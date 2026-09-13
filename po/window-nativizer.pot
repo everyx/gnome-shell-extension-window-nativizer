@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-13 15:20+0800\n"
+"POT-Creation-Date: 2026-09-14 02:36+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,149 +17,141 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/prefs.js:32
-msgid "Shadow"
+#: src/prefs.js:28
+msgid "Decorate"
 msgstr ""
 
-#: src/prefs.js:32
-msgid "Corners"
+#: src/prefs.js:29
+msgid "Leave alone"
 msgstr ""
 
-#: src/prefs.js:43
+#: src/prefs.js:30
+msgid "Corners only"
+msgstr ""
+
+#: src/prefs.js:31
+msgid "Shadow only"
+msgstr ""
+
+#: src/prefs.js:40
 msgid "dialog"
 msgstr ""
 
-#: src/prefs.js:44
+#: src/prefs.js:41
 msgid "modal dialog"
 msgstr ""
 
-#: src/prefs.js:45
+#: src/prefs.js:42
 msgid "utility window"
 msgstr ""
 
-#: src/prefs.js:49
+#: src/prefs.js:46
 msgid "window"
 msgstr ""
 
-#: src/prefs.js:65
+#: src/prefs.js:62
 msgid "Fixed-size"
 msgstr ""
 
-#: src/prefs.js:65
+#: src/prefs.js:62
 msgid "Resizable"
 msgstr ""
 
-#: src/prefs.js:66
+#: src/prefs.js:63
 msgid "X11"
 msgstr ""
 
-#: src/prefs.js:66
+#: src/prefs.js:63
 msgid "Wayland"
 msgstr ""
 
-#: src/prefs.js:70
+#: src/prefs.js:67
 msgid "with no parent"
 msgstr ""
 
-#: src/prefs.js:72
+#: src/prefs.js:69
 msgid "attached to its parent"
 msgstr ""
 
-#: src/prefs.js:74
+#: src/prefs.js:71
 msgid "with a parent"
 msgstr ""
 
 #. The template is the translatable unit, so a language can reorder the
 #. sentence; each fragment above is translated on its own.
-#: src/prefs.js:78
+#: src/prefs.js:75
 msgid "{size} {server} {type}, {parent}"
 msgstr ""
 
-#: src/prefs.js:184 src/prefs.js:192
+#: src/prefs.js:177 src/prefs.js:185
 msgid "OK"
 msgstr ""
 
-#: src/prefs.js:212
+#: src/prefs.js:205
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:218
+#: src/prefs.js:211
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:219
+#: src/prefs.js:212
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:224
+#: src/prefs.js:217
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:225
+#: src/prefs.js:218
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:237
-msgid "Suppress Rules"
+#: src/prefs.js:228
+msgid "Pick a window that looks wrong; the rule will be set the other way"
 msgstr ""
 
-#: src/prefs.js:238
-msgid "Turn a decoration on to suppress it for these windows."
+#: src/prefs.js:234 src/prefs.js:252 src/prefs.js:253
+msgid "Window Rules"
 msgstr ""
 
-#: src/prefs.js:239
-msgid "Leave a window undecorated"
+#: src/prefs.js:235
+msgid "Each rule names which decorations are ours for one window kind."
 msgstr ""
 
-#: src/prefs.js:240
-msgid "Use the button above to leave a window undecorated."
+#: src/prefs.js:257
+msgid "Use the button above to pick a window that looks wrong."
 msgstr ""
 
-#: src/prefs.js:244
-msgid "Force Rules"
-msgstr ""
-
-#: src/prefs.js:245
-msgid "Turn a decoration on to force it for these windows."
-msgstr ""
-
-#: src/prefs.js:246
-msgid "Decorate a window anyway"
-msgstr ""
-
-#: src/prefs.js:247
-msgid "Use the button above to decorate a window anyway."
-msgstr ""
-
-#: src/prefs.js:338
+#: src/prefs.js:324
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:400
+#: src/prefs.js:348
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:401
+#: src/prefs.js:349
 msgid ""
 "Could not connect to Window Nativizer extension. Please ensure the extension "
 "is enabled."
 msgstr ""
 
-#: src/prefs.js:415
+#: src/prefs.js:363
 msgid "No rule added: this window could not be identified."
 msgstr ""
 
-#: src/prefs.js:429
+#: src/prefs.js:378
 msgid "No rule added: it would have no effect on a window of this kind."
 msgstr ""
 
-#: src/prefs.js:449
+#: src/prefs.js:388
 msgid "No rule added: the rule could not be saved."
 msgstr ""
 
-#: src/prefs.js:459
+#: src/prefs.js:398
 #, javascript-format
-msgid "Moved to %s"
+msgid "Rule set to: %s"
 msgstr ""

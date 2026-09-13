@@ -17,8 +17,9 @@ shadow: who paints one?    declared margin, SSD frame, Mutter's X11 shadow   ─
 corners: do they
 already look like ours?    the Adwaita look                                  ── yes ─▶ skip
 
-your rules?                suppress / force, moving only the axes they name
+your rules?                per window kind: which axes are ours
 any policy?                tiled neighbour, crisp text on fractional scaling
+rounding them?             the client's own ring is cleared exactly when the shadow is ours
                            └───────────────────────────────▶ draw
 ```
 
@@ -28,16 +29,17 @@ any policy?                tiled neighbour, crisp text on fractional scaling
    and a user rule must never override them.
 2. **Inferred baseline** — `inferDecorationBaseline()`. The two axes do not rest on
    the same kind of evidence, and each is answered only from its own:
-   - **Shadows** are a *reading*, not an observation: the window declares its own
-     margin (`buffer_rect - frame_rect`, reaching Mutter's own minimum inset on both
-     axes — the signal Mutter reads as `has_custom_frame_extents`), Mutter says whether
-     it drew the frame instead (SSD), and a bare X11 window has its shadow painted by
-     Mutter. This axis is **one-sided**: "something else already paints one" is
-     reliable, while "nobody does, so we add one" misses a client that draws its own
-     shadow *without declaring a margin* (measured: `bradient` declares none). The
-     error therefore only ever points at a double shadow, never at a missing one, and
-     `suppress-rules` is its remedy (*What is not introspectable at all* names the
-     windows whose declaration cannot be read at all).
+   - **Shadows** are a *reading*, not an observation: the window declares a margin
+     (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
+     and a bare X11 window has its shadow painted by Mutter. One part of that reading is
+     ours, not Mutter's: Mutter asks only whether frame extents exist at all
+     (`has_custom_frame_extents`, true for 4px as much as for 40px), whereas a margin
+     counts as a shadow ring here only when it reaches Mutter's smallest window shadow
+     radius on both axes. The axis is then **one-sided**: "something else already paints
+     one" is reliable, while "nobody does, so we add one" misses a client that draws its
+     own shadow *without declaring a margin* (measured: `bradient` declares none). The
+     error only ever points at a double shadow, never at a missing one, and the remedy is
+     the ring (*Rounding a window takes its shadow over*) or a rule.
    - **Rounded corners** are *not* observable: a surface never reports whether it is
      already rounded, and Mutter has no concept of it at all. This axis therefore rests
      on an inference — the Adwaita look implies the Adwaita radius (*When a window's
@@ -45,16 +47,16 @@ any policy?                tiled neighbour, crisp text on fractional scaling
      inference to go on: the shadow axis at least has the window's own declaration.
      Everything else is rounded to our radius, whether the client rounded itself or not
      (*Which rectangle the clip lands on*).
-3. **User rules** — `src/lib/rules.js`. `suppress-rules` and `force-rules` move the
-   axes they name, in one direction. The only layer that may turn an axis back on.
+3. **User rules** — `src/lib/rules.js`. One state per window kind (`both`, `none`,
+   `corners`, `shadow`) names which axes are ours. The only layer that may turn an
+   axis back on.
 4. **State modifiers** — inside `evaluateWindowActions()`. Applied last, on top of
    both of the above, because they are visual policies rather than inferences about
    who already paints what.
 
-A `force` rule overrides layer 2 and nothing else: it exists to correct a wrong
-reading or inference, not to overrule a structural fact (layer 1) or a policy
-(layer 4). See [rule-model.md](rule-model.md) for why it stays available on the
-shadow axis too.
+A rule overrides layer 2 and nothing else: it exists to correct a wrong reading or
+inference, not to overrule a structural fact (layer 1) or a policy (layer 4). See
+[rule-model.md](rule-model.md) for the four states and what each does to the ring.
 
 ## When a window's corners already look like ours
 
@@ -92,13 +94,47 @@ The actor a clip is attached to is not the rectangle to round: for a client-side
 decorated window it is the buffer, which is the body plus the ring the client filled
 with its own shadow. `RoundedClipEffect` takes the body (`frame_rect`, expressed inside
 the actor) and removes only the four corner regions that fall inside the body's square
-bounds; everything beyond those bounds survives exactly as the client painted it.
-Without that distinction, rounding a decorated window would cut the outer edge of its
-shadow and leave the body square.
+bounds; everything beyond those bounds survives exactly as the client painted it, unless
+that ring holds the client's own shadow and we are replacing the corners it was painted
+for (*Rounding a window takes its shadow over*). Without that distinction, rounding a
+decorated window would cut the outer edge of its shadow and leave the body square.
 
 Rounding a window that already rounds itself is therefore safe, and easy to reason
 about: our radius is libadwaita's, so clipping a window libadwaita already drew is an
 exact identity, while a toolkit that rounds less ends up at ours.
+
+## Rounding a window takes its shadow over
+
+A window that declares its own shadow margin painted that shadow for the corners it
+had. Rounding those corners abandons the shape the shadow was cast by, and the shadow is
+pixels inside the window's texture: it cannot be erased selectively, only wholesale. So
+the shadow changes owner along with the shape, and the rule is one line:
+
+**the ring is cleared exactly when the shadow is ours** (`clearRing` in
+`evaluateWindowActions()`). With no rule in play, clipping a window that declared a ring
+makes the shadow ours first, so an ordinary client-decorated window ends up with one
+shadow matching the corners we drew. A rule decides the axes itself: `both` clears the
+ring and draws our shadow, `corners` and `none` leave the shadow with the client and
+leave its ring alone, and `shadow` clears the ring and draws ours while the corners stay
+the client's. The clip is attached for that last one too, with radius 0: erasing the ring
+is the clip's job and needs no corner cut. Our shadow is then cast for a square body,
+because a square body is the shape we have.
+
+| What the ring holds | Shadow ours? | What happens |
+|---|---|---|
+| the client's shadow (`buffer_rect - frame_rect` at or above Mutter's minimum inset on both axes) | yes | cleared, then our shadow is drawn: one shadow, for the corners we drew (for a square body, if a rule left the corners theirs) |
+| the client's shadow | no - it already looks like ours, or a rule left it theirs | untouched: its shadow still matches the shape it was painted for |
+| too narrow to be a shadow (a resize grip, or nothing) | either | untouched: nothing to own, and the client may have drawn in it |
+| none (a bare toplevel) | yes | nothing to clear; the actor is already the body |
+| Mutter's own (`has-ssd-frame`, `x11-mutter-native-shadow`) | either | out of reach: that shadow is not in the window's texture |
+
+Two consequences worth knowing. The shadow is cast by the **body**, not by the actor
+(`setShadowBody()` in `shadowActor.js`), or ours would be laid out around the ring the
+client reserved - the same distinction the clip makes with `uFrame`. Both rectangles are
+therefore derived once, in one pass, and the assumption that lets one rect serve both is
+that a window we draw a shadow for does not have Mutter's own shadow padding its actor:
+either the client declared extents (so Mutter drops its shadow) or the window reserved no
+ring at all.
 
 ## Where we deliberately differ from Mutter
 
@@ -118,15 +154,45 @@ exact identity, while a toolkit that rounds less ends up at ours.
   `RoundedClipEffect` to the native 15px (`window.radius` in
   `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and the cut corners reveal
   desktop background. SSD is an inference (layer 2), not a
-  structural fact as it once was: a `force` rule may override it.
+  structural fact as it once was: a rule may override it.
   X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
   native shadow, so those receive both shadow and rounded corners.
-- **A snap-tiled window loses its shadow** when it has an adjacent match, following
-  Mutter's own reasoning that the shadow would obstruct the neighbour
-  (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on its outer
-  edge. Tiled windows are flat-cornered either way (*Which style applies*).
+- **A snap-tiled window loses the shadow it would get from us** when it has an
+  adjacent match, following Mutter's own reasoning that the shadow would obstruct the
+  neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on
+  its outer edge. This only ever drops *our* shadow: a client that declared its own
+  ring keeps it, because tiling is not the client's shape to answer for. Tiled windows
+  are flat-cornered either way (*Which style applies*).
 - **Corner clipping is skipped under fractional scaling** when the user prefers
   crisp text: the offscreen pass is what blurs text at non-integer scales.
+
+## Known boundaries
+
+What this model cannot do, stated rather than papered over. Most of these follow from
+the reading being one-sided; the last is simply not verified yet.
+
+- **A client that draws its own decoration inside its surface without declaring a
+  margin** cannot be told apart from one that draws none. Nothing in the window's
+  geometry or in Mutter distinguishes them, so the baseline adds our decoration next
+  to theirs. A `none` rule is the only remedy.
+- **A ring at or above the threshold that is padding rather than a shadow** reads as a
+  shadow, and `both` - or the automatic takeover - clears it along with the corners.
+  If the client painted something in there, that something goes too.
+- **A ring below the threshold that does hold a small shadow** reads as not-a-shadow,
+  so we add ours on top of the client's: two shadows, not one.
+- **A client whose own corners are larger than ours** keeps a sliver of its shadow
+  just inside our arc, where clearing cannot reach: erasing it would need its measured
+  corner radius, which we do not have.
+- **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
+  drops the shadow we would draw; it does not clear the client's ring.
+- **An application that links GTK yet draws its own frame** is skipped by the Adwaita
+  look probe whenever the configured GTK theme is an Adwaita copy such as adw-gtk3
+  (measured on Chromium: 8px corners, a 24px tab-strip shadow). Picking one of its
+  windows once is the correction.
+- **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
+  margin is already in logical pixels and compares directly against the logical
+  threshold (*The margins, and the scale question*); whether an X11 / XWayland window
+  on a scaled monitor reads the same way has not been checked.
 
 ## The margins, and the scale question
 
@@ -239,4 +305,4 @@ style for the whole session; what runs per frame is eight textured rectangles.
 `has_custom_frame_extents`, none of which GJS can see. Those are the windows where
 something else is painting and the reading layer 2 makes cannot say so: reimplementing
 the gate partially would add a second shadow rather than skip one, so they are left to
-a `suppress` rule - the one-sided error above, with the remedy that fits it.
+a `none` rule - the one-sided error above, with the remedy that fits it.

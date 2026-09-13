@@ -40,8 +40,10 @@ Clutter event grab.
 
 Every decorated window gets a `ShadowActor` inserted below the window actor in
 `global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowTexture.js`)
-with Clutter property and constraint bindings (`Clutter.BindConstraint`), and,
-when there is something to clip, a `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
+with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is cast by the window
+body (`setShadowBody()`), not by the actor, which for a client-decorated window also carries the ring
+that client reserved for its own shadow. When there is something to clip, the window also gets a
+`RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
 On Wayland, the clip effect attaches directly to the window actor; on X11 / XWayland, it attaches
 to the surface child actor (`actor.get_first_child()`) so the native / frames-client drop shadow is preserved
 and coordinates align accurately.

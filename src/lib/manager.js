@@ -14,10 +14,11 @@ import {
     evaluateWindowActions,
     isWindowMaximized,
     isWindowTiled,
-    pickedRuleWouldChange,
+    suggestedRuleState,
+    suggestedRuleWouldChange,
 } from './detector.js';
 import {extractWindowProperties} from './pick.js';
-import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
+import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners} from './nativeLikeCorners.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
@@ -45,7 +46,7 @@ export class Manager {
         this._settings = ext.getSettings();
         this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];
-        this._rules = null;         // cached {suppress, force}, invalidated on settings change
+        this._rules = null;         // cached fingerprint -> RuleState value, invalidated on settings change
     }
 
     enable() {
@@ -72,7 +73,7 @@ export class Manager {
 
         // GSettings changes -> full re-evaluation (only relevant core keys)
         this._settingsHandlerIds = [];
-        for (const key of [SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES, 'prefer-crisp-text']) {
+        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text']) {
             const id = this._settings.connect(`changed::${key}`, () => {
                 this._refreshSettings();
                 this._reconcile();
@@ -199,7 +200,7 @@ export class Manager {
         if (this._windows.has(win))
             return;
         const state = {
-            clip: null, clipTarget: null, clipBody: null, shadow: null,
+            clip: null, clipTarget: null, clipBody: null, clearRing: false, shadow: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };
@@ -323,8 +324,16 @@ export class Manager {
         return actor;
     }
 
-    /** Dynamically synchronize window clipEffect */
-    _syncClip(win, wantClip) {
+    /**
+     * Dynamically synchronize window clipEffect.
+     *
+     * `wantEffect` attaches or removes the effect, which both rounds the body and
+     * clears the client's own shadow ring outside it. `clearRing` erases that ring for
+     * a window whose shadow we are taking over: the ring belongs to the client shape
+     * whose shadow we are taking over, even when the corners stay square
+     * (docs/decoration-model.md).
+     */
+    _syncClip(win, wantEffect, clearRing = false, target = null, body = undefined) {
         const state = this._windows.get(win);
         if (!state)
             return;
@@ -332,17 +341,17 @@ export class Manager {
         if (!actor)
             return;
 
-        const target = this._getClipTarget(win, actor);
-        const body = this._bodyRect(win, target);
+        const clipTarget = target ?? this._getClipTarget(win, actor);
+        const clipBody = body === undefined ? this._bodyRect(win, clipTarget) : body;
         // No placeable body means no rounding. Rounding the actor instead is exactly
         // the cut into a client's own shadow that this clip exists to avoid.
-        const wanted = wantClip && Boolean(body);
+        const wanted = wantEffect && Boolean(clipBody);
 
         const hasClip = Boolean(state.clip);
         if (wanted !== hasClip) {
             if (wanted) {
                 state.clip = new RoundedClipEffect();
-                state.clipTarget = target;
+                state.clipTarget = clipTarget;
                 state.clipTarget.add_effect(state.clip);
             } else {
                 this._removeClipEffect(state);
@@ -353,13 +362,14 @@ export class Manager {
             // X11 may replace the surface child (assign_surface_actor); the effect
             // would otherwise stay orphaned on the dead actor. Re-pin when moved.
             // A missing child falls back to the window actor until one appears.
-            if (target !== state.clipTarget) {
+            if (clipTarget !== state.clipTarget) {
                 this._removeClipEffect(state);
-                state.clipTarget = target;
-                target.add_effect(state.clip);
+                state.clipTarget = clipTarget;
+                clipTarget.add_effect(state.clip);
             }
         }
-        state.clipBody = state.clip ? body : null;
+        state.clipBody = state.clip ? clipBody : null;
+        state.clearRing = state.clip ? Boolean(clearRing) : false;
     }
 
     /**
@@ -406,13 +416,23 @@ export class Manager {
         const inputs = this._decorationInputs(win);
         const actions = evaluateWindowActions(inputs);
 
+        // One body rect for both: the clip rounds it and the shadow is cast by it, and
+        // deriving it twice would let the two drift apart mid-resize.
+        const target = this._getClipTarget(win, actor);
+        const body = this._bodyRect(win, target);
+
         // The decision and the style it was made with come from the same call, so
-        // there is no second derivation here to keep in step with it.
-        this._syncClip(win, actions.drawClip);
-        this._syncShadow(win, actions.drawShadow);
+        // there is no second derivation here to keep in step with it. Clearing the ring is
+        // the clip's job even when the corners are not ours (a `shadow` rule), so the
+        // effect is attached for either.
+        this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, body);
+
+        // A ring we could not clear must not get a second shadow on top of it: with no clip
+        // attached the client's own shadow is still there, so ours waits for the next pass.
+        this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
         if (state.clip || state.shadow)
-            this._applyStyle(win, actions.style);
+            this._applyStyle(win, actions.style, body, actions.drawClip);
     }
 
     /** Full idempotent re-evaluation: synchronizes clip and shadow for each tracked window */
@@ -445,7 +465,7 @@ export class Manager {
 
     /**
      * Everything the decoration decision depends on, read from a live window.
-     * Shared with ruleWouldChangeKind() so a rule is judged against the same
+     * Shared with suggestedRuleWouldChange() so a rule is judged against the same
      * inputs the runtime will later apply it to.
      */
     _decorationInputs(win) {
@@ -486,12 +506,22 @@ export class Manager {
     }
 
     /**
-     * Whether a rule for this window's kind would change what we draw, or null
-     * when the window cannot be identified.
+     * Whether storing `ruleState` for this window's kind would change what we draw,
+     * or null when the window cannot be identified.
      */
-    ruleWouldChangeKind(win, direction) {
+    suggestedRuleWouldChange(win, ruleState) {
         const inputs = this._decorationInputs(win);
-        return pickedRuleWouldChange(extractWindowProperties(win, inputs.wmClass), inputs, direction);
+        return suggestedRuleWouldChange(extractWindowProperties(win, inputs.wmClass), inputs, ruleState);
+    }
+
+    /**
+     * The state a pick on this window should write: the suggestion from
+     * suggestedRuleState(), or null when the window cannot be read.
+     */
+    suggestedRuleState(win) {
+        if (!win)
+            return null;
+        return suggestedRuleState(this._decorationInputs(win));
     }
 
     _undecorate(win) {
@@ -520,26 +550,34 @@ export class Manager {
     }
 
     /** Applies style -> shader uniforms and the shadow's baked texture */
-    _applyStyle(win, style) {
+    _applyStyle(win, style, body, drawClip) {
         const state = this._windows.get(win);
         const actor = win.get_compositor_private();
         if (!state || !actor)
             return;
 
         if (state.clip && state.clipBody) {
+            // A clip attached only to clear the ring keeps the body square: radius 0 leaves the
+            // corners alone, and what the mask erases is the ring outside the body.
             state.clip.setParams({
                 width: state.clipTarget.width,
                 height: state.clipTarget.height,
                 frame: state.clipBody,
-                radius: style.radius,
-                outline: style.outline,
+                radius: drawClip ? style.radius : 0,
+                outline: drawClip ? style.outline : null,
+                clearRing: state.clearRing,
             });
         }
         if (state.shadow) {
+            // The shadow is cast by the body, not by the actor: a client-decorated window's
+            // actor carries the margin ring it painted its own shadow into. The rect is the
+            // clip's own, and null casts the whole actor.
+            state.shadow.setShadowBody(body ?? null);
+
             // If corner clipping is skipped (square corners), the shadow fits a square
             // outline instead. The actor cross-fades to a new style on its own.
             state.shadow.setShadowStyle({
-                radius: state.clip ? style.radius : 0,
+                radius: state.clip && drawClip ? style.radius : 0,
                 shadows: style.shadows,
             });
         }

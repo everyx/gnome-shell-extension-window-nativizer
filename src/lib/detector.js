@@ -1,12 +1,11 @@
-import {MUTTER_CSD_MIN_INSET_THRESHOLD, WindowType} from './mutterRules.generated.js';
+import {MUTTER_MIN_SHADOW_RADIUS, WindowType} from './mutterRules.generated.js';
 
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
     CLIENT_TYPE_TOKEN_X11,
-    RULE_AXIS_ORDER,
     RuleAxis,
-    RuleDirection,
-    buildRuleValue,
+    RuleState,
+    buildRuleState,
     resolveRule,
     withRule,
 } from './rules.js';
@@ -15,11 +14,9 @@ import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
- * A window narrower or shorter than two corner radii cannot carry a rounded
- * rectangle - the two arcs on that axis would overlap - so it is a helper
- * surface, not a window. wl-clipboard maps a 1x1 transparent toplevel to hold
- * the selection; rounding or shadowing it paints a phantom decoration. Derived
- * from libadwaita's own radius so it tracks the real decoration.
+ * A window narrower or shorter than two corner radii cannot carry a rounded rectangle -
+ * the arcs on that axis would overlap - so it is a helper surface, not a window
+ * (wl-clipboard maps a 1x1 transparent toplevel). Derived from libadwaita's radius.
  */
 const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
@@ -78,6 +75,26 @@ export function checkDecorationEligibility({
     return {eligible: true, reason: ''};
 }
 /**
+ * Whether a window declares a margin that reads as its own shadow: the ring
+ * (`buffer_rect - frame_rect`) reaches Mutter's smallest window shadow radius on both
+ * axes. The reading is ours, not Mutter's: Mutter asks only whether extents exist at all,
+ * and this cannot tell a shadow from padding (docs/decoration-model.md).
+ *
+ * @param {object} params
+ * @param {boolean} [params.hasSsd=false] - Mutter drew the frame instead, so the ring is not the client's
+ * @param {number} params.sideW - per-side declared margin, logical px
+ * @param {number} params.sideH - per-side declared margin, logical px
+ * @param {number} [params.insetThreshold]
+ * @returns {boolean}
+ */
+export function declaresOwnShadow({
+    hasSsd = false,
+    sideW, sideH,
+    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
+}) {
+    return !hasSsd && sideW >= insetThreshold && sideH >= insetThreshold;
+}
+/**
  * What we would draw with no user rule, one axis at a time: the shadow by who
  * already paints one, the corners by whether the window already looks like
  * libadwaita. The model behind both, and where it diverges from Mutter on
@@ -95,21 +112,19 @@ export function checkDecorationEligibility({
 export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
-    insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
+    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
     hasSsd = false,
     nativeLikeCorners = false,
 }) {
     const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
-    // The shadow axis stands only on what the window declares and on Mutter's own
-    // gates, the two things that say who already paints a shadow.
     let shadow = true;
     let reason = `no-csd(${insets} < ${insetThreshold})`;
 
     if (hasSsd) {
         shadow = false;
         reason = 'has-ssd-frame';
-    } else if (sideW >= insetThreshold && sideH >= insetThreshold) {
+    } else if (declaresOwnShadow({hasSsd, sideW, sideH, insetThreshold})) {
         shadow = false;
         reason = `has-csd(${insets} >= ${insetThreshold})`;
     } else if (isX11 && sideW <= 0 && sideH <= 0) {
@@ -117,9 +132,8 @@ export function inferDecorationBaseline({
         reason = 'x11-mutter-native-shadow';
     }
 
-    // The corner axis has nothing to read - a surface never says whether it is already
-    // rounded - so it stands on this inference alone. The shadow keeps the reason it was
-    // read from: a declaration, not this.
+    // The corner axis has nothing to read, so it stands on this inference alone; the
+    // shadow keeps the reason it was read from.
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
 
@@ -150,10 +164,8 @@ export function isWindowMaximized(win) {
     return Boolean(win?.is_maximized?.());
 }
 /**
- * Checks whether a window is in a snap-tiled state: half-tiled on one axis, or
- * matched with a neighbour. Both flatten their corners, so the background cannot
- * leak past a flat screen edge or the split between two windows; only the matched
- * one also loses its shadow - see docs/decoration-model.md.
+ * Checks whether a window is in a snap-tiled state: half-tiled on one axis, or matched
+ * with a neighbour. Only the matched one also loses its shadow (docs/decoration-model.md).
  *
  * @param {object} win - Meta.Window instance
  * @param {object} [options={}]
@@ -193,15 +205,18 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [tiled=false] - Whether the window is snap-tiled (half-tiled or matched)
  * @property {boolean} [highContrast=false] - Whether the high-contrast theme is on
  * @property {string} [wmClass] - Window WM_CLASS / app ID
- * @property {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}] - Both rule groups
+ * @property {Record<string, string>} [rules={}] - Window-kind fingerprint -> RuleState value
  * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
- * @property {number} [insetThreshold] - Mutter CSD minimum margin threshold
+ * @property {number} [insetThreshold] - Declared margin that reads as a shadow ring (Mutter's smallest window shadow radius)
  */
 /**
  * Evaluates decoration actions based on geometric criteria and exclusion rules.
  *
+ * `clearRing` says the client's own shadow ring is ours to erase: set exactly when the
+ * window declared one and the shadow is ours (docs/decoration-model.md).
+ *
  * @param {WindowEvaluationParams} params
- * @returns {{ drawShadow: boolean, drawClip: boolean, style: object, reason: string }}
+ * @returns {{ drawShadow: boolean, drawClip: boolean, clearRing: boolean, style: object, reason: string }}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -221,7 +236,7 @@ export function evaluateWindowActions({
     wmClass,
     rules = {},
     preferCrispText = false,
-    insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
+    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
 }) {
     // The state's style is resolved here, once, and returned with the decision, so a
     // caller paints from the very object the decision was made from rather than
@@ -252,80 +267,95 @@ export function evaluateWindowActions({
     let shadow = baseline.shadow;
     let corners = baseline.corners;
     if (rule) {
-        const forced = rule.direction === RuleDirection.FORCE;
-        if (rule.axes.has(RuleAxis.SHADOW))
-            shadow = forced;
-        if (rule.axes.has(RuleAxis.CORNERS))
-            corners = forced;
+        // A rule names exactly the axes that are ours (docs/rule-model.md).
+        corners = rule.has(RuleAxis.CORNERS);
+        shadow = rule.has(RuleAxis.SHADOW);
     }
 
     // 4. State modifiers, applied last: policies, not inferences about who already
     //    paints what (docs/decoration-model.md). The clip axis also needs the style to
     //    have something to draw: tiled and maximized give radius 0 and no outline, so
     //    the offscreen pass would be pure waste there.
-    const shadowBeforeTiling = shadow;
-    shadow = shadow && !hasTileMatch;
-    corners = corners && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
+    const ours = corners;
+    corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
-    let reason = rule
-        ? `${rule.source === 'builtin' ? 'builtin-rule' : 'rule-applied'}(${wmClass}:${rule.direction}:${buildRuleValue(rule.axes)})`
-        : baseline.reason;
-    if (shadowBeforeTiling && !shadow)
-        reason = `tile-match(suppress-shadow,${reason})`;
+    const ownRing = declaresOwnShadow({hasSsd, sideW: w / 2, sideH: h / 2, insetThreshold});
 
-    return {drawShadow: shadow, drawClip: corners, style, reason};
+    // With no rule, clipping a ringed window makes its shadow ours: the ring was
+    // painted for the corners we are replacing. A rule decides this itself.
+    if (!rule && corners && ownRing)
+        shadow = true;
+
+    const shadowBeforeTiling = shadow;
+    shadow = shadow && !hasTileMatch;
+
+    // The ring is cleared exactly when the shadow is ours; the tiling policy is about
+    // the shadow we would draw, not about a client's own.
+    const clearRing = ownRing && shadow;
+
+    let reason = rule
+        ? `rule-applied(${wmClass}:${buildRuleState(rule)})`
+        : baseline.reason;
+    if (clearRing)
+        reason = `ring-cleared(${reason})`;
+    if (shadowBeforeTiling && !shadow)
+        reason = `tile-match(shadow-off,${reason})`;
+
+    return {drawShadow: shadow, drawClip: corners, clearRing, style, reason};
 }
 /**
- * Whether a rule would change the actions we take for a window.
+ * Whether storing a rule for `key` would change the actions we take for a window:
+ * false for an inert rule (ineligible kind, baseline already as asked, policy override).
  *
- * A rule that changes nothing is a row that misrepresents what it does, so the
- * picker refuses to add one. Running the runtime's evaluator twice - with and
- * without the rule - covers every way a rule can be inert: an ineligible kind, a
- * baseline that already answers as asked, a policy that overrides it again. *
  * @param {WindowEvaluationParams} params - The window, evaluated without the rule
- * @param {{direction: string, key: string, axes: Iterable<string>}} rule
+ * @param {{key: string, state: string}} rule
  * @returns {boolean}
  */
-function ruleWouldChangeActions(params, {direction, key, axes}) {
+function ruleWouldChangeActions(params, {key, state}) {
     const before = evaluateWindowActions(params);
     const after = evaluateWindowActions({
         ...params,
-        rules: withRule(params.rules, direction, key, axes),
+        rules: withRule(params.rules, key, state),
     });
 
     return before.drawShadow !== after.drawShadow ||
         before.drawClip !== after.drawClip;
 }
-/**
- * Whether the rule a pick would add for `properties`' window kind would change
- * what we draw for the window `params` describes.
- *
- * A fresh pick names every axis (RULE_AXIS_ORDER) and the user narrows it down
- * from there. Transient window state must not decide this: a rule worth creating
- * for a restored window is worth creating while it is maximized or tiled, so those
- * are normalized away and the kind's attributes and the margins it declares are
- * what count. A policy that stands for the whole session is left live instead -
- * with crisp text on a fractional scale the clip is skipped entirely, so a corners
- * rule really is ineffective there and the picker refuses it.
- *
- * @param {Record<string, string>} properties - extractWindowProperties() output
- * @param {WindowEvaluationParams} params - The window as the runtime sees it
- * @param {string} direction - RuleDirection
- * @returns {boolean|null} null when the window cannot be identified
- */
-export function pickedRuleWouldChange(properties, params, direction) {
-    const key = buildRuleKeyFromProperties(properties);
-    if (!key)
-        return null;
-
-    const asKind = {
+/** The window's kind, with the transient state a rule has to outlive normalized away. */
+function kindParams(params) {
+    return {
         ...params,
         isMaximized: false,
         isFullscreen: false,
         hasTileMatch: false,
         tiled: false,
     };
+}
+/**
+ * The state a pick should write for `params`' window kind: any axis of ours on
+ * screen suggests `none`, no axis suggests `both` (docs/rule-model.md).
+ *
+ * @param {WindowEvaluationParams} params - The window as the runtime sees it
+ * @returns {string} RuleState value - NONE or BOTH
+ */
+export function suggestedRuleState(params) {
+    const {drawShadow, drawClip} = evaluateWindowActions(kindParams(params));
+    return drawShadow || drawClip ? RuleState.NONE : RuleState.BOTH;
+}
+/**
+ * Whether storing `state` for `properties`' window kind would change what we draw
+ * for `params`. Judged against the kind, so transient state is normalized away.
+ *
+ * @param {Record<string, string>} properties - extractWindowProperties() output
+ * @param {WindowEvaluationParams} params - The window as the runtime sees it
+ * @param {string} state - RuleState value
+ * @returns {boolean|null} null when the window cannot be identified
+ */
+export function suggestedRuleWouldChange(properties, params, state) {
+    const key = buildRuleKeyFromProperties(properties);
+    if (!key)
+        return null;
 
-    return ruleWouldChangeActions(asKind, {direction, key, axes: RULE_AXIS_ORDER});
+    return ruleWouldChangeActions(kindParams(params), {key, state});
 }

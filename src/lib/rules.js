@@ -1,6 +1,6 @@
 /**
- * The window-kind rule model: keys, values, matching and sanitising. What a key
- * means, and the invariants the two groups rely on, are in docs/rule-model.md.
+ * The window-kind rule model: keys, states, matching and sanitising. What a key
+ * means, and what each state does, are in docs/rule-model.md.
  *
  * Pure logic module: no shell globals, unit-testable.
  */
@@ -12,50 +12,74 @@ export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
 export const CLIENT_TYPE_TOKEN_X11 = 'x11';
 /**
  * The two decorations this extension paints. They are independent: a window can
- * have either, both, or neither, and a rule may name one without the other.
+ * have either, both, or neither, and a rule says which of them are ours.
  */
 export const RuleAxis = Object.freeze({
     SHADOW: 'shadow',
     CORNERS: 'corners',
 });
-/** Which way a rule moves the axes it names. */
-export const RuleDirection = Object.freeze({
-    SUPPRESS: 'suppress',
-    FORCE: 'force',
+/**
+ * The four states a rule can name. There is no direction: a state names the axes
+ * that are ours, so an empty set (`none`) is a choice, not the absence of one.
+ */
+export const RuleState = Object.freeze({
+    BOTH: 'both',
+    NONE: 'none',
+    CORNERS: 'corners',
+    SHADOW: 'shadow',
 });
 /**
- * Every decoration a rule can name, in the canonical order of a rule value.
- * Also the set a freshly picked rule names, so the user narrows down from a rule
- * that covers the whole window rather than guessing at what it left out.
+ * Every state, in the order the preferences shows them. The state grammar lives
+ * here so parsing and rendering can never drift apart.
  */
-export const RULE_AXIS_ORDER = [RuleAxis.SHADOW, RuleAxis.CORNERS];
-// Parenthesised: a bare `a|b` would let the `^` bind to the first alternative only.
-const RULE_AXIS_PATTERN = `(?:${RULE_AXIS_ORDER.join('|')})`;
-/** A rule value names one or both axes, in canonical order. */
-const VALID_RULE_VALUE_PATTERN = new RegExp(
-    `^${RULE_AXIS_PATTERN}(?:,${RULE_AXIS_PATTERN})?$`
-);
+export const RULE_STATES = Object.freeze([
+    RuleState.BOTH, RuleState.NONE, RuleState.CORNERS, RuleState.SHADOW,
+]);
+// One entry per state. parseRuleState() reads it, and the hasOwnProperty guard there
+// keeps stray names like 'toString' from parsing as states.
+const RULE_STATE_AXES = Object.freeze({
+    [RuleState.BOTH]: [RuleAxis.CORNERS, RuleAxis.SHADOW],
+    [RuleState.NONE]: [],
+    [RuleState.CORNERS]: [RuleAxis.CORNERS],
+    [RuleState.SHADOW]: [RuleAxis.SHADOW],
+});
 /**
- * Parses a rule value into the set of axes it names.
+ * Parses a rule state into the set of axes it says are ours.
  *
- * @param {string} value
- * @returns {Set<string>|null} null when the value is not a valid axis list
+ * @param {string} state
+ * @returns {Set<string>|null} null when the state is not one of the four
  */
-export function parseRuleAxes(value) {
-    if (typeof value !== 'string' || !VALID_RULE_VALUE_PATTERN.test(value))
+export function parseRuleState(state) {
+    if (typeof state !== 'string' ||
+        !Object.prototype.hasOwnProperty.call(RULE_STATE_AXES, state))
         return null;
-    return new Set(value.split(','));
+    return new Set(RULE_STATE_AXES[state]);
 }
 /**
- * Renders axes back into the canonical rule value (declaration order fixed).
+ * Renders axes back into the canonical rule state.
  *
  * @param {Iterable<string>} axes
- * @returns {string} '' when no known axis is named
+ * @returns {string} One of RuleState; 'none' when no known axis is ours
  */
-export function buildRuleValue(axes) {
+export function buildRuleState(axes) {
     const named = new Set(axes);
-    return RULE_AXIS_ORDER.filter(axis => named.has(axis)).join(',');
+    const corners = named.has(RuleAxis.CORNERS);
+    const shadow = named.has(RuleAxis.SHADOW);
+
+    if (corners && shadow)
+        return RuleState.BOTH;
+    if (corners)
+        return RuleState.CORNERS;
+    if (shadow)
+        return RuleState.SHADOW;
+    return RuleState.NONE;
 }
+/**
+ * Renders a boolean as the canonical rule-key token.
+ *
+ * @param {*} value
+ * @returns {string} 'true' or 'false'
+ */
 export function boolString(value) {
     return value ? 'true' : 'false';
 }
@@ -183,97 +207,60 @@ export function buildRuleKey(wmClass, {
     return `${encodeIdentity(wmClass)}:${specifier}`;
 }
 /**
- * Validates and sanitizes both rule groups read from settings: malformed keys and
- * values are dropped, identities are lowercased so two spellings of one application
- * collapse onto one kind, and a kind found in both groups keeps its suppression
- * (docs/rule-model.md).
+ * Validates and sanitizes the rule map read from settings: malformed keys and
+ * states are dropped and identities are lowercased, so two spellings of one
+ * application collapse onto one kind (docs/rule-model.md).
  *
- * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [raw={}]
- * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
+ * @param {Record<string, string>} [rawRules={}]
+ * @returns {Record<string, string>} canonical key -> RuleState value
  */
-export function sanitizeWindowRules({suppress = {}, force = {}} = {}) {
-    const clean = {
-        suppress: sanitizeRuleGroup(suppress, RuleDirection.SUPPRESS),
-        force: sanitizeRuleGroup(force, RuleDirection.FORCE),
-    };
-
-    for (const key of Object.keys(clean.force)) {
-        const colliding = lookupRuleKey(clean.suppress, key);
-        if (!colliding)
-            continue;
-        console.warn(`[window-nativizer] "${key}" is in both rule groups; keeping the suppression`);
-        delete clean.force[key];
-    }
-
-    return clean;
-}
-function sanitizeRuleGroup(rawRules, direction) {
+export function sanitizeWindowRules(rawRules = {}) {
     if (!rawRules || typeof rawRules !== 'object')
         return {};
 
     const clean = {};
     const seenKeys = new Map();
 
-    for (const [key, value] of Object.entries(rawRules)) {
+    for (const [key, state] of Object.entries(rawRules)) {
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
-            console.warn(`[window-nativizer] Dropping invalid ${direction} rule key: "${key}"`);
+            console.warn(`[window-nativizer] Dropping invalid rule key: "${key}"`);
             continue;
         }
 
-        const axes = parseRuleAxes(value);
+        const axes = parseRuleState(state);
         if (!axes) {
-            console.warn(`[window-nativizer] Dropping ${direction} rule with invalid value: "${value}" for key "${key}"`);
+            console.warn(`[window-nativizer] Dropping rule with invalid state: "${state}" for key "${key}"`);
             continue;
         }
 
         const canonicalKey = normalizeRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             const existingKey = seenKeys.get(canonicalKey);
-            console.warn(`[window-nativizer] Dropping case-colliding ${direction} rule key "${key}" (conflicts with "${existingKey}")`);
+            console.warn(`[window-nativizer] Dropping case-colliding rule key "${key}" (conflicts with "${existingKey}")`);
             continue;
         }
 
         seenKeys.set(canonicalKey, key);
-        clean[canonicalKey] = buildRuleValue(axes);
+        clean[canonicalKey] = buildRuleState(axes);
     }
 
     return clean;
 }
 /**
- * Finds the key a rule group stores for `key`. Groups are stored canonicalised, so
- * one application always lands on one key and this is an exact lookup. Returns null
- * when the group holds no rule for it.
- */
-export function lookupRuleKey(group, key) {
-    return Object.prototype.hasOwnProperty.call(group, key) ? key : null;
-}
-/**
- * Returns the rules with `key` moved into `direction`, naming `axes`. A kind lives in
- * exactly one group, so the other group loses it - under whichever spelling it
- * stored. The picker and the effectiveness check both go through here, so the rule
- * that looked worth adding is the rule that gets stored.
+ * Returns the rules with `key` set to `state`. The picker and the
+ * effectiveness check both go through here, so the rule that looked worth adding is
+ * the rule that gets stored.
  *
- * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
- * @param {string} direction - RuleDirection
+ * @param {Record<string, string>} [rules={}]
  * @param {string} key
- * @param {Iterable<string>} axes
- * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
+ * @param {string} state
+ * @returns {Record<string, string>}
  */
-export function withRule({suppress = {}, force = {}} = {}, direction, key, axes) {
-    const moved = {
-        suppress: {...suppress},
-        force: {...force},
-    };
-
-    const other = direction === RuleDirection.SUPPRESS
-        ? RuleDirection.FORCE
-        : RuleDirection.SUPPRESS;
-    const previous = lookupRuleKey(moved[other], key);
-    if (previous)
-        delete moved[other][previous];
-
-    moved[direction][key] = buildRuleValue(axes);
-    return moved;
+export function withRule(rules = {}, key, state) {
+    // A rule is one of the four states; anything else is a caller bug, not a rule.
+    if (!RULE_STATES.includes(state))
+        throw new Error(`[window-nativizer] unknown rule state: ${state}`);
+    return {...rules, [key]: state};
 }
 /**
  * Splits a rule key into its identity, its fingerprint specifier, and the parsed
@@ -304,21 +291,20 @@ export function parseRuleKey(key) {
 }
 /**
  * Resolves the rule that applies to a window, matching its canonical window-kind
- * fingerprint against both groups. Suppressions are checked first, as
- * sanitizeWindowRules() enforces; the identity comparison is case-insensitive in
- * both directions, while the fingerprint must match exactly (docs/rule-model.md).
+ * fingerprint against the user's rules. The identity comparison is case-insensitive both
+ * ways, while the fingerprint must match exactly (docs/rule-model.md).
  *
  * @param {string} wmClass - Window identity (WM_CLASS / app id / resolver result)
- * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
+ * @param {Record<string, string>} [rules={}] - Canonical rule map
  * @param {object} [options={}]
  * @param {string} [options.clientType='wayland'] - 'wayland' | 'x11'
  * @param {number} [options.windowType=WindowType.NORMAL] - Meta.WindowType
  * @param {boolean} [options.hasParent=false] - Whether window has parent (transient)
  * @param {boolean} [options.allowsResize=true] - Whether window allows resizing
  * @param {boolean} [options.isAttachedDialog=false] - Whether modal dialog attached to parent
- * @returns {{direction: string, axes: Set<string>}|null} null when no rule matched
+ * @returns {Set<string>|null} The axes that are ours, or null when no rule matched
  */
-export function resolveRule(wmClass, {suppress = {}, force = {}} = {}, options = {}) {
+export function resolveRule(wmClass, rules = {}, options = {}) {
     if (!wmClass)
         return null;
 
@@ -340,19 +326,5 @@ export function resolveRule(wmClass, {suppress = {}, force = {}} = {}, options =
     if (!key)
         return null;
 
-    const suppressedKey = lookupRuleKey(suppress, key);
-    if (suppressedKey) {
-        const axes = parseRuleAxes(suppress[suppressedKey]);
-        if (axes)
-            return {direction: RuleDirection.SUPPRESS, axes};
-    }
-
-    const forcedKey = lookupRuleKey(force, key);
-    if (forcedKey) {
-        const axes = parseRuleAxes(force[forcedKey]);
-        if (axes)
-            return {direction: RuleDirection.FORCE, axes};
-    }
-
-    return null;
+    return parseRuleState(rules[key]);
 }

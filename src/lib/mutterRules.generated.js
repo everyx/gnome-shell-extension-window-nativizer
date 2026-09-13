@@ -38,12 +38,12 @@ export const WindowClientType = Object.freeze({
 });
 
 /**
- * Minimum threshold for CSD decoration determination (logical pixels).
+ * Mutter's smallest window shadow radius: a normal window's unfocused radius (its
+ * focused one is larger).
  *
- * In Mutter's definition, even an unfocused normal window has a shadow radius of 8px.
- * If a window's declared content margin (Insets / Frame Extents) on any side is less than 8px
- * (e.g. 4px declared by WeChat/CEF frameless windows), the geometry physically cannot accommodate
- * a normal window shadow. Such margins are merely mouse resize grips or micro-borders, meaning
- * the window does not draw its own full CSD shadow.
+ * This is our reading of a declared margin, not Mutter's own test: Mutter asks only
+ * whether the client declared frame extents at all (has_custom_frame_extents, true for
+ * 4px as much as for 40px). A margin below this radius cannot physically hold a window
+ * shadow, so it reads as a resize grip or a micro-border instead of a shadow ring.
  */
-export const MUTTER_CSD_MIN_INSET_THRESHOLD = 8;
+export const MUTTER_MIN_SHADOW_RADIUS = 8;

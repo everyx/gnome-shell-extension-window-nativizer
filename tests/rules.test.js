@@ -1,5 +1,5 @@
 /**
- * rule model unit tests: keys, values and resolution (jasmine-gjs).
+ * rule model unit tests: keys, states and resolution (jasmine-gjs).
  * Run: pnpm test
  */
 
@@ -7,52 +7,53 @@ import {
     WindowType,
 } from '../src/lib/mutterRules.generated.js';
 import {
-    RuleAxis, RuleDirection, RULE_AXIS_ORDER, parseRuleAxes,
-    buildRuleValue, resolveRule, parseRuleKey, buildRuleKey,
+    RuleAxis, RULE_STATES, parseRuleState,
+    buildRuleState, resolveRule, parseRuleKey, buildRuleKey,
     sanitizeWindowRules, withRule,
 } from '../src/lib/rules.js';
 
 /** Comparable shape for a resolveRule() result. */
 function resolved(result) {
-    return result && {direction: result.direction, axes: [...result.axes].sort()};
+    return result && [...result].sort();
 }
 
-describe('rule axes vocabulary', () => {
-    it('parseRuleAxes reads each canonical value into a set', () => {
-        expect([...parseRuleAxes('shadow')]).toEqual([RuleAxis.SHADOW]);
-        expect([...parseRuleAxes('corners')]).toEqual([RuleAxis.CORNERS]);
-        expect([...parseRuleAxes('shadow,corners')].sort()).toEqual(['corners', 'shadow']);
+describe('rule state vocabulary', () => {
+    it('parseRuleState reads each state into the axes that are ours', () => {
+        expect([...parseRuleState('both')].sort()).toEqual(['corners', 'shadow']);
+        expect([...parseRuleState('none')]).toEqual([]);
+        expect([...parseRuleState('corners')]).toEqual([RuleAxis.CORNERS]);
+        expect([...parseRuleState('shadow')]).toEqual([RuleAxis.SHADOW]);
     });
 
-    it('parseRuleAxes accepts a reversed pair, normalised later by buildRuleValue', () => {
-        expect([...parseRuleAxes('corners,shadow')].sort()).toEqual(['corners', 'shadow']);
-    });
-
-    it('parseRuleAxes rejects empty, legacy modes and unknown values', () => {
+    it('parseRuleState rejects an empty string, an axis list and unknown words', () => {
         for (const bad of [
-            '', 'all', 'clip', 'disable-all', 'disable-clip', 'disable-shadow',
-            'nonsense', 'both', null, undefined, 42,
+            '', 'shadow,corners', 'corners,shadow', 'corners,shadow,outline',
+            'nonsense', null, undefined, 42,
         ])
-            expect(parseRuleAxes(bad)).toBeNull();
+            expect(parseRuleState(bad)).toBeNull();
     });
 
-    it('buildRuleValue renders the canonical order regardless of input order', () => {
-        expect(buildRuleValue(['corners', 'shadow'])).toBe('shadow,corners');
-        expect(buildRuleValue(['shadow', 'corners'])).toBe('shadow,corners');
-        expect(buildRuleValue([RuleAxis.CORNERS])).toBe('corners');
-        expect(buildRuleValue([RuleAxis.SHADOW])).toBe('shadow');
+    it('buildRuleState renders the state that names exactly these axes', () => {
+        expect(buildRuleState(['corners', 'shadow'])).toBe('both');
+        expect(buildRuleState(['shadow', 'corners'])).toBe('both');
+        expect(buildRuleState([RuleAxis.CORNERS])).toBe('corners');
+        expect(buildRuleState([RuleAxis.SHADOW])).toBe('shadow');
+        expect(buildRuleState([])).toBe('none');
+        expect(buildRuleState(new Set())).toBe('none');
     });
 
-    it('buildRuleValue returns an empty string when no known axis is named', () => {
-        expect(buildRuleValue([])).toBe('');
-        expect(buildRuleValue(new Set())).toBe('');
-        expect(buildRuleValue(['nonsense'])).toBe('');
+    it('buildRuleState treats an unknown axis as no axis at all', () => {
+        expect(buildRuleState(['nonsense'])).toBe('none');
+        expect(buildRuleState(['nonsense', RuleAxis.CORNERS])).toBe('corners');
     });
 
-    it('round-trips parseRuleAxes -> buildRuleValue', () => {
-        for (const value of ['shadow', 'corners', 'shadow,corners'])
-            expect(buildRuleValue(parseRuleAxes(value))).toBe(value);
-        expect(buildRuleValue(parseRuleAxes('corners,shadow'))).toBe('shadow,corners');
+    it('round-trips parseRuleState -> buildRuleState for every state', () => {
+        for (const state of RULE_STATES)
+            expect(buildRuleState(parseRuleState(state))).toBe(state);
+    });
+
+    it('the four states are the whole grammar, in display order', () => {
+        expect([...RULE_STATES]).toEqual(['both', 'none', 'corners', 'shadow']);
     });
 });
 
@@ -60,36 +61,31 @@ describe('resolveRule', () => {
     const mainKey = buildRuleKey('wechat');
     const fixedChildKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
 
-    it('exact fingerprint match, returning direction and axes', () => {
+    it('exact fingerprint match, returning the axes that are ours', () => {
         const rules = {
-            suppress: {
-                [mainKey]: 'corners',
-                [fixedChildKey]: 'shadow,corners',
-            },
+            [mainKey]: 'corners',
+            [fixedChildKey]: 'both',
         };
         expect(resolved(resolveRule('wechat', rules)))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners']});
+            .toEqual(['corners']);
         expect(resolved(resolveRule('wechat', rules, {hasParent: true, allowsResize: false})))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
+            .toEqual(['corners', 'shadow']);
     });
 
-    it('reads force rules from the force group', () => {
-        const rules = {force: {[mainKey]: 'corners'}};
+    it('a none rule resolves to an empty axis set, not to no rule', () => {
+        const rules = {[mainKey]: 'none'};
         expect(resolved(resolveRule('wechat', rules)))
-            .toEqual({direction: RuleDirection.FORCE, axes: ['corners']});
+            .toEqual([]);
     });
 
-    it('suppression wins when a window kind is in both groups', () => {
-        const rules = {
-            suppress: {[mainKey]: 'shadow'},
-            force: {[mainKey]: 'corners'},
-        };
+    it('a shadow-only rule leaves the corners axis out', () => {
+        const rules = {[mainKey]: 'shadow'};
         expect(resolved(resolveRule('wechat', rules)))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['shadow']});
+            .toEqual(['shadow']);
     });
 
     it('does not fall back to the application: a different window kind of the same app does not match', () => {
-        const rules = {suppress: {[fixedChildKey]: 'shadow,corners'}};
+        const rules = {[fixedChildKey]: 'both'};
 
         expect(resolveRule('wechat', rules)).toBeNull();
         expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: true})).toBeNull();
@@ -99,18 +95,22 @@ describe('resolveRule', () => {
 
     it('matches an identity whatever case the window spells it in', () => {
         const upperRule = buildRuleKey('WeChat', {hasParent: true, allowsResize: false});
-        expect(resolved(resolveRule('wechat', {suppress: {[upperRule]: 'shadow,corners'}}, {hasParent: true, allowsResize: false})))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
+        expect(resolved(resolveRule('wechat', {[upperRule]: 'both'}, {hasParent: true, allowsResize: false})))
+            .toEqual(['corners', 'shadow']);
 
         const lowerRule = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-        expect(resolved(resolveRule('WeChat', {suppress: {[lowerRule]: 'shadow,corners'}}, {hasParent: true, allowsResize: false})))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
+        expect(resolved(resolveRule('WeChat', {[lowerRule]: 'both'}, {hasParent: true, allowsResize: false})))
+            .toEqual(['corners', 'shadow']);
+    });
+
+    it('ignores an invalid stored value rather than acting on it', () => {
+        expect(resolveRule('wechat', {[mainKey]: 'nonsense'})).toBeNull();
     });
 
     it('no match returns null', () => {
-        expect(resolveRule('unknown-app', {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
-        expect(resolveRule(null, {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
-        expect(resolveRule('', {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
+        expect(resolveRule('unknown-app', {[mainKey]: 'both'})).toBeNull();
+        expect(resolveRule(null, {[mainKey]: 'both'})).toBeNull();
+        expect(resolveRule('', {[mainKey]: 'both'})).toBeNull();
     });
 
     it('every fingerprint field participates in matching', () => {
@@ -118,7 +118,7 @@ describe('resolveRule', () => {
             clientType: 'wayland', windowType: WindowType.NORMAL,
             hasParent: true, allowsResize: false, isAttachedDialog: false,
         });
-        const rules = {suppress: {[base]: 'shadow,corners'}};
+        const rules = {[base]: 'both'};
 
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).not.toBeNull();
         expect(resolveRule('app', rules, {clientType: 'x11', windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
@@ -223,10 +223,10 @@ describe('rule key contract & round-trip', () => {
     it('prefs-generated keys match resolveRule for the picked kind only', () => {
         const picked = {hasParent: true, allowsResize: false};
         const prefsGeneratedRules = {
-            suppress: {[buildRuleKey('code', picked)]: 'shadow,corners'},
+            [buildRuleKey('code', picked)]: buildRuleState(parseRuleState('both')),
         };
         expect(resolved(resolveRule('code', prefsGeneratedRules, picked)))
-            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
+            .toEqual(['corners', 'shadow']);
         expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
         expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
     });
@@ -236,56 +236,42 @@ describe('sanitizeWindowRules', () => {
     const mainKey = buildRuleKey('wechat');
     const childKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
 
-    it('passes valid fingerprint keys unchanged', () => {
+    it('passes valid fingerprint keys and state values unchanged', () => {
         const input = {
-            suppress: {
-                [mainKey]: 'corners',
-                [childKey]: 'shadow,corners',
-            },
+            [mainKey]: 'corners',
+            [childKey]: 'both',
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {
-                [mainKey]: 'corners',
-                [childKey]: 'shadow,corners',
-            },
-            force: {},
+            [mainKey]: 'corners',
+            [childKey]: 'both',
         });
     });
 
     it('drops bare app keys, legacy specifiers and malformed keys', () => {
         const input = {
-            suppress: {
-                [mainKey]: 'corners',
-                'wechat': 'shadow,corners',
-                'wechat:dialog': 'shadow,corners',
-                'wechat:title=Exit': 'shadow,corners',
-                'wechat:has_parent=true,allows_resize=false': 'shadow,corners',
-                'invalid:key:too:many:colons': 'shadow,corners',
-                'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'shadow,corners',
-                'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'shadow,corners',
-                [buildRuleKey('valid_app')]: 123,
-            },
+            [mainKey]: 'corners',
+            'wechat': 'both',
+            'wechat:dialog': 'both',
+            'wechat:title=Exit': 'both',
+            'wechat:has_parent=true,allows_resize=false': 'both',
+            'invalid:key:too:many:colons': 'both',
+            'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'both',
+            'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'both',
+            [buildRuleKey('valid_app')]: 123,
         };
-        expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[mainKey]: 'corners'},
-            force: {},
-        });
+        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'corners'});
     });
 
-    it('drops entries naming an invalid or legacy rule value', () => {
+    it('drops entries naming an invalid or legacy state', () => {
         const input = {
-            suppress: {
-                [mainKey]: 'shadow,corners',
-                [childKey]: 'not-a-valid-mode',
-                [buildRuleKey('legacy-all')]: 'all',
-                [buildRuleKey('legacy-clip')]: 'clip',
-                [buildRuleKey('legacy-disable')]: 'disable-all',
-            },
+            [mainKey]: 'both',
+            [childKey]: 'not-a-valid-mode',
+            [buildRuleKey('legacy-all')]: 'all',
+            [buildRuleKey('legacy-clip')]: 'clip',
+            [buildRuleKey('legacy-disable')]: 'disable-all',
+            [buildRuleKey('legacy-axes')]: 'shadow,corners',
         };
-        expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[mainKey]: 'shadow,corners'},
-            force: {},
-        });
+        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'both'});
     });
 
     it('canonicalises the identity to lowercase when storing it', () => {
@@ -293,9 +279,8 @@ describe('sanitizeWindowRules', () => {
         const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
 
         expect(buildRuleKey('WeChat')).toBe(canonical);
-        expect(sanitizeWindowRules({suppress: {[asSpelled]: 'corners'}})).toEqual({
-            suppress: {[canonical]: 'corners'},
-            force: {},
+        expect(sanitizeWindowRules({[asSpelled]: 'corners'})).toEqual({
+            [canonical]: 'corners',
         });
     });
 
@@ -303,87 +288,48 @@ describe('sanitizeWindowRules', () => {
         const canonical = buildRuleKey('wechat');
         const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
         const input = {
-            suppress: {
-                [asSpelled]: 'corners',
-                [canonical]: 'shadow,corners',
-            },
+            [asSpelled]: 'corners',
+            [canonical]: 'both',
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[canonical]: 'corners'},
-            force: {},
+            [canonical]: 'corners',
         });
     });
 
-    it('canonicalises axis order in stored values', () => {
-        const input = {suppress: {[mainKey]: 'corners,shadow'}};
-        expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[mainKey]: 'shadow,corners'},
-            force: {},
-        });
-    });
-
-    it('mutual exclusion: a key in both groups is kept only in suppress', () => {
-        const input = {
-            suppress: {[mainKey]: 'shadow'},
-            force: {[mainKey]: 'corners', [childKey]: 'shadow,corners'},
-        };
-        expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[mainKey]: 'shadow'},
-            force: {[childKey]: 'shadow,corners'},
-        });
-    });
-
-    it('mutual exclusion holds across spellings of one identity', () => {
-        const canonical = buildRuleKey('wechat');
-        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
-        const input = {
-            suppress: {[canonical]: 'shadow'},
-            force: {[asSpelled]: 'corners'},
-        };
-        expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[canonical]: 'shadow'},
-            force: {},
-        });
-    });
-
-    it('handles undefined or non-object input as empty groups', () => {
-        expect(sanitizeWindowRules(undefined)).toEqual({suppress: {}, force: {}});
-        expect(sanitizeWindowRules('string')).toEqual({suppress: {}, force: {}});
-        expect(sanitizeWindowRules({})).toEqual({suppress: {}, force: {}});
-    });
-
-    it('rejects a null input', () => {
-        expect(() => sanitizeWindowRules(null)).toThrow();
+    it('handles undefined or non-object input as an empty map', () => {
+        expect(sanitizeWindowRules(undefined)).toEqual({});
+        expect(sanitizeWindowRules(null)).toEqual({});
+        expect(sanitizeWindowRules('string')).toEqual({});
+        expect(sanitizeWindowRules({})).toEqual({});
     });
 });
 
 describe('withRule', () => {
     const key = buildRuleKey('wechat', {hasParent: true});
 
-    it('puts the rule in the named group', () => {
-        expect(withRule({}, RuleDirection.FORCE, key, ['shadow'])).toEqual({
-            suppress: {},
-            force: {[key]: 'shadow'},
-        });
+    it('stores the state it was given', () => {
+        expect(withRule({}, key, 'shadow')).toEqual({[key]: 'shadow'});
+        expect(withRule({}, key, 'both')).toEqual({[key]: 'both'});
     });
 
-    it('takes the kind away from the other group, whatever its casing', () => {
+    it('writes none as a rule, not as an absent one', () => {
+        expect(withRule({}, key, 'none')).toEqual({[key]: 'none'});
+    });
+
+    it('replaces the state already stored for the kind', () => {
         const stored = buildRuleKey('WeChat', {hasParent: true});
-        const moved = withRule({suppress: {[stored]: 'corners'}}, RuleDirection.FORCE, key, ['corners']);
-
-        expect(moved.suppress).toEqual({});
-        expect(moved.force).toEqual({[key]: 'corners'});
+        const updated = withRule({[stored]: 'corners'}, key, 'both');
+        expect(updated).toEqual({[key]: 'both'});
     });
 
-    it('writes the axes in canonical order', () => {
-        const moved = withRule({}, RuleDirection.SUPPRESS, key, ['corners', 'shadow']);
-        expect(moved.suppress[key]).toBe(buildRuleValue(RULE_AXIS_ORDER));
+    it('leaves the rule map it was given untouched', () => {
+        const rules = {[key]: 'shadow'};
+        withRule(rules, key, 'corners');
+        expect(rules).toEqual({[key]: 'shadow'});
     });
 
-    it('leaves the rule groups it was given untouched', () => {
-        const rules = {suppress: {[key]: 'shadow'}, force: {}};
-        withRule(rules, RuleDirection.FORCE, key, ['corners']);
-        expect(rules).toEqual({suppress: {[key]: 'shadow'}, force: {}});
+    it('refuses anything but the four states', () => {
+        expect(() => withRule({}, key, 'shadow,corners')).toThrow();
+        expect(() => withRule({}, key, undefined)).toThrow();
     });
 });
-

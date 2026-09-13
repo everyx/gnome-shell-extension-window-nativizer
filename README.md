@@ -15,10 +15,10 @@ A GNOME Shell extension. Native rounded corners and shadows, only where missing 
   - **Corners — rounded to GNOME's 15px**, whether the toolkit rounded them itself or not, unless the window already draws the Adwaita look (libadwaita, [adw-gtk3](#less-work-for-us-let-the-toolkit-draw-it), [QAdwaitaDecorations](#less-work-for-us-let-the-toolkit-draw-it)) — those are left alone. [Why →](docs/decoration-model.md)
   - Shadow and corners are independent axes.
 - **Never double-decorates.**
-  - Two shadows → darker and misaligned, so the shadow axis only ever adds one where there is none — unless you force one for a window kind yourself.
-  - The corner clip lands on the window body, never on the ring a client filled with its own shadow: that shadow survives untouched.
+  - Two shadows → darker and misaligned, so the shadow axis has one owner: a window that painted its own gets ours instead of keeping it — never in addition.
+  - The corner clip lands on the window body, not on the ring around it: a client's shadow out there is erased only when we are replacing the corners it was painted for.
   - Unsure → skip. A false skip costs one rule; a wrong decoration is a visual bug. [Why →](docs/decoration-model.md)
-- **Hand-fixable.** Wrong guess → pick the window, make a force or suppress rule [Troubleshooting →](#troubleshooting)
+- **Hand-fixable.** Wrong guess → pick the window once, and the rule is set the other way (Decorate, Leave alone, Corners only, Shadow only). [Rules →](docs/rule-model.md)
 - **Matches GNOME.** Corners, shadow and outline track a native window in every state: focused, backdrop, tiled, maximized, fullscreen, high contrast. Values from libadwaita.
 
 ## Installation
@@ -58,8 +58,9 @@ Nothing here is required. Without them those windows are rounded by the extensio
 
 ## Troubleshooting
 
-- **Missing corners or shadow** → pick the window, **force** the decoration.
-- **Decorated when it shouldn't be** → pick the window, **suppress** the decoration.
+- **Missing corners or shadow** → pick the window; it will be set to **Decorate**.
+- **Decorated when it shouldn't be** → pick the window; it will be set to **Leave alone**.
+- **Only one axis is wrong** → set the rule to **Corners only** or **Shadow only** in the dropdown.
 - **Soft text on a fractional scale** → enable **Prioritize crisp text** (trades corners for sharpness).
 
 Rules come from the pick button in the preferences, and apply per window kind, not per app.

@@ -81,6 +81,7 @@ export const ShadowActor = GObject.registerClass({
         this._windowActor = windowActor;
         this._container = container;
         this._style = null;
+        this._body = null;
         this._outgoing = null;
         this._progress = 1;
         this._elapsed = FADE_MS;
@@ -100,6 +101,28 @@ export const ShadowActor = GObject.registerClass({
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
         container.insert_child_below(this, windowActor);
+    }
+
+    /**
+     * Set the rect the shadow is cast by: the window body, in window actor coordinates.
+     * A client-side decorated window reserves a margin ring around its body for its own
+     * shadow, and a ring is not part of the window. Null or degenerate casts the whole
+     * actor, which is the same rect for a window that reserves no ring.
+     *
+     * @param {{x: number, y: number, width: number, height: number}|null} body
+     */
+    setShadowBody(body) {
+        const next = body && body.width > 0 && body.height > 0
+            ? {x: body.x, y: body.y, width: body.width, height: body.height}
+            : null;
+        const current = this._body;
+        if (current === next || (current && next &&
+            current.x === next.x && current.y === next.y &&
+            current.width === next.width && current.height === next.height))
+            return;
+
+        this._body = next;
+        this.queue_redraw();
     }
 
     /**
@@ -176,7 +199,7 @@ export const ShadowActor = GObject.registerClass({
         for (let i = 0; i < style.slices.length; i++) {
             const slice = style.slices[i];
             const box = style.boxes[i];
-            box.set_origin(slice.x1, slice.y1);
+            box.set_origin(style.cast.x + slice.x1, style.cast.y + slice.y1);
             box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
             pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
         }
@@ -188,14 +211,34 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    /** Destination boxes follow the actor's size; the sources never change. */
+    /**
+     * The padded rect the shadow is laid out over, in this actor's coordinates: the cast
+     * body shifted by nothing (the actor sits at -SHADOW_PAD from the window actor, which
+     * is where the padded body rect starts) and grown by SHADOW_PAD on each side.
+     */
+    _castRect() {
+        const body = this._body ?? {
+            x: 0, y: 0,
+            width: this.width - SHADOW_PAD * 2,
+            height: this.height - SHADOW_PAD * 2,
+        };
+        return {
+            x: body.x, y: body.y,
+            width: body.width + SHADOW_PAD * 2,
+            height: body.height + SHADOW_PAD * 2,
+        };
+    }
+
+    /** Destination boxes follow the cast rect; the sources never change. */
     _relayout(style) {
-        if (style.slices && style.width === this.width && style.height === this.height)
+        const cast = this._castRect();
+        const previous = style.cast;
+        if (style.slices && previous && previous.x === cast.x && previous.y === cast.y &&
+            previous.width === cast.width && previous.height === cast.height)
             return;
-        style.slices = shadowSlices(shadowGeometry(style.radius), this.width, this.height);
+        style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
         style.boxes = style.slices.map(() => new Clutter.ActorBox());
-        style.width = this.width;
-        style.height = this.height;
+        style.cast = cast;
     }
 
     _startFade() {

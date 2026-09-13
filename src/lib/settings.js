@@ -2,7 +2,7 @@
  * Settings - GSettings IO adapter for Window Nativizer.
  *
  * Responsibilities:
- *   - Reads and deserializes both window rule groups (a{ss})
+ *   - Reads and deserializes the window rule map (a{ss})
  *   - Serializes and saves updated rules back to GSettings
  *   - Isolates GSettings IO from pure detection and rule resolution logic
  */
@@ -10,44 +10,35 @@
 import GLib from 'gi://GLib';
 import {sanitizeWindowRules} from './rules.js';
 
-/** Windows this extension must not decorate; key -> axes to suppress. */
-export const SETTINGS_KEY_SUPPRESS_RULES = 'suppress-rules';
-
-/** Windows this extension must decorate anyway; key -> axes to force. */
-export const SETTINGS_KEY_FORCE_RULES = 'force-rules';
+/** Window-kind fingerprint -> state, which names the axes that are ours. */
+export const SETTINGS_KEY_WINDOW_RULES = 'window-rules';
 
 /**
- * Reads and sanitizes both window rule groups from GSettings.
+ * Reads and sanitizes the window rule map from GSettings.
  *
  * @param {object} settings - GSettings object
- * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
+ * @returns {Record<string, string>} canonical key -> RuleState value
  */
 export function getWindowRules(settings) {
-    return sanitizeWindowRules({
-        suppress: readRuleGroup(settings, SETTINGS_KEY_SUPPRESS_RULES),
-        force: readRuleGroup(settings, SETTINGS_KEY_FORCE_RULES),
-    });
+    return sanitizeWindowRules(readRules(settings, SETTINGS_KEY_WINDOW_RULES));
 }
 
 /**
- * Saves both window rule groups to GSettings.
+ * Saves the window rule map to GSettings.
  *
  * @param {object} settings - GSettings object
- * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} rules
+ * @param {Record<string, string>} rules
  */
 export function setWindowRules(settings, rules) {
-    const clean = sanitizeWindowRules(rules);
-    writeRuleGroup(settings, SETTINGS_KEY_SUPPRESS_RULES, clean.suppress);
-    writeRuleGroup(settings, SETTINGS_KEY_FORCE_RULES, clean.force);
+    writeRules(settings, SETTINGS_KEY_WINDOW_RULES, sanitizeWindowRules(rules));
 }
 
 /**
- * Writes one group, unless it already holds exactly these rules. Every write
- * notifies the Shell side, which then re-evaluates every tracked window, so
- * changing one group must not cost the same as changing both.
+ * Writes the rule map, unless it already holds exactly these rules. Every write
+ * notifies the Shell side, which then re-evaluates every tracked window.
  */
-function writeRuleGroup(settings, key, group) {
-    const value = new GLib.Variant('a{ss}', group);
+function writeRules(settings, key, rules) {
+    const value = new GLib.Variant('a{ss}', rules);
     try {
         if (settings?.get_value?.(key)?.equal(value))
             return;
@@ -57,7 +48,7 @@ function writeRuleGroup(settings, key, group) {
     settings.set_value(key, value);
 }
 
-function readRuleGroup(settings, key) {
+function readRules(settings, key) {
     try {
         const value = settings?.get_value?.(key);
         return value ? value.deep_unpack() : {};

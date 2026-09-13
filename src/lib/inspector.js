@@ -18,7 +18,6 @@ import {
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
 } from './pick.js';
-import {RuleDirection} from './rules.js';
 import {resolveWindowIdentity} from './window.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
@@ -203,13 +202,15 @@ export class InspectorService {
 
         const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
-        // Whether a rule for this kind would change what we draw, per direction;
-        // the prefs window refuses to add one that would not. A missing manager
-        // leaves the answers absent, and prefs then treats the rule as effective.
-        for (const direction of [RuleDirection.SUPPRESS, RuleDirection.FORCE]) {
-            const changes = this._manager?.ruleWouldChangeKind?.(win, direction);
+        // The suggestion and whether it would change anything, so prefs can write the
+        // corrective state and refuse one that would do nothing. A missing manager
+        // leaves both absent, and prefs then adds the rule anyway.
+        const state = this._manager?.suggestedRuleState?.(win);
+        if (typeof state === 'string') {
+            properties.suggestedState = state;
+            const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
             if (typeof changes === 'boolean')
-                properties[`${direction}Effect`] = String(changes);
+                properties.suggestedStateWouldChange = String(changes);
         }
 
         invocation.return_value(new GLib.Variant('(a{ss})', [properties]));

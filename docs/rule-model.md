@@ -1,7 +1,7 @@
 # The rule model
 
 A rule is keyed by an application identity plus five structural attributes of the
-window, and it moves named decoration axes in one direction. The picker writes rules,
+window, and its state names which decoration axes are ours. The picker writes rules,
 the runtime matches them, and the settings layer sanitises them; this is the shared
 description of what a key means.
 
@@ -24,33 +24,47 @@ For example:
 - `title`, `role` and the size hints are deliberately *not* part of the key. They
   change while a window lives, so they cannot define a kind.
 
-## Value grammar
+The rules live in one settings key, `window-rules` (`a{ss}`), fingerprint → state. The
+old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
+a group plus a named axis has no equivalent in the four states below.
 
-`shadow`, `corners`, or both in canonical order (`shadow,corners`). A fresh pick names
-both: the user then narrows the rule down, instead of starting from one that silently
-covers only part of the window.
+## State grammar: the four states
 
-## Two groups, one kind
+The state names the axes that are ours, and only these four are valid:
 
-| Settings key | Meaning |
-|---|---|
-| `suppress-rules` | remove the named decorations |
-| `force-rules` | add them, where the baseline decided something else already did |
+| State | Corners | Shadow | What it does |
+|---|---|---|---|
+| `both` | ours | ours | we round the window and draw its shadow |
+| `none` | theirs | theirs | we draw neither; the window stays exactly as the client drew it |
+| `corners` | ours | theirs | we round it; its own shadow stays untouched |
+| `shadow` | theirs | ours | we take its shadow over; its corners stay |
 
-A window kind belongs to **at most one** group. On collision the suppression wins:
-under-decorating is visible and reversible, while the double decoration a stray force
-rule causes is neither. The invariant is enforced when rules are read, so stored
-settings cannot break it, and the picker moves a kind between groups rather than
-letting it appear in both.
+`parseRuleState()` and `buildRuleState()` in `rules.js` are the only place this
+grammar is spelled out, so the settings layer, the picker and the runtime cannot
+disagree about it.
 
-`force` overrides the inferred baseline and nothing else — never the structural facts,
-never the preferences, never a policy. See [decoration-model.md](decoration-model.md).
+A rule names *both* axes even when it leaves one to the client: there is no rule that
+touches only one axis and lets the inference answer for the other. `corners` is a
+complete statement that the shadow is theirs, not a partial one. The one axis that
+cannot always simply be handed back is the shadow of a client that declared a ring
+(`buffer_rect - frame_rect`): clearing that ring is the clip's job, so `shadow` alone
+cannot take it over on such a window. The boundaries are listed in
+[decoration-model.md](decoration-model.md).
 
-It stays available on the shadow axis too, although that axis is reliable in one
-direction only: a shadow rule of yours is an explicit act whose consequence is visible
-(a second shadow, as against the *stray* force rule the collision rule guards against)
-and can be taken back. What it cannot do is put a shadow on a window that a structural
-fact or a policy forbids one on.
+## One rule per window kind
+
+A rule is keyed by the whole window kind, not by the application, because one
+application routinely opens kinds that need opposite answers. WeChat is the example:
+its main and chat windows run on Wayland while its article/browser windows run on
+XWayland (and declare only a 4px resize grip), and some of its dialogs are
+self-decorated where others are not. An app-wide rule would have to be wrong for one
+of them, so the picker writes exactly the kind it was pointed at and nothing else.
+
+There is no direction any more, and so no collision to resolve: one kind has one row,
+and that row says what the window ends up with on both axes. A rule overrides the
+inferred baseline and nothing else — never the structural facts (window type,
+maximized/fullscreen), never a user preference, never a policy. See
+[decoration-model.md](decoration-model.md).
 
 ## Identity
 
@@ -75,3 +89,22 @@ read, and the fingerprint has to match exactly.
 The picker and the runtime must resolve identity through the same path
 (`window.js` + `chooseWindowIdentity`), otherwise a rule created for a picked window
 could never match it at runtime.
+
+## The pick heuristic
+
+Picking a window means "this looks wrong", so the picker stores the state that
+corrects what the window currently shows. The suggestion follows the window's
+**kind** — the transient state (maximized, tiled, fullscreen) is normalized away,
+because a rule outlives it:
+
+- any axis of ours on screen → suggest `none`
+- no axis of ours → suggest `both`
+
+The guess is safe because it is symmetric and cheap to reverse: whichever state it
+lands on, the dropdown on the row offers the other three, and the rule never touches
+another window kind. It is also checked before it is stored: the extension re-runs
+the evaluator with the proposed state and refuses a rule that would change nothing,
+so an inert guess is reported instead of written. `suggestedRuleState()` and
+`suggestedRuleWouldChange()` in `detector.js` are pure and unit-tested; the inspector
+passes both answers over D-Bus with the picked window's properties, and an absent
+answer means an extension too old to judge, in which case prefs stores the rule.
