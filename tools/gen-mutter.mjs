@@ -3,8 +3,8 @@
  * gen-mutter.mjs - Parses Mutter shadow parameters and algorithms from vendor/mutter/meta-shadow-factory.c
  * and MetaWindowType from vendor/mutter/window.h, generating src/lib/mutterRules.generated.js.
  *
- * Design: narrow parser + assertions. Parses the default_shadow_classes array and algorithms,
- * computing shadow radius and spread distance, plus window type enums to eliminate enum drift.
+ * Design: narrow parser + assertions. Parses the normal window's shadow radius out of
+ * default_shadow_classes, plus the window type enums, to eliminate enum drift.
  *
  * Usage: node tools/gen-mutter.mjs [--check]
  *   --check: Verifies generated results match existing files (used by CI / check-style), exits with 1 if mismatch.
@@ -27,20 +27,6 @@ function read(name) {
     return readFileSync(p, 'utf8');
 }
 
-// Gaussian blur filter size and spread algorithm from Mutter meta-shadow-factory.c
-// get_box_filter_size: (int)(0.5 + radius * (0.75 * sqrt(2*M_PI)))
-function getBoxFilterSize(radius) {
-    return Math.floor(0.5 + radius * (0.75 * Math.sqrt(2 * Math.PI)));
-}
-
-// get_shadow_spread: odd: 3*(d/2), even: 3*(d/2)-1
-function getShadowSpread(radius) {
-    if (radius === 0)
-        return 0;
-    const d = getBoxFilterSize(radius);
-    return d % 2 === 1 ? 3 * Math.floor(d / 2) : 3 * Math.floor(d / 2) - 1;
-}
-
 function parseParams(tupleStr) {
     // Format: { 10, -1, 0, 3, 128 }
     const nums = tupleStr.replace(/[{}]/g, '').split(',').map(s => parseInt(s.trim(), 10));
@@ -53,7 +39,6 @@ function parseParams(tupleStr) {
         xOffset: x_offset,
         yOffset: y_offset,
         opacity,
-        spread: getShadowSpread(radius),
     };
 }
 
@@ -150,12 +135,8 @@ function main() {
     const windowTypes = parseWindowTypes(headerCode);
     const clientTypes = parseClientTypes(headerCode);
 
-    const normalUnfocused = classes.normal.unfocused;
-    const normalFocused = classes.normal.focused;
-
     // Minimum shadow radius for normal window (unfocused: 8px, focused: 10px)
-    const minNormalRadius = normalUnfocused.radius;
-    const minNormalSpread = normalUnfocused.spread;
+    const minNormalRadius = classes.normal.unfocused.radius;
 
     const banner = `/**
  * mutterRules.generated.js - Automatically parsed and generated from:
@@ -179,39 +160,9 @@ export const WindowType = Object.freeze(${JSON.stringify(windowTypes, null, 4)})
 export const WindowClientType = Object.freeze(${JSON.stringify(clientTypes, null, 4)});
 
 /**
- * Mutter preset shadow style class metadata (MetaShadowClassInfo default_shadow_classes)
- */
-export const MUTTER_SHADOW_CLASSES = Object.freeze(${JSON.stringify(classes, null, 4)});
-
-/**
- * Mutter normal window unfocused minimum shadow radius (px)
- * Source: default_shadow_classes["normal"].unfocused.radius
- */
-export const MUTTER_MIN_NORMAL_SHADOW_RADIUS = ${minNormalRadius};
-
-/**
- * Mutter normal window unfocused minimum shadow outward spread distance (px)
- * Calculated from get_shadow_spread(8)
- */
-export const MUTTER_MIN_NORMAL_SHADOW_SPREAD = ${minNormalSpread};
-
-/**
- * Mutter normal window focused shadow radius (px)
- * Source: default_shadow_classes["normal"].focused.radius
- */
-export const MUTTER_FOCUSED_NORMAL_SHADOW_RADIUS = ${normalFocused.radius};
-
-/**
- * Mutter normal window focused shadow outward spread distance (px)
- * Calculated from get_shadow_spread(10)
- */
-export const MUTTER_FOCUSED_NORMAL_SHADOW_SPREAD = ${normalFocused.spread};
-
-/**
  * Minimum threshold for CSD decoration determination (logical pixels).
  *
- * In Mutter's definition, even an unfocused normal window has a shadow radius of ${minNormalRadius}px
- * and a spread extent of ${minNormalSpread}px.
+ * In Mutter's definition, even an unfocused normal window has a shadow radius of ${minNormalRadius}px.
  * If a window's declared content margin (Insets / Frame Extents) on any side is less than ${minNormalRadius}px
  * (e.g. 4px declared by WeChat/CEF frameless windows), the geometry physically cannot accommodate
  * a normal window shadow. Such margins are merely mouse resize grips or micro-borders, meaning
@@ -236,8 +187,6 @@ export const MUTTER_CSD_MIN_INSET_THRESHOLD = ${minNormalRadius};
 
     writeFileSync(OUT, code, 'utf8');
     console.log(`[gen-mutter] Successfully parsed and generated: ${path.relative(ROOT, OUT)}`);
-    console.log(`  - Normal window minimum shadow radius: ${minNormalRadius}px (spread: ${minNormalSpread}px)`);
-    console.log(`  - Normal window focused shadow radius: ${normalFocused.radius}px (spread: ${normalFocused.spread}px)`);
     console.log(`  - CSD genuine shadow threshold: >= ${minNormalRadius}px`);
 }
 
