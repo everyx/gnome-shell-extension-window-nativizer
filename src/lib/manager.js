@@ -199,7 +199,7 @@ export class Manager {
         if (this._windows.has(win))
             return;
         const state = {
-            clip: null, clipTarget: null, shadow: null,
+            clip: null, clipTarget: null, clipBody: null, shadow: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };
@@ -332,28 +332,34 @@ export class Manager {
         if (!actor)
             return;
 
+        const target = this._getClipTarget(win, actor);
+        const body = this._bodyRect(win, target);
+        // No placeable body means no rounding. Rounding the actor instead is exactly
+        // the cut into a client's own shadow that this clip exists to avoid.
+        const wanted = wantClip && Boolean(body);
+
         const hasClip = Boolean(state.clip);
-        if (wantClip !== hasClip) {
-            if (wantClip) {
+        if (wanted !== hasClip) {
+            if (wanted) {
                 state.clip = new RoundedClipEffect();
-                state.clipTarget = this._getClipTarget(win, actor);
+                state.clipTarget = target;
                 state.clipTarget.add_effect(state.clip);
             } else {
                 this._removeClipEffect(state);
                 state.clip = null;
                 state.clipTarget = null;
             }
-        } else if (wantClip) {
+        } else if (wanted) {
             // X11 may replace the surface child (assign_surface_actor); the effect
             // would otherwise stay orphaned on the dead actor. Re-pin when moved.
             // A missing child falls back to the window actor until one appears.
-            const target = this._getClipTarget(win, actor);
             if (target !== state.clipTarget) {
                 this._removeClipEffect(state);
                 state.clipTarget = target;
                 target.add_effect(state.clip);
             }
         }
+        state.clipBody = state.clip ? body : null;
     }
 
     /**
@@ -493,6 +499,26 @@ export class Manager {
         this._syncShadow(win, false);
     }
 
+    /**
+     * The window body inside the actor the clip is attached to: the buffer, body plus
+     * the margin ring the client drew its own shadow into. Null when it cannot be
+     * placed - the two rectangles belong to different coordinate frames (a framed X11
+     * window reports its buffer in frame coordinates), or the actor lags a resize.
+     */
+    _bodyRect(win, target) {
+        const b = win.get_buffer_rect?.();
+        const f = win.get_frame_rect?.();
+        if (!b || !f || f.width <= 0 || f.height <= 0)
+            return null;
+
+        const x = f.x - b.x;
+        const y = f.y - b.y;
+        if (x < 0 || y < 0 || x + f.width > target.width || y + f.height > target.height)
+            return null;
+
+        return {x, y, width: f.width, height: f.height};
+    }
+
     /** Applies style -> shader uniforms and the shadow's baked texture */
     _applyStyle(win, style) {
         const state = this._windows.get(win);
@@ -500,8 +526,15 @@ export class Manager {
         if (!state || !actor)
             return;
 
-        if (state.clip)
-            state.clip.setParams(state.clipTarget.width, state.clipTarget.height, style.radius, style.outline);
+        if (state.clip && state.clipBody) {
+            state.clip.setParams({
+                width: state.clipTarget.width,
+                height: state.clipTarget.height,
+                frame: state.clipBody,
+                radius: style.radius,
+                outline: style.outline,
+            });
+        }
         if (state.shadow) {
             // If corner clipping is skipped (square corners), the shadow fits a square
             // outline instead. The actor cross-fades to a new style on its own.

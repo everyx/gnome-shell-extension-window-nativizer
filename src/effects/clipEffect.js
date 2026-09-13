@@ -1,18 +1,24 @@
 /**
- * Rounded corner clipping effect: attached to window actor.
- * Uses GLSL to clip window contents to a rounded rectangle and adds an inner highlight outline.
+ * Rounded corner clipping effect: attached to the window actor, clips the window
+ * BODY to a rounded rectangle and adds an inner highlight outline.
  *
- * Shader mathematical principles:
- *   SDF (Signed Distance Field) computes distance d to window edge:
- *     p = cogl_tex_coord0_in.xy * uSize - halfSize (window center as origin)
- *     d = sdRoundedBox(p, halfSize, uRadius)
- *     inside window d < 0, outside window d > 0, boundary d = 0
- *   Rounded clipping:
- *     cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0) (1px anti-aliasing)
- *   Inner highlight outline (libadwaita 1px white window outline):
- *     Snugs along inside window boundary by 1px (d in [-1.0, 0.0])
- *     clamp(1.0 + d, 0.0, 1.0) strictly evaluates to 0 when d <= -1.0
- *     uOutline.rgb normalized to [0.0, 1.0]
+ * The body is not the whole actor. A client-side decorated window reserves a ring
+ * of margin around it for its own shadow (buffer_rect - frame_rect), and that ring
+ * has to survive untouched. The clip is therefore the frame rectangle *inside* the
+ * actor, and only the four corner regions within its square bounds: everything
+ * beyond those bounds stays exactly as the client painted it.
+ *
+ * Shader: signed distance to the body's rounded rectangle
+ *   frameCenter/frameHalf come from uFrame, p is the position in the redirected texture
+ *   d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)
+ *   inside the body d < 0, in a corner to remove d > 0, boundary d = 0
+ *   inSquare = 1 while the point stays inside the body's square bounds, which is
+ *   what keeps the client's shadow ring out of the cut
+ * Rounded clipping: cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0) * inSquare
+ * Inner highlight outline (libadwaita 1px window outline):
+ *   Snugs along inside the body boundary by 1px (d in [-1.0, 0.0])
+ *   clamp(1.0 + d, 0.0, 1.0) strictly evaluates to 0 when d <= -1.0
+ *   uOutline.rgb normalized to [0.0, 1.0]
  */
 
 import GObject from 'gi://GObject';
@@ -20,7 +26,8 @@ import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 
 const DECLARATIONS = `
-uniform vec2 uSize;      // Window size (width, height)
+uniform vec2 uSize;      // Actor size (width, height)
+uniform vec4 uFrame;     // Window body inside the actor: x, y, width, height
 uniform float uRadius;   // Corner radius
 uniform vec4 uOutline;   // Inner highlight (r, g, b, alpha), disabled when alpha=0, rgb in [0.0, 1.0]
 
@@ -36,21 +43,29 @@ float sdRoundedBox(vec2 p, vec2 b, float r) {
 `;
 
 const CODE = `
-    vec2 halfSize = uSize * 0.5;
     vec2 quadSize = uSize + FBO_EXTRA;
-    vec2 c = FBO_OFFSET + halfSize;
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
-    float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // Inner highlight: 1px band inside window edge (d in [-1.0, 0.0]), tracks corner curvature and fades with window
+    vec2 frameCenter = uFrame.xy + uFrame.zw * 0.5 + FBO_OFFSET;
+    vec2 frameHalf = uFrame.zw * 0.5;
+    vec2 fromCenter = p - frameCenter;
+    float d = sdRoundedBox(fromCenter, frameHalf, uRadius);
+
+    // 1 while the point is inside the body's square bounds, 0 out in the margin
+    // ring the client filled with its own shadow.
+    vec2 beyond = step(vec2(0.0), abs(fromCenter) - frameHalf);
+    float inSquare = 1.0 - max(beyond.x, beyond.y);
+
+    // Inner highlight: 1px band inside body edge (d in [-1.0, 0.0]), tracks corner curvature and fades with window
     if (uOutline.a > 0.0) {
-        float m = clamp(1.0 + d, 0.0, 1.0) * uOutline.a * cogl_color_in.a;
+        float m = clamp(1.0 + d, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    // Rounded clipping (1px anti-aliasing; zeroes out outside regions and clips excess drawing)
-    cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0);
+    // Rounded clipping (1px anti-aliasing): removes the body's corner regions and
+    // leaves the margin ring alone.
+    cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0) * inSquare;
 `;
 
 /** Registered type name, the stable identity of one of our effects. */
@@ -62,14 +77,15 @@ export const RoundedClipEffect = GObject.registerClass({
     _init() {
         super._init();
         this._uSize = this.get_uniform_location('uSize');
+        this._uFrame = this.get_uniform_location('uFrame');
         this._uRadius = this.get_uniform_location('uRadius');
         this._uOutline = this.get_uniform_location('uOutline');
 
         // -1 rather than 0: no real window reaches it, so the first call always uploads.
-        this._lastWidth = -1;
-        this._lastHeight = -1;
-        this._lastRadius = -1;
-        this._lastOutline = undefined;
+        this._last = {
+            width: -1, height: -1, frameX: -1, frameY: -1,
+            frameWidth: -1, frameHeight: -1, radius: -1, outline: undefined,
+        };
     }
 
     vfunc_build_pipeline() {
@@ -78,23 +94,36 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * Update clipping parameters (size/radius/outline; disabled when outline is null).
+     * Update clipping parameters (actor size, the window body inside it, radius and
+     * outline; the outline is disabled by null).
      *
      * Uploading a uniform is not free: it dirties Cogl's pipeline state, and the
      * repaint schedules a compositor frame. A reconciliation runs on every window
      * event, so most calls carry the parameters already in the pipeline.
+     *
+     * @param {object} params
+     * @param {number} params.width - Actor width
+     * @param {number} params.height - Actor height
+     * @param {{x: number, y: number, width: number, height: number}} params.frame - Body, in actor coordinates
+     * @param {number} params.radius - Corner radius
+     * @param {object|null} params.outline - `{color: number[], alpha: number}`, or null
      */
-    setParams(width, height, radius, outline) {
-        if (this._lastWidth === width && this._lastHeight === height &&
-            this._lastRadius === radius && this._lastOutline === outline)
+    setParams({width, height, frame, radius, outline}) {
+        const last = this._last;
+        if (last.width === width && last.height === height &&
+            last.frameX === frame.x && last.frameY === frame.y &&
+            last.frameWidth === frame.width && last.frameHeight === frame.height &&
+            last.radius === radius && last.outline === outline)
             return;
 
-        this._lastWidth = width;
-        this._lastHeight = height;
-        this._lastRadius = radius;
-        this._lastOutline = outline;
+        Object.assign(last, {
+            width, height, radius, outline,
+            frameX: frame.x, frameY: frame.y,
+            frameWidth: frame.width, frameHeight: frame.height,
+        });
 
         this.set_uniform_float(this._uSize, 2, [width, height]);
+        this.set_uniform_float(this._uFrame, 4, [frame.x, frame.y, frame.width, frame.height]);
         this.set_uniform_float(this._uRadius, 1, [radius]);
         const u = outline
             ? [
