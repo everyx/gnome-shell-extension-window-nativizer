@@ -78,20 +78,18 @@ export function checkDecorationEligibility({
     return {eligible: true, reason: ''};
 }
 /**
- * The decoration we would apply with no user rule, answered per axis.
- * The four-layer model behind this is in docs/decoration-model.md.
- *
- * Both axes answer independently based on window structural facts:
- * - Shadows are only drawn for windows lacking a native compositor or CSD shadow.
- * - Rounded corners are applied to all windows lacking native rounded corners.
+ * What we would draw with no user rule, one axis at a time: the shadow by who
+ * already paints one, the corners by whether the window already looks like
+ * libadwaita. The model behind both, and where it diverges from Mutter on
+ * purpose, are in docs/decoration-model.md.
  *
  * @param {object} params
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - per-side content margin, logical px
- * @param {number} params.sideH - per-side content margin, logical px
+ * @param {number} params.sideW - per-side declared margin, logical px
+ * @param {number} params.sideH - per-side declared margin, logical px
  * @param {number} [params.insetThreshold]
- * @param {boolean} [params.hasSsd=false] - Mutter already draws frame/titlebar
- * @param {boolean} [params.isAdwaita=false] - Libadwaita / Libhandy native app (per-process pid linkage, see adwaitaDetector.js)
+ * @param {boolean} [params.hasSsd=false] - Mutter drew a frame/titlebar
+ * @param {boolean} [params.nativeLikeCorners=false] - the client's corners already look like ours
  * @returns {{shadow: boolean, corners: boolean, reason: string}}
  */
 export function inferDecorationBaseline({
@@ -99,32 +97,33 @@ export function inferDecorationBaseline({
     sideW, sideH,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
     hasSsd = false,
-    isAdwaita = false,
+    nativeLikeCorners = false,
 }) {
-    // Native Libadwaita / Libhandy apps already draw their own rounded corners
-    // and drop shadows; skip both so we do not double-clip or double-shadow them.
-    if (isAdwaita)
-        return {shadow: false, corners: false, reason: 'has-adwaita-csd'};
+    const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
-    // Server-side decorations (SSD, traditional X11 app with Mutter frame/titlebar):
-    // The frames client draws the frame and its own shadow (the compositor draws
-    // none: has_shadow() returns FALSE once a frame exists), but corners are square.
-    // Keep their shadow and clip corners to match libadwaita.
-    if (hasSsd)
-        return {shadow: false, corners: true, reason: 'has-ssd-frame'};
+    // The shadow axis stands only on what the window declares and on Mutter's own
+    // gates, the two things that say who already paints a shadow.
+    let shadow = true;
+    let reason = `no-csd(${insets} < ${insetThreshold})`;
 
-    // A genuine client-side shadow reserves margin on every side; an oversized
-    // margin on a single axis is instead a resize grip or partial decoration.
-    if (sideW >= insetThreshold && sideH >= insetThreshold)
-        return {shadow: false, corners: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
+    if (hasSsd) {
+        shadow = false;
+        reason = 'has-ssd-frame';
+    } else if (sideW >= insetThreshold && sideH >= insetThreshold) {
+        shadow = false;
+        reason = `has-csd(${insets} >= ${insetThreshold})`;
+    } else if (isX11 && sideW <= 0 && sideH <= 0) {
+        shadow = false;
+        reason = 'x11-mutter-native-shadow';
+    }
 
-    // X11 / XWayland without custom frame extents (e.g. WPS Office, Dida): Mutter
-    // draws the box shadow itself (meta-window-actor-x11.c:has_shadow), but the window
-    // itself has sharp square corners. Retain native shadow and clip corners.
-    if (isX11 && sideW <= 0 && sideH <= 0)
-        return {shadow: false, corners: true, reason: 'x11-mutter-native-shadow'};
+    // The corner axis has no such evidence to read - a surface never says whether it is
+    // already rounded - so it rests on the one inference we allow ourselves. The shadow
+    // keeps the reason it was decided by, which was a declared fact and not this.
+    if (nativeLikeCorners)
+        return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
 
-    return {shadow: true, corners: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
+    return {shadow, corners: true, reason};
 }
 /**
  * Checks whether the scaling factor is fractional. Invalid or <= 0 counts as no.
@@ -184,7 +183,7 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [isFullscreen=false] - Whether window is fullscreen
  * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
  * @property {boolean} [isX11=false] - Whether client is X11 / XWayland
- * @property {boolean} [isAdwaita=false] - Whether window is native Libadwaita / Libhandy app (per-process pid linkage)
+ * @property {boolean} [nativeLikeCorners=false] - Whether the client's corners already look like ours
  * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
  * @property {boolean} [hasParent=false] - Whether window has transient parent
  * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
@@ -210,7 +209,7 @@ export function evaluateWindowActions({
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
     isX11 = false,
-    isAdwaita = false,
+    nativeLikeCorners = false,
     windowType = WindowType.NORMAL,
     hasParent = false,
     isAttachedDialog = false,
@@ -239,7 +238,7 @@ export function evaluateWindowActions({
 
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
-        isX11, sideW: w / 2, sideH: h / 2, insetThreshold, hasSsd, isAdwaita,
+        isX11, sideW: w / 2, sideH: h / 2, insetThreshold, hasSsd, nativeLikeCorners,
     });
 
     const rule = resolveRule(wmClass, rules, {
@@ -270,7 +269,7 @@ export function evaluateWindowActions({
         (style.radius > 0 || Boolean(style.outline));
 
     let reason = rule
-        ? `rule-applied(${wmClass}:${rule.direction}:${buildRuleValue(rule.axes)})`
+        ? `${rule.source === 'builtin' ? 'builtin-rule' : 'rule-applied'}(${wmClass}:${rule.direction}:${buildRuleValue(rule.axes)})`
         : baseline.reason;
     if (shadowBeforeTiling && !shadow)
         reason = `tile-match(suppress-shadow,${reason})`;

@@ -9,7 +9,7 @@ tested without a session; the processes only gather inputs and apply results.
 | Module | Responsibility |
 |---|---|
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
-| `lib/adwaitaDetector.js` | shell-side probe: detects Libadwaita / Libhandy process linking (`/proc/pid/maps`) |
+| `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted only by the corner axis |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |

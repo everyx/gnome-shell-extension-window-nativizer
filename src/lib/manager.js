@@ -19,7 +19,7 @@ import {
 import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
-import * as adwaitaDetector from './adwaitaDetector.js';
+import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners} from './nativeLikeCorners.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
@@ -105,7 +105,7 @@ export class Manager {
         // Only once nothing can re-add them: with the global signals gone, no reconcile
         // can run mid-sweep.
         this._tearDownStrays();
-        adwaitaDetector.clearAdwaitaCache();
+        destroyNativeLikeCorners();
         shadowTexture.destroy();
     }
 
@@ -265,7 +265,7 @@ export class Manager {
                 }
             }
             if (!hasPeer)
-                adwaitaDetector.clearAdwaitaCache(pid);
+                forgetProcess(pid);
         }
     }
 
@@ -466,7 +466,7 @@ export class Manager {
             isFullscreen: win.is_fullscreen(),
             hasSsd: Boolean(win.decorated),
             isX11: clientType === CLIENT_TYPE_X11,
-            isAdwaita: adwaitaDetector.isWindowAdwaita(win),
+            nativeLikeCorners: hasNativeLikeCorners(win),
             windowType: win.get_window_type(),
             hasParent: Boolean(win.get_transient_for?.()),
             isAttachedDialog: Boolean(win.is_attached_dialog?.()),

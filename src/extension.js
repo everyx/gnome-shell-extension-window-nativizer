@@ -26,16 +26,14 @@ export default class WindowNativizerExtension extends Extension {
             this._inspector = new InspectorService(manager);
         } catch (e) {
             // A half-enabled extension must not wedge the idempotency guard: roll the
-            // partial state back and let the failure surface. Teardown failing too must
-            // not swallow that error or leave the guard set.
+            // partial state back and let the failure surface. disable() clears that guard
+            // itself, so a teardown that fails leaves the extension needing a reload
+            // rather than re-enabling on top of a manager that is still live.
             try {
                 this.disable();
             } catch (teardownError) {
                 // Teardown is best-effort here; surface it rather than hide a leak.
                 logError(teardownError, '[window-nativizer] teardown after a failed enable()');
-            } finally {
-                this._manager = null;
-                this._inspector = null;
             }
             throw e;
         }

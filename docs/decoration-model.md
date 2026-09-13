@@ -11,26 +11,34 @@ Mutter does, so a change there does not have to rediscover them.
 ## Four layers, applied in order
 
 ```
-can we decorate it?   window type, maximized, fullscreen, tiny helper    ── no ──▶ leave it
-is it already drawn?  declared margins, Mutter native shadow (X11), Libadwaita / Libhandy maps ── yes ─▶ leave it
-your rules?           suppress / force, moving only the axes they name
-any policy?           tiled neighbour, crisp text on fractional scaling
-                      └───────────────────────────────▶ draw
+can we decorate it?        window type, maximized, fullscreen, tiny helper   ── no ──▶ leave it
+
+shadow: who paints one?    declared margin, SSD frame, Mutter's X11 shadow   ── yes ─▶ skip
+corners: do they
+already look like ours?    the Adwaita look                                  ── yes ─▶ skip
+
+your rules?                suppress / force, moving only the axes they name
+any policy?                tiled neighbour, crisp text on fractional scaling
+                           └───────────────────────────────▶ draw
 ```
 
 1. **Structural eligibility** — `checkDecorationEligibility()`. Window type,
    maximized/fullscreen, and a degenerate size (helper surfaces such as
    wl-clipboard's 1x1 transparent toplevel). These are facts about the window,
    and a user rule must never override them.
-2. **Inferred baseline** — `inferDecorationBaseline()`. Answered per axis:
-   - **Shadows**: Only drawn when the window has neither a client-side CSD shadow
-     nor a Mutter native shadow nor a frames-client frame (SSD).
-   - **Rounded corners**: Applied to all windows lacking native rounded corners.
-     Windows using Libadwaita / Libhandy already draw native rounded corners and
-     are skipped (per-process pid linkage, so mixed windows of one process share
-     one answer). Server-side decorated (SSD) windows keep the frames-client shadow
-     and X11 windows without custom frame extents keep Mutter's native shadow, while
-     both receive rounded corners clipped at the surface level.
+2. **Inferred baseline** — `inferDecorationBaseline()`. The two axes do not rest on
+   the same kind of evidence, and each is answered only from its own:
+   - **Shadows** are a *declared* fact, so this axis never guesses. A window is
+     skipped when it declares a shadow margin of its own (`buffer_rect - frame_rect`
+     reaching the threshold on both axes — the signal Mutter itself reads as
+     `has_custom_frame_extents`), when Mutter drew the frame instead (SSD), or when
+     it is a bare X11 window whose shadow Mutter paints itself.
+   - **Rounded corners** are *not* observable: a surface never reports whether it is
+     already rounded, and Mutter has no concept of it at all. This axis therefore
+     rests on an inference — the Adwaita look implies the Adwaita radius — and it is
+     the only axis allowed to consult it (*When a window's corners already look like
+     ours*). Everything else is rounded to our radius, whether the client rounded
+     itself or not (*Which rectangle the clip lands on*).
 3. **User rules** — `src/lib/rules.js`. `suppress-rules` and `force-rules` move the
    axes they name, in one direction. The only layer that may turn an axis back on.
 4. **State modifiers** — inside `evaluateWindowActions()`. Applied last, on top of
@@ -39,6 +47,50 @@ any policy?           tiled neighbour, crisp text on fractional scaling
 
 A `force` rule overrides layer 2 and nothing else: it exists to correct a wrong
 inference, not to overrule a fact or a policy.
+
+## When a window's corners already look like ours
+
+`nativeLikeCorners.js` answers this, and only the corner axis consults it. Nothing
+here claims a window is native: most of what it detects reimplements the Adwaita look
+outside GNOME. Two kinds of thing provide that look, and they are visible in
+different places:
+
+| Provider | How it is visible |
+|---|---|
+| libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
+| Qt's Adwaita decoration | the process maps `wayland-decoration-client/libqadwaitadecorations.so`, or the same-named `libadwaita.so` plugin — a reimplementation that links no libadwaita, so only its own name gives it away |
+| a theme that copies libadwaita's stylesheet (adw-gtk3 and its variants) | nothing inside the process changes; only the configured `gtk-theme` name says so |
+
+The theme branch is gated on the process mapping a GTK library. Qt, Chromium and
+Electron never read that theme, and without the gate a Qt window would be skipped just
+because the user's GTK theme happens to be an Adwaita copy.
+
+Reading the theme *name* rather than the window's declared margin is deliberate. The
+margin does track the effective theme — measured on one GTK4 program with only the
+theme changed: adw-gtk3 declares 25px per side, the stock themes 14/12 — but it cannot
+say *which* theme produced it: Chromium's tab-strip shadow declares 24px on one axis
+while its corners are 8px. A name is also a fact about the configuration, which is what
+an inference about the configuration should rest on.
+
+Both branches read the process, not the window, so a process that maps libadwaita and
+also opens a window without client-side decoration — a splash, or one forced to SSD —
+is skipped along with the rest. Both ways of being wrong are harmless: a window we skip
+when we should not keeps the corners its toolkit drew, and a window we clip when we
+need not costs one offscreen pass and comes out identical.
+
+## Which rectangle the clip lands on
+
+The actor a clip is attached to is not the rectangle to round: for a client-side
+decorated window it is the buffer, which is the body plus the ring the client filled
+with its own shadow. `RoundedClipEffect` takes the body (`frame_rect`, expressed inside
+the actor) and removes only the four corner regions that fall inside the body's square
+bounds; everything beyond those bounds survives exactly as the client painted it.
+Without that distinction, rounding a decorated window would cut the outer edge of its
+shadow and leave the body square.
+
+Rounding a window that already rounds itself is therefore safe, and easy to reason
+about: our radius is libadwaita's, so clipping a window libadwaita already drew is an
+exact identity, while a toolkit that rounds less ends up at ours.
 
 ## Where we deliberately differ from Mutter
 
@@ -54,10 +106,10 @@ inference, not to overrule a fact or a policy.
   beneath-region (`shadow_clip`, strict clip), and it is a soft Gaussian blur of the
   window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c` gives a
   normal window `{radius 10, opacity 128}` focused), not an opaque square. Either way
-  no square shadow sits under the corners we cut, so we clip the window's surface
-  child actor (`actor.get_first_child()`) with `RoundedClipEffect` to the native
-  15px (`window.radius` in `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and
-  the cut corners reveal desktop background. SSD is an inference (layer 2), not a
+  no square shadow sits under the corners we cut, so we clip the window's body with
+  `RoundedClipEffect` to the native 15px (`window.radius` in
+  `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and the cut corners reveal
+  desktop background. SSD is an inference (layer 2), not a
   structural fact as it once was: a `force` rule may override it.
   X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
   native shadow, so those receive both shadow and rounded corners.
@@ -109,11 +161,18 @@ session:
 
 | Part | Where | Size |
 |---|---|---|
-| clip | `clipEffect.js`, on the window actor (surface actor on X11) | window size + 3px, ~8.3 MB at 1920x1080 |
+| clip | `clipEffect.js`, on the window actor (surface child on X11) | window size + 3px, ~8.3 MB at 1920x1080 |
 | shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window |
 
 The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and a
-window with no shadow never touches a baked buffer.
+window with no shadow never touches a baked buffer. It costs nothing while nothing
+damages the window: it is one framebuffer, re-rendered whole whenever the window paints,
+local damage included. Measured against one 500x350 target (`pnpm run benchmark:perf`):
+no idle CPU difference, about 0.9 ms of shell CPU per frame while dragging a resize, and
+the framebuffer's size in the shell's memory.
+
+That per-window cost is what `nativeLikeCorners.js` exists to avoid paying where the
+clip would be an identity — a window already drawn with libadwaita's radius.
 
 The shadow's buffer is small because a shadow is a blurred rounded rectangle: its pixels
 depend on the window's size only through the length of its straight edges, so four corners

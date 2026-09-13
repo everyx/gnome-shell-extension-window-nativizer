@@ -145,11 +145,16 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toBe('has-ssd-frame');
     });
 
-    it('native Libadwaita / Libhandy apps -> skips shadow and corners', () => {
-        const r = inferDecorationBaseline({isAdwaita: true, ...marginsFromRects(800, 600, 800, 600)});
-        expect(r.shadow).toBeFalse();
-        expect(r.corners).toBeFalse();
-        expect(r.reason).toBe('has-adwaita-csd');
+    it('corners that already look like ours -> left alone, while the shadow follows its margins', () => {
+        const bare = inferDecorationBaseline({nativeLikeCorners: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(bare.corners).toBeFalse();
+        expect(bare.shadow).toBeTrue(); // no margin declared: no shadow of its own to respect
+        expect(bare.reason).toContain('native-like-corners');
+        expect(bare.reason).toContain('no-csd'); // the shadow axis keeps the reason it decided by
+
+        const declared = inferDecorationBaseline({nativeLikeCorners: true, ...marginsFromRects(850, 650, 800, 600)});
+        expect(declared.corners).toBeFalse();
+        expect(declared.shadow).toBeFalse(); // its own declared CSD shadow
     });
 
     it('X11 with a small non-zero grip declares custom frame extents -> baseline still decorates', () => {
@@ -159,11 +164,11 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toContain('no-csd');
     });
 
-    it('genuine self-drawn CSD shadow (e.g. GTK4/Adwaita, single side 20px+ >= 8px) -> baseline off', () => {
+    it('genuine self-drawn CSD shadow (single side 20px+ >= 8px) -> keeps its shadow, still rounds', () => {
         // Margins: 20px left/right (bufferWidth=440, frameWidth=400), 20px top/bottom
         const r = inferDecorationBaseline(marginsFromRects(440, 340, 400, 300));
         expect(r.shadow).toBeFalse();
-        expect(r.corners).toBeFalse();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toContain('has-csd');
         expect(r.reason).toContain(`20.0x20.0 >= ${MUTTER_CSD_MIN_INSET_THRESHOLD}`);
     });
@@ -292,15 +297,27 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('has-ssd-frame');
     });
 
-    it('native Libadwaita window: skips both shadow and clip', () => {
+    it('corners that already look like ours: clip skipped, shadow still read from the margins', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            isAdwaita: true,
+            nativeLikeCorners: true,
+            wmClass: 'org.gnome.Nautilus',
+        });
+        expect(res.drawShadow).toBeTrue(); // baseWin declares no margin
+        expect(res.drawClip).toBeFalse();
+        expect(res.reason).toContain('native-like-corners');
+        expect(res.reason).toContain('no-csd');
+    });
+
+    it('corners that already look like ours, with a declared margin: both axes left alone', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 440, bufferHeight: 340,
+            nativeLikeCorners: true,
             wmClass: 'org.gnome.Nautilus',
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
-        expect(res.reason).toBe('has-adwaita-csd');
     });
 
     it('X11 window with small frame extents (WeChat 4px resize grip): decorates with shadow and clip', () => {
@@ -363,16 +380,18 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('rule-applied(wechat:suppress:corners)');
     });
 
-    it('CSD window (GTK4): no decorations applied regardless of suppress rules', () => {
-        const csdWin = {
-            ...baseWin,
-            bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
-            wmClass: 'gtk4-app',
+    it('CSD window (GTK4): keeps its own shadow and rounds the corners unless a rule says otherwise', () => {
+        const win = {...baseWin, bufferWidth: 460, bufferHeight: 360, wmClass: 'gtk4-app'};
+        const plain = evaluateWindowActions(win);
+        expect(plain.drawShadow).toBeFalse();
+        expect(plain.drawClip).toBeTrue();
+
+        const suppressed = evaluateWindowActions({
+            ...win,
             rules: {suppress: {[buildRuleKey('gtk4-app')]: 'corners'}},
-        };
-        const res = evaluateWindowActions(csdWin);
-        expect(res.drawShadow).toBeFalse();
-        expect(res.drawClip).toBeFalse();
+        });
+        expect(suppressed.drawShadow).toBeFalse();
+        expect(suppressed.drawClip).toBeFalse();
     });
 
     it('CSD window (GTK4): the has-csd baseline reason surfaces when no rule matches', () => {
@@ -382,14 +401,14 @@ describe('evaluateWindowActions', () => {
             wmClass: 'gtk4-app',
         });
         expect(res.drawShadow).toBeFalse();
-        expect(res.drawClip).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toContain('has-csd');
     });
 
     it('force rule re-enables both axes on a has-csd baseline', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: both off
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: own shadow, corners ours
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow,corners'}},
         });
@@ -410,10 +429,10 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('rule-applied');
     });
 
-    it('per-axis force: corners turned ON while shadow keeps the inferred baseline', () => {
+    it('per-axis force: corners on a has-csd baseline leaves the inferred actions alone', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: shadow=false, corners=false
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: own shadow, corners ours
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'corners'}},
         });
@@ -425,12 +444,12 @@ describe('evaluateWindowActions', () => {
     it('per-axis force: shadow turned ON while corners keeps the inferred baseline', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: shadow=false, corners=false
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: own shadow, corners ours
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow'}},
         });
         expect(res.drawShadow).toBeTrue();
-        expect(res.drawClip).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('rule-applied(gtk4-app:force:shadow)');
     });
 
@@ -753,8 +772,13 @@ describe('pickedRuleWouldChange', () => {
         expect(pickedRuleWouldChange(propertiesFor(plainWindow), plainWindow, RuleDirection.SUPPRESS)).toBeTrue();
     });
 
+    it('reports an effect when suppressing the corners of a window that draws its own shadow', () => {
+        expect(pickedRuleWouldChange(propertiesFor(csdWindow), csdWindow, RuleDirection.SUPPRESS)).toBeTrue();
+    });
+
     it('reports no effect when suppressing a decoration we never draw', () => {
-        expect(pickedRuleWouldChange(propertiesFor(csdWindow), csdWindow, RuleDirection.SUPPRESS)).toBeFalse();
+        const native = {...csdWindow, nativeLikeCorners: true};
+        expect(pickedRuleWouldChange(propertiesFor(native), native, RuleDirection.SUPPRESS)).toBeFalse();
     });
 
     it('reports no effect either way for a window type we never decorate', () => {
@@ -770,14 +794,15 @@ describe('pickedRuleWouldChange', () => {
         expect(pickedRuleWouldChange(propertiesFor(maximized), maximized, RuleDirection.SUPPRESS)).toBeTrue();
     });
 
-    it('preserves the hasSsd / isAdwaita kind attributes while normalizing transient state', () => {
+    it('preserves the hasSsd / nativeLikeCorners kind attributes while normalizing transient state', () => {
         // Maximized (transient) is normalized away, but hasSsd (kind) is kept:
         // suppressing corners on an SSD window still changes the outcome.
         const ssd = {...plainWindow, hasSsd: true, isMaximized: true, wmClass: 'xclock'};
         expect(pickedRuleWouldChange(propertiesFor(ssd), ssd, RuleDirection.SUPPRESS)).toBeTrue();
-        // Libadwaita draws everything itself: suppressing changes nothing.
-        const adw = {...plainWindow, isAdwaita: true, isMaximized: true, wmClass: 'adw-app'};
-        expect(pickedRuleWouldChange(propertiesFor(adw), adw, RuleDirection.SUPPRESS)).toBeFalse();
+        // Corners that already look like ours are left alone, so suppressing them there
+        // changes nothing - maximized or not.
+        const nativeLike = {...csdWindow, nativeLikeCorners: true, isMaximized: true, wmClass: 'adw-app'};
+        expect(pickedRuleWouldChange(propertiesFor(nativeLike), nativeLike, RuleDirection.SUPPRESS)).toBeFalse();
     });
 
     it('returns null when the window declares no identity', () => {
