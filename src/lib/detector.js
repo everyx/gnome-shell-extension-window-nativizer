@@ -117,9 +117,9 @@ export function inferDecorationBaseline({
         reason = 'x11-mutter-native-shadow';
     }
 
-    // The corner axis has no such evidence to read - a surface never says whether it is
-    // already rounded - so it rests on the one inference we allow ourselves. The shadow
-    // keeps the reason it was decided by, which was a declared fact and not this.
+    // The corner axis has nothing to read - a surface never says whether it is already
+    // rounded - so it stands on this inference alone. The shadow keeps the reason it was
+    // read from: a declaration, not this.
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
 

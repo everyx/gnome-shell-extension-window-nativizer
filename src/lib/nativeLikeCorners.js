@@ -4,7 +4,8 @@
  *
  * An inference, not an observation: a surface never reports whether it is rounded, so
  * the presence of the Adwaita look stands in for it. Only the corner axis consults
- * this; the shadow axis reads what the window itself declares.
+ * this; the shadow axis reads what the window itself declares and what Mutter reports
+ * about the frame.
  *
  * Which look that is, and where it is visible, is in docs/decoration-model.md.
  *

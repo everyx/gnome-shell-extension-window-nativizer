@@ -28,17 +28,23 @@ any policy?                tiled neighbour, crisp text on fractional scaling
    and a user rule must never override them.
 2. **Inferred baseline** — `inferDecorationBaseline()`. The two axes do not rest on
    the same kind of evidence, and each is answered only from its own:
-   - **Shadows** are a *declared* fact, so this axis never guesses. A window is
-     skipped when it declares a shadow margin of its own (`buffer_rect - frame_rect`
-     reaching the threshold on both axes — the signal Mutter itself reads as
-     `has_custom_frame_extents`), when Mutter drew the frame instead (SSD), or when
-     it is a bare X11 window whose shadow Mutter paints itself.
+   - **Shadows** are a *reading*, not an observation: the window declares its own
+     margin (`buffer_rect - frame_rect`, reaching Mutter's own minimum inset on both
+     axes — the signal Mutter reads as `has_custom_frame_extents`), Mutter says whether
+     it drew the frame instead (SSD), and a bare X11 window has its shadow painted by
+     Mutter. This axis is **one-sided**: "something else already paints one" is
+     reliable, while "nobody does, so we add one" misses a client that draws its own
+     shadow *without declaring a margin* (measured: `bradient` declares none). The
+     error therefore only ever points at a double shadow, never at a missing one, and
+     `suppress-rules` is its remedy (*What is not introspectable at all* names the
+     windows whose declaration cannot be read at all).
    - **Rounded corners** are *not* observable: a surface never reports whether it is
-     already rounded, and Mutter has no concept of it at all. This axis therefore
-     rests on an inference — the Adwaita look implies the Adwaita radius — and it is
-     the only axis allowed to consult it (*When a window's corners already look like
-     ours*). Everything else is rounded to our radius, whether the client rounded
-     itself or not (*Which rectangle the clip lands on*).
+     already rounded, and Mutter has no concept of it at all. This axis therefore rests
+     on an inference — the Adwaita look implies the Adwaita radius (*When a window's
+     corners already look like ours*) — and it is the only axis with nothing but
+     inference to go on: the shadow axis at least has the window's own declaration.
+     Everything else is rounded to our radius, whether the client rounded itself or not
+     (*Which rectangle the clip lands on*).
 3. **User rules** — `src/lib/rules.js`. `suppress-rules` and `force-rules` move the
    axes they name, in one direction. The only layer that may turn an axis back on.
 4. **State modifiers** — inside `evaluateWindowActions()`. Applied last, on top of
@@ -46,7 +52,9 @@ any policy?                tiled neighbour, crisp text on fractional scaling
    who already paints what.
 
 A `force` rule overrides layer 2 and nothing else: it exists to correct a wrong
-inference, not to overrule a fact or a policy.
+reading or inference, not to overrule a structural fact (layer 1) or a policy
+(layer 4). See [rule-model.md](rule-model.md) for why it stays available on the
+shadow axis too.
 
 ## When a window's corners already look like ours
 
@@ -228,6 +236,7 @@ style for the whole session; what runs per frame is eight textured rectangles.
 ## What is not introspectable at all
 
 `has_shadow()` also gates on ARGB32 windows, shaped windows, and
-`has_custom_frame_extents`, none of which GJS can see. A partial reimplementation
-would flip the error toward double shadows instead, so those windows are left to a
-`force` rule.
+`has_custom_frame_extents`, none of which GJS can see. Those are the windows where
+something else is painting and the reading layer 2 makes cannot say so: reimplementing
+the gate partially would add a second shadow rather than skip one, so they are left to
+a `suppress` rule - the one-sided error above, with the remedy that fits it.

@@ -11,11 +11,11 @@ A GNOME Shell extension. Native rounded corners and shadows, only where missing 
 ## Features
 
 - **Adds what is missing, and unifies the rest.**
-  - **Shadow — never guessed.** Only added where nothing is painted: a window that declares its own shadow margin, an X11 window with a system title bar, and a bare X11 window whose shadow Mutter paints keep theirs.
+  - **Shadow — read from the window, not guessed.** Only added where nothing is painted: a window that declares its own shadow margin, an X11 window with a system title bar, and a bare X11 window whose shadow Mutter paints keep theirs. The one reading that can be wrong is a client drawing its own shadow *without* declaring one.
   - **Corners — rounded to GNOME's 15px**, whether the toolkit rounded them itself or not, unless the window already draws the Adwaita look (libadwaita, [adw-gtk3](#less-work-for-us-let-the-toolkit-draw-it), [QAdwaitaDecorations](#less-work-for-us-let-the-toolkit-draw-it)) — those are left alone. [Why →](docs/decoration-model.md)
   - Shadow and corners are independent axes.
 - **Never double-decorates.**
-  - Two shadows → darker and misaligned, so the shadow axis only ever adds one where there is none.
+  - Two shadows → darker and misaligned, so the shadow axis only ever adds one where there is none — unless you force one for a window kind yourself.
   - The corner clip lands on the window body, never on the ring a client filled with its own shadow: that shadow survives untouched.
   - Unsure → skip. A false skip costs one rule; a wrong decoration is a visual bug. [Why →](docs/decoration-model.md)
 - **Hand-fixable.** Wrong guess → pick the window, make a force or suppress rule [Troubleshooting →](#troubleshooting)

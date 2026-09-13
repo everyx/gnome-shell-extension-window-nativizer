@@ -35,7 +35,7 @@ covers only part of the window.
 | Settings key | Meaning |
 |---|---|
 | `suppress-rules` | remove the named decorations |
-| `force-rules` | add them, where the heuristic assumed someone else drew them |
+| `force-rules` | add them, where the baseline decided something else already did |
 
 A window kind belongs to **at most one** group. On collision the suppression wins:
 under-decorating is visible and reversible, while the double decoration a stray force
@@ -45,6 +45,12 @@ letting it appear in both.
 
 `force` overrides the inferred baseline and nothing else — never the structural facts,
 never the preferences, never a policy. See [decoration-model.md](decoration-model.md).
+
+It stays available on the shadow axis too, although that axis is reliable in one
+direction only: a shadow rule of yours is an explicit act whose consequence is visible
+(a second shadow, as against the *stray* force rule the collision rule guards against)
+and can be taken back. What it cannot do is put a shadow on a window that a structural
+fact or a policy forbids one on.
 
 ## Identity
 
