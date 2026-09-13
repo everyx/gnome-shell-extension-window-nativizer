@@ -4,11 +4,6 @@
     "description": "Fills in missing GNOME rounded corners and shadows, each only where absent.",
     "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer",
     "shell-version": [
-        "45",
-        "46",
-        "47",
-        "48",
-        "49",
         "50"
     ],
     "settings-schema": "org.gnome.shell.extensions.window-nativizer",
