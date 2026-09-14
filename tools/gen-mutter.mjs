@@ -132,12 +132,10 @@ function parseClientTypes(headerCode) {
 function main() {
     const cCode = read('meta-shadow-factory.c');
     const headerCode = read('window.h');
-    const classes = parseShadowClasses(cCode);
+    // Parsed for validation only: a format change in Mutter's shadow factory fails the build.
+    parseShadowClasses(cCode);
     const windowTypes = parseWindowTypes(headerCode);
     const clientTypes = parseClientTypes(headerCode);
-
-    // Minimum shadow radius for normal window (unfocused: 8px, focused: 10px)
-    const minNormalRadius = classes.normal.unfocused.radius;
 
     const banner = `/**
  * mutterRules.generated.js - Automatically parsed and generated from:
@@ -160,16 +158,6 @@ export const WindowType = Object.freeze(${JSON.stringify(windowTypes, null, 4)})
  */
 export const WindowClientType = Object.freeze(${JSON.stringify(clientTypes, null, 4)});
 
-/**
- * Mutter's smallest window shadow radius: a normal window's unfocused radius (its
- * focused one is larger).
- *
- * This is our reading of a declared margin, not Mutter's own test: Mutter asks only
- * whether the client declared frame extents at all (has_custom_frame_extents, true for
- * 4px as much as for 40px). A margin below this radius cannot physically hold a window
- * shadow, so it reads as a resize grip or a micro-border instead of a shadow ring.
- */
-export const MUTTER_MIN_SHADOW_RADIUS = ${minNormalRadius};
 `;
 
     if (CHECK) {
@@ -188,7 +176,6 @@ export const MUTTER_MIN_SHADOW_RADIUS = ${minNormalRadius};
 
     writeFileSync(OUT, code, 'utf8');
     console.log(`[gen-mutter] Successfully parsed and generated: ${path.relative(ROOT, OUT)}`);
-    console.log(`  - Smallest window shadow radius: ${minNormalRadius}px`);
 }
 
 main();

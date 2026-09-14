@@ -37,13 +37,3 @@ export const WindowClientType = Object.freeze({
     "X11": 1
 });
 
-/**
- * Mutter's smallest window shadow radius: a normal window's unfocused radius (its
- * focused one is larger).
- *
- * This is our reading of a declared margin, not Mutter's own test: Mutter asks only
- * whether the client declared frame extents at all (has_custom_frame_extents, true for
- * 4px as much as for 40px). A margin below this radius cannot physically hold a window
- * shadow, so it reads as a resize grip or a micro-border instead of a shadow ring.
- */
-export const MUTTER_MIN_SHADOW_RADIUS = 8;
