@@ -8,6 +8,7 @@ import {
     MIN_BAND_WINDOW,
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
+    RESIZE_CORNER,
 } from '../src/lib/resizeBand.js';
 import {shouldShowResizeBand} from '../src/lib/detector.js';
 
@@ -28,27 +29,48 @@ function overlapArea(a, b) {
     return width > 0 && height > 0 ? width * height : 0;
 }
 
-/** @returns {number} Area of a ring around `frame` grown by the band */
-function ringArea(frame) {
-    return (frame.width + 2 * RESIZE_BAND) * (frame.height + 2 * RESIZE_BAND) -
+/**
+ * @param {object} frame
+ * @returns {number} Area of the union the band must tile: the 12px ring plus the
+ * outward half of each 24×24 corner square (the inward half is already in the ring).
+ */
+function bandArea(frame) {
+    const ring = (frame.width + 2 * RESIZE_BAND) * (frame.height + 2 * RESIZE_BAND) -
         frame.width * frame.height;
+    const addedPerCorner = RESIZE_CORNER * RESIZE_CORNER - RESIZE_BAND * RESIZE_BAND;
+    return ring + 4 * addedPerCorner;
+}
+
+/**
+ * @param {object} frame
+ * @returns {Record<string, object>} The union the eight regions must tile exactly
+ */
+function expectedCornerRects(frame) {
+    const {x, y, width, height} = frame;
+    const c = RESIZE_CORNER;
+    return {
+        nw: rect(x - c, y - c, c, c),
+        ne: rect(x + width, y - c, c, c),
+        sw: rect(x - c, y + height, c, c),
+        se: rect(x + width, y + height, c, c),
+    };
 }
 
 describe('computeResizeBands', () => {
-    it('rings the frame with 12px edges and 12x12 corners', () => {
+    it('rings the frame with 12px edges and 24x24 corners', () => {
         const bands = computeResizeBands({frame: rect(100, 50, 400, 300)});
 
         expect(bands.n).toEqual(rect(100, 38, 400, 12));
         expect(bands.s).toEqual(rect(100, 350, 400, 12));
         expect(bands.w).toEqual(rect(88, 50, 12, 300));
         expect(bands.e).toEqual(rect(500, 50, 12, 300));
-        expect(bands.nw).toEqual(rect(88, 38, 12, 12));
-        expect(bands.ne).toEqual(rect(500, 38, 12, 12));
-        expect(bands.sw).toEqual(rect(88, 350, 12, 12));
-        expect(bands.se).toEqual(rect(500, 350, 12, 12));
+        expect(bands.nw).toEqual(rect(76, 26, 24, 24));
+        expect(bands.ne).toEqual(rect(500, 26, 24, 24));
+        expect(bands.sw).toEqual(rect(76, 350, 24, 24));
+        expect(bands.se).toEqual(rect(500, 350, 24, 24));
     });
 
-    it('tiles the ring: eight disjoint regions, no overlap and no gap', () => {
+    it('tiles the ring plus the corner squares: eight disjoint regions, no overlap and no gap', () => {
         const frame = rect(10, 20, 61, 43);
         const bands = computeResizeBands({frame});
         const rects = RESIZE_BAND_REGIONS.map(region => bands[region]);
@@ -60,7 +82,14 @@ describe('computeResizeBands', () => {
         }
 
         const area = rects.reduce((sum, r) => sum + r.width * r.height, 0);
-        expect(area).toBe(ringArea(frame));
+        expect(area).toBe(bandArea(frame));
+
+        // Every corner is the outward 24px square, and every edge keeps to the frame side.
+        const corners = expectedCornerRects(frame);
+        for (const [region, corner] of Object.entries(corners))
+            expect(bands[region]).toEqual(corner);
+        expect(bands.n.x).toBe(frame.x);
+        expect(bands.n.width).toBe(frame.width);
     });
 
     it('still tiles when the window is smaller than two handles', () => {
@@ -68,13 +97,13 @@ describe('computeResizeBands', () => {
         const bands = computeResizeBands({frame});
         const rects = RESIZE_BAND_REGIONS.map(region => bands[region]);
 
-        // Short sides, not clamped: the corner squares sit outside the frame either way.
+        // Short sides, not clamped: the edge spans the frame either way.
         expect(bands.n).toEqual(rect(100, 88, 10, 12));
         expect(bands.w).toEqual(rect(88, 100, 12, 8));
         expect(rects.every(Boolean)).toBeTrue();
 
         const area = rects.reduce((sum, r) => sum + r.width * r.height, 0);
-        expect(area).toBe(ringArea(frame));
+        expect(area).toBe(bandArea(frame));
     });
 
     it('drops every region that falls off the monitor', () => {
@@ -88,7 +117,7 @@ describe('computeResizeBands', () => {
         expect(bands.sw).toBeNull();
 
         expect(bands.e).toEqual(rect(400, 0, 12, 300));
-        expect(bands.se).toEqual(rect(400, 300, 12, 12));
+        expect(bands.se).toEqual(rect(400, 300, 24, 24));
         expect(bands.s).toEqual(rect(0, 300, 400, 12));
     });
 
@@ -98,7 +127,7 @@ describe('computeResizeBands', () => {
 
         // Left band hangs 6px over the edge: clipped, not dropped.
         expect(bands.w).toEqual(rect(0, 980, 6, 90));
-        expect(bands.nw).toEqual(rect(0, 968, 6, 12));
+        expect(bands.nw).toEqual(rect(0, 956, 6, 24));
         // Bottom band hangs 2px over the bottom edge.
         expect(bands.s).toEqual(rect(6, 1070, 200, 10));
         expect(bands.sw).toEqual(rect(0, 1070, 6, 10));
@@ -110,12 +139,14 @@ describe('computeResizeBands', () => {
             .toEqual(emptyBands());
     });
 
-    it('is 12 logical pixels at a fractional scale too', () => {
+    it('is 12 logical pixels deep at a fractional scale too', () => {
         const frame = rect(100, 50, 400, 300);
         const whole = computeResizeBands({frame, scale: 1});
         expect(computeResizeBands({frame, scale: 1.3333})).toEqual(whole);
         expect(computeResizeBands({frame, scale: 2})).toEqual(whole);
         expect(whole.n.height).toBe(RESIZE_BAND);
+        expect(whole.nw.width).toBe(RESIZE_CORNER);
+        expect(whole.nw.height).toBe(RESIZE_CORNER);
     });
 
     it('refuses a scale that cannot place the regions', () => {
@@ -156,6 +187,26 @@ describe('shouldShowResizeBand', () => {
 
     it('skips a window whose own corners already look native', () => {
         expect(shouldShowResizeBand({...plain, nativeLikeCorners: true})).toBeFalse();
+    });
+
+    it('skips a window whose declared margin is already a native-width handle', () => {
+        // buffer - frame = 24 on each axis → 12px per side, GTK4's floor.
+        const wide = {...plain, bufferWidth: 824, bufferHeight: 624};
+        expect(shouldShowResizeBand(wide)).toBeFalse();
+    });
+
+    it('keeps the band while either axis is narrower than a native handle', () => {
+        // One axis already native, the other a hair under: still awkward to grab.
+        expect(shouldShowResizeBand({
+            ...plain, bufferWidth: 824, bufferHeight: 622,
+        })).toBeTrue();
+        expect(shouldShowResizeBand({
+            ...plain, bufferWidth: 822, bufferHeight: 624,
+        })).toBeTrue();
+    });
+
+    it('does not read a margin when the window has no ring at all', () => {
+        expect(shouldShowResizeBand({...plain, bufferWidth: 800, bufferHeight: 600})).toBeTrue();
     });
 
     it('skips a window smaller than two handles', () => {

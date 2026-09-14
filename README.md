@@ -25,7 +25,7 @@ To correct a wrong guess, pick the window once with the button in the preference
 
 ## The resize band
 
-Native GNOME windows can be resized by dragging the 12 pixels around them. A window whose own resize border is narrower gets the same band from the extension, so it can be grabbed the way a native window can. It is measured from the window body, not from the visible shadow, and maximized, fullscreen and tiled windows have none.
+Native GNOME windows can be resized by dragging the band around them: 12 pixels along the sides and 24 at the corners. A window whose own resize border is narrower gets the same band from the extension, so it can be grabbed the way a native window can. It is measured from the window body, not from the visible shadow; a window whose own declared margin is already at least 12 pixels on every side is left alone, and maximized, fullscreen and tiled windows have none.
 
 This band is the only part of a window the extension takes part in hit testing: inside it, a click starts a resize instead of reaching whatever is behind the window. Turn off **Widen the Resize Band** in the preferences if you would rather those clicks go through.
 

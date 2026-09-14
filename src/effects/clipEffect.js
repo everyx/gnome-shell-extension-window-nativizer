@@ -1,11 +1,19 @@
 /**
  * RoundedClipEffect: clips the window body to a rounded rect with optional 1px inner outline.
  * See docs/architecture.md (Rounded clip) for body vs actor, SDF and clearRing.
+ *
+ * Geometry is computed in `vfunc_paint_target`, from the actor's live size plus the insets
+ * stored here. The body rect used to be snapshotted by the manager's 50ms reconcile, which
+ * is why a resize showed square corners for every frame between two reconciles; the actor
+ * size cannot lag the actor, so the clip cannot either. `setParams` now carries only the
+ * decisions (insets, radius, outline, clearRing), and those may stay debounced.
  */
 
 import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
+
+import {frameFromInsets, ZERO_INSETS} from '../lib/frame.js';
 
 const DECLARATIONS = `
 uniform vec2 uSize;       // Actor size in px
@@ -63,12 +71,13 @@ export const RoundedClipEffect = GObject.registerClass({
         this._uOutline = this.get_uniform_location('uOutline');
         this._uClearRing = this.get_uniform_location('uClearRing');
 
-        // Sentinel -1: no window reaches it, first setParams always uploads.
-        this._last = {
-            width: -1, height: -1, frameX: -1, frameY: -1,
-            frameWidth: -1, frameHeight: -1, radius: -1, outline: undefined,
-            clearRing: undefined,
-        };
+        // Decisions only; geometry lives in vfunc_paint_target. Sentinel -1: no window
+        // reaches it, first setParams always uploads.
+        this._insets = ZERO_INSETS;
+        this._radius = -1;
+        this._outline = undefined;
+        this._outlineVec = [0, 0, 0, 0];
+        this._clearRing = false;
     }
 
     vfunc_build_pipeline() {
@@ -77,33 +86,25 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
+     * Store the decisions. Geometry is not here: it is read from the actor every paint.
      * @param {object} params
-     * @param {number} params.width - Actor width in px
-     * @param {number} params.height - Actor height in px
-     * @param {{x:number,y:number,width:number,height:number}} params.frame - Body rect in actor coords
+     * @param {import('../lib/frame.js').Insets} params.insets - Ring between actor and body
      * @param {number} params.radius - Corner radius in px
      * @param {{color:number[],alpha:number}|null} params.outline
      * @param {boolean} [params.clearRing=false]
      */
-    setParams({width, height, frame, radius, outline, clearRing = false}) {
-        const last = this._last;
-        if (last.width === width && last.height === height &&
-            last.frameX === frame.x && last.frameY === frame.y &&
-            last.frameWidth === frame.width && last.frameHeight === frame.height &&
-            last.radius === radius && last.outline === outline &&
-            last.clearRing === clearRing)
+    setParams({insets, radius, outline, clearRing = false}) {
+        const last = this._insets;
+        if (last.left === insets.left && last.top === insets.top &&
+            last.right === insets.right && last.bottom === insets.bottom &&
+            this._radius === radius && this._outline === outline &&
+            this._clearRing === clearRing)
             return;
 
-        Object.assign(last, {
-            width, height, radius, outline, clearRing,
-            frameX: frame.x, frameY: frame.y,
-            frameWidth: frame.width, frameHeight: frame.height,
-        });
-
-        this.set_uniform_float(this._uSize, 2, [width, height]);
-        this.set_uniform_float(this._uFrame, 4, [frame.x, frame.y, frame.width, frame.height]);
-        this.set_uniform_float(this._uRadius, 1, [radius]);
-        const u = outline
+        this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
+        this._radius = radius;
+        this._outline = outline;
+        this._outlineVec = outline
             ? [
                 outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
                 outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
@@ -111,8 +112,37 @@ export const RoundedClipEffect = GObject.registerClass({
                 outline.alpha,
             ]
             : [0, 0, 0, 0];
-        this.set_uniform_float(this._uOutline, 4, u);
-        this.set_uniform_float(this._uClearRing, 1, [clearRing ? 1 : 0]);
+        this._clearRing = clearRing;
         this.queue_repaint();
+    }
+
+    /**
+     * Runs after Clutter has sized the offscreen for this frame, so the actor's size is
+     * the one being painted. Coming back here also means no `queue_repaint`: this is the
+     * paint, not a decision that invalidates it.
+     * @param {object} node
+     * @param {object} paintContext
+     */
+    vfunc_paint_target(node, paintContext) {
+        const actor = this.get_actor();
+        const width = actor?.width ?? 0;
+        const height = actor?.height ?? 0;
+        // Only a degenerate actor (nothing to show) skips the pass. The shadow is derived
+        // from the same actor and is degenerate with it, so there is no visible "shadow but
+        // no clip" frame: the body this would have left square has no area either.
+        if (!(width > 0) || !(height > 0))
+            return;
+
+        const frame = frameFromInsets({width, height}, this._insets);
+        if (!(frame.width > 0) || !(frame.height > 0))
+            return;
+
+        this.set_uniform_float(this._uSize, 2, [width, height]);
+        this.set_uniform_float(this._uFrame, 4, [frame.x, frame.y, frame.width, frame.height]);
+        this.set_uniform_float(this._uRadius, 1, [this._radius]);
+        this.set_uniform_float(this._uOutline, 4, this._outlineVec);
+        this.set_uniform_float(this._uClearRing, 1, [this._clearRing ? 1 : 0]);
+
+        super.vfunc_paint_target(node, paintContext);
     }
 });

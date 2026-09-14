@@ -14,8 +14,8 @@ import {
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
+import {insetsFromRects} from './frame.js';
 import {extractWindowProperties} from './pick.js';
-import {computeResizeBands} from './resizeBand.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
@@ -176,7 +176,7 @@ export class Manager {
         if (this._windows.has(win))
             return;
         const state = {
-            clip: null, clipTarget: null, clipBody: null, clearRing: false, shadow: null,
+            clip: null, clipTarget: null, clipInsets: null, clearRing: false, shadow: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };
@@ -289,7 +289,7 @@ export class Manager {
     }
 
     /** Sync clip; clearRing erases client's shadow ring even when corners stay square (see docs/decoration-model.md § Rounding a window takes its shadow over). */
-    _syncClip(win, wantEffect, clearRing = false, target = null, body = undefined) {
+    _syncClip(win, wantEffect, clearRing = false, target = null, insets = null) {
         const state = this._windows.get(win);
         if (!state)
             return;
@@ -298,9 +298,12 @@ export class Manager {
             return;
 
         const clipTarget = target ?? this._getClipTarget(win, actor);
-        const clipBody = body === undefined ? this._bodyRect(win, clipTarget) : body;
-        // No placeable body → don't clip actor into client's shadow.
-        const wanted = wantEffect && Boolean(clipBody);
+        // Attach/detach is a decision, not a frame measurement: it no longer depends on the
+        // actor's current allocation (that is why a resize used to drop the effect for a
+        // frame). The one window that gets no effect is the one whose body has no place
+        // inside the actor at all (a framed X11 window, whose buffer and frame are reported
+        // in different coordinate frames) - a fact of the window, not of the frame painted.
+        const wanted = wantEffect && Boolean(insets);
 
         const hasClip = Boolean(state.clip);
         if (wanted !== hasClip) {
@@ -321,7 +324,7 @@ export class Manager {
                 clipTarget.add_effect(state.clip);
             }
         }
-        state.clipBody = state.clip ? clipBody : null;
+        state.clipInsets = state.clip ? insets : null;
         state.clearRing = state.clip ? Boolean(clearRing) : false;
     }
 
@@ -364,11 +367,11 @@ export class Manager {
         const inputs = this._decorationInputs(win);
         const actions = evaluateWindowActions(inputs);
 
-        // One rect for both clip and shadow so they cannot drift mid-resize.
+        // One inset set for clip and shadow so they cannot drift mid-resize.
         const target = this._getClipTarget(win, actor);
-        const body = this._bodyRect(win, target);
+        const insets = this._frameInsets(win);
 
-        this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, body);
+        this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
         // No clip → client's shadow still visible; defer ours to avoid double shadow.
         this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
@@ -376,7 +379,7 @@ export class Manager {
         this._syncResizeBand(win, shouldShowResizeBand(inputs), inputs);
 
         if (state.clip || state.shadow)
-            this._applyStyle(win, actions.style, body, actions.drawClip);
+            this._applyStyle(win, actions.style, insets, actions.drawClip);
     }
 
     _reconcile() {
@@ -487,11 +490,14 @@ export class Manager {
 
         const monitor = win.get_monitor();
         const bounds = monitor >= 0 ? global.display.get_monitor_geometry(monitor) : null;
-        state.resizeBand.setBands(computeResizeBands({
-            frame: win.get_frame_rect(),
+        // Geometry, not decisions: the actor carries it live and the band derives its
+        // regions from the actor's size on every allocation, so this only has to hand over
+        // the insets and the monitor rect. A frameless window's null insets read as zero.
+        state.resizeBand.setGeometry({
+            insets: this._frameInsets(win),
             bounds,
             scale: inputs.monitorScale,
-        }));
+        });
     }
 
     _undecorate(win) {
@@ -500,33 +506,30 @@ export class Manager {
         this._syncResizeBand(win, false, null);
     }
 
-    /** @returns {{x:number,y:number,width:number,height:number}|null} Body inside clip target, logical px; null when buffer and frame are in different coordinate frames (a framed X11 window reports its buffer in frame coords) or the actor lags a resize. */
-    _bodyRect(win, target) {
-        const b = win.get_buffer_rect?.();
-        const f = win.get_frame_rect?.();
-        if (!b || !f || f.width <= 0 || f.height <= 0)
-            return null;
-
-        const x = f.x - b.x;
-        const y = f.y - b.y;
-        if (x < 0 || y < 0 || x + f.width > target.width || y + f.height > target.height)
-            return null;
-
-        return {x, y, width: f.width, height: f.height};
+    /**
+     * @param {Meta.Window} win
+     * @returns {import('./frame.js').Insets|null} Ring between the actor (buffer) and the
+     * body (`frame_rect`); null when the frame has no place inside the buffer, which is
+     * the framed-X11 coordinate mismatch. Deliberately does not look at any actor size:
+     * the body is placed against the actor's live size at paint time, so a lagging actor
+     * can never turn this into "no body".
+     */
+    _frameInsets(win) {
+        return insetsFromRects(win.get_buffer_rect?.(), win.get_frame_rect?.());
     }
 
-    _applyStyle(win, style, body, drawClip) {
+    _applyStyle(win, style, insets, drawClip) {
         const state = this._windows.get(win);
         const actor = win.get_compositor_private();
         if (!state || !actor)
             return;
 
-        if (state.clip && state.clipBody) {
+        if (state.clip && state.clipInsets) {
             // Radius 0 keeps corners square; the clip still clears the ring outside body.
+            // Only the decisions are uploaded here; the effect places the body against the
+            // actor's live size in its own paint.
             state.clip.setParams({
-                width: state.clipTarget.width,
-                height: state.clipTarget.height,
-                frame: state.clipBody,
+                insets: state.clipInsets,
                 radius: drawClip ? style.radius : 0,
                 outline: drawClip ? style.outline : null,
                 clearRing: state.clearRing,
@@ -534,7 +537,7 @@ export class Manager {
         }
         if (state.shadow) {
             // Shadow cast by body, not actor (actor includes client's ring).
-            state.shadow.setShadowBody(body ?? null);
+            state.shadow.setShadowInsets(insets);
 
             state.shadow.setShadowStyle({
                 radius: state.clip && drawClip ? style.radius : 0,

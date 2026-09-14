@@ -12,7 +12,7 @@ import {
 import {buildRuleKeyFromProperties} from './pick.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
-import {MIN_BAND_WINDOW} from './resizeBand.js';
+import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 
 // Four-layer model in docs/decoration-model.md; pure logic, unit-testable.
 
@@ -202,6 +202,13 @@ export function isWindowTiled(win, options = {}) {
  * Whether the window gets the resize band. Input, not decoration: the band changes
  * where a drag starts, not what is drawn, so a rule does not turn it off and the
  * window's own corners do not earn it one. See docs/decoration-model.md § The resize band.
+ *
+ * The declared-margin check is a **proxy**: the client's real handle width is not
+ * observable (Chromium draws 10px no matter how wide its ring is), so this only skips a
+ * window whose ring is *obviously* wide enough — at least `RESIZE_BAND` on every side,
+ * which is the toolkit's own floor. `Math.min` because one narrow axis is enough to make
+ * the window awkward to grab, and the ring is read the one way the rest of the code reads
+ * a margin (`computeInsets`/`declaresOwnShadow`, not a second reading path).
  * @param {object} params
  * @param {boolean} [params.resizeBand=true]
  * @param {boolean} [params.allowsResize=true]
@@ -210,6 +217,9 @@ export function isWindowTiled(win, options = {}) {
  * @param {boolean} [params.tiled=false]
  * @param {boolean} [params.hasTileMatch=false]
  * @param {boolean} [params.nativeLikeCorners=false]
+ * @param {boolean} [params.hasSsd=false]
+ * @param {number} [params.bufferWidth=0]
+ * @param {number} [params.bufferHeight=0]
  * @param {number} [params.frameWidth=0]
  * @param {number} [params.frameHeight=0]
  * @returns {boolean}
@@ -220,6 +230,8 @@ export function shouldShowResizeBand({
     isMaximized = false, isFullscreen = false,
     tiled = false, hasTileMatch = false,
     nativeLikeCorners = false,
+    hasSsd = false,
+    bufferWidth = 0, bufferHeight = 0,
     frameWidth = 0, frameHeight = 0,
 } = {}) {
     if (!resizeBand || !allowsResize)
@@ -229,6 +241,14 @@ export function shouldShowResizeBand({
     // A window that already has the Adwaita look has a native-width band of its own.
     if (nativeLikeCorners)
         return false;
+
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
+    const sideW = w / 2;
+    const sideH = h / 2;
+    // Its own handle is already at least as wide as a native one on every side.
+    if (declaresOwnShadow({hasSsd, sideW, sideH}) && Math.min(sideW, sideH) >= RESIZE_BAND)
+        return false;
+
     return frameWidth >= MIN_BAND_WINDOW && frameHeight >= MIN_BAND_WINDOW;
 }
 

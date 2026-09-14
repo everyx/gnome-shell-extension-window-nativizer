@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
+import {frameFromInsets, ZERO_INSETS} from '../lib/frame.js';
 import {
     setPipelineOpacity,
     shadowGeometry,
@@ -56,7 +57,7 @@ export const ShadowActor = GObject.registerClass({
         this._windowActor = windowActor;
         this._container = container;
         this._style = null;
-        this._body = null;
+        this._insets = null;
         this._outgoing = null;
         this._progress = 1;
         this._elapsed = FADE_MS;
@@ -79,19 +80,21 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * @param {{x:number,y:number,width:number,height:number}|null} body - window body in actor coords; null/degenerate = whole actor
+     * The ring the client declared, per side. Stored, not the body: the body is recomputed
+     * from this actor's live size on every paint, so a resize cannot leave a stale cast.
+     * @param {import('../lib/frame.js').Insets|null} insets - null = whole actor
      */
-    setShadowBody(body) {
-        const next = body && body.width > 0 && body.height > 0
-            ? {x: body.x, y: body.y, width: body.width, height: body.height}
+    setShadowInsets(insets) {
+        const next = insets
+            ? {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom}
             : null;
-        const current = this._body;
+        const current = this._insets;
         if (current === next || (current && next &&
-            current.x === next.x && current.y === next.y &&
-            current.width === next.width && current.height === next.height))
+            current.left === next.left && current.top === next.top &&
+            current.right === next.right && current.bottom === next.bottom))
             return;
 
-        this._body = next;
+        this._insets = next;
         this.queue_redraw();
     }
 
@@ -174,17 +177,12 @@ export const ShadowActor = GObject.registerClass({
     }
 
     // Padded body: actor sits at -PAD, so cast starts at body.xy and grows by PAD each side.
+    // `this.width/height` is this actor's live size (the window actor plus `2*PAD`) and the
+    // body follows from the stored insets, so the cast rect tracks a resize every frame
+    // instead of waiting for the manager's 50ms reconcile. No insets = the body is the
+    // whole actor, which is what a bare toplevel is.
     _castRect() {
-        const body = this._body ?? {
-            x: 0, y: 0,
-            width: this.width - SHADOW_PAD * 2,
-            height: this.height - SHADOW_PAD * 2,
-        };
-        return {
-            x: body.x, y: body.y,
-            width: body.width + SHADOW_PAD * 2,
-            height: body.height + SHADOW_PAD * 2,
-        };
+        return frameFromInsets({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
     }
 
     // Cache slices/boxes per cast rect; sources are style-fixed.

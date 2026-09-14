@@ -1,6 +1,8 @@
 /**
- * ResizeBand: the 12px strip around a window that starts a resize grab, as one
- * transparent container above its window actor with one reactive child per region.
+ * ResizeBand: the strip around a window that starts a resize grab, as one transparent
+ * container above its window actor with one reactive child per region. The container is
+ * bound to the window actor (position and size), and the regions are placed from the
+ * actor's live size on every allocation, so a resize cannot leave the band behind.
  * Model and cost in docs/decoration-model.md § The resize band; lifecycle in
  * docs/architecture.md.
  */
@@ -12,9 +14,15 @@ import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {RESIZE_BAND_REGIONS} from './resizeBand.js';
+import {frameFromInsets, ZERO_INSETS} from './frame.js';
+import {computeResizeBands, RESIZE_BAND_REGIONS, RESIZE_CORNER} from './resizeBand.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
+
+// The band reaches RESIZE_CORNER (24) outward at the corners, so the container has to be
+// larger than the window actor by that much on every side or the corner regions would be
+// clipped out of it.
+const OUTER = RESIZE_CORNER;
 
 // Eight regions → the eight-way cursor and the matching compositor grab op.
 const REGION_CURSOR = {
@@ -99,6 +107,21 @@ export const ResizeBand = GObject.registerClass({
         this._regions = new Map();
         this._bands = null;
         this._hover = null;
+        this._insets = ZERO_INSETS;
+        this._bounds = null;
+        this._scale = 1;
+
+        // The actor is the ground truth for the band's geometry: it is the thing Mutter
+        // resizes every frame, while our reconcile is debounced. Binding here (rather than
+        // reading the frame rect on a 50ms tick) is what keeps the regions under the
+        // pointer during a drag.
+        for (const [coordinate, offset] of [
+            [Clutter.BindCoordinate.X, -OUTER],
+            [Clutter.BindCoordinate.Y, -OUTER],
+            [Clutter.BindCoordinate.WIDTH, OUTER * 2],
+            [Clutter.BindCoordinate.HEIGHT, OUTER * 2],
+        ])
+            this.add_constraint(new Clutter.BindConstraint({source: windowActor, coordinate, offset}));
 
         for (const region of RESIZE_BAND_REGIONS) {
             const child = new St.Widget({
@@ -126,49 +149,92 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * @param {Record<string, object|null>} bands - From computeResizeBands()
+     * Store the decisions the geometry is derived from. The regions themselves are placed
+     * in vfunc_allocate() from the actor's live size, so this does not carry absolute px.
+     * @param {object} params
+     * @param {import('./frame.js').Insets|null} params.insets - Ring between actor and body
+     * @param {{x:number,y:number,width:number,height:number}|null} [params.bounds=null] - Monitor rect
+     * @param {number} [params.scale=1] - Monitor scale the frame was read at
      */
-    setBands(bands) {
-        if (sameBands(this._bands, bands))
+    setGeometry({insets, bounds = null, scale = 1}) {
+        const nextInsets = insets ?? ZERO_INSETS;
+        if (this._insets.left === nextInsets.left && this._insets.top === nextInsets.top &&
+            this._insets.right === nextInsets.right && this._insets.bottom === nextInsets.bottom &&
+            this._scale === scale && sameBounds(this._bounds, bounds))
             return;
-        this._bands = copyBands(bands);
 
-        let x1 = Infinity;
-        let y1 = Infinity;
-        let x2 = -Infinity;
-        let y2 = -Infinity;
-        for (const region of RESIZE_BAND_REGIONS) {
-            const rect = this._bands[region];
-            if (!rect)
-                continue;
-            x1 = Math.min(x1, rect.x);
-            y1 = Math.min(y1, rect.y);
-            x2 = Math.max(x2, rect.x + rect.width);
-            y2 = Math.max(y2, rect.y + rect.height);
-        }
+        this._insets = {
+            left: nextInsets.left, top: nextInsets.top,
+            right: nextInsets.right, bottom: nextInsets.bottom,
+        };
+        this._bounds = bounds
+            ? {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height}
+            : null;
+        this._scale = scale;
+        this.queue_relayout();
+    }
 
-        if (x1 === Infinity) {
-            this._hideRegions();
-            return;
-        }
+    /**
+     * Allocate the eight regions from the container's own allocation plus the stored
+     * insets. Called after the BindConstraints have sized the container for this frame,
+     * so the regions are always placed against the size being painted.
+     * @param {Clutter.ActorBox} box
+     */
+    vfunc_allocate(box) {
+        // Not super: St.Widget would run the (fixed) layout manager, which would undo the
+        // direct child allocations below on the next pass. This is the same shape
+        // boxpointer.js uses.
+        this.set_allocation(box);
 
-        this.set_position(x1, y1);
-        this.set_size(Math.max(1, x2 - x1), Math.max(1, y2 - y1));
+        const containerWidth = box.x2 - box.x1;
+        const containerHeight = box.y2 - box.y1;
+        // The container is the actor grown by OUTER per side; undo that to place the body.
+        const actorSize = {width: containerWidth - OUTER * 2, height: containerHeight - OUTER * 2};
+        const body = frameFromInsets(actorSize, this._insets);
+        const frame = {
+            x: body.x + OUTER, y: body.y + OUTER,
+            width: body.width, height: body.height,
+        };
+        const bounds = this._bounds
+            ? {
+                x: this._bounds.x - box.x1,
+                y: this._bounds.y - box.y1,
+                width: this._bounds.width,
+                height: this._bounds.height,
+            }
+            : null;
 
+        const bands = computeResizeBands({frame, bounds, scale: this._scale});
+        const changed = !sameBands(this._bands, bands);
+        if (changed)
+            this._bands = copyBands(bands);
+
+        const childBox = new Clutter.ActorBox();
         for (const region of RESIZE_BAND_REGIONS) {
             const child = this._regions.get(region);
-            const rect = this._bands[region];
-            if (!rect) {
-                child.hide();
-                continue;
+            const rect = bands[region];
+            if (rect) {
+                childBox.x1 = rect.x;
+                childBox.y1 = rect.y;
+                childBox.x2 = rect.x + rect.width;
+                childBox.y2 = rect.y + rect.height;
+            } else {
+                // Zero area, not hidden: hiding a child queues a relayout from inside
+                // this allocation, which leaves the band itself needing one and trips
+                // Clutter's "can't update stage views ... needs an allocation" warning.
+                // A zero-size reactive child is simply never picked.
+                childBox.x1 = 0;
+                childBox.y1 = 0;
+                childBox.x2 = 0;
+                childBox.y2 = 0;
             }
-            child.set_position(rect.x - x1, rect.y - y1);
-            child.set_size(rect.width, rect.height);
-            child.show();
+            child.allocate(childBox);
         }
 
         // The ground moved under the pointer: drop the stale cursor until motion resets it.
-        this.resetCursor();
+        // Only when it actually moved, or a hover would flicker on every allocation.
+        if (changed)
+            this.resetCursor();
     }
 
     /** Re-pin above the window actor; window_group's stacking is rebuilt on 'restacked'. */
@@ -208,12 +274,6 @@ export const ResizeBand = GObject.registerClass({
     }
 
     // ---------- Internal ----------
-
-    _hideRegions() {
-        for (const child of this._regions.values())
-            child.hide();
-        this.resetCursor();
-    }
 
     /**
      * @param {string} region
@@ -274,3 +334,14 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_STOP;
     }
 });
+
+/**
+ * @param {{x:number,y:number,width:number,height:number}|null} a
+ * @param {{x:number,y:number,width:number,height:number}|null} b
+ * @returns {boolean}
+ */
+function sameBounds(a, b) {
+    if (!a || !b)
+        return a === b;
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}

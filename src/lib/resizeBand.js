@@ -1,16 +1,17 @@
 /**
  * Resize band geometry: the strip around a window where a drag starts a compositor
  * resize grab. Pure, so the eight rectangles can be tested without a session; the
- * model (why 12px, what it costs) is in docs/decoration-model.md § The resize band.
+ * model (why 12px, why the corners are 24px and not uniform) is in
+ * docs/decoration-model.md § The resize band.
  */
 
 /** GTK4 floors its resize handle at 12 logical px (`RESIZE_HANDLE_SIZE`, gtkwindow.c). */
 export const RESIZE_BAND = 12;
 
-/**
- * Thinnest window that gets a band. Below 2×12 the corner regions would meet, which is
- * the degenerate helper surface case (wl-clipboard's 1×1 toplevel), not a window.
- */
+/** GTK's corner handle, `RESIZE_HANDLE_CORNER_SIZE` (gtkwindow.c); spent outward, since the inward half is the client's. */
+export const RESIZE_CORNER = 24;
+
+/** Thinnest window that gets a band; below it is a helper surface (wl-clipboard's 1×1), not a window. */
 export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
 
 /** Regions, clockwise from the top edge. The order only fixes iteration, not geometry. */
@@ -50,15 +51,14 @@ function emptyBands() {
 }
 
 /**
- * The eight regions tiling `frame` grown by `RESIZE_BAND` on every side, each clipped
- * to `bounds`. Edges run the length of the frame side, corners take the 12×12 diagonal
- * squares, so the four edges and four corners never overlap and never leave a gap.
+ * The eight regions tiling `frame` grown by `RESIZE_BAND`, with a 24×24 corner square at
+ * each frame corner, all clipped to `bounds`. The corners are deliberately not uniform
+ * with the edges; docs/decoration-model.md § The resize band says why.
  *
- * Units: logical pixels on every scale. `frame_rect` and the actor tree are both in
- * stage (logical) units, and GTK's 12 is logical too (`RESIZE_HANDLE_SIZE`), so the
- * monitor scale cancels out and is deliberately not a multiplier. It is still required
- * to be positive — a caller that cannot say which space it measured in gets no band
- * rather than one that silently means something else.
+ * Units are logical px on every scale. `frame` and the actor tree are both logical, and
+ * GTK's 12/24 are logical too, so the monitor scale cancels and is never a multiplier —
+ * but it must be positive, so a caller that cannot say which space it measured in gets no
+ * band rather than one that silently means something else.
  *
  * @param {object} params
  * @param {Rect} params.frame - Window body (`frame_rect`), logical px
@@ -76,16 +76,17 @@ export function computeResizeBands({frame, bounds = null, scale = 1} = {}) {
         return bands;
 
     const b = RESIZE_BAND;
+    const c = RESIZE_CORNER;
     const {x, y, width, height} = frame;
     const rects = {
         n: {x, y: y - b, width, height: b},
-        ne: {x: x + width, y: y - b, width: b, height: b},
+        ne: {x: x + width, y: y - c, width: c, height: c},
         e: {x: x + width, y, width: b, height},
-        se: {x: x + width, y: y + height, width: b, height: b},
+        se: {x: x + width, y: y + height, width: c, height: c},
         s: {x, y: y + height, width, height: b},
-        sw: {x: x - b, y: y + height, width: b, height: b},
+        sw: {x: x - c, y: y + height, width: c, height: c},
         w: {x: x - b, y, width: b, height},
-        nw: {x: x - b, y: y - b, width: b, height: b},
+        nw: {x: x - c, y: y - c, width: c, height: c},
     };
 
     for (const region of RESIZE_BAND_REGIONS)

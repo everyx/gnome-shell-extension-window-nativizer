@@ -21,6 +21,8 @@ stops being true is a compatibility break, not a refactor.
 | `win.begin_grab_op(op, sprite, timestamp, pos_hint)` | 45–50 stable | starts a compositor resize grab; `op` is `Meta.GrabOp.RESIZING_{N,S,E,W,NE,NW,SE,SW}`, `pos_hint` is a nullable `Graphene.Point` (Mutter queries the seat when it is null) |
 | `backend.get_sprite(stage, event)` | 45–50 stable | the pointer sprite `begin_grab_op` takes; documented nullable, so `windowMenu.js`'s `get_pointer_sprite(stage)` fallback is kept |
 | `Clutter.Actor:set_cursor_type()` | 45–50 stable | the hover cursor; per-actor, `Clutter.CursorType.*_RESIZE` and `DEFAULT`. `Clutter.CursorType.INHERIT` is the reset `screenshot.js` uses |
+| `Clutter.BindConstraint` | 45–50 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
+| `Clutter.Effect:vfunc_paint_target()` / `get_actor()` | 45–50 stable | the hook `RoundedClipEffect` reads the live actor size in; the shell's own `FadeEffect` (`messageList.js`) uses the same pair |
 | `global.window_group.set_child_above_sibling()` | 45–50 stable | re-pins the band above its window actor on `restacked` |
 | `Meta.Cursor` / `global.display.set_cursor()` | **does not exist** | 50.4 has no such API; the cursor is the actor property above |
 

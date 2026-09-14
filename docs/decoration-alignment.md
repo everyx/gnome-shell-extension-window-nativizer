@@ -84,6 +84,23 @@ stage filter neither takes the press nor passes it on. Mutter moved the other wa
 this reason (issues #2788, !3031, #2706). The measured gain is zero on GTK4, whose floor is
 already 12px, and 2px on GTK3, so the band keeps to 12px and leaves the outer 13px alone.
 
+### Who owns the cursor
+
+The band is the only place the extension sets a cursor, and it has to. Where the band covers
+the ring, the pointer focus is cleared - `repick_for_event` reaches
+`meta_wayland_pointer_set_current(window, NULL)` - so our reactive child becomes the only actor
+the pointer is over and whoever else might have owned that cursor no longer does. Leaving the
+cursor unset is therefore not neutral: the whole ring would just be the default arrow.
+
+Mutter does not fill the gap for an ungrabbed window. It maps the 8-way resize cursor only
+inside a grab (`meta_cursor_for_grab_op`), and it starts a resize only from inside the
+window's own input region, never from the shadow band outside it. So the cursor in the outer
+band can only come from us; there is no underlying owner whose value we would be duplicating.
+
+The corollary is the residual defect in `decoration-model.md` § What the band cannot fix: we
+own the cursor from the frame outward, the client owns it inside the frame, and where the
+client uses a different cursor family at its own edge the pattern changes at that boundary.
+
 Not verified with a real pointer: these figures come from the toolkit sources and from the
 declared margins measured in the nested session. To see it by hand, hover a native libadwaita
 window's shadow 8px and 20px from the window; only the inner one shows a resize cursor. The

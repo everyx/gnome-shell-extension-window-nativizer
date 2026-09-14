@@ -9,6 +9,7 @@ tested without a session; the processes only gather inputs and apply results.
 | Module | Responsibility |
 |---|---|
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
+| `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`insetsFromRects` (pure) |
 | `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted only by the corner axis |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
@@ -62,8 +63,10 @@ reloading the extension.
 Every decorated window gets a `ShadowActor` inserted below the window actor in
 `global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowTexture.js`)
 with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is cast by the window
-body (`setShadowBody()`), not by the actor, which for a client-decorated window also carries the ring
-that client reserved for its own shadow. When there is something to clip, the window also gets a
+body (`setShadowInsets()`), not by the actor, which for a client-decorated window also carries the ring
+that client reserved for its own shadow. Both the shadow's cast rect and the clip's body are
+computed from the actor's live size at paint time (`lib/frame.js`), so a resize never shows a
+geometry the actor has already left. When there is something to clip, the window also gets a
 `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
 On Wayland, the clip effect attaches directly to the window actor; on X11 / XWayland, it attaches
 to the surface child actor (`actor.get_first_child()`) so the native / frames-client drop shadow is preserved
@@ -73,21 +76,30 @@ state change.
 
 A resizable window that passes `shouldShowResizeBand()` also gets a `ResizeBand`
 (`lib/resizeBandActor.js`), the only actor here that takes input: a transparent container with
-eight reactive `St.Widget` children, one per region of the 12px band. The container is inserted
-in `global.window_group` above its own window actor, so it never covers another window or shell
-chrome, and `_restackActors()` re-pins it on `restacked` (the same signal the shadow is pinned
-below its window on). Its geometry is recomputed from `frame_rect` on every reconcile, and the
-container follows the window actor's `visible` so a minimized window leaves no strip behind.
-Created and destroyed by `_syncResizeBand()`; dropped in `_undecorate()` and, before the close
-animation, in `_forgetWindow()` — a band that outlived its window would go on taking clicks.
+eight reactive `St.Widget` children, one per region of the band (12px edges, 24px corners). The
+container is inserted in `global.window_group` above its own window actor, so it never covers
+another window or shell chrome, and `_restackActors()` re-pins it on `restacked` (the same
+signal the shadow is pinned below its window on). Like the shadow it is bound to the window
+actor (`Clutter.BindConstraint`, grown by 24px per side for the corner squares) and derives its
+regions from the actor's live size in `vfunc_allocate`, from the insets and monitor rect the
+manager stored; the debounced reconcile hands over those decisions, never absolute pixel
+geometry, so a resize cannot leave the band behind. The container follows the window actor's
+`visible` so a minimized window leaves no strip behind. Created and destroyed by
+`_syncResizeBand()`; dropped in `_undecorate()` and, before the close animation, in
+`_forgetWindow()` — a band that outlived its window would go on taking clicks.
 See `decoration-model.md` § The resize band for why it exists and what it costs.
 
 ## Effects — RoundedClipEffect (`effects/clipEffect.js`)
 
 The actor to clip is not the body: a CSD window's actor is body plus the shadow ring the
-client painted (`buffer_rect - frame_rect`). The effect receives the body as `uFrame`
-(in actor coords) and removes only the four corner caps that lie inside the body's
-square bounds. `inSquare = 1 - max(step(bodyEdge))` keeps the client-painted ring
+client painted (`buffer_rect - frame_rect`). The effect stores the ring as per-side insets and
+computes the body in `vfunc_paint_target` from the actor's live width/height
+(`frameFromInsets`), then removes only the four corner caps that lie inside the body's
+square bounds. Geometry is thus read in the paint that uses it, after Clutter has sized the
+offscreen; `setParams` carries the decisions (insets, radius, outline, clearRing) and may stay
+debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width or height
+≤ 0) skips the pass: the shadow comes from the same actor, so there is no visible body to
+leave square. `inSquare = 1 - max(step(bodyEdge))` keeps the client-painted ring
 intact; `uClearRing` blends that mask away when the shadow is ours (see
 `decoration-model.md`: ring cleared exactly when shadow is ours).
 
@@ -107,11 +119,11 @@ Clutter enlarges the offscreen by `FBO_OFFSET` and `FBO_EXTRA` (what those pixel
 the measured split, are in `decoration-alignment.md`). The shader computes
 `quadSize = uSize + FBO_EXTRA` and `frameCenter = uFrame.xy + uFrame.zw*0.5 + FBO_OFFSET`.
 
-Upload cost: each `set_uniform_float` dirties Cogl pipeline state and schedules a
-compositor frame; reconciliation runs on every window event, so most calls are
-no-ops. Deduplication keeps `_last` with sentinel `-1` (no real window reaches it).
-See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants and
-`RoundedClipEffect._last` for the sentinel.
+Upload cost: `setParams` deduplicates the decisions (insets, radius, outline, clearRing) and
+`queue_repaint`s only when one changes, so the debounced reconcile is cheap. The paint then
+uploads five uniforms per frame, which is what reading live geometry costs;
+`set_uniform_float` dirties Cogl pipeline state but does not schedule a frame (the paint is
+already running). See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
 
 ## Effects — Shadow baking and slicing (`effects/shadowTexture.js`)
 
@@ -172,17 +184,25 @@ One `ShadowActor` per decorated window, sibling below `windowActor` in
 carry map/close/minimize animations with no JS per frame. Inserted with
 `container.insert_child_below(shadow, windowActor)`.
 
-Shadow is cast by the body, not the actor: `setShadowBody(body)` stores the
-`frame_rect` in actor coords; fallback is the whole actor. `cast = body + PAD on
-every side`; the actor itself sits at `-PAD` from the window actor, so cast is
-`body` shifted by zero then grown. `shadowSlices(shadowGeometry(radius), cast.w, cast.h)`
-yields dest boxes and normalized sources; sources never change. `_relayout` caches
-`slices/boxes/cast` per style and skips work when cast is unchanged.
+Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the ring
+(`buffer_rect - frame_rect`) per side; null insets mean the whole actor. `_castRect()` computes
+`frameFromInsets(this.width/height, insets)` from the actor's live size on every paint, so
+`cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
+`-PAD` from the window actor, so cast is `body` shifted by zero then grown.
+`shadowSlices(shadowGeometry(radius), cast.w, cast.h)` yields dest boxes and normalized sources;
+sources never change. `_relayout` caches `slices/boxes/cast` per style and recomputes them when
+cast changes — eight small rects per frame during a drag, which is the cost the live geometry
+buys.
 
 Paint (`vfunc_paint_node`): obtains `Cogl.Context` from the framebuffer (only exists
 inside paint), gets `Cogl.Pipeline` via `_pipelineFor` (lazy `shadowPipelineFor`),
 then adds a `Clutter.PipelineNode` with eight `add_texture_rectangle`s. Opacity is
 set via `setPipelineOpacity` (alpha 0-255).
+
+The style (and therefore the baked texture) still changes only on a decision: `styleKey` ignores
+the window size, so a resize never re-bakes, and the actor is not rebuilt. What runs per frame
+is the offscreen window pass (the clip) plus these eight textured rectangles; this change buys
+correctness and less per-frame JS reconcile, not an order-of-magnitude cheaper redraw.
 
 Style change cross-fades (the transition and why nothing resizes are the model in
 `decoration-model.md`, *How a style change is drawn*). The fade is driven at

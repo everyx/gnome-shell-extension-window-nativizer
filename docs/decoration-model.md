@@ -138,7 +138,7 @@ extents `4,4,4,4`) paints a 1px decorated edge inside its ring, which clearing r
 along with the square corner it was drawn for.
 
 Two consequences worth knowing. The shadow is cast by the **body**, not by the actor
-(`setShadowBody()` in `shadowActor.js`), or ours would be laid out around the ring the
+(`setShadowInsets()` in `shadowActor.js`), or ours would be laid out around the ring the
 client reserved - the same distinction the clip makes with `uFrame`. Both rectangles are
 therefore derived once, in one pass, and the assumption that lets one rect serve both is
 that a window we draw a shadow for does not have Mutter's own shadow padding its actor:
@@ -206,8 +206,19 @@ theme's `decoration { margin: 10px }` - so that strip is the handle every native
 A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
 
 So a window we decorate also gets a **resize band**: eight transparent, reactive rectangles
-around its body, 12 logical px deep, four edges and four 12×12 corners. The geometry is pure
+around its body. Four edges are 12 logical px deep and span the frame side; four corners are
+24×24 squares anchored at the frame corner and reaching outward. The geometry is pure
 (`lib/resizeBand.js`); one actor with eight children applies it (`lib/resizeBandActor.js`).
+
+**Why the corners are not 12px.** GTK's corner handle is `RESIZE_HANDLE_CORNER_SIZE 24`
+(`gtkwindow.c`), anchored at the frame corner and counted both inward and outward: inside the
+frame the edge gives way to the corner for 24px (`get_edge_for_coordinates`). We cannot reach
+inward - that surface belongs to the client, and claiming it is what breaks titlebar drags,
+GTK window buttons and Chromium tab clicks - so the corner is spent entirely outward. The
+result is deliberately not a uniform 12px ring: edges are the frame side wide and 12px deep,
+while each corner is a 24×24 square hanging off the frame corner, and the union is the ring
+plus the outward 12px of every corner. That is what makes an approach to a corner read as a
+corner rather than as an edge, the way the toolkit's own 8-way mapping does.
 
 Three things about the extent:
 
@@ -226,9 +237,17 @@ Three things about the extent:
 
 Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): resizable,
 not maximized, fullscreen, tiled or tile-matched, not already Adwaita-looking (that window
-has a band), at least 2×12px per side (a 1×1 helper is not a window). A rule does not turn it
-off - a `none` rule answers "do not draw my decoration", not "do not handle my input". The
-`resize-band` setting does, and with it off no band is built at all.
+has a band), and not already declaring a margin of at least 12px per side.
+
+That last condition is a **proxy**, not a measurement: the width of the client's own handle is
+not introspectable (Chromium answers a 25px ring with a 10px border), so the rule only skips a
+window whose declared margin is *obviously* wide enough - at least `RESIZE_BAND` on both axes,
+compared with `Math.min` so a single narrow axis is enough to keep the band. The margin is the
+same reading the shadow axis uses (`computeInsets`/`declaresOwnShadow` over `buffer_rect -
+frame_rect`), not a second path. Below the minimum, at least 2×12px per side (a 1×1 helper is
+not a window). A rule does not turn it off - a `none` rule answers "do not draw my decoration",
+not "do not handle my input". The `resize-band` setting does, and with it off no band is built
+at all.
 
 ### It is the first thing here that takes clicks
 
@@ -243,6 +262,16 @@ were the client's to begin with, so a band as wide as the toolkit's changes noth
 outside it, in the pixels that were **click-through on purpose**, a press now starts a resize
 and never reaches what is under the cursor - typically a click on a desktop icon or on the
 window behind, a few pixels outside the body. That is the trade the setting exists for.
+
+### What the band cannot fix
+
+The band is ours only from the frame outward. Inside the frame body the client's own hit
+region and cursor still win, so where the client draws a different cursor family at its own
+edge - WeChat's diagonal double-arrow is the measured example - crossing the frame boundary
+still changes the cursor, from the client's inward region to our 12px outward one. Owning that
+inner boundary would mean taking the client's whole border band over, and that band is also its
+titlebar drag surface and, on Chromium and GTK, its tab strip and window buttons; taking it
+breaks them. The mismatch is left where it is.
 
 ## Known boundaries
 
@@ -265,14 +294,15 @@ the reading being one-sided; the last is simply not verified yet.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
-- **A window whose body cannot be placed inside its clip target is never rounded**,
+- **A window whose body cannot be placed inside its buffer is never rounded**,
   and a bare one still gets our shadow: square corners under it for that pass.
-  `_bodyRect()` answers null when the two rectangles live in different coordinate
-  frames (a framed X11 window reports its buffer in frame coordinates) or when the
-  actor lags a resize; the guard exists so the clip never cuts the client's own ring
-  (rounding the actor instead is the cut it prevents). A window that *declared* a
-  ring gets no shadow in that pass either (`clearRing` without a clip defers it), so
-  the visible case is a bare window on the frame its actor lags. Tiled windows reach
+  `_frameInsets()` answers null when the two rectangles live in different coordinate
+  frames (a framed X11 window reports its buffer in frame coordinates); the guard exists
+  so the clip never cuts the client's own ring (rounding the actor instead is the cut it
+  prevents). It no longer consults any actor size: the body is placed against the actor's
+  live size at paint time, so a resize cannot turn this into "no body" for a frame. A
+  window that *declared* a ring gets no shadow in that pass either (`clearRing` without a
+  clip defers it), so the visible case is a bare framed X11 window. Tiled windows reach
   the same square-corner-with-shadow look on purpose (`style.tiled` has radius 0 and
   no outline, *Which style applies*), as does `prefer-crisp-text` on a fractional
   monitor and a `shadow` rule.
