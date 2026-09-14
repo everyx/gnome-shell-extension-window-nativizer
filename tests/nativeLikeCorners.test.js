@@ -3,13 +3,11 @@ import {
     destroy,
     forgetProcess,
     hasNativeLikeCorners,
-    isAdwaitaTheme,
     hasAdwaitaLook,
 } from '../src/lib/nativeLikeCorners.js';
 
 const mapped = path => `7f9914000-7f9915000 r-xp 00000000 103:02 12345 ${path}\n`;
 const maps = (...paths) => paths.map(mapped).join('');
-const neverAsks = {gtkTheme: () => { throw new Error('theme must not be read'); }};
 
 describe('nativeLikeCorners', () => {
     beforeEach(() => {
@@ -21,10 +19,9 @@ describe('nativeLikeCorners', () => {
     });
 
     describe('classifyProcess', () => {
-        it('takes libadwaita as a provider, and the program as GTK', () => {
+        it('takes libadwaita as a provider', () => {
             const info = classifyProcess(maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libadwaita-1.so.0'));
             expect(info.hasProvider).toBeTrue();
-            expect(info.isGtk).toBeTrue();
         });
 
         it('takes libhandy as a provider', () => {
@@ -38,47 +35,21 @@ describe('nativeLikeCorners', () => {
             expect(classifyProcess(maps(plugin)).hasProvider).toBeTrue();
         });
 
-        it('reports a plain GTK program as GTK, holding no provider', () => {
-            const info = classifyProcess(maps('/usr/lib/libgtk-4.so.1'));
-            expect(info.isGtk).toBeTrue();
-            expect(info.hasProvider).toBeFalse();
-            expect(classifyProcess(maps('/usr/lib/libgtk-3.so.0')).isGtk).toBeTrue();
+        it('reports a plain GTK program as holding no provider', () => {
+            expect(classifyProcess(maps('/usr/lib/libgtk-4.so.1')).hasProvider).toBeFalse();
+            expect(classifyProcess(maps('/usr/lib/libgtk-3.so.0')).hasProvider).toBeFalse();
         });
 
-        it('reports Qt, Chromium and libc as neither', () => {
+        it('reports Qt, Chromium and libc as holding no provider', () => {
             const info = classifyProcess(maps('/usr/lib/libc.so.6', '/usr/lib/libQt6Core.so.6',
                 '/usr/lib/chromium/chromium'));
             expect(info.hasProvider).toBeFalse();
-            expect(info.isGtk).toBeFalse();
         });
 
-        it('treats missing input as neither', () => {
+        it('treats missing input as holding no provider', () => {
             for (const input of [null, undefined, '']) {
                 expect(classifyProcess(input).hasProvider).toBeFalse();
-                expect(classifyProcess(input).isGtk).toBeFalse();
             }
-        });
-    });
-
-    describe('isAdwaitaTheme', () => {
-        it('accepts the adw-gtk3 family, dark and compact variants included', () => {
-            expect(isAdwaitaTheme('adw-gtk3')).toBeTrue();
-            expect(isAdwaitaTheme('adw-gtk3-dark')).toBeTrue();
-            expect(isAdwaitaTheme('adw-gtk3-compact-dark')).toBeTrue();
-            expect(isAdwaitaTheme('Adw-gtk3')).toBeTrue();
-        });
-
-        it('rejects the names that round only the top corners', () => {
-            expect(isAdwaitaTheme('Adwaita')).toBeFalse();
-            expect(isAdwaitaTheme('Adwaita-dark')).toBeFalse();
-            expect(isAdwaitaTheme('Default')).toBeFalse();
-            expect(isAdwaitaTheme('Breeze')).toBeFalse();
-        });
-
-        it('rejects missing input', () => {
-            expect(isAdwaitaTheme(null)).toBeFalse();
-            expect(isAdwaitaTheme(undefined)).toBeFalse();
-            expect(isAdwaitaTheme('')).toBeFalse();
         });
     });
 
@@ -114,39 +85,20 @@ describe('nativeLikeCorners', () => {
             expect(reads).toBe(2);
         });
 
-        it('accepts a mapped provider without consulting the theme', () => {
+        it('accepts a mapped provider', () => {
             const readMaps = () => maps('/usr/lib/libadwaita-1.so.0');
-            expect(hasAdwaitaLook(424242, {...neverAsks, readMaps})).toBeTrue();
+            expect(hasAdwaitaLook(424242, {readMaps})).toBeTrue();
         });
 
-        it('accepts a GTK program running under an Adwaita theme', () => {
+        it('rejects a GTK program holding no provider', () => {
             expect(hasAdwaitaLook(424243, {
-                readMaps: () => maps('/usr/lib/libgtk-4.so.1'),
-                gtkTheme: () => 'adw-gtk3-dark',
-            })).toBeTrue();
-        });
-
-        it('rejects a GTK program under any other theme', () => {
-            expect(hasAdwaitaLook(424244, {
-                readMaps: () => maps('/usr/lib/libgtk-4.so.1'),
-                gtkTheme: () => 'Adwaita',
+                readMaps: () => maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libgtk-3.so.0'),
             })).toBeFalse();
         });
 
-        it('rejects a non-GTK program under an Adwaita theme', () => {
-            expect(hasAdwaitaLook(424245, {...neverAsks, readMaps: () => maps('/usr/lib/libQt6Core.so.6')}))
+        it('rejects a non-GTK program', () => {
+            expect(hasAdwaitaLook(424245, {readMaps: () => maps('/usr/lib/libQt6Core.so.6')}))
                 .toBeFalse();
-        });
-
-        it('re-reads the theme on every call, unlike the process', () => {
-            let themes = 0;
-            const api = {
-                readMaps: () => maps('/usr/lib/libgtk-3.so.0'),
-                gtkTheme: () => { themes++; return 'adw-gtk3'; },
-            };
-            hasAdwaitaLook(424246, api);
-            hasAdwaitaLook(424246, api);
-            expect(themes).toBe(2);
         });
     });
 

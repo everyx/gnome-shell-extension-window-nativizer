@@ -12,7 +12,7 @@ A GNOME Shell extension. Native rounded corners and shadows, only where missing 
 
 - **Adds what is missing, and unifies the rest.**
   - **Shadow — read from the window, not guessed.** Only added where nothing is painted: a window that declares its own shadow margin, an X11 window with a system title bar, and a bare X11 window whose shadow Mutter paints keep theirs. The one reading that can be wrong is a client drawing its own shadow *without* declaring one.
-  - **Corners — rounded to GNOME's 15px**, whether the toolkit rounded them itself or not, unless the window already draws the Adwaita look (libadwaita, [adw-gtk3](#less-work-for-us-let-the-toolkit-draw-it), [QAdwaitaDecorations](#less-work-for-us-let-the-toolkit-draw-it)) — those are left alone. [Why →](docs/decoration-model.md)
+  - **Corners — rounded to GNOME's 15px**, whether the toolkit rounded them itself or not, unless the window already draws the Adwaita look (libadwaita, [QAdwaitaDecorations](#less-work-for-us-let-the-toolkit-draw-it)) — those are left alone. [Why →](docs/decoration-model.md)
   - Shadow and corners are independent axes.
 - **Never double-decorates.**
   - Two shadows → darker and misaligned, so the shadow axis has one owner: a window that painted its own gets ours instead of keeping it — never in addition.
@@ -49,12 +49,12 @@ Not on extensions.gnome.org yet.
 
 ### Less work for us: let the toolkit draw it
 
-Windows that already draw GNOME's rounded corners themselves are left alone, which skips that offscreen buffer. Two optional pieces make most apps do that:
+Windows that already draw GNOME's rounded corners themselves are left alone, which skips that offscreen buffer. The probe sees that from the libraries a process maps, so GTK4 apps and Qt apps with an Adwaita decoration plugin are recognised without any setup:
 
-- **GTK apps** — [adw-gtk3](https://github.com/lassekongo83/adw-gtk3), a GTK 3/4 theme built from libadwaita's own stylesheet, so the corners match this extension's radius exactly.
-- **Qt apps** — [QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations), a Qt Wayland decoration plugin that mimics it. It rounds a little tighter than libadwaita (12px against 15px), so a Qt window keeps that 12px rather than being unified to 15px: you trade one small difference on screen for one less offscreen buffer.
+- **GTK4 apps** — anything that links libadwaita is recognised and left alone. A GTK3 theme such as [adw-gtk3](https://github.com/lassekongo83/adw-gtk3) cannot join them: GTK3's decoration node does not cover the bottom of the window, so a themed GTK3 program can never have four rounded corners. Those windows are taken over by the extension instead — corners and shadow both. [Why →](docs/decoration-model.md)
+- **Qt apps** — [QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations), a Qt Wayland decoration plugin that mimics libadwaita. Install it and a Qt window is skipped. It rounds a little tighter than libadwaita (12px against 15px), so a Qt window keeps that 12px rather than being unified to 15px: you trade one small difference on screen for one less offscreen buffer.
 
-Nothing here is required. Without them those windows are rounded by the extension instead, which looks the same as adw-gtk3 and costs one offscreen buffer per window.
+The Qt plugin is the only optional piece. Anything the probe does not recognise — including GTK3 apps under adw-gtk3 — is decorated by the extension, which costs one offscreen buffer per window.
 
 ## Troubleshooting
 

@@ -12,7 +12,7 @@
 
 - **补缺口，并统一外观**：
   - **阴影——读窗口自己的声明，不是猜**：自己声明了阴影边距的窗口、带系统标题栏的 X11 应用、以及由 Mutter 代画阴影的裸 X11 窗口，一律保留原样。唯一会读错的情况：客户端自画阴影却不声明。
-  - **圆角——统一到 GNOME 的 15px**：不管工具包自己有没有圆角；除非那个窗口已经长成 Adwaita 的样子（libadwaita、[adw-gtk3](#给我们省点活让工具包自己画)、[QAdwaitaDecorations](#给我们省点活让工具包自己画)）——那些一律不碰。[为什么 →](docs/decoration-model.md)
+  - **圆角——统一到 GNOME 的 15px**：不管工具包自己有没有圆角；除非那个窗口已经长成 Adwaita 的样子（libadwaita、[QAdwaitaDecorations](#给我们省点活让工具包自己画)）——那些一律不碰。[为什么 →](docs/decoration-model.md)
   - 两轴独立。
 - **绝不重复装饰**：
   - 两层阴影 → 更黑、边缘错位，所以阴影轴只有一个主人：自己画了阴影的窗口，换成我们那层——绝不叠加；
@@ -49,12 +49,12 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 ### 给我们省点活：让工具包自己画
 
-已经自己画了 GNOME 圆角的窗口会被跳过，也就省掉那张离屏缓冲。两件可选的配料能让多数应用自己画：
+已经自己画了 GNOME 圆角的窗口会被跳过，也就省掉那张离屏缓冲。探测只看进程映射了哪些库，所以链接了 libadwaita 的 GTK4 应用、以及装了 Adwaita 装饰插件的 Qt 应用无需配置就会被识别：
 
-- **GTK 应用** — [adw-gtk3](https://github.com/lassekongo83/adw-gtk3)：用 libadwaita 自己的样式表做出来的 GTK 3/4 主题，圆角与本扩展完全一致。
-- **Qt 应用** — [QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)：模仿同样外观的 Qt Wayland 装饰插件。它的圆角比 libadwaita 略紧（12px 对 15px），于是 Qt 窗口会保留 12px、不再被统一成 15px：用一处观感差异换掉每窗口一张离屏缓冲。
+- **GTK4 应用** — 只要链接了 libadwaita 就会被识别并放过。GTK3 主题（如 [adw-gtk3](https://github.com/lassekongo83/adw-gtk3)）进不了这个名单：GTK3 的 `decoration` 节点盖不到窗口底部，主题再像也给不了四个圆角。这类窗口改由本扩展接手——圆角和阴影一起。[为什么 →](docs/decoration-model.md)
+- **Qt 应用** — [QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)：模仿同样外观的 Qt Wayland 装饰插件，装了就跳过。它的圆角比 libadwaita 略紧（12px 对 15px），于是 Qt 窗口会保留 12px、不再被统一成 15px：用一处观感差异换掉每窗口一张离屏缓冲。
 
-两者都不是必需的。不装的话这些窗口由本扩展来画圆角——与 adw-gtk3 的效果一致，代价是每窗口一张离屏缓冲。
+只有这个 Qt 插件是可选的。探测认不出的窗口——包括 adw-gtk3 主题下的 GTK3 应用——都由本扩展来画，代价是每窗口一张离屏缓冲。
 
 ## 遇到问题
 

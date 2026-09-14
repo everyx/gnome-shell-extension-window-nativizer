@@ -63,27 +63,26 @@ inference, not to overrule a structural fact (layer 1) or a policy (layer 4). Se
 
 `nativeLikeCorners.js` answers this, and only the corner axis consults it. Nothing
 here claims a window is native: most of what it detects reimplements the Adwaita look
-outside GNOME. Two kinds of thing provide that look, and they are visible in
-different places:
+outside GNOME. Every provider is a library the process maps, and all of them are
+visible in the same place:
 
 | Provider | How it is visible |
 |---|---|
 | libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
 | Qt's Adwaita decoration | the process maps `wayland-decoration-client/libqadwaitadecorations.so`, or the same-named `libadwaita.so` plugin — a reimplementation that links no libadwaita, so only its own name gives it away |
-| a theme that copies libadwaita's stylesheet (adw-gtk3 and its variants) | nothing inside the process changes; only the configured `gtk-theme` name says so |
 
-The theme branch is gated on the process mapping a GTK library. Qt, Chromium and
-Electron never read that theme, and without the gate a Qt window would be skipped just
-because the user's GTK theme happens to be an Adwaita copy.
+A GTK **theme** that copies libadwaita's stylesheet — adw-gtk3 and its variants — is
+deliberately not a provider, and cannot be one. GTK3 draws a window's decoration in its
+own `decoration` node, which does not cover the bottom of the window: the same block
+carries the top-only `border-radius` and the `box-shadow` GTK3 reads as the shadow
+width, so a plain GTK3 program keeps a square bottom contour no theme can round. The one
+way a GTK3 program gets four rounded corners is libhandy's `window.csd.unified`, and such
+a program maps `libhandy-1.so`, already caught above. A theme name could therefore only
+ever have *skipped* the bottom two corners of a window that needs them — the bright wedge
+with a square shadow shoulder at the bottom corners. The theme branch that used to read
+`gtk-theme` was removed for exactly that reason.
 
-Reading the theme *name* rather than the window's declared margin is deliberate. The
-margin does track the effective theme — measured on one GTK4 program with only the
-theme changed: adw-gtk3 declares 25px per side, the stock themes 14/12 — but it cannot
-say *which* theme produced it: Chromium's tab-strip shadow declares 24px on one axis
-while its corners are 8px. A name is also a fact about the configuration, which is what
-an inference about the configuration should rest on.
-
-Both branches read the process, not the window, so a process that maps libadwaita and
+The probe reads the process, not the window, so a process that maps libadwaita and
 also opens a window without client-side decoration — a splash, or one forced to SSD —
 is skipped along with the rest. Both ways of being wrong are harmless: a window we skip
 when we should not keeps the corners its toolkit drew, and a window we clip when we
@@ -192,10 +191,6 @@ the reading being one-sided; the last is simply not verified yet.
   corner radius, which we do not have.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
   drops the shadow we would draw; it does not clear the client's ring.
-- **An application that links GTK yet draws its own frame** is skipped by the Adwaita
-  look probe whenever the configured GTK theme is an Adwaita copy such as adw-gtk3
-  (measured on Chromium: 8px corners, a 24px tab-strip shadow). Picking one of its
-  windows once is the correction.
 - **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
   margin is already in logical pixels and compares directly against the logical
   threshold (*The margins, and the scale question*); whether an X11 / XWayland window

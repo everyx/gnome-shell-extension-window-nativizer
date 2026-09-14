@@ -14,7 +14,6 @@ stops being true is a compatibility break, not a refactor.
 | `win.get_frame_rect()` | 45–50 stable | the window body, margin excluded; the rectangle `RoundedClipEffect` rounds |
 | `win.get_buffer_rect()` | 45–50 stable | what the clip target is sized from; `buffer_rect - frame_rect` is the ring the client drew its own shadow into |
 | `/proc/pid/maps` via `Gio.File` | kernel + GIO stable | which Adwaita providers a process maps (`libadwaita-1.so`, `libhandy-1.so`, Qt's `wayland-decoration-client/*adwaita*.so`); per-process, not per-window |
-| `Gio.Settings` `org.gnome.desktop.interface`, key `gtk-theme` | GSettings stable | names the configured GTK theme — the only trace an Adwaita-copy theme leaves, since it changes nothing inside a process |
 | `global.display.get_monitor_scale(i)` | 45–50 stable | fractional scale, so it is not an integer; called through optional chaining |
 | `global.backend.get_monitor_manager()` | 45–50 stable | called through optional chaining |
 

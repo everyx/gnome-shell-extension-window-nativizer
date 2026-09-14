@@ -7,7 +7,12 @@
  * this; the shadow axis reads what the window itself declares and what Mutter reports
  * about the frame.
  *
- * Which look that is, and where it is visible, is in docs/decoration-model.md.
+ * A GTK theme is not a provider. GTK3's `decoration` node does not cover the bottom of
+ * the window - its top-only `border-radius` shares that block with the `box-shadow` GTK3
+ * reads as the shadow width - so a theme can round only the top corners, and the one
+ * way a GTK3 program gets four (libhandy's `window.csd.unified`) already maps
+ * `libhandy-1.so`. A theme name could therefore only skip the bottom two corners of a
+ * window that needs them (docs/decoration-model.md).
  *
  * Shell-side probe (IO-dependent, not pure).
  */
@@ -25,22 +30,8 @@ const ADWAITA_PROVIDERS = [
     'wayland-decoration-client/libadwaita.so',             // qtwayland's same-named plugin
 ];
 
-/** Only a GTK program's own window decoration is drawn by the GTK theme. */
-const GTK_LIBRARIES = ['libgtk-4.so', 'libgtk-3.so'];
-
-/**
- * Themes that hand a GTK program the Adwaita window radius, as prefixes so the
- * dark and compact variants are covered.
- *
- * Deliberately not `Adwaita`: on this platform that name resolves to GTK's own
- * fallback theme, which rounds the top corners 8px and leaves the bottom square.
- */
-const ADWAITA_THEME_PREFIXES = ['adw-gtk3'];
-
-/** pid -> {hasProvider, isGtk}: both are facts about the running process. */
+/** pid -> {hasProvider}: a fact about the running process. */
 const processCache = new Map();
-
-let interfaceSettings = null;
 
 /** Reads /proc/<pid>/maps; throws when it cannot be read. */
 function readMaps(pid) {
@@ -51,51 +42,27 @@ function readMaps(pid) {
     return new TextDecoder().decode(bytes);
 }
 
-/** The configured GTK theme. Constructed once; GSettings caches the value too. */
-function gtkThemeName() {
-    interfaceSettings ??= new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
-    return interfaceSettings.get_string('gtk-theme');
-}
-
 /**
  * What a maps listing says about its process.
  *
  * @param {string} mapsText - Contents of /proc/pid/maps
- * @returns {{hasProvider: boolean, isGtk: boolean}}
+ * @returns {{hasProvider: boolean}}
  */
 export function classifyProcess(mapsText) {
     if (!mapsText || typeof mapsText !== 'string')
-        return {hasProvider: false, isGtk: false};
+        return {hasProvider: false};
     return {
         hasProvider: ADWAITA_PROVIDERS.some(name => mapsText.includes(name)),
-        isGtk: GTK_LIBRARIES.some(name => mapsText.includes(name)),
     };
 }
 
 /**
- * Whether a GTK theme name is an Adwaita copy.
- *
- * @param {string} themeName
- * @returns {boolean}
- */
-export function isAdwaitaTheme(themeName) {
-    if (typeof themeName !== 'string')
-        return false;
-    // Theme names are conventionally lowercase, but nothing enforces it.
-    return ADWAITA_THEME_PREFIXES.some(prefix => themeName.toLowerCase().startsWith(prefix));
-}
-
-/**
- * Whether a process's windows already have the Adwaita look - from a library the
- * process maps, or from the configured theme.
- *
- * The theme is consulted last and never cached: unlike the process's own mappings
- * it can change while the process runs.
+ * Whether a process's windows already have the Adwaita look, from a library the
+ * process maps.
  *
  * @param {number} pid - Process ID
  * @param {object} [deps] - overrides, injectable for tests
  * @param {(pid: number) => string} [deps.readMaps] - maps reader
- * @param {() => string} [deps.gtkTheme] - configured GTK theme name
  * @returns {boolean}
  */
 export function hasAdwaitaLook(pid, deps = {}) {
@@ -114,17 +81,12 @@ export function hasAdwaitaLook(pid, deps = {}) {
         processCache.set(pid, info);
     }
 
-    if (info.hasProvider)
-        return true;
-    if (!info.isGtk)
-        return false;
-
-    return isAdwaitaTheme((deps.gtkTheme ?? gtkThemeName)());
+    return info.hasProvider;
 }
 
 /**
- * Whether the window's corners already look like ours, rounded by its own process
- * or theme. A window whose process cannot be probed counts as not rounded.
+ * Whether the window's corners already look like ours, rounded by its own process.
+ * A window whose process cannot be probed counts as not rounded.
  *
  * @param {object} win - Meta.Window instance
  * @returns {boolean}
@@ -145,10 +107,9 @@ export function forgetProcess(pid) {
 }
 
 /**
- * Releases everything this module holds: the process cache and the settings object.
- * The counterpart of the extension's `disable()`, alongside `shadowTexture.destroy()`.
+ * Releases everything this module holds: the process cache, the counterpart of the
+ * extension's `disable()`, alongside `shadowTexture.destroy()`.
  */
 export function destroy() {
     processCache.clear();
-    interfaceSettings = null;
 }
