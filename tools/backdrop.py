@@ -13,7 +13,7 @@ window.backdrop-window {
 }
 """
 
-app = Gtk.Application(application_id='dev.csd.fixer.backdrop')
+app = Gtk.Application(application_id='dev.windownativizer.backdrop')
 
 def on_activate(app):
     provider = Gtk.CssProvider()

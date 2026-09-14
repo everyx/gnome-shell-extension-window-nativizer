@@ -14,7 +14,7 @@ import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 
-app = Gtk.Application(application_id='org.test.csdfixer.e2e')
+app = Gtk.Application(application_id='org.test.windownativizer.e2e')
 
 def on_activate(app):
     win = Gtk.ApplicationWindow(application=app)

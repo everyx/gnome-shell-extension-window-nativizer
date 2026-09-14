@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * gen-mutter.mjs - Parses Mutter shadow parameters and algorithms from vendor/mutter/meta-shadow-factory.c
+ * gen-mutter.mjs - Parses Mutter shadow parameters from vendor/mutter/meta-shadow-factory.c
  * and MetaWindowType from vendor/mutter/window.h, generating src/lib/mutterRules.generated.js.
  *
  * Design: narrow parser + assertions. Parses the normal window's shadow radius out of
@@ -33,6 +33,7 @@ function parseParams(tupleStr) {
     if (nums.length !== 5 || nums.some(n => Number.isNaN(n)))
         throw new Error(`[gen-mutter] Cannot parse MetaShadowParams: "${tupleStr}"`);
     const [radius, top_fade, x_offset, y_offset, opacity] = nums;
+    // Only radius is generated; the other four are parsed to pin Mutter's tuple shape, so a format change fails the build.
     return {
         radius,
         topFade: top_fade,

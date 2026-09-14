@@ -181,7 +181,7 @@ def main():
         measured_profile = csd["bottom"]
 
         print("\n" + "=" * 76)
-        print("                CSD FIXER DECORATION BENCHMARK REPORT")
+        print("                WINDOW NATIVIZER DECORATION BENCHMARK REPORT")
         print("=" * 76)
         print(f"Window Geometry : {csd['width']}x{csd['height']} (expected 440x280)")
         print(f"Symmetry Status : {'PASS (100% 4-way symmetric)' if is_symmetric else 'FAIL (edges diverge)'}")

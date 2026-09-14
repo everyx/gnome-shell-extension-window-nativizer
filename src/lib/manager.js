@@ -21,7 +21,7 @@ import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 
-// Mutter enum value; pure modules mirror it via generated copy (pick.js) to avoid gi://Meta.
+// Mutter enum value; the generated copy exists so modules and tests without the gi://Meta typelib can still read Mutter's constants.
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
 
 /** @returns {string|undefined} Registered GType name; name comparison survives module re-evaluation. */

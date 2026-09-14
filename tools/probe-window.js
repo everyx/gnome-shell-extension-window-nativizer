@@ -35,8 +35,8 @@ const sizeW = sizeMatch ? parseInt(sizeMatch[1], 10) : 900;
 const sizeH = sizeMatch ? parseInt(sizeMatch[2], 10) : 600;
 
 const applicationId = native
-    ? 'dev.csd.fixer.native'
-    : (backdrop ? 'dev.csd.fixer.backdrop' : 'dev.csd.fixer.probe');
+    ? 'dev.windownativizer.native'
+    : (backdrop ? 'dev.windownativizer.backdrop' : 'dev.windownativizer.probe');
 
 let Adw = null;
 if (native)

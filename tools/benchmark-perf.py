@@ -213,7 +213,7 @@ def main():
     shell_pid, bus = ensure_session()
 
     print("=" * 76)
-    print("       CSD FIXER CPU & MEMORY PERFORMANCE BENCHMARK")
+    print("       WINDOW NATIVIZER CPU & MEMORY PERFORMANCE BENCHMARK")
     print("=" * 76)
     print(f"Shell PID: {shell_pid} | Clock Ticks: {CLK_TCK}/s | Rounds: {rounds}")
     print(f"1. Idle Phase: {idle_secs:.1f}s static hold")

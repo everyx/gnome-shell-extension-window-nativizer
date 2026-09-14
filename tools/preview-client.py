@@ -18,7 +18,7 @@ window.solid-preview-window {
 }
 """
 
-app = Gtk.Application(application_id='dev.csd.fixer.preview')
+app = Gtk.Application(application_id='dev.windownativizer.preview')
 
 def on_activate(app):
     provider = Gtk.CssProvider()

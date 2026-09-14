@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--steps", type=int, default=150, help="Number of resize steps")
     args = parser.parse_args()
 
-    app = Gtk.Application(application_id='dev.csd.fixer.perf')
+    app = Gtk.Application(application_id='dev.windownativizer.perf')
 
     def on_activate(app):
         win = Gtk.ApplicationWindow(application=app)
