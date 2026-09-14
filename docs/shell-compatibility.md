@@ -1,6 +1,6 @@
 # The Shell / Mutter API surface we depend on
 
-Checked against the Shell 45–50 typelibs and Mutter's C source. Anything here that
+Checked against the Shell 50 typelibs and Mutter's C source. Anything here that
 stops being true is a compatibility break, not a refactor.
 
 | Used | Status | Notes |

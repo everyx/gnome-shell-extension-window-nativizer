@@ -9,7 +9,7 @@ import {
     boolString,
 } from './rules.js';
 
-// Generated from vendor/mutter/window.h; re-exported so pure modules avoid Shell/Meta.
+// Generated from vendor/mutter/window.h.
 export {WindowClientType};
 
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';

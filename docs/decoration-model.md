@@ -269,7 +269,7 @@ is Mutter's approach as well: `MetaShadow` (`src/x11/meta-shadow-factory.c`) is 
 generator takes from GTK4, so this stays the upstream shadow, computed once instead of
 every frame.
 
-Mutter never needs the clip pass, and Shell 45-50 ships no rounded-clip effect (the
+Mutter never needs the clip pass, and Shell 50 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating
 windows that do not round themselves is what makes an offscreen pass inherent here.

@@ -4,7 +4,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A GNOME Shell extension that rounds window corners to GNOME's radius and adds a shadow only where no compositor, frame or client draws one. Windows that already look native are left alone.
+A GNOME Shell extension that rounds window corners to GNOME's radius and adds a shadow only where no compositor, frame or client draws one. Windows that already look native keep their own corners; the shadow still follows what the window declares.
 
 ![Before and after: a square window next to the same window with rounded corners and a shadow](assets/preview.webp)
 
