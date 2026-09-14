@@ -182,6 +182,21 @@ ring at all.
 - **Corner clipping is skipped under fractional scaling** when the user prefers
   crisp text: the offscreen pass is what blurs text at non-integer scales.
 
+## Where the problems actually are
+
+Every entry under *Known boundaries*, and every case that has needed a per-window rule, has one
+thing in common: the window does not follow the Adwaita conventions. GTK4 and libadwaita do, and
+GTK3 with a theme that copies them comes close - it declares a normal margin, draws its shadow
+where Adwaita draws one, and rounds its top corners the same way, so taking such a window over
+amounts to finishing its bottom two corners. Non-GTK toolkits are the other case: they declare
+margins ranging from none to twenty-odd pixels, and they paint borders, grips and shadows
+*inside* their own surface, where no reading of the geometry can see them.
+
+That is why a rule, rather than a better predicate, is the answer for those windows: what they
+draw inside their surface is invisible to us, and the only technique that would see it is
+sampling the alpha of the window's own edge pixels in the offscreen pass - a mechanism of its
+own, with a cache and no unit test behind it, and not part of the current model.
+
 ## Known boundaries
 
 What this model cannot do, stated rather than papered over. Most of these follow from
