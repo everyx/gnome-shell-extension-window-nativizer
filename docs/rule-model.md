@@ -15,6 +15,11 @@ For example:
 
 - Field **order is part of the format**: `rules.js` renders it canonically, so string
   comparison is enough to match.
+- An **attached dialog always has a parent** — Mutter only attaches a transient whose
+  parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
+  `attached_dialog` cannot vary independently: `attached_dialog=true` implies
+  `has_parent=true`. That is why the prefs sentence can fold both into one phrase
+  (`windowKindSentence()` in `prefs.js`) without losing a case.
 - The identity is percent-encoded, because `:` and whitespace are delimiters.
   Realistic identities (WM_CLASS, Flatpak id, reverse-DNS app id) pass through
   unchanged; only exotic ones are escaped, and parsing decodes them back.

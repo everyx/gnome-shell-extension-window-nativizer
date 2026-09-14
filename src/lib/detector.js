@@ -13,26 +13,17 @@ import {buildRuleKeyFromProperties} from './pick.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
-/**
- * A window narrower or shorter than two corner radii cannot carry a rounded rectangle -
- * the arcs on that axis would overlap - so it is a helper surface, not a window
- * (wl-clipboard maps a 1x1 transparent toplevel). Derived from libadwaita's radius.
- */
+// Four-layer model in docs/decoration-model.md; pure logic, unit-testable.
+
+// 2× the libadwaita radius: below it the two corner arcs overlap, so no rounded rect fits (helper surface, e.g. wl-clipboard 1×1).
 const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
 /**
- * Decoration detection: what we would draw for a window, and whether a rule would
- * change it. The four-layer model behind that, and where it diverges from Mutter
- * on purpose, are in docs/decoration-model.md. Pure logic module, unit-testable.
- */
-/**
- * Computes window content margins - how far the buffer extends past the frame on
- * each side pair - as {w, h} two-sided totals, each >= 0.
- *
- * Both rectangles carry the window's geometry scale, so the difference is the
- * margin the client declared: logical pixels on Wayland, and scaled by a factor
- * GJS cannot read on a backend that lays monitors out physically. See
- * docs/decoration-model.md.
+ * @param {number} bufferWidth
+ * @param {number} bufferHeight
+ * @param {number} frameWidth
+ * @param {number} frameHeight
+ * @returns {{w: number, h: number}} Two-sided totals, each >= 0
  */
 export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     return {
@@ -40,16 +31,14 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
         h: Math.max(0, bufferHeight - frameHeight),
     };
 }
+
 /**
- * Whether the extension is allowed to decorate this window at all. Structural
- * facts, not guesses - no rule may override them.
- *
  * @param {object} [params={}]
- * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
+ * @param {number} [params.windowType=WindowType.NORMAL]
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
- * @param {number} [params.frameWidth=Infinity] - On-screen window width, logical px
- * @param {number} [params.frameHeight=Infinity] - On-screen window height, logical px
+ * @param {number} [params.frameWidth=Infinity] - Logical px
+ * @param {number} [params.frameHeight=Infinity] - Logical px
  * @returns {{eligible: boolean, reason: string}}
  */
 export function checkDecorationEligibility({
@@ -58,32 +47,26 @@ export function checkDecorationEligibility({
     frameWidth = Number.POSITIVE_INFINITY,
     frameHeight = Number.POSITIVE_INFINITY,
 } = {}) {
-    // Only normal, dialog, modal and utility windows are ours to decorate.
     if (windowType !== WindowType.NORMAL && windowType !== WindowType.DIALOG &&
         windowType !== WindowType.MODAL_DIALOG && windowType !== WindowType.UTILITY)
         return {eligible: false, reason: `window-type=${windowType}`};
 
-    // Maximized / fullscreen: libadwaita gives them square corners and no shadow.
+    // libadwaita: maximized/fullscreen have square corners, no shadow.
     if (isMaximized || isFullscreen)
         return {eligible: false, reason: 'maximized/fullscreen'};
 
-    // Helper surfaces are not windows: decorating a 1x1 transparent toplevel
-    // paints a shadow over nothing. wl-clipboard is the known case.
+    // 1×1 helper (e.g. wl-clipboard) would get a shadow over nothing.
     if (frameWidth < MIN_DECORABLE_SIZE || frameHeight < MIN_DECORABLE_SIZE)
         return {eligible: false, reason: `too-small(${frameWidth}x${frameHeight})`};
 
     return {eligible: true, reason: ''};
 }
+
 /**
- * Whether a window declares a margin that reads as its own shadow: the ring
- * (`buffer_rect - frame_rect`) reaches Mutter's smallest window shadow radius on both
- * axes. The reading is ours, not Mutter's: Mutter asks only whether extents exist at all,
- * and this cannot tell a shadow from padding (docs/decoration-model.md).
- *
  * @param {object} params
- * @param {boolean} [params.hasSsd=false] - Mutter drew the frame instead, so the ring is not the client's
- * @param {number} params.sideW - per-side declared margin, logical px
- * @param {number} params.sideH - per-side declared margin, logical px
+ * @param {boolean} [params.hasSsd=false]
+ * @param {number} params.sideW - Per-side margin, logical px
+ * @param {number} params.sideH - Per-side margin, logical px
  * @param {number} [params.insetThreshold]
  * @returns {boolean}
  */
@@ -94,32 +77,27 @@ export function declaresOwnShadow({
 }) {
     return !hasSsd && sideW >= insetThreshold && sideH >= insetThreshold;
 }
+
 /**
- * Whether the shadow on screen is another's and not ours to clear: an SSD frame (Mutter
- * or the frames client) or Mutter's bare-X11 shadow. A declared ring is ours to clear
- * (docs/decoration-model.md).
- * @param {boolean} [params.hasSsd=false] - Mutter / the frames client drew the frame
+ * @param {object} params
+ * @param {boolean} [params.hasSsd=false]
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - per-side declared margin, logical px
- * @param {number} params.sideH - per-side declared margin, logical px
+ * @param {number} params.sideW - Per-side margin, logical px
+ * @param {number} params.sideH - Per-side margin, logical px
  * @returns {boolean}
  */
 export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
     return hasSsd || (isX11 && sideW <= 0 && sideH <= 0);
 }
+
 /**
- * What we would draw with no user rule, one axis at a time: the shadow by who
- * already paints one, the corners by whether the window already looks like
- * libadwaita. The model behind both, and where it diverges from Mutter on
- * purpose, are in docs/decoration-model.md.
- *
  * @param {object} params
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - per-side declared margin, logical px
- * @param {number} params.sideH - per-side declared margin, logical px
+ * @param {number} params.sideW - Per-side margin, logical px
+ * @param {number} params.sideH - Per-side margin, logical px
  * @param {number} [params.insetThreshold]
- * @param {boolean} [params.hasSsd=false] - Mutter drew a frame/titlebar
- * @param {boolean} [params.nativeLikeCorners=false] - the client's corners already look like ours
+ * @param {boolean} [params.hasSsd=false]
+ * @param {boolean} [params.nativeLikeCorners=false]
  * @returns {{shadow: boolean, corners: boolean, reason: string}}
  */
 export function inferDecorationBaseline({
@@ -142,45 +120,47 @@ export function inferDecorationBaseline({
         reason = `has-csd(${insets} >= ${insetThreshold})`;
     }
 
-    // The corner axis has nothing to read, so it stands on this inference alone; the
-    // shadow keeps the reason it was read from.
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
 
     return {shadow, corners: true, reason};
 }
+
 /**
- * Checks whether the scaling factor is fractional. Invalid or <= 0 counts as no.
+ * @param {number|null|undefined} scale
+ * @returns {boolean}
  */
 export function isFractionalScale(scale) {
     if (scale === null || scale === undefined || !Number.isFinite(scale) || scale <= 0)
         return false;
     return Math.abs(scale - Math.round(scale)) > 0.001;
 }
+
 /**
- * Whether to clip the window to its rounded corners: always, unless the user
- * prefers crisp text on a fractional-scale display, where clipping is what blurs.
+ * @param {object} params
+ * @param {boolean} [params.preferCrispText=false]
+ * @param {number} [params.scale=1]
+ * @returns {boolean}
  */
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     if (!preferCrispText)
         return true;
     return !isFractionalScale(scale);
 }
+
 /**
  * @param {object} win - Meta.Window instance
- * @returns {boolean} Whether the window is maximized
+ * @returns {boolean}
  */
 export function isWindowMaximized(win) {
     return Boolean(win?.is_maximized?.());
 }
+
 /**
- * Checks whether a window is in a snap-tiled state: half-tiled on one axis, or matched
- * with a neighbour. Only the matched one also loses its shadow (docs/decoration-model.md).
- *
  * @param {object} win - Meta.Window instance
  * @param {object} [options={}]
- * @param {boolean} [options.isMaximized] - Precomputed maximization state
- * @param {boolean} [options.hasTileMatch] - Precomputed tile match state
+ * @param {boolean} [options.isMaximized]
+ * @param {boolean} [options.hasTileMatch]
  * @returns {boolean}
  */
 export function isWindowTiled(win, options = {}) {
@@ -194,39 +174,36 @@ export function isWindowTiled(win, options = {}) {
     const vMax = Boolean(win.maximized_vertically);
     return (hMax !== vMax) || hasMatch;
 }
+
 /**
  * @typedef {object} WindowEvaluationParams
- * @property {number} bufferWidth - Buffer rectangle width
- * @property {number} bufferHeight - Buffer rectangle height
- * @property {number} frameWidth - Frame rectangle width
- * @property {number} frameHeight - Frame rectangle height
- * @property {number} [monitorScale=1] - Display scale factor
- * @property {boolean} [isMaximized=false] - Whether window is maximized
- * @property {boolean} [isFullscreen=false] - Whether window is fullscreen
- * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
- * @property {boolean} [isX11=false] - Whether client is X11 / XWayland
- * @property {boolean} [nativeLikeCorners=false] - Whether the client's corners already look like ours
- * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
- * @property {boolean} [hasParent=false] - Whether window has transient parent
- * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
- * @property {boolean} [allowsResize=true] - Whether window allows resizing
- * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
- * @property {boolean} [focused=false] - Whether the window is focused (backdrop otherwise)
- * @property {boolean} [tiled=false] - Whether the window is snap-tiled (half-tiled or matched)
- * @property {boolean} [highContrast=false] - Whether the high-contrast theme is on
- * @property {string} [wmClass] - Window WM_CLASS / app ID
- * @property {Record<string, string>} [rules={}] - Window-kind fingerprint -> RuleState value
- * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
- * @property {number} [insetThreshold] - Declared margin that reads as a shadow ring (Mutter's smallest window shadow radius)
+ * @property {number} bufferWidth
+ * @property {number} bufferHeight
+ * @property {number} frameWidth
+ * @property {number} frameHeight
+ * @property {number} [monitorScale=1]
+ * @property {boolean} [isMaximized=false]
+ * @property {boolean} [isFullscreen=false]
+ * @property {boolean} [hasSsd=false]
+ * @property {boolean} [isX11=false]
+ * @property {boolean} [nativeLikeCorners=false]
+ * @property {number} [windowType=WindowType.NORMAL]
+ * @property {boolean} [hasParent=false]
+ * @property {boolean} [isAttachedDialog=false]
+ * @property {boolean} [allowsResize=true]
+ * @property {boolean} [hasTileMatch=false]
+ * @property {boolean} [focused=false]
+ * @property {boolean} [tiled=false]
+ * @property {boolean} [highContrast=false]
+ * @property {string} [wmClass]
+ * @property {Record<string, string>} [rules={}]
+ * @property {boolean} [preferCrispText=false]
+ * @property {number} [insetThreshold]
  */
+
 /**
- * Evaluates decoration actions based on geometric criteria and exclusion rules.
- *
- * `clearRing` says the client's own shadow ring is ours to erase: set exactly when the
- * window declared one and the shadow is ours (docs/decoration-model.md).
- *
  * @param {WindowEvaluationParams} params
- * @returns {{ drawShadow: boolean, drawClip: boolean, clearRing: boolean, style: object, reason: string }}
+ * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, style: object, reason: string}}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -248,15 +225,8 @@ export function evaluateWindowActions({
     preferCrispText = false,
     insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
 }) {
-    // The state's style is resolved here, once, and returned with the decision, so a
-    // caller paints from the very object the decision was made from rather than
-    // deriving the style a second time (docs/decoration-model.md).
     const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast});
 
-    // 1. Structural eligibility - no rule may override it.
-    // 2. Inferred baseline - what we would do with no rule at all.
-    // 3. User rule - moves the axes it names; the only layer that can turn one on.
-    // 4. State modifiers - policies, not inferences (docs/decoration-model.md).
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
     if (!eligibility.eligible)
         return {drawShadow: false, drawClip: false, style, reason: eligibility.reason};
@@ -277,31 +247,25 @@ export function evaluateWindowActions({
     let shadow = baseline.shadow;
     let corners = baseline.corners;
     if (rule) {
-        // A rule names exactly the axes that are ours (docs/rule-model.md).
         corners = rule.has(RuleAxis.CORNERS);
         shadow = rule.has(RuleAxis.SHADOW);
     }
 
-    // 4. State modifiers, applied last: policies, not inferences about who already
-    //    paints what (docs/decoration-model.md). The clip axis also needs the style to
-    //    have something to draw: tiled and maximized give radius 0 and no outline, so
-    //    the offscreen pass would be pure waste there.
+    // Clip needs something to draw; radius 0 + no outline would be a wasted offscreen pass.
     const ours = corners;
     corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
     const ownRing = declaresOwnShadow({hasSsd, sideW: w / 2, sideH: h / 2, insetThreshold});
 
-    // With no rule, clipping a ringed window makes its shadow ours: the ring was
-    // painted for the corners we are replacing. A rule decides this itself.
+    // No rule: ring was painted for the corners we replace, so the shadow becomes ours.
     if (!rule && corners && ownRing)
         shadow = true;
 
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
 
-    // The ring is cleared exactly when the shadow is ours; the tiling policy is about
-    // the shadow we would draw, not about a client's own.
+    // Ring is ours to clear exactly when the shadow we draw is ours.
     const clearRing = ownRing && shadow;
 
     let reason = rule
@@ -314,11 +278,9 @@ export function evaluateWindowActions({
 
     return {drawShadow: shadow, drawClip: corners, clearRing, style, reason};
 }
+
 /**
- * Whether storing a rule for `key` would change the actions we take for a window:
- * false for an inert rule (ineligible kind, baseline already as asked, policy override).
- *
- * @param {WindowEvaluationParams} params - The window, evaluated without the rule
+ * @param {WindowEvaluationParams} params
  * @param {{key: string, state: string}} rule
  * @returns {boolean}
  */
@@ -332,7 +294,8 @@ function ruleWouldChangeActions(params, {key, state}) {
     return before.drawShadow !== after.drawShadow ||
         before.drawClip !== after.drawClip;
 }
-/** The window's kind, with the transient state a rule has to outlive normalized away. */
+
+/** Transient state normalized away; a rule outlives it. */
 function kindParams(params) {
     return {
         ...params,
@@ -342,14 +305,10 @@ function kindParams(params) {
         tiled: false,
     };
 }
+
 /**
- * The state a pick should write for `params`' window kind: any axis of ours on
- * screen suggests `none`; otherwise `both`, or `corners` when the shadow on screen
- * is not ours to clear - suggesting `both` there would only add a second shadow
- * (docs/rule-model.md).
- *
- * @param {WindowEvaluationParams} params - The window as the runtime sees it
- * @returns {string} RuleState value - NONE, CORNERS or BOTH
+ * @param {WindowEvaluationParams} params
+ * @returns {string}
  */
 export function suggestedRuleState(params) {
     const kind = kindParams(params);
@@ -363,14 +322,12 @@ export function suggestedRuleState(params) {
 
     return RuleState.BOTH;
 }
+
 /**
- * Whether storing `state` for `properties`' window kind would change what we draw
- * for `params`. Judged against the kind, so transient state is normalized away.
- *
- * @param {Record<string, string>} properties - extractWindowProperties() output
- * @param {WindowEvaluationParams} params - The window as the runtime sees it
- * @param {string} state - RuleState value
- * @returns {boolean|null} null when the window cannot be identified
+ * @param {Record<string, string>} properties
+ * @param {WindowEvaluationParams} params
+ * @param {string} state
+ * @returns {boolean|null} Null when the window cannot be identified
  */
 export function suggestedRuleWouldChange(properties, params, state) {
     const key = buildRuleKeyFromProperties(properties);

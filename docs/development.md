@@ -134,3 +134,18 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 | [rule-model.md](rule-model.md) | the rule key and value format, the two groups, identity resolution |
 | [architecture.md](architecture.md) | modules, the two processes, the actors |
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
+
+**Comments are for the line they sit on.** Keep one when deleting it would make the next
+line unreadable or easy to misread: what an otherwise arbitrary condition selects (the
+window-type test in `checkDecorationEligibility()`), which entry of a literal array means
+what (the slice table in the shadow texture), a unit, an endpoint. Anything that needs
+another file, the history of a decision, or an upstream source to make sense belongs in
+`docs/` — measured numbers and their evidence, trade-offs, rejected alternatives, case
+tables. A pointer at the model is worth one line, and only where the code cannot be read
+without it.
+
+Moving is not deleting: before dropping a comment, the fact it carries has to be readable
+from the names and structure around it, or already in `docs/` — compress while moving, never
+drop. JSDoc on an export keeps types, what it returns, and when it throws; the reasoning
+goes to `docs/`. The concern is that comment density rots: `comment-density` in ego-lint
+(over 50% of a file, ignoring its first ten lines) is a signal, not the goal.

@@ -21,9 +21,7 @@ import {
     setWindowRules,
 } from './lib/settings.js';
 
-// The labels are thunks because this table is built while the module loads, before
-// the prefs process has bound the gettext domain - a plain _() here would capture
-// the untranslated string.
+// Thunked: built at import time before prefs binds gettext, plain _() would capture untranslated.
 const STATE_LABELS = new Map([
     [RuleState.BOTH, () => _('Decorate')],
     [RuleState.NONE, () => _('Leave alone')],
@@ -35,7 +33,7 @@ function stateLabel(state) {
     return (STATE_LABELS.get(state) ?? (() => state))();
 }
 
-// The nouns are thunks for the same reason as the state labels above.
+// Same thunk reason as above.
 const WINDOW_TYPE_NOUNS = new Map([
     [WindowType.DIALOG, () => _('dialog')],
     [WindowType.MODAL_DIALOG, () => _('modal dialog')],
@@ -47,13 +45,8 @@ function windowTypeNoun(windowType) {
 }
 
 /**
- * Describes what windows a rule matches, as a sentence.
- *
- * A rule is an exact conjunction of the five structural attributes, so all of
- * them have to be named: naming only the unusual ones would hide part of what
- * the rule matches. The two parent-related attributes fold into one phrase,
- * because an attached dialog always has a parent and so they cannot vary
- * independently.
+ * @param {{client_type:string,window_type:number,has_parent:boolean,allows_resize:boolean,attached_dialog:boolean}|null} properties
+ * @returns {string}
  */
 function windowKindSentence(properties) {
     if (!properties)
@@ -80,22 +73,21 @@ function windowKindSentence(properties) {
 }
 
 /**
- * Adw group and row labels are parsed as Pango markup, and both translated text
- * and application names can contain '&' or '<'. Escape them so they stay literal;
- * Adw.Toast and Adw.AlertDialog take plain text and must not be escaped. A bare
- * Gtk.Label defaults to use-markup=FALSE, so it takes raw text as well.
+ * Escape for Adw rows (Pango markup); Toast/AlertDialog and Gtk.Label are plain text.
+ * @param {string} text
+ * @returns {string}
  */
 function asMarkup(text) {
     return GLib.markup_escape_text(String(text), -1);
 }
 
-/** 'org.gnome.Nautilus.desktop' -> 'org.gnome.Nautilus' */
+// 'org.gnome.Nautilus.desktop' -> 'org.gnome.Nautilus'
 function stripDesktopSuffix(id) {
     return id.endsWith('.desktop') ? id.slice(0, -8) : id;
 }
 
 /**
- * Enumerate installed desktop application metadata
+ * @returns {Array<{app:Gio.AppInfo,name:string,id:string,wmClass:string,icon:Gio.Icon|null}>}
  */
 function getInstalledApps() {
     const apps = Gio.AppInfo.get_all();
@@ -127,9 +119,6 @@ function getInstalledApps() {
     return result;
 }
 
-/**
- * Look up installed application metadata by wmClass
- */
 function findAppInfoByWmClass(wmClass, appsList) {
     if (!wmClass)
         return null;
@@ -142,9 +131,6 @@ function findAppInfoByWmClass(wmClass, appsList) {
     ) || null;
 }
 
-/**
- * D-Bus inspection helper to pick a window
- */
 function inspectWindow(callback) {
     Gio.DBus.session.call(
         INSPECTOR_DBUS_NAME,
@@ -193,9 +179,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const settings = this.getSettings();
         const installedApps = getInstalledApps();
 
-        // Picking hides the preferences window; the user can still close it while
-        // the (deliberately modal) picker is up, in which case the D-Bus reply
-        // arrives for a dead window. Everything touching the UI checks this.
+        // Picker hides prefs window; reply may arrive after prefs closed — guard UI touches.
         let windowAlive = true;
         window.connect('destroy', () => {
             windowAlive = false;
@@ -220,9 +204,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // One rule per window kind. The state names which decoration axes are ours;
-        // the runtime applies exactly that (docs/rule-model.md). Picking a window
-        // that looks wrong sets its kind the other way.
+        // See docs/rule-model.md — state names which decoration axes are ours.
         const pickButton = new Gtk.Button({
             icon_name: 'find-location-symbolic',
             tooltip_text: _('Pick a window that looks wrong; the rule will be set the other way'),
@@ -247,7 +229,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             const rules = getWindowRules(settings);
             const entries = Object.entries(rules);
 
-            // A count saves opening a group just to see whether it holds anything.
+            // Count in header avoids opening group to see if it has items.
             rulesGroup.title = entries.length > 0
                 ? `${asMarkup(_('Window Rules'))} <span size="small" alpha="55%">· ${entries.length}</span>`
                 : asMarkup(_('Window Rules'));
@@ -269,9 +251,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             }
         };
 
-        // Rows are torn down from inside their own widgets' signal handlers, so
-        // defer the rebuild to idle time rather than destroying the emitter. One
-        // pending rebuild is enough: it reads the rules when it runs, not here.
+        // Destroyed from own signal: defer rebuild to idle. One pending is enough.
         let renderScheduled = false;
         const scheduleRenderRules = () => {
             if (renderScheduled)
@@ -301,8 +281,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
                 : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
 
-            // One dropdown for the four states, in grammar order. A plain string
-            // list, so the items carry no icons.
             const dropdown = new Gtk.DropDown({
                 model: Gtk.StringList.new(RULE_STATES.map(stateLabel)),
                 selected: Math.max(0, RULE_STATES.indexOf(state)),
@@ -350,9 +328,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                // An empty result is how the inspector reports a cancelled pick
-                // (Escape, right-click) and one abandoned because the extension was
-                // being disabled. Neither is a failure, so say nothing.
+                // Empty = cancelled pick or extension disabling — not an error.
                 if (!props || Object.keys(props).length === 0)
                     return;
 
@@ -365,10 +341,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                // The extension suggests the state that corrects what the window
-                // looks like now. An absent suggestion means an extension too old to
-                // judge, so fall back to the full native look; an absent effect
-                // answer means the same, and the rule goes in.
                 const state = RULE_STATES.includes(props.suggestedState)
                     ? props.suggestedState
                     : RuleState.BOTH;
@@ -382,7 +354,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
                 setWindowRules(settings, withRule(getWindowRules(settings), ruleKey, state));
 
-                // Never claim success on a write the settings layer rejected.
                 if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
                     window.add_toast(new Adw.Toast({
                         title: _('No rule added: the rule could not be saved.'),
@@ -392,8 +363,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
                 renderRules();
 
-                // The row is visible straight away, but name the state it landed on:
-                // the heuristic's guess is otherwise not spelled out anywhere.
                 window.add_toast(new Adw.Toast({
                     title: _('Rule set to: %s').replace('%s', stateLabel(state)),
                 }));

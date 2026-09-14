@@ -1,20 +1,6 @@
 /**
- * ShadowActor: the shadow of one window, drawn from a baked texture.
- *
- * Geometry is the compositor's job. Four Clutter.BindConstraint sync the padded rect with
- * the window actor and seven property bindings carry opacity, visibility, pivot, scale and
- * translation through the map, close and minimize animations, so neither a frame nor a
- * resize costs any JavaScript.
- *
- * Painting is eight texture rectangles out of one baked buffer (shadowTexture.js): four
- * corners, four edges stretched from a one-pixel strip, and no middle, because the
- * shader's hollow mask leaves the window's interior transparent.
- *
- * A style change cross-fades rather than cutting, which is what libadwaita does: its
- * backdrop rule declares `transition: box-shadow 200ms ease-out`, and it makes the biggest
- * shadow layer transparent in backdrop on purpose so the extents stay put. A window switch
- * moves focus several times before it holds still, and without the fade every one of those
- * turns into a visible pop.
+ * ShadowActor: 8-slice baked shadow below window actor; cross-fades on style change.
+ * See docs/architecture.md (ShadowActor, Shadow baking) for geometry and animation.
  */
 
 import Clutter from 'gi://Clutter';
@@ -30,21 +16,13 @@ import {
     SHADOW_PAD,
 } from './shadowTexture.js';
 
-/** libadwaita's `$backdrop_transition`. */
-const FADE_MS = 200;
-
-/** The curve it is timed with: CSS `ease-out`, as a unit cubic Bézier. */
-const EASE_OUT = [0, 0, 0.58, 1];
-
-/** Frame interval the fade is stepped at; the fade stops itself when it reaches the end. */
-const FADE_STEP_MS = 16;
+const FADE_MS = 200; // libadwaita $backdrop_transition
+const EASE_OUT = [0, 0, 0.58, 1]; // CSS ease-out bezier
+const FADE_STEP_MS = 16; // ~60 fps
 
 /**
- * A unit cubic Bézier evaluated the way CSS does: solve for the parameter whose x is the
- * input, then read y. Four Newton steps land well inside a pixel's worth of alpha.
- *
- * @param {number} t - Progress along the curve, 0 to 1
- * @param {number[]} curve - x1, y1, x2, y2
+ * @param {number} t - 0..1
+ * @param {number[]} curve - x1,y1,x2,y2
  * @returns {number}
  */
 function bezier(t, [x1, y1, x2, y2]) {
@@ -59,21 +37,18 @@ function bezier(t, [x1, y1, x2, y2]) {
     return at(Math.max(0, Math.min(1, u)), y1, y2);
 }
 
-/** Properties that carry the shadow through the window's own animations. */
 const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
 ];
 
-/** Registered type name, the stable identity of one of our actors. */
 export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
 
 export const ShadowActor = GObject.registerClass({
     GTypeName: SHADOW_ACTOR_G_TYPE,
 }, class ShadowActor extends Clutter.Actor {
     /**
-     * @param {Clutter.Actor} windowActor - Actor of the window being decorated
-     * @param {Clutter.Actor} container - Container actor (windowGroup), which the shadow
-     *   is inserted below
+     * @param {Clutter.Actor} windowActor
+     * @param {Clutter.Actor} container - windowGroup; shadow inserted below windowActor
      */
     _init(windowActor, container) {
         super._init({name: 'WindowNativizerShadowActor', reactive: false, opacity: 255});
@@ -104,12 +79,7 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Set the rect the shadow is cast by: the window body, in window actor coordinates.
-     * A client-side decorated window reserves a margin ring around its body for its own
-     * shadow, and a ring is not part of the window. Null or degenerate casts the whole
-     * actor, which is the same rect for a window that reserves no ring.
-     *
-     * @param {{x: number, y: number, width: number, height: number}|null} body
+     * @param {{x:number,y:number,width:number,height:number}|null} body - window body in actor coords; null/degenerate = whole actor
      */
     setShadowBody(body) {
         const next = body && body.width > 0 && body.height > 0
@@ -126,11 +96,7 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Draw this shadow: corner radius and shadow layers, already resolved for the window's
-     * state. The bake happens at the first paint of a style, because the Cogl context does
-     * not exist outside a paint.
-     *
-     * @param {{radius: number, shadows: Array<object>}} style
+     * @param {{radius:number,shadows:Array<object>}} style - resolved for current window state
      */
     setShadowStyle({radius, shadows}) {
         const key = styleKey(radius, shadows);
@@ -144,9 +110,6 @@ export const ShadowActor = GObject.registerClass({
             return;
         }
 
-        // A change arriving mid-fade keeps whichever side is more visible as the one fading
-        // out, so a burst of focus changes reads as one movement instead of a series of
-        // jumps. Its weight carries over, so the fade never pops back to full.
         const keepStyle = this._progress >= 0.5;
         const kept = keepStyle ? this._style : this._outgoing?.style;
         let keptWeight = 0;
@@ -190,7 +153,6 @@ export const ShadowActor = GObject.registerClass({
             this._finishFade();
     }
 
-    /** Adds the eight texture rectangles of one style to the paint node. */
     _addRects(node, pipeline, style) {
         this._relayout(style);
 
@@ -211,11 +173,7 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    /**
-     * The padded rect the shadow is laid out over, in this actor's coordinates: the cast
-     * body shifted by nothing (the actor sits at -SHADOW_PAD from the window actor, which
-     * is where the padded body rect starts) and grown by SHADOW_PAD on each side.
-     */
+    // Padded body: actor sits at -PAD, so cast starts at body.xy and grows by PAD each side.
     _castRect() {
         const body = this._body ?? {
             x: 0, y: 0,
@@ -229,7 +187,7 @@ export const ShadowActor = GObject.registerClass({
         };
     }
 
-    /** Destination boxes follow the cast rect; the sources never change. */
+    // Cache slices/boxes per cast rect; sources are style-fixed.
     _relayout(style) {
         const cast = this._castRect();
         const previous = style.cast;
@@ -278,14 +236,14 @@ export const ShadowActor = GObject.registerClass({
         try {
             this._windowActor.disconnect(this._destroyId);
         } catch {
-            // Window actor already destroyed: its signals went with it
+            // Already destroyed.
         }
         this._style = null;
         this._outgoing = null;
         try {
             this._container?.remove_child(this);
         } catch {
-            // Container may already be destroyed
+            // Container already gone.
         }
         this._container = null;
         super.destroy();

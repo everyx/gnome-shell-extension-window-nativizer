@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 02:36+0800\n"
+"POT-Creation-Date: 2026-09-14 11:23+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -16,142 +16,142 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:28
+#: src/prefs.js:26
 msgid "Decorate"
 msgstr "加装饰"
 
-#: src/prefs.js:29
+#: src/prefs.js:27
 msgid "Leave alone"
 msgstr "不加（保持原样）"
 
-#: src/prefs.js:30
+#: src/prefs.js:28
 msgid "Corners only"
 msgstr "只要我们的圆角"
 
-#: src/prefs.js:31
+#: src/prefs.js:29
 msgid "Shadow only"
 msgstr "只要我们的阴影"
 
-#: src/prefs.js:40
+#: src/prefs.js:38
 msgid "dialog"
 msgstr "对话框"
 
-#: src/prefs.js:41
+#: src/prefs.js:39
 msgid "modal dialog"
 msgstr "模态对话框"
 
-#: src/prefs.js:42
+#: src/prefs.js:40
 msgid "utility window"
 msgstr "工具窗口"
 
-#: src/prefs.js:46
+#: src/prefs.js:44
 msgid "window"
 msgstr "窗口"
 
-#: src/prefs.js:62
+#: src/prefs.js:55
 msgid "Fixed-size"
 msgstr "固定尺寸"
 
-#: src/prefs.js:62
+#: src/prefs.js:55
 msgid "Resizable"
 msgstr "可缩放"
 
-#: src/prefs.js:63
+#: src/prefs.js:56
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:63
+#: src/prefs.js:56
 msgid "Wayland"
 msgstr "Wayland"
 
-#: src/prefs.js:67
+#: src/prefs.js:60
 msgid "with no parent"
 msgstr "无父窗口"
 
-#: src/prefs.js:69
+#: src/prefs.js:62
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
-#: src/prefs.js:71
+#: src/prefs.js:64
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. The template is the translatable unit, so a language can reorder the
 #. sentence; each fragment above is translated on its own.
-#: src/prefs.js:75
+#: src/prefs.js:68
 msgid "{size} {server} {type}, {parent}"
 msgstr "{size}的 {server} {type}，{parent}"
 
-#: src/prefs.js:177 src/prefs.js:185
+#: src/prefs.js:163 src/prefs.js:171
 msgid "OK"
 msgstr "确定"
 
-#: src/prefs.js:205
+#: src/prefs.js:189
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:211
+#: src/prefs.js:195
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:212
+#: src/prefs.js:196
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:217
+#: src/prefs.js:201
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:218
+#: src/prefs.js:202
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上免除圆角（保留阴影），消除重采样带来的字体模糊与性能损耗"
 
-#: src/prefs.js:228
+#: src/prefs.js:210
 msgid "Pick a window that looks wrong; the rule will be set the other way"
 msgstr "拾取一个显示不正常的窗口，规则会自动设成相反的状态"
 
-#: src/prefs.js:234 src/prefs.js:252 src/prefs.js:253
+#: src/prefs.js:216 src/prefs.js:234 src/prefs.js:235
 msgid "Window Rules"
 msgstr "窗口规则"
 
-#: src/prefs.js:235
+#: src/prefs.js:217
 msgid "Each rule names which decorations are ours for one window kind."
 msgstr "每条规则写明某个窗口种类里哪些装饰由我们绘制。"
 
-#: src/prefs.js:257
+#: src/prefs.js:239
 msgid "Use the button above to pick a window that looks wrong."
 msgstr "用上面的按钮拾取一个显示不正常的窗口。"
 
-#: src/prefs.js:324
+#: src/prefs.js:302
 msgid "Remove Rule"
 msgstr "删除规则"
 
-#: src/prefs.js:348
+#: src/prefs.js:326
 msgid "Window Inspection Failed"
 msgstr "窗口拾取失败"
 
-#: src/prefs.js:349
+#: src/prefs.js:327
 msgid ""
 "Could not connect to Window Nativizer extension. Please ensure the extension "
 "is enabled."
 msgstr "无法连接到 Window Nativizer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
-#: src/prefs.js:363
+#: src/prefs.js:339
 msgid "No rule added: this window could not be identified."
 msgstr "未添加规则：无法识别这个窗口。"
 
-#: src/prefs.js:378
+#: src/prefs.js:350
 msgid "No rule added: it would have no effect on a window of this kind."
 msgstr "未添加规则：这条规则对此类窗口不会有任何效果。"
 
-#: src/prefs.js:388
+#: src/prefs.js:359
 msgid "No rule added: the rule could not be saved."
 msgstr "未添加规则：规则未能保存。"
 
-#: src/prefs.js:398
+#: src/prefs.js:367
 #, javascript-format
 msgid "Rule set to: %s"
 msgstr "规则已设为：%s"

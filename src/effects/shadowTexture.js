@@ -1,50 +1,27 @@
 /**
- * The shadow, baked once per style into one texture.
- *
- * A shadow is a blurred rounded rectangle, so its pixels depend on the window's size
- * only through the length of its straight edges: four corners and a one-pixel strip
- * from each edge describe the whole shape. Baking those pieces once and stretching the
- * strips lets a window be any size without an offscreen pass of its own, which is how
- * Mutter treats its own window shadows (docs/decoration-model.md).
- *
- * The bake runs the same GLSL the generator produces from GTK4's shadow, so what is
- * drawn stays the upstream shadow rather than a second rendering of it.
+ * Shadow baking: one baked buffer per style, sliced into 8 rects (see docs/architecture.md).
  */
 
 import Cogl from 'gi://Cogl';
 
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 
-/** How far the shadow reaches outside the window: max blur 14 (3 sigma = 21) + spread 5. */
-export const SHADOW_PAD = 28;
+export const SHADOW_PAD = 28; // px; blur 14 (3σ=21) + spread 5
 
-/** The shader carries three shadow layers; a style may name fewer. */
-const LAYER_COUNT = 3;
+const LAYER_COUNT = 3; // shader has 3 layers
 
-/**
- * The shader lays its quad out in a buffer three pixels wider than the padded rect,
- * offset by two, which is how Clutter enlarges an offscreen to keep it from jittering
- * (FBO_OFFSET and FBO_EXTRA in the generated code). Slices are taken through that.
- */
-const BAKE_ORIGIN = 2;
+const BAKE_ORIGIN = 2; // px offset from FBO padding (2 top-left, 3 total)
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
-/** Cogl's `COGL_BUFFER_BIT_COLOR`, which the GIR does not expose as an enum. */
-const CLEAR_COLOR_BUFFER = 1;
+const CLEAR_COLOR_BUFFER = 1; // Cogl BUFFER_BIT_COLOR (GIR omits enum)
 
-/** Cogl's opacity is the fragment shader's job; the pipeline colour stays out of it. */
 const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
 
 /**
- * Geometry of a padded shadow for one corner radius.
- *
- * The canonical window a bake is taken from is a square of 2*(pad + radius), which
- * leaves a straight middle 2*pad long. That is wider than the blur reaches, so a strip
- * taken from the middle of an edge is a settled profile that can be stretched.
- *
- * @param {number} radius - Corner radius, in logical pixels
- * @returns {{corner: number, window: number, buffer: number}}
+ * Canonical square 2*(pad+radius) with middle 2*pad (settled strip).
+ * @param {number} radius - Corner radius in px
+ * @returns {{corner:number,window:number,buffer:number}} sizes in px
  */
 export function shadowGeometry(radius) {
     const corner = SHADOW_PAD + radius;
@@ -56,19 +33,11 @@ export function shadowGeometry(radius) {
 }
 
 /**
- * The eight pieces of a padded shadow: destination boxes inside it, and the source
- * rectangle each samples from the baked buffer, as normalized texture coordinates
- * (Cogl only accepts those). The middle is absent on purpose, since the hollow mask
- * leaves the window's interior transparent.
- *
- * A window too small to hold the four corners at full size shrinks them instead: the
- * result is the corner scaled down, which is the right shape for a window that is all
- * corner, and keeps one code path for every size.
- *
- * @param {{corner: number, window: number, buffer: number}} geometry - shadowGeometry() output
- * @param {number} width - Padded rect width
- * @param {number} height - Padded rect height
- * @returns {Array<{x1: number, y1: number, x2: number, y2: number, s1: number, t1: number, s2: number, t2: number}>}
+ * 8 rects (4 corners 1:1, 4 edges stretched from 1px strip), no middle — hollow mask.
+ * @param {{corner:number,window:number,buffer:number}} geometry
+ * @param {number} width - Padded rect width in px
+ * @param {number} height - Padded rect height in px
+ * @returns {Array<{x1:number,y1:number,x2:number,y2:number,s1:number,t1:number,s2:number,t2:number}>}
  */
 export function shadowSlices({corner, window, buffer}, width, height) {
     const c = Math.min(corner, width / 2, height / 2);
@@ -77,21 +46,15 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     const span = corner / buffer;
     const strip = 1 / buffer;
     const far = (buffer - corner - 1) / buffer;
-    // The edge strips have to come from the middle of the canonical window's edges, not
-    // from where the corner blocks end: a corner reaches about 3 sigma along the edge it
-    // meets, so a strip taken at the corner boundary carries a profile the corner has
-    // pulled tighter, and the stretched shadow comes out darker at the edge and shorter.
     const edge = (o + SHADOW_PAD + window / 2) / buffer;
     const right = width - c;
     const bottom = height - c;
 
     return [
-        // corners, drawn one to one
         {x1: 0, y1: 0, x2: c, y2: c, s1: near, t1: near, s2: near + span, t2: near + span},
         {x1: right, y1: 0, x2: width, y2: c, s1: far, t1: near, s2: far + span, t2: near + span},
         {x1: 0, y1: bottom, x2: c, y2: height, s1: near, t1: far, s2: near + span, t2: far + span},
         {x1: right, y1: bottom, x2: width, y2: height, s1: far, t1: far, s2: far + span, t2: far + span},
-        // edges, stretched from the one-pixel strip that sits in the middle of each
         {x1: c, y1: 0, x2: right, y2: c, s1: edge, t1: near, s2: edge + strip, t2: near + span},
         {x1: c, y1: bottom, x2: right, y2: height, s1: edge, t1: far, s2: edge + strip, t2: far + span},
         {x1: 0, y1: c, x2: c, y2: bottom, s1: near, t1: edge, s2: near + span, t2: edge + strip},
@@ -99,32 +62,24 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     ];
 }
 
-/** Pipelines, one per shadow style; each holds its own baked buffer as its layer. */
-const pipelines = new Map();
-
-/** Set once disabled, so a late paint cannot re-bake into the cleared cache. */
-let destroyed = false;
+const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
+let destroyed = false; // sealed after destroy()
 
 /**
- * Clears the baked pipeline cache and seals it. Called when the extension is
- * disabled so no module-scope pipeline or texture handles survive in memory.
+ * Clears baked cache and seals it until reset().
  */
 export function destroy() {
     destroyed = true;
     pipelines.clear();
 }
 
-/** Re-arms the cache after destroy(), for a disable()/enable() cycle in one session. */
 export function reset() {
     destroyed = false;
 }
 
 /**
- * Cache key for one shadow style, shared with ShadowActor so both agree on when
- * two styles are the same.
- *
- * @param {number} radius - Corner radius
- * @param {Array<object>} shadows - Style shadow layers
+ * @param {number} radius
+ * @param {Array<object>} shadows
  * @returns {string}
  */
 export function styleKey(radius, shadows) {
@@ -132,13 +87,10 @@ export function styleKey(radius, shadows) {
 }
 
 /**
- * The pipeline that draws a shadow style, from the cache or freshly baked. Windows
- * sharing a style share the pipeline.
- *
- * @param {Cogl.Context} context - Cogl context, which only exists inside a paint
- * @param {number} radius - Corner radius the shadow is drawn with
- * @param {Array<object>} shadows - Style shadow layers
- * @returns {Cogl.Pipeline|null} null when the buffer could not be allocated
+ * @param {Cogl.Context} context - exists only inside paint
+ * @param {number} radius
+ * @param {Array<object>} shadows
+ * @returns {Cogl.Pipeline|null}
  */
 function shadowPipeline(context, radius, shadows) {
     if (destroyed)
@@ -150,24 +102,18 @@ function shadowPipeline(context, radius, shadows) {
         return cached;
 
     const pipeline = bake(context, radius, shadows);
-    // A bake that could not allocate is not remembered, so the next paint retries it
-    // rather than leaving the window without a shadow for the rest of the session.
     if (pipeline)
         pipelines.set(key, pipeline);
     return pipeline;
 }
 
 /**
- * A pipeline that draws one style's baked buffer with its own opacity.
+ * Per-window pipeline sharing the baked texture (for cross-fade opacity).
  *
- * The sharing is on the texture, which is what costs memory; a pipeline per window lets
- * a window cross-fade between two styles without touching another window's colours. Cogl
- * compiles the program once per source, so the extra pipeline is a small state object.
- *
- * @param {Cogl.Context} context - Cogl context, which only exists inside a paint
- * @param {number} radius - Corner radius the shadow is drawn with
- * @param {Array<object>} shadows - Style shadow layers
- * @returns {Cogl.Pipeline|null} null when the buffer could not be allocated
+ * @param {Cogl.Context} context
+ * @param {number} radius
+ * @param {Array<object>} shadows
+ * @returns {Cogl.Pipeline|null}
  */
 export function shadowPipelineFor(context, radius, shadows) {
     const source = shadowPipeline(context, radius, shadows);
@@ -180,8 +126,8 @@ export function shadowPipelineFor(context, radius, shadows) {
 }
 
 /**
- * Sets a shadow pipeline's opacity, 0 to 1. The colour stays opaque white; only its
- * alpha changes, and Cogl's premultiplied blend scales the baked shadow by it.
+ * @param {Cogl.Pipeline} pipeline
+ * @param {number} opacity - 0..1
  */
 export function setPipelineOpacity(pipeline, opacity) {
     const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
@@ -199,13 +145,7 @@ function bake(context, radius, shadows) {
     }
 
     const pipeline = Cogl.Pipeline.new(context);
-    // A pipeline starts with no colour, and the shader scales its output by the vertex
-    // alpha, so an unset colour bakes an empty buffer. Cogl's blend is premultiplied:
-    // opaque white leaves the fragment shader's own alpha to do the work.
     pipeline.set_color(opaqueWhite());
-    // Cogl wants a snippet object; the shell's GLSL effect takes the same three pieces
-    // inline. The code replaces the fragment stage's tail, which is what the effect's
-    // non-replacing form does too.
     pipeline.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE));
     uniform(pipeline, 'uWinSize', 2, [window, window]);
     uniform(pipeline, 'uRadius', 1, [radius]);
@@ -215,15 +155,9 @@ function bake(context, radius, shadows) {
         uniform(pipeline, `uShadow${i + 1}`, 4, [layer.blur, layer.spread, layer.alpha, 0]);
     }
 
-    // cogl_tex_coord0_in is what the shader maps, and it comes from a texture layer,
-    // so the quad is drawn through a one-pixel placeholder.
     pipeline.set_layer_texture(0, Cogl.Texture2D.new_with_size(context, 1, 1));
 
     framebuffer.orthographic(0, 0, buffer, buffer, -1, 1);
-    // The shader returns before writing anything for the window's interior (the hollow
-    // mask), and an offscreen texture is not zeroed: without this, the pixels inside the
-    // mask keep whatever the driver handed over, and the slices sample them wherever a
-    // rounded corner leaves them visible.
     framebuffer.clear4f(CLEAR_COLOR_BUFFER, 0, 0, 0, 0);
     framebuffer.draw_textured_rectangle(pipeline, 0, 0, buffer, buffer, 0, 0, 1, 1);
     context.flush();
@@ -234,12 +168,7 @@ function bake(context, radius, shadows) {
     return drawing;
 }
 
-/**
- * Cogl's float setter takes the array with a separate count, and the GIR does not mark
- * the array's length, so whether GJS accepts that form has to be found out rather than
- * read off. Whichever works is kept for the session; the bake runs once per style.
- */
-let setUniformFloat = null;
+let setUniformFloat = null; // probed once: two GJS signatures for set_uniform_float
 
 function uniform(pipeline, name, components, values) {
     const location = pipeline.get_uniform_location(name);

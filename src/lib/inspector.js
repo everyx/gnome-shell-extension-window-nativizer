@@ -1,9 +1,4 @@
-/**
- * The interactive picker: it dims the screen, lets the user click a window, and
- * answers the prefs process over the D-Bus method defined in lib/pick.js. How it
- * fits the two-process split, and the selection mechanics it borrows from KWin and
- * from GNOME's own, are in docs/architecture.md.
- */
+// Interactive window picker — selection mechanics in docs/architecture.md.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -31,8 +26,6 @@ const INSPECTOR_DBUS_IFACE_XML = `
 
 export class InspectorService {
     constructor(manager = null) {
-        // The prefs process owns no window, so the picker has to answer whether a
-        // rule for the picked kind would change anything.
         this._manager = manager;
 
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(INSPECTOR_DBUS_IFACE_XML, this);
@@ -64,9 +57,7 @@ export class InspectorService {
         }
     }
 
-    /**
-     * D-Bus method: PickWindow (implemented via GJS async naming convention `PickWindowAsync`)
-     */
+    /** D-Bus method PickWindow — GJS async name is PickWindowAsync. */
     PickWindowAsync(_params, invocation) {
         if (this._pendingInvocation) {
             invocation.return_error_literal(
@@ -81,12 +72,9 @@ export class InspectorService {
         this._startInteractivePick();
     }
 
-    // ---------- Interactive Picking Implementation ----------
-
     _findTargetWindow(stageX, stageY) {
         const actors = global.get_window_actors?.() ?? [];
-        // Hoisted: this runs on every pointer motion, and the active workspace cannot
-        // change between the first and the last window of one hit test.
+        // Hoisted out of the loop: the active workspace cannot change while one hit test enumerates windows.
         const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
         for (let i = actors.length - 1; i >= 0; i--) {
             const winActor = actors[i];
@@ -99,8 +87,6 @@ export class InspectorService {
             if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
                 continue;
 
-            // Runtime typelib enum: numeric values must align with src/lib/mutterRules.generated.js
-            // (verified against upstream Mutter headers by tools/gen-mutter.mjs).
             const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
             if (type === Meta.WindowType.DESKTOP || type === Meta.WindowType.DOCK)
                 continue;
@@ -114,7 +100,6 @@ export class InspectorService {
     }
 
     _startInteractivePick() {
-        // 1. Overlay to capture global mouse and keyboard events
         this._overlay = new St.Widget({
             name: 'WindowNativizerInspectorOverlay',
             reactive: true,
@@ -125,7 +110,6 @@ export class InspectorService {
         });
         Main.uiGroup.add_child(this._overlay);
 
-        // 2. Visual highlight border box
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
             style: 'border: 3px solid #3584e4; background-color: rgba(53, 132, 228, 0.15); border-radius: 12px;',
@@ -133,7 +117,6 @@ export class InspectorService {
         });
         Main.uiGroup.add_child(this._highlight);
 
-        // 3. Event bindings
         this._overlay.connect('motion-event', (_actor, event) => {
             const [x, y] = event.get_coords();
             const targetWin = this._findTargetWindow(x, y);
@@ -155,7 +138,6 @@ export class InspectorService {
                 const targetWin = this._findTargetWindow(x, y);
                 this._finishInteractivePick(targetWin);
             } else {
-                // Right click or other buttons cancel
                 this._finishInteractivePick(null);
             }
             return Clutter.EVENT_STOP;
@@ -168,12 +150,10 @@ export class InspectorService {
             return Clutter.EVENT_STOP;
         });
 
-        // 4. Modal grab and crosshair cursor
         try {
             this._activeGrab = Main.pushModal(this._overlay);
         } catch (e) {
-            // A failed grab must still answer the D-Bus call, or the prefs window
-            // stays hidden waiting on a reply that never comes.
+            // Must answer the D-Bus call or the prefs window hangs waiting.
             logError(e, '[window-nativizer] Could not grab the window picker');
             this._finishInteractivePick(null);
             return;
@@ -181,7 +161,7 @@ export class InspectorService {
         try {
             global.stage?.set_cursor_type?.(Clutter.CursorType.CROSSHAIR);
         } catch {
-            // Ignore if stage is unmanaging or cursor cannot be updated
+            // stage may be unmanaging
         }
     }
 
@@ -195,16 +175,12 @@ export class InspectorService {
             return;
 
         if (!win) {
-            // Cancelled or no window clicked
             invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
             return;
         }
 
         const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
-        // The suggestion and whether it would change anything, so prefs can write the
-        // corrective state and refuse one that would do nothing. A missing manager
-        // leaves both absent, and prefs then adds the rule anyway.
         const state = this._manager?.suggestedRuleState?.(win);
         if (typeof state === 'string') {
             properties.suggestedState = state;
@@ -223,16 +199,15 @@ export class InspectorService {
             try {
                 inv.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
-                // Ignore if invocation already answered
+                // invocation already answered
             }
         }
         this._cleanupPickUI();
     }
 
     _cleanupPickUI() {
-        // popModal() raises 'incorrect pop' when the grab was already released by
-        // the actor-destroy hook. The cursor and overlay must be restored either
-        // way, otherwise a stuck crosshair and a stale overlay leak out.
+        // popModal can throw "incorrect pop" if the grab was already released;
+        // cursor and overlay must be restored either way or a crosshair leaks.
         try {
             if (this._activeGrab)
                 Main.popModal(this._activeGrab);
@@ -245,7 +220,7 @@ export class InspectorService {
         try {
             global.stage?.set_cursor_type?.(Clutter.CursorType.DEFAULT);
         } catch {
-            // Ignore if stage is unmanaging
+            // stage may be unmanaging
         }
 
         this._highlight?.destroy();

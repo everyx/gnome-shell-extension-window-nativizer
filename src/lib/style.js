@@ -1,17 +1,9 @@
-/**
- * Picks the decoration parameters for a window state, tracking libadwaita's
- * window.csd. Pure logic module, unit-testable.
- */
+// Tracks libadwaita's window.csd — see docs/decoration-model.md.
 
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
- * Returns the decoration parameters for a window state: {radius, shadows, outline} -
- * the corner radius, up to three shadow layers ({blur, spread, alpha}), and
- * libadwaita's outline highlight. The precedence between states is in
- * docs/decoration-model.md.
- *
- * @param {object} winState - focused / maximized / fullscreen / tiled / highContrast
+ * @param {object} winState - Focused/maximized/fullscreen/tiled/highContrast
  * @returns {{radius: number, shadows: Array<object>, outline: object|null}}
  */
 export function styleForWindow(winState) {
@@ -19,7 +11,7 @@ export function styleForWindow(winState) {
     const outline = winState.highContrast
         ? window.outline.highContrast : window.outline.normal;
 
-    // Maximized / fullscreen / tiled: no outline (upstream outline: none), no shadows
+    // Upstream has no shadows or outline when flush with the screen edge.
     if (winState.fullscreen)
         return {...window.fullscreen, outline: null};
     if (winState.maximized)
