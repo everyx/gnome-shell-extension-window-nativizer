@@ -14,7 +14,7 @@ const ADWAITA_PROVIDERS = [
     'wayland-decoration-client/libadwaita.so',             // qtwayland plugin (same name, different code)
 ];
 
-/** pid -> {hasProvider}; freed by forgetProcess(pid) and destroy(). */
+/** pid -> has an Adwaita provider; freed by forgetProcess(pid) and destroy(). */
 const processCache = new Map();
 
 /** @throws when /proc/<pid>/maps cannot be read */
@@ -28,14 +28,12 @@ function readMaps(pid) {
 
 /**
  * @param {string} mapsText - Contents of /proc/pid/maps
- * @returns {{hasProvider: boolean}}
+ * @returns {boolean} Whether the process maps an Adwaita provider
  */
 export function classifyProcess(mapsText) {
     if (!mapsText || typeof mapsText !== 'string')
-        return {hasProvider: false};
-    return {
-        hasProvider: ADWAITA_PROVIDERS.some(name => mapsText.includes(name)),
-    };
+        return false;
+    return ADWAITA_PROVIDERS.some(name => mapsText.includes(name));
 }
 
 /**
@@ -48,18 +46,16 @@ export function hasAdwaitaLook(pid, deps = {}) {
     if (!pid || typeof pid !== 'number' || pid <= 0)
         return false;
 
-    let info = processCache.get(pid);
-    if (!info) {
+    if (!processCache.has(pid)) {
         try {
-            info = classifyProcess((deps.readMaps ?? readMaps)(pid));
+            processCache.set(pid, classifyProcess((deps.readMaps ?? readMaps)(pid)));
         } catch {
             // Permission/sandbox/dead process — don't cache; may succeed later.
             return false;
         }
-        processCache.set(pid, info);
     }
 
-    return info.hasProvider;
+    return processCache.get(pid);
 }
 
 /**

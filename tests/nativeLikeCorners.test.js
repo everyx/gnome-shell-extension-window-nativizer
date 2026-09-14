@@ -20,35 +20,34 @@ describe('nativeLikeCorners', () => {
 
     describe('classifyProcess', () => {
         it('takes libadwaita as a provider', () => {
-            const info = classifyProcess(maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libadwaita-1.so.0'));
-            expect(info.hasProvider).toBeTrue();
+            const mapsText = maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libadwaita-1.so.0');
+            expect(classifyProcess(mapsText)).toBeTrue();
         });
 
         it('takes libhandy as a provider', () => {
-            expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0')).hasProvider).toBeTrue();
+            expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
         it('takes Qt decoration plugins as providers, named by their own path', () => {
             const qadwaita = '/usr/lib/qt6/plugins/wayland-decoration-client/libqadwaitadecorations.so';
             const plugin = '/usr/lib/qt6/plugins/wayland-decoration-client/libadwaita.so';
-            expect(classifyProcess(maps(qadwaita)).hasProvider).toBeTrue();
-            expect(classifyProcess(maps(plugin)).hasProvider).toBeTrue();
+            expect(classifyProcess(maps(qadwaita))).toBeTrue();
+            expect(classifyProcess(maps(plugin))).toBeTrue();
         });
 
         it('reports a plain GTK program as holding no provider', () => {
-            expect(classifyProcess(maps('/usr/lib/libgtk-4.so.1')).hasProvider).toBeFalse();
-            expect(classifyProcess(maps('/usr/lib/libgtk-3.so.0')).hasProvider).toBeFalse();
+            expect(classifyProcess(maps('/usr/lib/libgtk-4.so.1'))).toBeFalse();
+            expect(classifyProcess(maps('/usr/lib/libgtk-3.so.0'))).toBeFalse();
         });
 
         it('reports Qt, Chromium and libc as holding no provider', () => {
-            const info = classifyProcess(maps('/usr/lib/libc.so.6', '/usr/lib/libQt6Core.so.6',
-                '/usr/lib/chromium/chromium'));
-            expect(info.hasProvider).toBeFalse();
+            expect(classifyProcess(maps('/usr/lib/libc.so.6', '/usr/lib/libQt6Core.so.6',
+                '/usr/lib/chromium/chromium'))).toBeFalse();
         });
 
         it('treats missing input as holding no provider', () => {
             for (const input of [null, undefined, '']) {
-                expect(classifyProcess(input).hasProvider).toBeFalse();
+                expect(classifyProcess(input)).toBeFalse();
             }
         });
     });
