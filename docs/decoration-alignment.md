@@ -183,7 +183,7 @@ SCSS definition (`box-shadow: 0 0 14px 5px ..., 0 0 5px 2px ..., 0 0 0 1px ...`)
 
 | Offset (px) | Window Nativizer (4-way symmetric) | Native Libadwaita (4-way symmetric) | Delta (G) | Notes |
 | :---: | :---: | :---: | :---: | :--- |
-| **0 (outline)** | **9** | **18** | -9 | 1px inner outline (G channel over Red body) |
+| **0 (outline)** | **18** | **18** | **±0** | 1px inner outline (G channel over Red body) |
 | **+1** | **191** | **199** | **-8** | First shadow pixel outside window |
 | **+2** | **208** | **216** | **-8** | Smooth parallel decay |
 | **+3** | **218** | **221** | **-3** | Rapid convergence |
@@ -254,6 +254,47 @@ The magnitude is a handful of grey levels on the first two physical pixels (abou
 logical px); whether that reads as a heavier shadow depends on the sub-pixel phase the
 window happens to land on, so two windows on the same monitor can differ by ~5/255
 purely from where their edges fall.
+
+### The inner outline, which is a shader band
+
+Ours is not drawn by the client: the 1px inner outline is the shader's coverage ramp, and its
+strength is where that ramp sits relative to the pixel grid. `m = clamp(1+d)` centred the
+ring on the body boundary, so the innermost body pixel — the only one whose centre can fall
+inside a ring that is one pixel wide — came out at half coverage: G **9** against native's
+**18**, at every edge and every scale where the boundary lands on a whole pixel. Centring
+the ring half a pixel inside the body (`m = clamp(1.5+d)`, ramp over `d in [-1.5,-0.5]`)
+puts that pixel centre at full coverage, and the two agree exactly at 1.0.
+
+Measured as in the profile above — innermost body rows per edge, G channel, red body over
+white backdrop — for four window positions one logical pixel apart, which is four sub-pixel
+phases per edge:
+
+| scale |  | before | after | native |
+| :---: | :--- | :---: | :---: | :---: |
+| 1.0 | each edge, each phase | 9 | **18** | 18 |
+| 1.3333 | strongest edge | 7 | **18** (16 + 2) | 49 (37 + 12) |
+| 1.3333 | weakest edge | 0 | 0 | 12 |
+| 1.3333 | total, four edges | 9–16 | 31–47 | 97–171 |
+
+What the numbers say:
+
+- **At 1.0 the ring is now native's value exactly**, at every edge and every phase, and it is
+  still one pixel: one row reads 18, the row inside it 0.
+- **At 1.3333 the change doubles the ink** (per edge 7 -> 18 on the best phase, 2 -> 11 on the
+  next, 0 -> 0 where the phase was already empty) and never puts `G >= 3` on two body rows,
+  so the ring does not become 2px. A row at G 0 with the ink one row further out is the
+  anti-aliased body boundary against the shadow, which native has too.
+- **The phase spread is older than this change.** At 1.3333 the four edges of one window sit
+  at four different sub-pixel phases; one can read 18 while another reads 0, and moving the
+  window one logical pixel moves the ink between edges. Before the change the same sweep read
+  7/2/0/0, so the fix raises the level and leaves the spread; native spreads the same way
+  (across the same four positions its per-edge reading moves between 12 and 49 — one row of 12
+  up to 37 + 12). Closing that
+  last gap means drawing the outline at the physical resolution — as a clipped actor like the
+  shadow rather than a coverage term in the offscreen pass — and is not what this changed.
+- **High contrast scales with it.** At 1.0 the 30% tier reads 76 after the change where it read
+  38 before, against the 7% tier's 18 — the two tiers keep their 30/7 ratio, and both are still
+  one pixel.
 
 ### Automated Benchmark Tool
 

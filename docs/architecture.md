@@ -81,7 +81,11 @@ intact; `uClearRing` blends that mask away when the shadow is ours (see
 Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)` — `d < 0` inside body,
 `d > 0` in removed corners, `d == 0` on boundary. Anti-alias: `corner = 1 - clamp(d+0.5)`,
 `keep = min(corner + 1 - inSquare, 1)`, final `mix(keep, corner*inSquare, uClearRing)`.
-Inner 1px outline lives in `d in [-1,0]`: `m = clamp(1+d)*inSquare*uOutline.a*cogl_color_in.a`.
+Inner 1px outline: `m = clamp(1.5+d)*inSquare*uOutline.a*cogl_color_in.a`. The ring is one
+logical pixel wide and centred half a pixel inside the body (`d in [-1.5,-0.5]`), which is
+where the `d = -0.5` pixel centre of the innermost body pixel sits; `1+d` centred it on the
+boundary instead and rendered that pixel at half strength (measured, with the reasoning, in
+`decoration-alignment.md`).
 `uOutline` is `rgb in [0,1], a in [0,1]`; `a == 0` disables it. Its color is normalized
 from `0..255` to `0..1` on upload. Radius 0 means square body — used by the `shadow` rule to
 clear the ring without rounding.

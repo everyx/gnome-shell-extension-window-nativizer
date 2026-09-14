@@ -37,7 +37,10 @@ const CODE = `
     float inSquare = 1.0 - max(beyond.x, beyond.y);
 
     if (uOutline.a > 0.0) {
-        float m = clamp(1.0 + d, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
+        // 1.5, not 1.0: the ring's centre is half a pixel inside the body, so the
+        // innermost pixel's centre (d = -0.5) has to be fully covered. libadwaita's
+        // 7% ring measures that at offset 0 (decoration-alignment.md).
+        float m = clamp(1.5 + d, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }

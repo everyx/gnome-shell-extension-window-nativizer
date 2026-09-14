@@ -24,7 +24,7 @@ SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 # Golden Baseline (1.0x Integer Scale, Offsets 0..22)
 # Offset 0 is inner outline (G channel), 1..N is shadow attenuation into 255 (white backdrop)
 BASELINE_CSD = [
-    9, 191, 208, 218, 227, 233, 238, 242, 246, 249, 251, 253, 254, 254, 255
+    18, 191, 208, 218, 227, 233, 238, 242, 246, 249, 251, 253, 254, 254, 255
 ]
 BASELINE_NATIVE = [
     18, 199, 216, 221, 227, 231, 235, 238, 241, 243, 245, 247, 248, 250, 251, 252, 252, 253, 254, 254, 254, 254, 255
