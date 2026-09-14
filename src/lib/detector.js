@@ -95,6 +95,19 @@ export function declaresOwnShadow({
     return !hasSsd && sideW >= insetThreshold && sideH >= insetThreshold;
 }
 /**
+ * Whether the shadow on screen is another's and not ours to clear: an SSD frame (Mutter
+ * or the frames client) or Mutter's bare-X11 shadow. A declared ring is ours to clear
+ * (docs/decoration-model.md).
+ * @param {boolean} [params.hasSsd=false] - Mutter / the frames client drew the frame
+ * @param {boolean} [params.isX11=false]
+ * @param {number} params.sideW - per-side declared margin, logical px
+ * @param {number} params.sideH - per-side declared margin, logical px
+ * @returns {boolean}
+ */
+export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
+    return hasSsd || (isX11 && sideW <= 0 && sideH <= 0);
+}
+/**
  * What we would draw with no user rule, one axis at a time: the shadow by who
  * already paints one, the corners by whether the window already looks like
  * libadwaita. The model behind both, and where it diverges from Mutter on
@@ -121,15 +134,12 @@ export function inferDecorationBaseline({
     let shadow = true;
     let reason = `no-csd(${insets} < ${insetThreshold})`;
 
-    if (hasSsd) {
+    if (hasUnclearableShadow({hasSsd, isX11, sideW, sideH})) {
         shadow = false;
-        reason = 'has-ssd-frame';
+        reason = hasSsd ? 'has-ssd-frame' : 'x11-mutter-native-shadow';
     } else if (declaresOwnShadow({hasSsd, sideW, sideH, insetThreshold})) {
         shadow = false;
         reason = `has-csd(${insets} >= ${insetThreshold})`;
-    } else if (isX11 && sideW <= 0 && sideH <= 0) {
-        shadow = false;
-        reason = 'x11-mutter-native-shadow';
     }
 
     // The corner axis has nothing to read, so it stands on this inference alone; the
@@ -334,14 +344,24 @@ function kindParams(params) {
 }
 /**
  * The state a pick should write for `params`' window kind: any axis of ours on
- * screen suggests `none`, no axis suggests `both` (docs/rule-model.md).
+ * screen suggests `none`; otherwise `both`, or `corners` when the shadow on screen
+ * is not ours to clear - suggesting `both` there would only add a second shadow
+ * (docs/rule-model.md).
  *
  * @param {WindowEvaluationParams} params - The window as the runtime sees it
- * @returns {string} RuleState value - NONE or BOTH
+ * @returns {string} RuleState value - NONE, CORNERS or BOTH
  */
 export function suggestedRuleState(params) {
-    const {drawShadow, drawClip} = evaluateWindowActions(kindParams(params));
-    return drawShadow || drawClip ? RuleState.NONE : RuleState.BOTH;
+    const kind = kindParams(params);
+    const {drawShadow, drawClip} = evaluateWindowActions(kind);
+    if (drawShadow || drawClip)
+        return RuleState.NONE;
+
+    const {w, h} = computeInsets(kind.bufferWidth, kind.bufferHeight, kind.frameWidth, kind.frameHeight);
+    if (hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, sideW: w / 2, sideH: h / 2}))
+        return RuleState.CORNERS;
+
+    return RuleState.BOTH;
 }
 /**
  * Whether storing `state` for `properties`' window kind would change what we draw

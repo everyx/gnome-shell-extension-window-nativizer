@@ -31,7 +31,8 @@ rounding them?             the client's own ring is cleared exactly when the sha
    the same kind of evidence, and each is answered only from its own:
    - **Shadows** are a *reading*, not an observation: the window declares a margin
      (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
-     and a bare X11 window has its shadow painted by Mutter. One part of that reading is
+     and Mutter paints the shadow of a bare X11 window unless one of `has_shadow()`'s
+     gates excludes it (*Where we deliberately differ from Mutter*). One part of that reading is
      ours, not Mutter's: Mutter asks only whether frame extents exist at all
      (`has_custom_frame_extents`, true for 4px as much as for 40px), whereas a margin
      counts as a shadow ring here only when it reaches Mutter's smallest window shadow
@@ -139,14 +140,17 @@ ring at all.
 ## Where we deliberately differ from Mutter
 
 - **X11 / XWayland without custom frame extents & Server-Side Decorations (SSD).**
-  We never paint a redundant shadow (`shadow: false`); who owns the visible one
-  depends on the case. For SSD, Mutter's compositor draws none — `has_shadow()`
+  With no rule we never paint a redundant shadow (`shadow: false`); who owns the
+  visible one depends on the case. For SSD, Mutter's compositor draws none — `has_shadow()`
   (`meta-window-actor-x11.c`) returns FALSE once a frame exists (*"Let the frames
   client put a shadow around frames"*), and the frames client draws its own:
   a GTK window carrying the `ssd-frame` CSS class (`src/frames/meta-frame.c:570`),
   whose shadow comes from the GTK/Adwaita theme (`window.csd { box-shadow: … }`
-  in libadwaita's `src/stylesheet/widgets/_window.scss`), not from the compositor. For bare X11 windows Mutter does draw
-  one, but strictly outside the window square: it is painted only into the
+  in libadwaita's `src/stylesheet/widgets/_window.scss`), not from the compositor. For a bare X11 window Mutter draws
+  one only when every gate in `has_shadow()` (`vendor/mutter/meta-window-actor-x11.c:373-427`)
+  passes: not maximized or fullscreen, no snap-tile match, no frames-client frame, an
+  opaque window (not ARGB32), no custom frame extents declared, and not shaped.
+  When it does, it is painted strictly outside the window square: only into the
   beneath-region (`shadow_clip`, strict clip), and it is a soft Gaussian blur of the
   window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c` gives a
   normal window `{radius 10, opacity 128}` focused), not an opaque square. Either way
@@ -154,7 +158,10 @@ ring at all.
   `RoundedClipEffect` to the native 15px (`window.radius` in
   `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and the cut corners reveal
   desktop background. SSD is an inference (layer 2), not a
-  structural fact as it once was: a rule may override it.
+  structural fact as it once was: a rule may override it. So is the bare-X11 shadow,
+  and overriding it with `both` or `shadow` adds ours on top of Mutter's — the user's
+  explicit choice, not something we override; `corners` is the intended look there,
+  leaving one shadow.
   X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
   native shadow, so those receive both shadow and rounded corners.
 - **A snap-tiled window loses the shadow it would get from us** when it has an

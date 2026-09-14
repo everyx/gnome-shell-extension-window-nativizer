@@ -797,6 +797,24 @@ describe('the pick heuristic', () => {
             expect(suggestedRuleState(nativeWindow)).toBe(RuleState.BOTH);
         });
 
+        it('suggests corners when the shadow on screen is not ours to clear', () => {
+            // A bare X11 window (no declared margin) whose corners already look like
+            // ours: no axis is ours, and Mutter's shadow cannot be cleared, so `both`
+            // would add a second shadow on top of it.
+            const x11Bare = {
+                ...plainWindow,
+                isX11: true,
+                nativeLikeCorners: true,
+                wmClass: 'x11-adw-app',
+            };
+            expect(suggestedRuleState(x11Bare)).toBe(RuleState.CORNERS);
+        });
+
+        it('still suggests both when the X11 window declares a ring we can clear', () => {
+            const x11Ring = {...nativeWindow, isX11: true, wmClass: 'x11-csd-adw-app'};
+            expect(suggestedRuleState(x11Ring)).toBe(RuleState.BOTH);
+        });
+
         it('judges the kind, not the transient state the window is in', () => {
             // A maximized or tiled window is not decorated while it is in that state,
             // but the rule outlives it, so the suggestion follows the kind.

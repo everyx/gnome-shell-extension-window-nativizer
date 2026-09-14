@@ -63,8 +63,11 @@ of them, so the picker writes exactly the kind it was pointed at and nothing els
 There is no direction any more, and so no collision to resolve: one kind has one row,
 and that row says what the window ends up with on both axes. A rule overrides the
 inferred baseline and nothing else — never the structural facts (window type,
-maximized/fullscreen), never a user preference, never a policy. See
-[decoration-model.md](decoration-model.md).
+maximized/fullscreen), never a user preference, never a policy. The same direction
+guides the override layers themselves: we overrule the user only where honouring the
+request would be meaningless — a structural disqualifier, a window state (maximized,
+tiled, matched), or a window the user cannot see — never where the request is merely
+imperfect. See [decoration-model.md](decoration-model.md).
 
 ## Identity
 
@@ -98,7 +101,9 @@ corrects what the window currently shows. The suggestion follows the window's
 because a rule outlives it:
 
 - any axis of ours on screen → suggest `none`
-- no axis of ours → suggest `both`
+- no axis of ours, and the shadow on screen is ours to clear → suggest `both`
+- no axis of ours, and that shadow is not ours to clear (Mutter's, or the frames
+  client's) → suggest `corners`, so the suggestion cannot add a second shadow
 
 The guess is safe because it is symmetric and cheap to reverse: whichever state it
 lands on, the dropdown on the row offers the other three, and the rule never touches
