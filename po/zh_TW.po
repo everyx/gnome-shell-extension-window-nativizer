@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 11:23+0800\n"
+"POT-Creation-Date: 2026-09-14 12:48+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -16,144 +16,155 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:26
-msgid "Decorate"
-msgstr "加裝飾"
-
+#. Translators: This extension draws both the corners and the shadow of the window.
 #: src/prefs.js:27
-msgid "Leave alone"
-msgstr "不加（保持原樣）"
+msgid "Both"
+msgstr "都加"
 
-#: src/prefs.js:28
-msgid "Corners only"
-msgstr "只要我們的圓角"
-
+#. Translators: This extension draws neither the corners nor the shadow of the window.
 #: src/prefs.js:29
-msgid "Shadow only"
-msgstr "只要我們的陰影"
+msgid "Neither"
+msgstr "都不加"
 
-#: src/prefs.js:38
+#. Translators: This extension draws the corners of the window, but not its shadow.
+#: src/prefs.js:31
+msgid "Corners only"
+msgstr "僅圓角"
+
+#. Translators: This extension draws the shadow of the window, but not its corners.
+#: src/prefs.js:33
+msgid "Shadow only"
+msgstr "僅陰影"
+
+#. Translators: A dialog window.
+#: src/prefs.js:43
 msgid "dialog"
 msgstr "對話框"
 
-#: src/prefs.js:39
+#. Translators: A dialog that blocks its parent window.
+#: src/prefs.js:45
 msgid "modal dialog"
 msgstr "模態對話框"
 
-#: src/prefs.js:40
+#. Translators: A small utility window, such as a palette or a toolbar.
+#: src/prefs.js:47
 msgid "utility window"
 msgstr "工具視窗"
 
-#: src/prefs.js:44
+#. Translators: A normal, top-level window.
+#: src/prefs.js:52
 msgid "window"
 msgstr "視窗"
 
-#: src/prefs.js:55
+#. Translators: A window the user cannot resize.
+#: src/prefs.js:64
 msgid "Fixed-size"
 msgstr "固定尺寸"
 
-#: src/prefs.js:55
+#. Translators: A window the user can resize.
+#: src/prefs.js:66
 msgid "Resizable"
 msgstr "可縮放"
 
-#: src/prefs.js:56
+#: src/prefs.js:68
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:56
+#: src/prefs.js:68
 msgid "Wayland"
 msgstr "Wayland"
 
-#: src/prefs.js:60
+#. Translators: The window has no parent window.
+#: src/prefs.js:71
 msgid "with no parent"
 msgstr "無父視窗"
 
-#: src/prefs.js:62
+#. Translators: The window is attached to its parent window.
+#: src/prefs.js:73
 msgid "attached to its parent"
 msgstr "附加到父視窗"
 
-#: src/prefs.js:64
+#. Translators: The window has a parent window it is not attached to.
+#: src/prefs.js:75
 msgid "with a parent"
 msgstr "有父視窗"
 
-#. The template is the translatable unit, so a language can reorder the
-#. sentence; each fragment above is translated on its own.
-#: src/prefs.js:68
-msgid "{size} {server} {type}, {parent}"
-msgstr "{size}的 {server} {type}，{parent}"
+#. Translators: %s is the size, the client type, the window type and the
+#. parent, in that order. Reorder the placeholders to fit the language.
+#: src/prefs.js:87
+#, javascript-format
+msgid "%s %s %s, %s"
+msgstr "%s %s %s，%s"
 
-#: src/prefs.js:163 src/prefs.js:171
-msgid "OK"
-msgstr "確定"
+#. Translators: Closes the error dialog.
+#: src/prefs.js:179 src/prefs.js:187
+msgid "Close"
+msgstr "關閉"
 
-#: src/prefs.js:189
+#: src/prefs.js:205
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:195
+#: src/prefs.js:211
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:196
+#: src/prefs.js:212
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
 
-#: src/prefs.js:201
+#: src/prefs.js:217
 msgid "Prioritize Crisp Text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:202
+#: src/prefs.js:218
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
-"在分數縮放螢幕上免除圓角（保留陰影），消除重新取樣帶來的字體模糊與效能損耗"
+"在分數縮放螢幕上跳過圓角（保留陰影），避免重新取樣造成的文字模糊與效能損耗"
 
-#: src/prefs.js:210
-msgid "Pick a window that looks wrong; the rule will be set the other way"
-msgstr "選取一個顯示不正常的視窗，規則會自動設成相反的狀態"
+#: src/prefs.js:226 src/prefs.js:230
+msgid "Pick a window that looks wrong"
+msgstr "選取一個顯示不正常的視窗"
 
-#: src/prefs.js:216 src/prefs.js:234 src/prefs.js:235
+#: src/prefs.js:233 src/prefs.js:251 src/prefs.js:252
 msgid "Window Rules"
 msgstr "視窗規則"
 
-#: src/prefs.js:217
-msgid "Each rule names which decorations are ours for one window kind."
-msgstr "每條規則寫明某個視窗種類裡哪些裝飾由我們繪製。"
+#: src/prefs.js:234
+msgid "Which decorations are ours for this window kind?"
+msgstr "這類視窗要加哪些裝飾？"
 
-#: src/prefs.js:239
-msgid "Use the button above to pick a window that looks wrong."
-msgstr "用上面的按鈕選取一個顯示不正常的視窗。"
+#: src/prefs.js:256
+msgid "Use the button above to pick a window that looks wrong"
+msgstr "用上面的按鈕選取一個顯示不正常的視窗"
 
-#: src/prefs.js:302
+#: src/prefs.js:319 src/prefs.js:321
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:326
+#: src/prefs.js:344
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:327
-msgid ""
-"Could not connect to Window Nativizer extension. Please ensure the extension "
-"is enabled."
-msgstr ""
-"無法連線至 Window Nativizer 擴充套件，請確認該擴充套件已在 GNOME 擴充套件中啟"
-"用。"
+#: src/prefs.js:345
+msgid "Could not connect to the Window Nativizer extension — it is not enabled"
+msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:339
-msgid "No rule added: this window could not be identified."
-msgstr "未新增規則：無法識別這個視窗。"
+#: src/prefs.js:357
+msgid "No rule added: this window could not be identified"
+msgstr "未新增規則：無法識別這個視窗"
 
-#: src/prefs.js:350
-msgid "No rule added: it would have no effect on a window of this kind."
-msgstr "未新增規則：這條規則對此類視窗不會有任何效果。"
+#: src/prefs.js:368
+msgid "No rule added: it would have no effect on a window of this kind"
+msgstr "未新增規則：這條規則對此類視窗不會有任何效果"
 
-#: src/prefs.js:359
-msgid "No rule added: the rule could not be saved."
-msgstr "未新增規則：規則未能儲存。"
+#: src/prefs.js:377
+msgid "No rule added: the rule could not be saved"
+msgstr "未新增規則：規則未能儲存"
 
-#: src/prefs.js:367
+#: src/prefs.js:385
 #, javascript-format
 msgid "Rule set to: %s"
 msgstr "規則已設為：%s"

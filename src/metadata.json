@@ -1,7 +1,7 @@
 {
     "uuid": "window-nativizer@everyx.github.io",
     "name": "Window Nativizer",
-    "description": "Rounds window corners to GNOME's radius and adds a shadow only where no compositor, frame or client draws one. Windows that already look like this - libadwaita apps, or GTK and Qt apps drawing the same corners - are left alone. To tell them apart it reads /proc/<pid>/maps and the configured GTK theme; a wrong guess is corrected by picking the window once. Nothing is written and nothing leaves the machine.",
+    "description": "Rounds window corners to GNOME's radius and adds a shadow only where no compositor, frame or client draws one. Windows that already look native — libadwaita or libhandy applications, or Qt applications with an Adwaita decoration plugin — are left alone. It decides that from the libraries a process maps (/proc/<pid>/maps); a wrong guess is corrected by picking the window once. Nothing about your windows leaves the machine, and the only thing stored is the rule you set.",
     "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer",
     "shell-version": [
         "50"
