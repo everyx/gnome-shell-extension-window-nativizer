@@ -32,12 +32,16 @@ rounding them?             the client's own ring is cleared exactly when the sha
    - **Shadows** are a *reading*, not an observation: the window declares a margin
      (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
      and Mutter paints the shadow of a bare X11 window unless one of `has_shadow()`'s
-     gates excludes it (*Where we deliberately differ from Mutter*). One part of that reading is
-     ours, not Mutter's: Mutter asks only whether frame extents exist at all
-     (`has_custom_frame_extents`, true for 4px as much as for 40px), whereas a margin
-     counts as a shadow ring here only when it reaches Mutter's smallest window shadow
-     radius on both axes. The axis is then **one-sided**: "something else already paints
-     one" is reliable, while "nobody does, so we add one" misses a client that draws its
+     gates excludes it (*Where we deliberately differ from Mutter*). A declared margin
+     is read the way Mutter reads it, as the boolean `has_custom_frame_extents`: **any**
+     declared margin is a ring, on one axis or both, 1px as much as 40px. That is why
+     `declaresOwnShadow()` is `sideW > 0 || sideH > 0`, and why its reason string
+     carries the measured margin and no threshold (`has-csd(4.0x4.0)`). A radius cannot
+     answer this question: GTK4 floors a CSD window's margin at 12 logical px
+     (`gtkwindow.c`: `shadow_width = MAX(css_extents, RESIZE_HANDLE_SIZE)`), so no
+     radius separates a 12px resize handle from a 12px shadow. The axis is then
+     **one-sided**: "something else already paints one" is reliable, while "nobody
+     does, so we add one" misses a client that draws its
      own shadow *without declaring a margin* (measured: `bradient` declares none). The
      error only ever points at a double shadow, never at a missing one, and the remedy is
      the ring (*Rounding a window takes its shadow over*) or a rule.
@@ -122,11 +126,16 @@ because a square body is the shape we have.
 
 | What the ring holds | Shadow ours? | What happens |
 |---|---|---|
-| the client's shadow (`buffer_rect - frame_rect` at or above Mutter's minimum inset on both axes) | yes | cleared, then our shadow is drawn: one shadow, for the corners we drew (for a square body, if a rule left the corners theirs) |
-| the client's shadow | no - it already looks like ours, or a rule left it theirs | untouched: its shadow still matches the shape it was painted for |
-| too narrow to be a shadow (a resize grip, or nothing) | either | untouched: nothing to own, and the client may have drawn in it |
-| none (a bare toplevel) | yes | nothing to clear; the actor is already the body |
+| the client's declared ring (`buffer_rect - frame_rect`, any positive margin on either axis) | yes | cleared, then our shadow is drawn: one shadow, for the corners we drew (for a square body, if a rule left the corners theirs) |
+| the client's declared ring | no - it already looks like ours, or a rule left it theirs | untouched: its shadow still matches the shape it was painted for |
+| none (a bare toplevel: no margin on either axis) | yes | nothing to clear; the actor is already the body |
 | Mutter's own (`has-ssd-frame`, `x11-mutter-native-shadow`) | either | out of reach: that shadow is not in the window's texture |
+
+The ring is a **declaration, not content**: `_GTK_FRAME_EXTENTS` on X11 and
+`set_window_geometry` on Wayland both say "this much of my buffer is decoration", and
+the client drew its frame there. Measured: WeChat's CEF window (X11, Depth 32,
+extents `4,4,4,4`) paints a 1px decorated edge inside its ring, which clearing removes
+along with the square corner it was drawn for.
 
 Two consequences worth knowing. The shadow is cast by the **body**, not by the actor
 (`setShadowBody()` in `shadowActor.js`), or ours would be laid out around the ring the
@@ -161,8 +170,9 @@ ring at all.
   and overriding it with `both` or `shadow` adds ours on top of Mutter's — the user's
   explicit choice, not something we override; `corners` is the intended look there,
   leaving one shadow.
-  X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
-  native shadow, so those receive both shadow and rounded corners.
+  X11 windows that *do* declare frame extents make Mutter drop its native shadow, and
+  that declaration is exactly the ring we read (any positive margin), so those receive
+  both our shadow and rounded corners, with the ring cleared.
 - **A snap-tiled window loses the shadow it would get from us** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct the
   neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on
@@ -181,11 +191,15 @@ the reading being one-sided; the last is simply not verified yet.
   margin** cannot be told apart from one that draws none. Nothing in the window's
   geometry or in Mutter distinguishes them, so the baseline adds our decoration next
   to theirs. A `none` rule is the only remedy.
-- **A ring at or above the threshold that is padding rather than a shadow** reads as a
-  shadow, and `both` - or the automatic takeover - clears it along with the corners.
-  If the client painted something in there, that something goes too.
-- **A ring below the threshold that does hold a small shadow** reads as not-a-shadow,
-  so we add ours on top of the client's: two shadows, not one.
+- **A declared ring that is padding rather than a shadow** reads as a ring, and `both` -
+  or the automatic takeover - clears it along with the corners. If the client painted
+  something in there, that something goes too. The client's own declaration is the only
+  evidence there is, and it says the ring is decoration.
+- **Extents of all zeros read as a bare window.** Mutter sets `has_custom_frame_extents`
+  for the property alone, zeros included (GTK4 writes `0,0,0,0` whenever the surface has
+  a client shadow but no extents to declare, e.g. while maximized), and our margin is
+  then 0x0. On X11 that lands in the bare case where we decline to paint, so such a
+  window keeps our corners and gets no shadow at all.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
@@ -203,9 +217,9 @@ the reading being one-sided; the last is simply not verified yet.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
   drops the shadow we would draw; it does not clear the client's ring.
 - **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
-  margin is already in logical pixels and compares directly against the logical
-  threshold (*The margins, and the scale question*); whether an X11 / XWayland window
-  on a scaled monitor reads the same way has not been checked.
+  margin is already in logical pixels and answers "declared or not" directly (*The
+  margins, and the scale question*); whether an X11 / XWayland window on a scaled
+  monitor reads the same way has not been checked.
 
 ## The margins, and the scale question
 
@@ -214,15 +228,16 @@ rectangles by the same window geometry scale, so their difference is the margin 
 client declared. That scale is 1 whenever the logical monitor layout is LOGICAL,
 and the native backend always reports that
 (`meta-window-wayland.c`, `get_window_geometry_scale_for_logical_monitor`) — so on
-Wayland the margin is already in logical pixels and compares directly against the
-logical threshold.
+Wayland the margin is already in logical pixels, and the predicate only asks whether
+either axis is positive.
 
 A backend that lays monitors out physically scales the margin by the integer
 monitor scale instead. GJS cannot read that scale:
 `meta_backend_is_stage_views_scaled()` is private, and the layout mode is not in
 the GIR. The margin is therefore left as it comes, which on such a backend reads
-larger than it is — never smaller — so the error stays on the side of declining to
-draw.
+larger than it is — never smaller. Since the reading is only "positive or not",
+that error cannot change an answer: a declared margin stays declared and a zero
+stays zero.
 
 ## Which style applies
 

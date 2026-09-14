@@ -61,7 +61,7 @@ listed in [decoration-model.md](decoration-model.md).
 A rule is keyed by the whole window kind, not by the application, because one
 application routinely opens kinds that need opposite answers. WeChat is the example:
 its main and chat windows run on Wayland while its article/browser windows run on
-XWayland (and declare only a 4px resize grip), and some of its dialogs are
+XWayland (with a declared 4px ring), and some of its dialogs are
 self-decorated where others are not. An app-wide rule would have to be wrong for one
 of them, so the picker writes exactly the kind it was pointed at and nothing else.
 

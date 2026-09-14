@@ -3,9 +3,7 @@
  * Run: pnpm test
  */
 
-import {
-    WindowType, MUTTER_MIN_SHADOW_RADIUS,
-} from '../src/lib/mutterRules.generated.js';
+import {WindowType} from '../src/lib/mutterRules.generated.js';
 import {
     computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
     isWindowTiled, checkDecorationEligibility, inferDecorationBaseline,
@@ -108,27 +106,25 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toContain('no-csd');
     });
 
-    it('WeChat article / browser window (XWayland, Chromium 4px resize grip) single side < 8px -> Mutter skips native shadow, baseline decorates', () => {
+    it('WeChat article / browser window (XWayland, CEF, extents 4,4,4,4) -> its ring is the client\'s, so the shadow is not ours', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const r = inferDecorationBaseline({
             isX11: true,
             ...marginsFromRects(1156, 852, 1148, 844),
         });
-        expect(r.shadow).toBeTrue();
+        expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
-        expect(r.reason).toContain('no-csd');
-        expect(r.reason).toContain(`4.0x4.0 < ${MUTTER_MIN_SHADOW_RADIUS}`);
+        expect(r.reason).toBe('has-csd(4.0x4.0)');
     });
 
-    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, baseline decorates', () => {
+    it('Wayland window declaring a 4px ring (Chromium/CEF) -> read the same way as on X11', () => {
         const r = inferDecorationBaseline({
             isX11: false,
             ...marginsFromRects(1156, 852, 1148, 844),
         });
-        expect(r.shadow).toBeTrue();
+        expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
-        expect(r.reason).toContain('no-csd');
-        expect(r.reason).toContain(`4.0x4.0 < ${MUTTER_MIN_SHADOW_RADIUS}`);
+        expect(r.reason).toBe('has-csd(4.0x4.0)');
     });
 
     it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
@@ -157,33 +153,26 @@ describe('inferDecorationBaseline', () => {
         expect(declared.shadow).toBeFalse(); // its own declared CSD shadow
     });
 
-    it('X11 with a small non-zero grip declares custom frame extents -> baseline still decorates', () => {
+    it('X11 with a small declared margin -> the client owns that shadow, baseline still rounds', () => {
         const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(808, 604, 800, 600)});
-        expect(r.shadow).toBeTrue();
+        expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
-        expect(r.reason).toContain('no-csd');
+        expect(r.reason).toBe('has-csd(4.0x2.0)');
     });
 
-    it('genuine self-drawn CSD shadow (single side 20px+ >= 8px) -> keeps its shadow, still rounds', () => {
+    it('genuine self-drawn CSD shadow (single side 20px) -> keeps its shadow, still rounds', () => {
         // Margins: 20px left/right (bufferWidth=440, frameWidth=400), 20px top/bottom
         const r = inferDecorationBaseline(marginsFromRects(440, 340, 400, 300));
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
-        expect(r.reason).toContain('has-csd');
-        expect(r.reason).toContain(`20.0x20.0 >= ${MUTTER_MIN_SHADOW_RADIUS}`);
+        expect(r.reason).toBe('has-csd(20.0x20.0)');
     });
 
-    it('oversized margin on a single axis (asymmetric) is not treated as a CSD shadow -> baseline decorates', () => {
+    it('a margin on one axis only is still a declaration (Mutter asks whether extents exist, not both axes)', () => {
         const r = inferDecorationBaseline(marginsFromRects(440, 300, 400, 300));
-        expect(r.shadow).toBeTrue();
+        expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
-        expect(r.reason).toContain('no-csd');
-    });
-
-    it('honours an explicit inset threshold', () => {
-        const margins = marginsFromRects(410, 310, 400, 300); // single side 5px
-        expect(inferDecorationBaseline({...margins, insetThreshold: 4}).reason).toContain('has-csd');
-        expect(inferDecorationBaseline({...margins, insetThreshold: 8}).reason).toContain('no-csd');
+        expect(r.reason).toBe('has-csd(20.0x0.0)');
     });
 });
 
@@ -239,8 +228,8 @@ describe('evaluateWindowActions', () => {
         windowType: WindowType.NORMAL,
         wmClass: 'test-app',
     };
-    // A client that declared a shadow ring: single side 30px >= 8px, so the
-    // baseline keeps its corners but reads the shadow as the client's.
+    // A client that declared a ring: the baseline reads the shadow as the client's,
+    // and the automatic corner takeover makes it ours again.
     const ringedWindow = {...baseWin, bufferWidth: 460, bufferHeight: 360};
 
     it('degenerate helper surface (wl-clipboard 1x1): no decoration', () => {
@@ -323,7 +312,8 @@ describe('evaluateWindowActions', () => {
         expect(res.drawClip).toBeFalse();
     });
 
-    it('X11 window with small frame extents (WeChat 4px resize grip): decorates with shadow and clip', () => {
+    it('a 4px declared ring (WeChat/CEF: X11, extents 4,4,4,4) -> corners ours, ring cleared, our shadow', () => {
+        // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
@@ -331,9 +321,36 @@ describe('evaluateWindowActions', () => {
             bufferWidth: 1156, bufferHeight: 852,
             frameWidth: 1148, frameHeight: 844,
         });
-        expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeTrue();
-        expect(res.reason).toContain('no-csd');
+        expect(res.clearRing).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-csd(4.0x4.0))');
+    });
+
+    it('a bare window (no declared extents) is still not client-decorated: zero is not a ring', () => {
+        // A `>= 0` reading would make every bare window "declared", and on X11 that
+        // would put our shadow on top of Mutter's native one.
+        const x11 = evaluateWindowActions({...baseWin, isX11: true, wmClass: 'wps'});
+        expect(x11.clearRing).toBeFalse();
+        expect(x11.drawShadow).toBeFalse();
+        expect(x11.reason).toBe('x11-mutter-native-shadow');
+
+        const wayland = evaluateWindowActions({...baseWin, wmClass: 'bare-app'});
+        expect(wayland.clearRing).toBeFalse();
+        expect(wayland.drawShadow).toBeTrue();
+        expect(wayland.reason).toBe('no-csd(0.0x0.0)');
+    });
+
+    it('a margin on one axis only is a declared ring too (asymmetric extents, e.g. TLBR 0,0,12,12)', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'asymmetric-app',
+            bufferHeight: 324, // +24 total -> sideH = 12, sideW stays 0
+        });
+        expect(res.drawClip).toBeTrue();
+        expect(res.clearRing).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-csd(0.0x12.0))');
     });
 
     // ---- user rules: a state names the axes that are ours ----

@@ -1,4 +1,4 @@
-import {MUTTER_MIN_SHADOW_RADIUS, WindowType} from './mutterRules.generated.js';
+import {WindowType} from './mutterRules.generated.js';
 
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
@@ -63,19 +63,18 @@ export function checkDecorationEligibility({
 }
 
 /**
+ * Whether the client declared a decoration ring of its own, on either axis.
+ * Same question Mutter answers with the boolean `has_custom_frame_extents` (set
+ * whenever the property exists, 4px as much as 40px; see docs/decoration-model.md),
+ * and it reads the same way: a declared extent means the client draws its own frame.
  * @param {object} params
  * @param {boolean} [params.hasSsd=false]
  * @param {number} params.sideW - Per-side margin, logical px
  * @param {number} params.sideH - Per-side margin, logical px
- * @param {number} [params.insetThreshold]
  * @returns {boolean}
  */
-export function declaresOwnShadow({
-    hasSsd = false,
-    sideW, sideH,
-    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
-}) {
-    return !hasSsd && sideW >= insetThreshold && sideH >= insetThreshold;
+export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
+    return !hasSsd && (sideW > 0 || sideH > 0);
 }
 
 /**
@@ -95,7 +94,6 @@ export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, side
  * @param {boolean} [params.isX11=false]
  * @param {number} params.sideW - Per-side margin, logical px
  * @param {number} params.sideH - Per-side margin, logical px
- * @param {number} [params.insetThreshold]
  * @param {boolean} [params.hasSsd=false]
  * @param {boolean} [params.nativeLikeCorners=false]
  * @returns {{shadow: boolean, corners: boolean, reason: string}}
@@ -103,21 +101,20 @@ export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, side
 export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
-    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
     hasSsd = false,
     nativeLikeCorners = false,
 }) {
     const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
     let shadow = true;
-    let reason = `no-csd(${insets} < ${insetThreshold})`;
+    let reason = `no-csd(${insets})`;
 
     if (hasUnclearableShadow({hasSsd, isX11, sideW, sideH})) {
         shadow = false;
         reason = hasSsd ? 'has-ssd-frame' : 'x11-mutter-native-shadow';
-    } else if (declaresOwnShadow({hasSsd, sideW, sideH, insetThreshold})) {
+    } else if (declaresOwnShadow({hasSsd, sideW, sideH})) {
         shadow = false;
-        reason = `has-csd(${insets} >= ${insetThreshold})`;
+        reason = `has-csd(${insets})`;
     }
 
     if (nativeLikeCorners)
@@ -198,7 +195,6 @@ export function isWindowTiled(win, options = {}) {
  * @property {string} [wmClass]
  * @property {Record<string, string>} [rules={}]
  * @property {boolean} [preferCrispText=false]
- * @property {number} [insetThreshold]
  */
 
 /**
@@ -223,7 +219,6 @@ export function evaluateWindowActions({
     wmClass,
     rules = {},
     preferCrispText = false,
-    insetThreshold = MUTTER_MIN_SHADOW_RADIUS,
 }) {
     const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast});
 
@@ -233,7 +228,7 @@ export function evaluateWindowActions({
 
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
-        isX11, sideW: w / 2, sideH: h / 2, insetThreshold, hasSsd, nativeLikeCorners,
+        isX11, sideW: w / 2, sideH: h / 2, hasSsd, nativeLikeCorners,
     });
 
     const rule = resolveRule(wmClass, rules, {
@@ -256,7 +251,7 @@ export function evaluateWindowActions({
     corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
-    const ownRing = declaresOwnShadow({hasSsd, sideW: w / 2, sideH: h / 2, insetThreshold});
+    const ownRing = declaresOwnShadow({hasSsd, sideW: w / 2, sideH: h / 2});
 
     // No rule: ring was painted for the corners we replace, so the shadow becomes ours.
     if (!rule && corners && ownRing)
