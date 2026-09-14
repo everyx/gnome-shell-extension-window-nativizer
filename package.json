@@ -1,6 +1,6 @@
 {
   "name": "window-nativizer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "GNOME Shell extension: fills in missing GNOME rounded corners and shadows, each only where absent",

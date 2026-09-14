@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.3.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.2.0...v0.3.0) (2026-09-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* the UUID becomes window-nativizer@everyx.github.io, so GNOME sees a new extension and existing installs must be reinstalled. Move the old rules across with `dconf dump /org/gnome/shell/extensions/csd-fixer/ | dconf load /org/gnome/shell/extensions/window-nativizer/ && dconf reset -f /org/gnome/shell/extensions/csd-fixer/`, then drop the old install with `gnome-extensions uninstall csd-fixer@everyx.github.io`.
+
+### Features
+
+* **decoration:** one owner per axis, four states per rule ([22db6c3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/22db6c31e5fc455bc5489a0cc67a5b2f0053f94f))
+* **detector:** round corners on X11 and SSD windows, skip libadwaita ([034d038](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/034d0387eb77a18c6ee54c04f24fb6039dd3556f))
+* **detector:** round every window unless its corners already look like ours ([0dc0613](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0dc06137d2aab26f4d0d4709e8136c0eb3218285))
+* **detector:** take the corners of adw-gtk3 GTK3 windows too ([056ea07](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/056ea074fa39fc4044d46d524d5218b1f32575e8))
+* **prefs:** align the copy with GNOME's writing style, and rewrite the READMEs ([28d3a92](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/28d3a9216a89971572007262153090b74f8763bf))
+
+
+### Bug Fixes
+
+* **adwaita:** do not cache a failed process probe ([448c253](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/448c2539bc7618d581bde1d73e726cffef98590f))
+* **detector:** skip degenerate helper windows ([3120e42](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3120e4276dec0830852e6c645483eb0b795a18c9))
+* **effects:** clip the window body, not the actor ([76e0998](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/76e09981b78f017ece5c0d864e26bd73724b5d5d))
+* **effects:** seal the shadow cache and share the style key ([76b4f92](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/76b4f92d1dd2636528d6b4fddbbab894250a69ec))
+* **identity:** read window strings without throwing on non-UTF-8 ([7ff0b91](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7ff0b911b18077c820656159f58be1c98b395cdb))
+* **manager:** harden the clip decision, lifecycle and teardown ([c163509](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c163509ca3a66bbf00d015882a9df3c7aec265fe))
+* **metadata:** declare only the Shell version we have tested ([b903755](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b90375544a9ce8293366825c1aa36fc2b492fcc0)), closes [#8](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/8)
+* **picker:** take only the corners where the shadow is not ours to clear ([37721ce](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/37721ce0c5da882ae07d894eeb6d4a5b6babbc62))
+* **prefs:** drop the first person from the window rules description ([8b6d84b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8b6d84b95b0e500943f0eec2e072b2f8a64b0c72))
+* **runtime:** picker, enable, identity and client-type ([8a0e384](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8a0e38497af2b08c1c0fbcc01bca9e365a5904d2))
+
+
+### Refactoring
+
+* rename the extension to Window Nativizer ([1535dfe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1535dfe97a059c47c3d5abf24ca37f6cef5ca58b))
+
+
+### Documentation
+
+* read the shadow axis as one-sided evidence, not a declared fact ([2223e05](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2223e051ec72bec52f7063509d0fe37a38d3d4af))
+* record the commit convention and align the docs with the code ([0687eea](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0687eea97bdc35d9602122481b35aeb17efaa69d))
+* record what the shadow comparison measured, and the window we cannot measure ([d34684d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d34684dbc64636367212fe62978489e2293b4d75))
+* rewrite the READMEs ([6ffbe7f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6ffbe7fb98900bb27f2a112b771e631a0e0b394c))
+* say what "looks native" actually skips, and claim Shell 50 only ([f8babf6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f8babf6ea473cf1b2627d4b8259ff9cb11cb1c73))
+
 ## [0.2.0](https://github.com/everyx/csd-fixer/compare/v0.1.0...v0.2.0) (2026-09-12)
 
 
