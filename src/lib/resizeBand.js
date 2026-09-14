@@ -77,18 +77,21 @@ function emptyBands() {
 }
 
 /**
- * The twelve regions tiling `frame` grown by `RESIZE_BAND`, each clipped to `bounds`.
+ * The twelve regions tiling `frame`'s `RESIZE_BAND`-wide ring, each clipped to `bounds`.
  *
- * GTK decides a corner by proximity alone: a pointer inside an edge's band is the corner
- * whenever the other axis is within `RESIZE_HANDLE_CORNER_SIZE` of the frame's edge
- * (`get_edge_for_coordinates`, gtkwindow.c, where the comment on the constant reads "How
- * resize corners extend"). So a corner owns 24px of each edge next to it, not just the
- * 24×24 square outside the frame. We cannot spend that reach inward - inside the frame the
- * surface is the client's - so each corner is two regions: `<corner>_<edge>` for the edge
- * band it takes over (24px along the edge), which merges with the corner's outward 24×24
- * quadrant, and the region on the other edge (24px along, 12px outward, the band's depth).
- * The eight regions are therefore split into twelve that are pairwise disjoint, so a point
- * has at most one direction.
+ * The ring is exactly GTK's input region: `update_realized_window_properties` grows the CSD
+ * border box by `RESIZE_HANDLE_SIZE` (12) on every side, and clicks outside it go through -
+ * so 12px out from the frame is as far as a band can reach, and as far as a pointer can be
+ * delivered. Within that ring GTK picks a direction with `get_edge_for_coordinates`: a
+ * pointer in an edge's band is the corner whenever the other axis is within
+ * `RESIZE_HANDLE_CORNER_SIZE` (24) of the frame edge ("How resize corners extend"). So the
+ * ring is cut twelve ways - four edges that stop 24px short of each end, and two regions per
+ * corner: the 24px it takes along each neighbouring edge. Both halves of a corner resolve to
+ * one direction, so the twelve are pairwise disjoint and a point has at most one direction.
+ *
+ * A corner's 24px reach lies *along* the edge, never *outward*: `get_edge_for_coordinates`
+ * would extend a corner outward by the shadow, but the input region stops at
+ * `RESIZE_HANDLE_SIZE`, so those pixels are click-through and the band may not claim them.
  *
  * Units are logical px on every scale. `frame` and the actor tree are both logical, and
  * GTK's 12/24 are logical too, so the monitor scale cancels and is never a multiplier —
@@ -120,17 +123,17 @@ export function computeResizeBands({frame, bounds = null, scale = 1} = {}) {
     const ry = Math.min(c, height / 2);
     const rects = {
         n: {x: x + rx, y: y - b, width: width - 2 * rx, height: b},
-        ne_n: {x: x + width - rx, y: y - c, width: rx + c, height: c},
+        ne_n: {x: x + width - rx, y: y - b, width: rx + b, height: b},
         ne_e: {x: x + width, y, width: b, height: ry},
         e: {x: x + width, y: y + ry, width: b, height: height - 2 * ry},
         se_e: {x: x + width, y: y + height - ry, width: b, height: ry},
-        se_s: {x: x + width - rx, y: y + height, width: rx + c, height: c},
+        se_s: {x: x + width - rx, y: y + height, width: rx + b, height: b},
         s: {x: x + rx, y: y + height, width: width - 2 * rx, height: b},
-        sw_s: {x: x - c, y: y + height, width: rx + c, height: c},
+        sw_s: {x: x - b, y: y + height, width: rx + b, height: b},
         sw_w: {x: x - b, y: y + height - ry, width: b, height: ry},
         w: {x: x - b, y: y + ry, width: b, height: height - 2 * ry},
         nw_w: {x: x - b, y, width: b, height: ry},
-        nw_n: {x: x - c, y: y - c, width: rx + c, height: c},
+        nw_n: {x: x - b, y: y - b, width: rx + b, height: b},
     };
 
     for (const region of RESIZE_BAND_REGIONS)

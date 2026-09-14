@@ -15,14 +15,13 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
-import {computeResizeBands, REGION_DIRECTION, RESIZE_BAND_REGIONS, RESIZE_CORNER} from './resizeBand.js';
+import {computeResizeBands, REGION_DIRECTION, RESIZE_BAND, RESIZE_BAND_REGIONS} from './resizeBand.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
-// The band reaches RESIZE_CORNER (24) outward at the corners, so the container has to be
-// larger than the window actor by that much on every side or the corner regions would be
-// clipped out of it.
-const OUTER = RESIZE_CORNER;
+// The band reaches RESIZE_BAND (12) outward on every side, so the container has to be
+// larger than the window actor by that much, or the regions would be clipped out of it.
+const OUTER = RESIZE_BAND;
 
 // Twelve regions → the eight-way cursor and the matching compositor grab op. The two
 // halves of a corner collapse through REGION_DIRECTION, so a corner never resolves to a

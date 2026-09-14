@@ -206,24 +206,31 @@ theme's `decoration { margin: 10px }` - so that strip is the handle every native
 A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
 
 So a window we decorate also gets a **resize band**: twelve transparent, reactive
-rectangles around its body. Four edges are 12 logical px deep and span the frame side between
-the corners, stopping 24px short of each end; each corner is two rectangles, because a corner
-reaches 24px along each edge next to it. The geometry is pure (`lib/resizeBand.js`); one actor
-with twelve children applies it (`lib/resizeBandActor.js`).
+rectangles around its body, exactly filling the 12px ring the frame grows. Four edges are 12
+logical px deep, span the frame side between the corners and stop 24px short of each end;
+each corner is two rectangles, because a corner reaches 24px along each edge next to it. The
+geometry is pure (`lib/resizeBand.js`); one actor with twelve children applies it
+(`lib/resizeBandActor.js`).
 
-**Why a corner reaches 24px.** GTK's corner handle is `RESIZE_HANDLE_CORNER_SIZE 24`
-(`gtkwindow.c`, *"How resize corners extend"*), and `get_edge_for_coordinates` resolves by
-proximity: a pointer inside an edge's band is the corner as soon as the other axis is within
-24px of the frame's edge. A corner therefore owns 24px of each edge beside it, not only the
-24×24 square outside the frame. We cannot spend that reach *into the frame* - that surface
-belongs to the client, and claiming it is what breaks titlebar drags, GTK window buttons and
-Chromium tab clicks - but the 24px a corner takes along an edge outside the frame is ours. So
-each corner is two regions: the edge band it takes over (24px along the edge, merged with the
-outward 24×24 quadrant) and the 24×12 it takes from the other edge. That is what makes an
-approach to a corner read as a corner rather than as an edge, the way the toolkit's own 8-way
-mapping does - and it is why the narrow strip hugging an edge next to a corner belongs to the
-corner, not to the edge. The twelve regions are pairwise disjoint, so a point has one
-direction.
+**The band is exactly GTK's input region.** `update_realized_window_properties`
+(`gtkwindow.c`) builds a CSD window's input region as the border box grown by
+`RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
+the body is as far as a band can reach, and as far as a pointer is delivered at all.
+
+**Why a corner reaches 24px along the edge.** GTK's corner handle is
+`RESIZE_HANDLE_CORNER_SIZE 24` (`gtkwindow.c`, *"How resize corners extend"*), and
+`get_edge_for_coordinates` resolves by proximity: a pointer inside an edge's band is the
+corner as soon as the other axis is within 24px of the frame's edge. A corner therefore owns
+24px of each edge beside it - *along* the edge, not outward. We cannot spend that reach *into
+the frame* - that surface belongs to the client, and claiming it is what breaks titlebar
+drags, GTK window buttons and Chromium tab clicks - and we cannot spend it *outward* either:
+`get_edge_for_coordinates` alone would extend a corner outward by the shadow, but the input
+region stops at 12px, so that part of the shadow is click-through upstream. So each corner is
+two regions, both only 12px deep: the 24px it takes along one edge, and the 24px it takes
+along the other. That is what makes an approach to a corner read as a corner rather than as an
+edge, the way the toolkit's own 8-way mapping does - and it is why the narrow strip hugging an
+edge next to a corner belongs to the corner, not to the edge. The twelve regions are pairwise
+disjoint, so a point has one direction.
 
 Three things about the extent:
 

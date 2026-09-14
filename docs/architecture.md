@@ -81,7 +81,7 @@ short of each corner, each corner split into its two 24px edge reaches). The
 container is inserted in `global.window_group` above its own window actor, so it never covers
 another window or shell chrome, and `_restackActors()` re-pins it on `restacked` (the same
 signal the shadow is pinned below its window on). Like the shadow it is bound to the window
-actor (`Clutter.BindConstraint`, grown by 24px per side for the corner squares) and derives its
+actor (`Clutter.BindConstraint`, grown by 12px per side, the band's depth) and derives its
 regions from the actor's live size in `vfunc_allocate`, from the insets and monitor rect the
 manager stored; the debounced reconcile hands over those decisions, never absolute pixel
 geometry, so a resize cannot leave the band behind. The container follows the window actor's
