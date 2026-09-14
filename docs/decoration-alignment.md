@@ -205,6 +205,56 @@ Both curves are strictly monotonic. Across the primary visible range (+1 to +10p
 tracks native curvature closely with an average deviation under 5 grey levels, zero banding,
 and 100% four-way symmetry.
 
+### At the fractional scale (1.3333), and what it does not change
+
+Measured on a `--virtual-monitor 1920x1080` session moved to scale 1.3333 via
+`ApplyMonitorsConfig`, all three windows **unfocused** over the white backdrop, body
+`#ff0000`, 440x280, G channel outward from the last body row (physical px):
+
+| Offset | ① native libadwaita | ② ours, GTK3+adw-gtk3 | ③ ours, bare (no ring) | client alone, extension off |
+| :---: | :---: | :---: | :---: | :---: |
+| +1 | 226 | 216 | 231 | 225 |
+| +2 | 239 | 229 | 229 | 230 |
+| +3 | 240 | 236 | 236 | 232 |
+| +4 | 241 | 238 | 238 | 235 |
+| +5 | 243 | 239 | 239 | 236 |
+| +6 | 244 | 241 | 241 | 238 |
+| +7 | 245 | 243 | 243 | 239 |
+| +8 | 246 | 246 | 246 | 242 |
+
+At scale 1.0 the same pair of columns for ② minus ① is `-2 -4 -3 -2 -1 0 +2 +3`;
+at 1.3333 it is `-10 -10 -4 -3 -4 -3 -2 0`. The first two physical pixels are the
+whole difference, and fractional scaling roughly doubles it.
+
+What the numbers settle:
+
+- **The client's ring is cleared, not overlaid.** Total darkness over +1..+15 is 171
+  with the extension on against 227 for the client's own shadow alone. Extension *on*
+  is lighter everywhere except the single +1 pixel, so `clearRing` does erase the
+  adw-gtk3 `0 3px 8px 1px rgba(0,0,0,0.3)` ring; there is no 0.3 + 0.08 stack.
+- **The reference is the right one.** Our style for a backdrop window is libadwaita's
+  own `window.csd:backdrop` set (`adwaitaStyle.generated.js`), so a taken-over window
+  *should* profile like the skipped libadwaita one. ① and ② are the same measurement.
+- **The remaining gap is the shadow's own edge, not a state error.** The style keys are
+  right (`15|14,5,0;10,5,0.08;0,1,0.05` unfocused, `...0.15;5,2,0.1...` focused), baked
+  at the same 1px/logical-px grid as `decoration-model.md` describes; our profile is a
+  few grey levels darker across the first ~5 logical px, closing by the sixth. Column
+  ③ (a bare window, so no client ring anywhere) shows the same +2 difference, which
+  puts it in our shadow rather than in the ring.
+- **The one-pixel boundary row belongs to the clip.** With the shadow actor's style
+  zeroed and `clearRing` on, the first ring pixel of ② still reads 239 over white
+  (255 would be fully erased); ③, whose ring is empty, has nothing there. At scale 1.0
+  the offscreen is 1:1 and ② and ③ agree at +1, so the difference is the fractional
+  offscreen downsample meeting the clip's anti-aliased body boundary, not the shadow
+  texture: re-baking the same shader into a 2x texture (window, radius and pad all
+  doubled, FBO origin scaled with them) leaves every profile above unchanged.
+
+The last two bullets are why the fractional profile is not byte-identical to native.
+The magnitude is a handful of grey levels on the first two physical pixels (about 1.5
+logical px); whether that reads as a heavier shadow depends on the sub-pixel phase the
+window happens to land on, so two windows on the same monitor can differ by ~5/255
+purely from where their edges fall.
+
 ### Automated Benchmark Tool
 
 To measure the current decoration against this baseline and prevent visual regressions:

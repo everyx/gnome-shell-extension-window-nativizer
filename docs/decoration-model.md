@@ -189,6 +189,17 @@ the reading being one-sided; the last is simply not verified yet.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
+- **A window whose body cannot be placed inside its clip target is never rounded**,
+  and a bare one still gets our shadow: square corners under it for that pass.
+  `_bodyRect()` answers null when the two rectangles live in different coordinate
+  frames (a framed X11 window reports its buffer in frame coordinates) or when the
+  actor lags a resize; the guard exists so the clip never cuts the client's own ring
+  (rounding the actor instead is the cut it prevents). A window that *declared* a
+  ring gets no shadow in that pass either (`clearRing` without a clip defers it), so
+  the visible case is a bare window on the frame its actor lags. Tiled windows reach
+  the same square-corner-with-shadow look on purpose (`style.tiled` has radius 0 and
+  no outline, *Which style applies*), as does `prefer-crisp-text` on a fractional
+  monitor and a `shadow` rule.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
   drops the shadow we would draw; it does not clear the client's ring.
 - **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
