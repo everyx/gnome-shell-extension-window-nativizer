@@ -15,7 +15,7 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
-import {computeResizeBands, RESIZE_BAND_REGIONS, RESIZE_CORNER} from './resizeBand.js';
+import {computeResizeBands, REGION_DIRECTION, RESIZE_BAND_REGIONS, RESIZE_CORNER} from './resizeBand.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
@@ -24,8 +24,10 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // clipped out of it.
 const OUTER = RESIZE_CORNER;
 
-// Eight regions → the eight-way cursor and the matching compositor grab op.
-const REGION_CURSOR = {
+// Twelve regions → the eight-way cursor and the matching compositor grab op. The two
+// halves of a corner collapse through REGION_DIRECTION, so a corner never resolves to a
+// straight edge.
+const DIRECTION_CURSOR = {
     n: Clutter.CursorType.N_RESIZE,
     ne: Clutter.CursorType.NE_RESIZE,
     e: Clutter.CursorType.E_RESIZE,
@@ -36,7 +38,7 @@ const REGION_CURSOR = {
     nw: Clutter.CursorType.NW_RESIZE,
 };
 
-const REGION_GRAB_OP = {
+const DIRECTION_GRAB_OP = {
     n: Meta.GrabOp.RESIZING_N,
     ne: Meta.GrabOp.RESIZING_NE,
     e: Meta.GrabOp.RESIZING_E,
@@ -175,7 +177,7 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * Allocate the eight regions from the container's own allocation plus the stored
+     * Allocate the twelve regions from the container's own allocation plus the stored
      * insets. Called after the BindConstraints have sized the container for this frame,
      * so the regions are always placed against the size being painted.
      * @param {Clutter.ActorBox} box
@@ -282,7 +284,7 @@ export const ResizeBand = GObject.registerClass({
     _applyCursor(region) {
         if (this._hover !== region) {
             this._hover = region;
-            this._regions.get(region)?.set_cursor_type(REGION_CURSOR[region]);
+            this._regions.get(region)?.set_cursor_type(DIRECTION_CURSOR[REGION_DIRECTION[region]]);
         }
         return Clutter.EVENT_PROPAGATE;
     }
@@ -325,7 +327,7 @@ export const ResizeBand = GObject.registerClass({
         // coordinate is that position, so no fallback is needed.
         const [x, y] = event.get_coords();
         win.begin_grab_op(
-            REGION_GRAB_OP[region],
+            DIRECTION_GRAB_OP[REGION_DIRECTION[region]],
             sprite,
             event.get_time(),
             new Graphene.Point({x, y})
