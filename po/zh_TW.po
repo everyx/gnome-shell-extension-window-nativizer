@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 14:18+0800\n"
+"POT-Creation-Date: 2026-09-14 21:42+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -124,47 +124,63 @@ msgid ""
 msgstr ""
 "在分數縮放螢幕上跳過圓角（保留陰影），避免重新取樣造成的文字模糊與效能損耗"
 
-#: src/prefs.js:213 src/prefs.js:217
+#: src/prefs.js:214
+msgid "Window Interaction"
+msgstr "視窗互動"
+
+#. Translators: The resize band is the strip around a window that can be dragged to resize it.
+#: src/prefs.js:220
+msgid "Widen the Resize Band"
+msgstr "加寬視窗縮放觸發區"
+
+#: src/prefs.js:221
+msgid ""
+"Let windows with a narrow resize border be resized by dragging the 12 pixels "
+"around them, as native GNOME windows can"
+msgstr ""
+"讓縮放邊框較窄的視窗也能像原生 GNOME 視窗一樣，拖曳視窗外緣 12 像素來縮放"
+
+#: src/prefs.js:229 src/prefs.js:233
 msgid "Pick a window that looks wrong"
 msgstr "選取一個顯示不正常的視窗"
 
-#: src/prefs.js:220 src/prefs.js:238 src/prefs.js:239
+#: src/prefs.js:236 src/prefs.js:254 src/prefs.js:255
 msgid "Window Rules"
 msgstr "視窗規則"
 
-#: src/prefs.js:221
+#: src/prefs.js:237
 msgid "Which decorations this extension draws for this window kind?"
 msgstr "本擴充套件為這類視窗繪製哪些裝飾？"
 
-#: src/prefs.js:243
+#: src/prefs.js:259
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "用上面的按鈕選取一個顯示不正常的視窗"
 
-#: src/prefs.js:306 src/prefs.js:308
+#: src/prefs.js:322 src/prefs.js:324
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:331
+#: src/prefs.js:347
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:332
+#: src/prefs.js:348
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:344
+#: src/prefs.js:360
 msgid "No rule added: this window could not be identified"
 msgstr "未新增規則：無法識別這個視窗"
 
-#: src/prefs.js:355
+#: src/prefs.js:371
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr "未新增規則：這條規則對此類視窗不會有任何效果"
 
-#: src/prefs.js:364
+#: src/prefs.js:380
 msgid "No rule added: the rule could not be saved"
 msgstr "未新增規則：規則未能儲存"
 
-#: src/prefs.js:372
+#: src/prefs.js:388
 #, javascript-format
 msgid "Rule set to: %s"
 msgstr "規則已設為：%s"

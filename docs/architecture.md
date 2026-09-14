@@ -14,6 +14,8 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
 | `lib/settings.js` | GSettings IO adapter |
+| `lib/resizeBand.js` | the window's resize band as eight rectangles, clipped to the monitor (pure) |
+| `lib/resizeBandActor.js` | the resize band actor: one reactive child per region, hover cursor and resize grab |
 | `lib/window.js` | shell-side identity gathering (`Shell.WindowTracker`, live window list) |
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
@@ -68,6 +70,17 @@ to the surface child actor (`actor.get_first_child()`) so the native / frames-cl
 and coordinates align accurately.
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
+
+A resizable window that passes `shouldShowResizeBand()` also gets a `ResizeBand`
+(`lib/resizeBandActor.js`), the only actor here that takes input: a transparent container with
+eight reactive `St.Widget` children, one per region of the 12px band. The container is inserted
+in `global.window_group` above its own window actor, so it never covers another window or shell
+chrome, and `_restackActors()` re-pins it on `restacked` (the same signal the shadow is pinned
+below its window on). Its geometry is recomputed from `frame_rect` on every reconcile, and the
+container follows the window actor's `visible` so a minimized window leaves no strip behind.
+Created and destroyed by `_syncResizeBand()`; dropped in `_undecorate()` and, before the close
+animation, in `_forgetWindow()` — a band that outlived its window would go on taking clicks.
+See `decoration-model.md` § The resize band for why it exists and what it costs.
 
 ## Effects — RoundedClipEffect (`effects/clipEffect.js`)
 

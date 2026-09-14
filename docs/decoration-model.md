@@ -197,6 +197,53 @@ draw inside their surface is invisible to us, and the only technique that would 
 sampling the alpha of the window's own edge pixels in the offscreen pass - a mechanism of its
 own, with a cache and no unit test behind it, and not part of the current model.
 
+## The resize band
+
+The decoration is not the only thing a non-Adwaita window gets wrong: its grab band is
+narrower too. A native window answers a drag in the strip hugging its body - GTK4 floors its
+input region at `RESIZE_HANDLE_SIZE 12` (`gtkwindow.c`), GTK3 with adw-gtk3 takes 10px from the
+theme's `decoration { margin: 10px }` - so that strip is the handle every native window offers.
+A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
+
+So a window we decorate also gets a **resize band**: eight transparent, reactive rectangles
+around its body, 12 logical px deep, four edges and four 12×12 corners. The geometry is pure
+(`lib/resizeBand.js`); one actor with eight children applies it (`lib/resizeBandActor.js`).
+
+Three things about the extent:
+
+- **It hugs the body, not the shadow.** The band is `frame_rect` grown by 12px, so a window
+  that declares no margin gets 12px of the desktop, and one with a 25px shadow gets the inner
+  12px of that ring - exactly the strip its toolkit would have claimed. Making the *visible*
+  shadow grabbable is a different proposal, and it was rejected: the gain over 12px is small,
+  the swallowed clicks are not, and Mutter moved the other way on purpose
+  ([decoration-alignment.md](decoration-alignment.md) has the measurements and the issues).
+- **It is logical pixels at every scale.** `frame_rect` and actor coordinates are both stage
+  (logical) units and GTK's 12 is logical too, so the monitor scale cancels out. It is passed
+  into the geometry so a caller that cannot report a positive one gets no band, never as a
+  multiplier.
+- **It is clipped to the monitor.** A region that falls off the screen is dropped, so a window
+  flush against the edge adds nothing there.
+
+Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): resizable,
+not maximized, fullscreen, tiled or tile-matched, not already Adwaita-looking (that window
+has a band), at least 2×12px per side (a 1×1 helper is not a window). A rule does not turn it
+off - a `none` rule answers "do not draw my decoration", not "do not handle my input". The
+`resize-band` setting does, and with it off no band is built at all.
+
+### It is the first thing here that takes clicks
+
+Everything else is `reactive: false`: the shadow is painted, never picked, and until now "we
+never participate in hit testing" was true of the whole extension. It is not true of the band.
+Its eight children are reactive, and it is inserted above its own window actor but below every
+other window and below shell chrome, because it lives in `global.window_group`, which
+`Main.layoutManager.uiGroup` keeps under the panel and the overview.
+
+The cost is the ring the client does not cover. Inside the window's own surface those clicks
+were the client's to begin with, so a band as wide as the toolkit's changes nothing there;
+outside it, in the pixels that were **click-through on purpose**, a press now starts a resize
+and never reaches what is under the cursor - typically a click on a desktop icon or on the
+window behind, a few pixels outside the body. That is the trade the setting exists for.
+
 ## Known boundaries
 
 What this model cannot do, stated rather than papered over. Most of these follow from

@@ -13,5 +13,10 @@
       <summary>Prioritize crisp text rendering</summary>
       <description>Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead.</description>
     </key>
+    <key name="resize-band" type="b">
+      <default>true</default>
+      <summary>Widen the resize band around windows</summary>
+      <description>Let windows with a narrow resize border be resized by dragging the 12 pixels around them, as native GNOME windows can. When off, clicks in that band go to whatever is behind the window</description>
+    </key>
   </schema>
 </schemalist>

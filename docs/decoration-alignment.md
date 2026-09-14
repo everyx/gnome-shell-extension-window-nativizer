@@ -72,19 +72,22 @@ shadow is click-through:
 
 "It looks like the whole shadow can be grabbed and only a strip of it can" is therefore
 **native behaviour**, not something the drawing introduced: we draw the same shadow (aligned to
-within 5/255) and never participate in hit testing, so a decorated window has the same band as
-the same window undecorated.
+within 5/255), and the grab band we add stops at 12px from the body - the toolkit's own width -
+so a decorated window has the same band as the same window undecorated. That band is the one
+place the extension participates in hit testing at all (`decoration-model.md` § The resize
+band); the shadow itself is still painted and never picked.
 
-That is also why no input layer was added for it. Making the visible shadow grabbable means
+What was rejected is turning the **whole visible shadow** into an input region. That means
 claiming a band the toolkit leaves click-through on purpose - 13px per side on GTK4 - and every
 click in it would be swallowed: a strip above the window is not a surface actor, so Mutter's
 stage filter neither takes the press nor passes it on. Mutter moved the other way for exactly
 this reason (issues #2788, !3031, #2706). The measured gain is zero on GTK4, whose floor is
-already 12px, and 2px on GTK3.
+already 12px, and 2px on GTK3, so the band keeps to 12px and leaves the outer 13px alone.
 
 Not verified with a real pointer: these figures come from the toolkit sources and from the
 declared margins measured in the nested session. To see it by hand, hover a native libadwaita
-window's shadow 8px and 20px from the window; only the inner one shows a resize cursor.
+window's shadow 8px and 20px from the window; only the inner one shows a resize cursor. The
+resize band's own feel - hover cursor and drag - has not been tried with a real pointer either.
 
 ## The setting that silently disables half of this
 

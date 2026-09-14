@@ -23,6 +23,12 @@ A **rule** covers one window kind — an application's window with the same clie
 
 To correct a wrong guess, pick the window once with the button in the preferences. The rule is set to the state that fixes what the window currently shows. [Rules →](docs/rule-model.md)
 
+## The resize band
+
+Native GNOME windows can be resized by dragging the 12 pixels around them. A window whose own resize border is narrower gets the same band from the extension, so it can be grabbed the way a native window can. It is measured from the window body, not from the visible shadow, and maximized, fullscreen and tiled windows have none.
+
+This band is the only part of a window the extension takes part in hit testing: inside it, a click starts a resize instead of reaching whatever is behind the window. Turn off **Widen the Resize Band** in the preferences if you would rather those clicks go through.
+
 ## Windows it leaves alone
 
 - **Windows that already draw the Adwaita look.** The extension decides this from the libraries a process maps: libadwaita, libhandy, or Qt's Adwaita decoration plugin. It does not read the GTK theme, because GTK3 cannot round the bottom of a window. [Why →](docs/decoration-model.md)

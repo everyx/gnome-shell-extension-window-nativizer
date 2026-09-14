@@ -207,6 +207,22 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
+        // Input, not decoration: the band changes where a drag starts.
+        // See docs/decoration-model.md § The resize band — it is the first thing here
+        // that takes clicks, and it can be turned off for that reason.
+        const interactionGroup = new Adw.PreferencesGroup({
+            title: asMarkup(_('Window Interaction')),
+        });
+        page.add(interactionGroup);
+
+        const bandRow = new Adw.SwitchRow({
+            // Translators: The resize band is the strip around a window that can be dragged to resize it.
+            title: asMarkup(_('Widen the Resize Band')),
+            subtitle: asMarkup(_('Let windows with a narrow resize border be resized by dragging the 12 pixels around them, as native GNOME windows can')),
+        });
+        settings.bind('resize-band', bandRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        interactionGroup.add(bandRow);
+
         // See docs/rule-model.md — state names which decoration axes this extension draws.
         const pickButton = new Gtk.Button({
             icon_name: 'find-location-symbolic',

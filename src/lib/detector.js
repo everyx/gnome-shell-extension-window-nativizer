@@ -12,6 +12,7 @@ import {
 import {buildRuleKeyFromProperties} from './pick.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
+import {MIN_BAND_WINDOW} from './resizeBand.js';
 
 // Four-layer model in docs/decoration-model.md; pure logic, unit-testable.
 
@@ -196,6 +197,40 @@ export function isWindowTiled(win, options = {}) {
  * @property {Record<string, string>} [rules={}]
  * @property {boolean} [preferCrispText=false]
  */
+
+/**
+ * Whether the window gets the resize band. Input, not decoration: the band changes
+ * where a drag starts, not what is drawn, so a rule does not turn it off and the
+ * window's own corners do not earn it one. See docs/decoration-model.md § The resize band.
+ * @param {object} params
+ * @param {boolean} [params.resizeBand=true]
+ * @param {boolean} [params.allowsResize=true]
+ * @param {boolean} [params.isMaximized=false]
+ * @param {boolean} [params.isFullscreen=false]
+ * @param {boolean} [params.tiled=false]
+ * @param {boolean} [params.hasTileMatch=false]
+ * @param {boolean} [params.nativeLikeCorners=false]
+ * @param {number} [params.frameWidth=0]
+ * @param {number} [params.frameHeight=0]
+ * @returns {boolean}
+ */
+export function shouldShowResizeBand({
+    resizeBand = true,
+    allowsResize = true,
+    isMaximized = false, isFullscreen = false,
+    tiled = false, hasTileMatch = false,
+    nativeLikeCorners = false,
+    frameWidth = 0, frameHeight = 0,
+} = {}) {
+    if (!resizeBand || !allowsResize)
+        return false;
+    if (isMaximized || isFullscreen || tiled || hasTileMatch)
+        return false;
+    // A window that already has the Adwaita look has a native-width band of its own.
+    if (nativeLikeCorners)
+        return false;
+    return frameWidth >= MIN_BAND_WINDOW && frameHeight >= MIN_BAND_WINDOW;
+}
 
 /**
  * @param {WindowEvaluationParams} params

@@ -10,10 +10,13 @@ import {
     evaluateWindowActions,
     isWindowMaximized,
     isWindowTiled,
+    shouldShowResizeBand,
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
 import {extractWindowProperties} from './pick.js';
+import {computeResizeBands} from './resizeBand.js';
+import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners} from './nativeLikeCorners.js';
@@ -42,9 +45,16 @@ export class Manager {
         shadowTexture.reset();
 
         this._connect(this._signals, global.display, 'window-created', (_, win) => this._trackWindow(win));
-        this._connect(this._signals, global.display, 'grab-op-end', () => this._reconcile());
-        this._connect(this._signals, global.display, 'restacked', () => this._restackShadows());
-        this._connect(this._signals, global.display, 'notify::focus-window', () => this._reconcileDebounced());
+        this._connect(this._signals, global.display, 'grab-op-end', () => {
+            // Mutter drove the cursor through the grab; take the band's back to DEFAULT.
+            this._resetBandCursors();
+            this._reconcile();
+        });
+        this._connect(this._signals, global.display, 'restacked', () => this._restackActors());
+        this._connect(this._signals, global.display, 'notify::focus-window', () => {
+            this._resetBandCursors();
+            this._reconcileDebounced();
+        });
 
         this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => this._reconcile());
 
@@ -53,7 +63,7 @@ export class Manager {
             this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
 
         this._settingsHandlerIds = [];
-        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text']) {
+        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text', 'resize-band']) {
             const id = this._settings.connect(`changed::${key}`, () => {
                 this._refreshSettings();
                 this._reconcile();
@@ -91,7 +101,7 @@ export class Manager {
     /** Remove orphaned effects/actors from windows closed mid-session (clip/shadow must not outlive disable()). */
     _tearDownStrays() {
         for (const actor of global.window_group?.get_children?.() ?? []) {
-            if (gtypeName(actor) === SHADOW_ACTOR_G_TYPE)
+            if (gtypeName(actor) === SHADOW_ACTOR_G_TYPE || gtypeName(actor) === RESIZE_BAND_G_TYPE)
                 actor.destroy();
         }
         for (const winActor of global.get_window_actors?.() ?? []) {
@@ -117,6 +127,7 @@ export class Manager {
     _refreshSettings() {
         this._rules = null;
         this._preferCrispText = this._settings.get_boolean('prefer-crisp-text');
+        this._resizeBandEnabled = this._settings.get_boolean('resize-band');
     }
 
     _dropPendingWork(state) {
@@ -212,6 +223,9 @@ export class Manager {
         if (state) {
             this._dropPendingWork(state);
             this._disconnectSignals(state.signals);
+            // The band takes clicks, so it cannot fade with the window: drop it now.
+            state.resizeBand?.destroy();
+            state.resizeBand = null;
             // Keep clip/shadow to fade with windowActor on close.
         }
         const pid = win.get_pid?.();
@@ -359,6 +373,8 @@ export class Manager {
         // No clip → client's shadow still visible; defer ours to avoid double shadow.
         this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
+        this._syncResizeBand(win, shouldShowResizeBand(inputs), inputs);
+
         if (state.clip || state.shadow)
             this._applyStyle(win, actions.style, body, actions.drawClip);
     }
@@ -374,15 +390,21 @@ export class Manager {
         return this._rules;
     }
 
-    _restackShadows() {
+    _restackActors() {
         for (const [win, state] of this._windows) {
-            if (!state.shadow)
-                continue;
             const actor = win.get_compositor_private();
             if (!actor)
                 continue;
-            global.window_group.set_child_below_sibling(state.shadow, actor);
+            if (state.shadow)
+                global.window_group.set_child_below_sibling(state.shadow, actor);
+            state.resizeBand?.restack();
         }
+    }
+
+    /** Back to the arrow on every band; the next motion event over one sets it again. */
+    _resetBandCursors() {
+        for (const state of this._windows.values())
+            state.resizeBand?.resetCursor();
     }
 
     /** Inputs for evaluateWindowActions; shared with suggestedRuleWouldChange(). */
@@ -416,6 +438,7 @@ export class Manager {
 
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,
+            resizeBand: this._resizeBandEnabled,
         };
     }
 
@@ -439,9 +462,42 @@ export class Manager {
         return suggestedRuleState(this._decorationInputs(win));
     }
 
+    /**
+     * @param {Meta.Window} win
+     * @param {boolean} want
+     * @param {object} inputs - From _decorationInputs(): frame size and monitor scale
+     */
+    _syncResizeBand(win, want, inputs) {
+        const state = this._windows.get(win);
+        if (!state)
+            return;
+
+        if (!want) {
+            state.resizeBand?.destroy();
+            state.resizeBand = null;
+            return;
+        }
+
+        const actor = win.get_compositor_private();
+        if (!actor)
+            return;
+
+        if (!state.resizeBand)
+            state.resizeBand = new ResizeBand(actor, global.window_group);
+
+        const monitor = win.get_monitor();
+        const bounds = monitor >= 0 ? global.display.get_monitor_geometry(monitor) : null;
+        state.resizeBand.setBands(computeResizeBands({
+            frame: win.get_frame_rect(),
+            bounds,
+            scale: inputs.monitorScale,
+        }));
+    }
+
     _undecorate(win) {
         this._syncClip(win, false);
         this._syncShadow(win, false);
+        this._syncResizeBand(win, false, null);
     }
 
     /** @returns {{x:number,y:number,width:number,height:number}|null} Body inside clip target, logical px; null when buffer and frame are in different coordinate frames (a framed X11 window reports its buffer in frame coords) or the actor lags a resize. */
