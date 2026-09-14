@@ -51,6 +51,41 @@ style says 7%). `0` is the anti-aliased body edge. `+1` and beyond is the shadow
 shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.15)`, which the generated style has
 as `shadows: [{blur: 0, spread: 1, alpha: 0.15}]`).
 
+## The band you can grab is narrower than the shadow you can see
+
+A native GNOME window is grabbable only in a band hugging the window itself; the rest of its
+shadow is click-through:
+
+| | Visible shadow | Grabbable band |
+|---|---|---|
+| GTK4 / libadwaita | 25px | **12px** |
+| GTK3 + adw-gtk3 | 24/21/24/27px | **10px** |
+
+- GTK4 floors the handle at `RESIZE_HANDLE_SIZE 12` (`gtkwindow.c:191`) and builds the input
+  region as the border box plus 12px (`update_realized_window_properties`, `:4229-4232`), so
+  the outer 13px of the shadow belongs to nobody. The declared margin says the same thing from
+  the other side: `MAX(css shadow, 12)` (`get_shadow_width`, `:4196-4201`).
+- GTK3 + adw-gtk3 takes the band from the decoration node's margin + border + padding
+  (`gtk-3-24 gtkwindow.c:7063,7088-7095`), and the theme names it outright -
+  `decoration { box-shadow: 0 3px 8px 1px; margin: 10px }`, with the comment *"this is used for
+  the resize cursor area"*.
+
+"It looks like the whole shadow can be grabbed and only a strip of it can" is therefore
+**native behaviour**, not something the drawing introduced: we draw the same shadow (aligned to
+within 5/255) and never participate in hit testing, so a decorated window has the same band as
+the same window undecorated.
+
+That is also why no input layer was added for it. Making the visible shadow grabbable means
+claiming a band the toolkit leaves click-through on purpose - 13px per side on GTK4 - and every
+click in it would be swallowed: a strip above the window is not a surface actor, so Mutter's
+stage filter neither takes the press nor passes it on. Mutter moved the other way for exactly
+this reason (issues #2788, !3031, #2706). The measured gain is zero on GTK4, whose floor is
+already 12px, and 2px on GTK3.
+
+Not verified with a real pointer: these figures come from the toolkit sources and from the
+declared margins measured in the nested session. To see it by hand, hover a native libadwaita
+window's shadow 8px and 20px from the window; only the inner one shows a resize cursor.
+
 ## The setting that silently disables half of this
 
 `prefer-crisp-text` (default false) plus a fractional-scale monitor means
