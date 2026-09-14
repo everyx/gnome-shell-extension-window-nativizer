@@ -220,7 +220,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // See docs/rule-model.md — state names which decoration axes are ours.
+        // See docs/rule-model.md — state names which decoration axes this extension draws.
         const pickButton = new Gtk.Button({
             icon_name: 'find-location-symbolic',
             tooltip_text: _('Pick a window that looks wrong'),
@@ -231,7 +231,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
         const rulesGroup = new Adw.PreferencesGroup({
             title: asMarkup(_('Window Rules')),
-            description: asMarkup(_('Which decorations are ours for this window kind?')),
+            description: asMarkup(_('Which decorations this extension draws for this window kind?')),
             header_suffix: pickButton,
         });
         page.add(rulesGroup);

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 12:48+0800\n"
+"POT-Creation-Date: 2026-09-14 13:53+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -133,8 +133,8 @@ msgid "Window Rules"
 msgstr "視窗規則"
 
 #: src/prefs.js:234
-msgid "Which decorations are ours for this window kind?"
-msgstr "這類視窗要加哪些裝飾？"
+msgid "Which decorations this extension draws for this window kind?"
+msgstr "本擴充套件為這類視窗繪製哪些裝飾？"
 
 #: src/prefs.js:256
 msgid "Use the button above to pick a window that looks wrong"

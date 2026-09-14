@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 12:48+0800\n"
+"POT-Creation-Date: 2026-09-14 13:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -133,7 +133,7 @@ msgid "Window Rules"
 msgstr ""
 
 #: src/prefs.js:234
-msgid "Which decorations are ours for this window kind?"
+msgid "Which decorations this extension draws for this window kind?"
 msgstr ""
 
 #: src/prefs.js:256
