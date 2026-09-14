@@ -32,6 +32,31 @@ export {WindowClientType};
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/WindowNativizer';
 /**
+ * Reads a window string, returning '' when GJS rejects non-UTF-8 C bytes: an app
+ * may set any bytes as its class, and one unreadable name must not cost the
+ * window its decision. Takes the getter; the throw is inside the call.
+ *
+ * @param {Function} getter - Reads the window field
+ */
+export function readWindowString(getter) {
+    try {
+        return getter() ?? '';
+    } catch {
+        return '';
+    }
+}
+/**
+ * The identity a window declares, most authoritative source first.
+ *
+ * @param {object} win - Meta.Window instance
+ */
+export function readDeclaredIdentity(win) {
+    return readWindowString(() => win?.get_wm_class?.()) ||
+        readWindowString(() => win?.get_sandboxed_app_id?.()) ||
+        readWindowString(() => win?.get_gtk_application_id?.()) ||
+        '';
+}
+/**
  * Extracts the normalized inspection properties dictionary for the picker.
  * Values are strings because the dictionary crosses D-Bus as `a{ss}`; prefs.js
  * parses them back and feeds buildRuleKey(), which must yield exactly the key
@@ -47,7 +72,7 @@ export function extractWindowProperties(win, wmClassOverride = null) {
     if (!win)
         return {};
 
-    const wmClass = wmClassOverride || win.get_wm_class?.() || win.get_sandboxed_app_id?.() || win.get_gtk_application_id?.() || '';
+    const wmClass = wmClassOverride || readDeclaredIdentity(win);
     const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
     const isX11 = win.get_client_type?.() === WindowClientType.X11;
 

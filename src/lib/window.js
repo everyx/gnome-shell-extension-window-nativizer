@@ -5,21 +5,8 @@
 
 import Shell from 'gi://Shell';
 
+import {readDeclaredIdentity} from './pick.js';
 import {chooseWindowIdentity} from './rules.js';
-
-/**
- * Reads what a window declares about its own application identity, most
- * authoritative source first.
- *
- * @param {object} win - Meta.Window instance
- * @returns {string} '' when the window declares nothing usable
- */
-function readDeclaredIdentity(win) {
-    return win?.get_wm_class?.() ||
-        win?.get_sandboxed_app_id?.() ||
-        win?.get_gtk_application_id?.() ||
-        '';
-}
 
 /** Every mapped window, used to find a sibling of the same process. */
 function listWindowActors() {
