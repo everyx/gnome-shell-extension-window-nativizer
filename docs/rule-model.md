@@ -50,11 +50,11 @@ disagree about it.
 
 A rule names *both* axes even when it leaves one to the client: there is no rule that
 touches only one axis and lets the inference answer for the other. `corners` is a
-complete statement that the shadow is theirs, not a partial one. The one axis that
-cannot always simply be handed back is the shadow of a client that declared a ring
-(`buffer_rect - frame_rect`): clearing that ring is the clip's job, so `shadow` alone
-cannot take it over on such a window. The boundaries are listed in
-[decoration-model.md](decoration-model.md).
+complete statement that the shadow is theirs, not a partial one. Taking the shadow of a
+client that declared a ring (`buffer_rect - frame_rect`) is the one takeover that
+borrows the other axis: clearing that ring is the clip's job, so `shadow` still attaches
+the clip, at radius 0, and leaves the corners as the client drew them. The boundaries are
+listed in [decoration-model.md](decoration-model.md).
 
 ## One rule per window kind
 

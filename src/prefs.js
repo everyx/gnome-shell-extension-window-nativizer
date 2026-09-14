@@ -170,23 +170,10 @@ function inspectWindow(callback) {
 }
 
 function showError(parentWindow, heading, body) {
-    if (Adw.AlertDialog) {
-        const dialog = new Adw.AlertDialog({
-            heading,
-            body,
-        });
-        // Translators: Closes the error dialog.
-        dialog.add_response('ok', _('Close'));
-        dialog.present(parentWindow);
-    } else {
-        const dialog = new Adw.MessageDialog({
-            heading,
-            body,
-            transient_for: parentWindow,
-        });
-        dialog.add_response('ok', _('Close'));
-        dialog.present();
-    }
+    const dialog = new Adw.AlertDialog({heading, body});
+    // Translators: Closes the error dialog.
+    dialog.add_response('ok', _('Close'));
+    dialog.present(parentWindow);
 }
 
 

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 13:53+0800\n"
+"POT-Creation-Date: 2026-09-14 14:18+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -97,74 +97,74 @@ msgid "%s %s %s, %s"
 msgstr "%s %s %s，%s"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:179 src/prefs.js:187
+#: src/prefs.js:175
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs.js:205
+#: src/prefs.js:192
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:211
+#: src/prefs.js:198
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:212
+#: src/prefs.js:199
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
 
-#: src/prefs.js:217
+#: src/prefs.js:204
 msgid "Prioritize Crisp Text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:218
+#: src/prefs.js:205
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分數縮放螢幕上跳過圓角（保留陰影），避免重新取樣造成的文字模糊與效能損耗"
 
-#: src/prefs.js:226 src/prefs.js:230
+#: src/prefs.js:213 src/prefs.js:217
 msgid "Pick a window that looks wrong"
 msgstr "選取一個顯示不正常的視窗"
 
-#: src/prefs.js:233 src/prefs.js:251 src/prefs.js:252
+#: src/prefs.js:220 src/prefs.js:238 src/prefs.js:239
 msgid "Window Rules"
 msgstr "視窗規則"
 
-#: src/prefs.js:234
+#: src/prefs.js:221
 msgid "Which decorations this extension draws for this window kind?"
 msgstr "本擴充套件為這類視窗繪製哪些裝飾？"
 
-#: src/prefs.js:256
+#: src/prefs.js:243
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "用上面的按鈕選取一個顯示不正常的視窗"
 
-#: src/prefs.js:319 src/prefs.js:321
+#: src/prefs.js:306 src/prefs.js:308
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:344
+#: src/prefs.js:331
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:345
+#: src/prefs.js:332
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:357
+#: src/prefs.js:344
 msgid "No rule added: this window could not be identified"
 msgstr "未新增規則：無法識別這個視窗"
 
-#: src/prefs.js:368
+#: src/prefs.js:355
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr "未新增規則：這條規則對此類視窗不會有任何效果"
 
-#: src/prefs.js:377
+#: src/prefs.js:364
 msgid "No rule added: the rule could not be saved"
 msgstr "未新增規則：規則未能儲存"
 
-#: src/prefs.js:385
+#: src/prefs.js:372
 #, javascript-format
 msgid "Rule set to: %s"
 msgstr "規則已設為：%s"

@@ -8,7 +8,6 @@ Usage:
 """
 
 import os
-import sys
 import time
 import subprocess
 from PIL import Image, ImageDraw, ImageFont

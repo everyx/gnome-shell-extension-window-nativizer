@@ -32,7 +32,6 @@ function gtypeName(object) {
 export class Manager {
     /** @param {import('../extension.js').default} ext */
     constructor(ext) {
-        this._ext = ext;
         this._settings = ext.getSettings();
         this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];

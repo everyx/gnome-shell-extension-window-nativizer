@@ -151,8 +151,8 @@ ring at all.
   opaque window (not ARGB32), no custom frame extents declared, and not shaped.
   When it does, it is painted strictly outside the window square: only into the
   beneath-region (`shadow_clip`, strict clip), and it is a soft Gaussian blur of the
-  window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c` gives a
-  normal window `{radius 10, opacity 128}` focused), not an opaque square. Either way
+  window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c`; *How a
+  style change is drawn* gives its values), not an opaque square. Either way
   no square shadow sits under the corners we cut, so we clip the window's body with
   `RoundedClipEffect` to the native 15px (`window.radius` in
   `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and the cut corners reveal
