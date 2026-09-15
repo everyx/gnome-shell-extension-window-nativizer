@@ -49,6 +49,29 @@ shell_eval() {
         --method org.gnome.Shell.Eval "$1"
 }
 
+# The reply is a GVariant tuple whose JSON string has its own quotes escaped, so a field
+# has to be parsed, not substring-matched: `leakedShadowCount.*:0` also matches a leaked
+# count of 1 as soon as a zero-valued neighbour follows it. Pass a JSON object of the
+# fields and values that must hold.
+check_fields() {
+    python3 - "$1" "$2" << 'PYEOF'
+import json, re, sys
+
+reply, expectation = sys.argv[1], sys.argv[2]
+# GVariant prints the reply string with its quotes backslash-escaped (twice, through the
+# Eval wrapper); the payloads here carry no backslash of their own, so drop them and read
+# the JSON object.
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+if not match:
+    sys.exit(f"no JSON object in reply: {reply!r}")
+data = json.loads(match.group(0))
+expected = json.loads(expectation)
+wrong = {k: data.get(k) for k, v in expected.items() if data.get(k) != v}
+if wrong:
+    sys.exit(f"expected {expected}, got {wrong} (reply: {data})")
+PYEOF
+}
+
 # 3. Launch GTK4 test client in background
 echo ">> [test-e2e] Launching GTK4 client (resize, maximize, close sequence)..."
 "$DEV" app python3 "$ROOT/tools/e2e-client.py" &
@@ -98,16 +121,8 @@ CHECK_RESULT="$(shell_eval '
 ')"
 
 echo ">> Attachment check: $CHECK_RESULT"
-if ! echo "$CHECK_RESULT" | grep -q 'hasClip.*true'; then
-    echo "!! RoundedClipEffect was not attached to window actor!"
-    exit 1
-fi
-if ! echo "$CHECK_RESULT" | grep -q 'hasShadow.*true'; then
-    echo "!! WindowNativizerShadowActor was not inserted below window actor!"
-    exit 1
-fi
-if ! echo "$CHECK_RESULT" | grep -q 'hasBand.*true'; then
-    echo "!! WindowNativizerResizeBand was not created for the narrow-margin window!"
+if ! check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand": true}'; then
+    echo "!! RoundedClipEffect, WindowNativizerShadowActor or WindowNativizerResizeBand was not attached!"
     exit 1
 fi
 echo ">> Clip effect, shadow actor and resize band successfully verified on active window."
@@ -146,12 +161,8 @@ CLEANUP_CHECK="$(shell_eval '
 })()
 ')"
 echo ">> Cleanup check: $CLEANUP_CHECK"
-if ! echo "$CLEANUP_CHECK" | grep -q 'leakedShadowCount.*:0'; then
-    echo "!! Leaked shadow actors detected in windowGroup after window close!"
-    exit 1
-fi
-if ! echo "$CLEANUP_CHECK" | grep -q 'leakedBandCount.*:0'; then
-    echo "!! Leaked resize band detected in windowGroup after window close!"
+if ! check_fields "$CLEANUP_CHECK" '{"leakedShadowCount": 0, "leakedBandCount": 0}'; then
+    echo "!! Leaked shadow actors or resize band detected in windowGroup after window close!"
     exit 1
 fi
 echo ">> 0 leaked actors confirmed."

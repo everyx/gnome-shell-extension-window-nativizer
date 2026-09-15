@@ -12,11 +12,12 @@ export const RESIZE_BAND = 12;
 export const RESIZE_CORNER = 24;
 
 /**
- * Thinnest window that gets a band, `2 * RESIZE_CORNER` (48px). Below this, a side is
- * shorter than the two corner reaches, and `computeResizeBands` has to halve them, which
- * no longer matches GTK's fixed 24px `get_edge_for_coordinates` (see the note there).
- * The floor keeps that divergence, and the helper surfaces it would band (wl-clipboard's
- * 1x1), out of the session entirely.
+ * Thinnest window that gets a band, `2 * RESIZE_CORNER` (48px). This is a deliberate limit,
+ * not a geometry floor: below it a side is shorter than the two corner reaches, and
+ * `computeResizeBands` has to halve them, which no longer matches GTK's fixed 24px
+ * first-match-wins `get_edge_for_coordinates` (`docs/decoration-model.md`, § The resize band,
+ * "Why the floor is 48, not 24"). The floor keeps that divergence, and the helper surfaces
+ * it would band (wl-clipboard's 1x1), out of the session entirely.
  */
 export const MIN_BAND_WINDOW = 2 * RESIZE_CORNER;
 

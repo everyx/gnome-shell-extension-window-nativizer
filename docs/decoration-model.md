@@ -268,8 +268,10 @@ not introspectable (Chromium answers a 25px ring with a 10px border), so the rul
 window whose declared margin is *obviously* wide enough - at least `RESIZE_BAND` **on every
 side**, which is why the ring is read per side (`Math.min(left, right)`, `Math.min(top,
 bottom)`) and not as the average of a two-sided total: a 0,24 ring averages 12 but has no
-margin on one side. The margin is the same reading the shadow axis uses
-(`insetsFromRects`/`declaresOwnShadow` over `buffer_rect - frame_rect`), not a second path.
+margin on one side. The source is the same reading the shadow axis uses (`insetsFromRects`
+over `buffer_rect - frame_rect`), not a second path; only the per-axis aggregation differs
+(`declaredSides()` gives the band the narrowest side and the shadow axis the widest, because
+the two ask different questions).
 Below the minimum, at least `2 * RESIZE_CORNER = 48px` per side - the floor that keeps the
 corner reaches from overlapping, see below - and a 1×1 helper is not a window. The
 `resize-band` setting turns the whole thing off.
@@ -280,8 +282,10 @@ corners split the short side evenly. That is safe geometry, but it is no longer 
 `get_edge_for_coordinates` is first-match-wins with a fixed 24px (`x < left + 24` is tested
 before the right corner), so on a 30px side it hands the first 24px to NW and only the rest to
 NE, where we split the side 15/15. The direction would disagree with GTK, which is what this
-model claims not to do. So a window with any side under 48px gets no band, and the halving
-stays only as a safety net for a caller that reaches the geometry directly.
+model claims not to do. So a window with any side under 48px gets no band - a **deliberate
+limit**, not a geometry floor: we would rather draw no band than one whose corner direction
+disagrees with GTK's - and the halving stays only as a safety net for a caller that reaches the
+geometry directly.
 
 ### It is the first thing here that takes clicks
 

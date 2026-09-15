@@ -70,8 +70,8 @@ export function checkDecorationEligibility({
  * and it reads the same way: a declared extent means the client draws its own frame.
  * @param {object} params
  * @param {boolean} [params.hasSsd=false]
- * @param {number} params.sideW - Per-side margin, logical px
- * @param {number} params.sideH - Per-side margin, logical px
+ * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
+ * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
  * @returns {boolean}
  */
 export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
@@ -82,8 +82,8 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
  * @param {object} params
  * @param {boolean} [params.hasSsd=false]
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - Per-side margin, logical px
- * @param {number} params.sideH - Per-side margin, logical px
+ * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
+ * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
  * @returns {boolean}
  */
 export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
@@ -93,8 +93,8 @@ export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, side
 /**
  * @param {object} params
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - Per-side margin, logical px
- * @param {number} params.sideH - Per-side margin, logical px
+ * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
+ * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
  * @param {boolean} [params.hasSsd=false]
  * @param {boolean} [params.nativeLikeCorners=false]
  * @returns {{shadow: boolean, corners: boolean, reason: string}}
@@ -200,20 +200,38 @@ export function isWindowTiled(win, options = {}) {
  */
 
 /**
- * Smallest declared margin on each axis. The ring is declared per side (`_GTK_FRAME_EXTENTS`
- * LTRB, read as `buffer_rect - frame_rect`), so "at least 12 on every side" is the minimum
- * per axis, not the per-axis average a two-sided total gives: a 0,24 ring is not 12 a side.
- * On non-negative values `min > 0` and `avg > 0` agree, so `declaresOwnShadow()` reads the
- * same either way. The widths are the fallback for a caller that only has totals.
+ * The declared margin, read the two ways the two questions need. The ring is declared per
+ * side (`_GTK_FRAME_EXTENTS` LTRB, read as `buffer_rect - frame_rect`), and a two-sided
+ * total loses which side it came from, so neither reading is "the" margin:
+ *  - `declaringSides` is the widest margin on each axis. A positive value then means "a ring
+ *    on either side of this axis" - the question `declaresOwnShadow()` asks. On non-negative
+ *    values `max > 0` is exactly "some side on this axis is positive".
+ *  - `narrowestSides` is the smallest margin on each axis. "At least 12 on every side" is
+ *    that minimum, not the per-axis average a two-sided total gives: a 0,24 ring is not 12 a
+ *    side, so `shouldShowResizeBand()` reads this pair.
+ * With only the two-sided totals both pairs are equal, which is right for a symmetric
+ * measure. The widths are the fallback for a caller that only has totals.
  * @param {object} params
  * @param {import('./frame.js').Insets|null} params.insets
- * @returns {{sideW: number, sideH: number}}
+ * @returns {{declaringSides: {sideW: number, sideH: number},
+ *            narrowestSides: {sideW: number, sideH: number}}}
  */
-function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {
-    if (insets)
-        return {sideW: Math.min(insets.left, insets.right), sideH: Math.min(insets.top, insets.bottom)};
-    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
-    return {sideW: w / 2, sideH: h / 2};
+export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {
+    if (!insets) {
+        const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
+        const totals = {sideW: w / 2, sideH: h / 2};
+        return {declaringSides: totals, narrowestSides: totals};
+    }
+    return {
+        declaringSides: {
+            sideW: Math.max(insets.left, insets.right),
+            sideH: Math.max(insets.top, insets.bottom),
+        },
+        narrowestSides: {
+            sideW: Math.min(insets.left, insets.right),
+            sideH: Math.min(insets.top, insets.bottom),
+        },
+    };
 }
 
 /**
@@ -225,8 +243,9 @@ function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeig
  * The declared-margin check is a **proxy**: the client's real handle width is not
  * observable (Chromium draws 10px no matter how wide its ring is), so this only skips a
  * window whose ring is *obviously* wide enough - at least `RESIZE_BAND` on every side, which
- * is the toolkit's own floor. The ring is read the one way the rest of the code reads a
- * margin (`buffer_rect - frame_rect`, `declaresOwnShadow`), per side.
+ * is the toolkit's own floor. The ring is the same reading the shadow axis uses
+ * (`buffer_rect - frame_rect`), but the threshold is per side, so this asks for the
+ * *narrowest* margin on each axis and not the widest one `declaresOwnShadow()` asks for.
  * @param {object} params
  * @param {boolean} [params.resizeBand=true]
  * @param {boolean} [params.decorated=true] - Whether we draw anything on the window at all
@@ -269,9 +288,9 @@ export function shouldShowResizeBand({
     if (hasSsd)
         return false;
 
-    const {sideW, sideH} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
+    const {narrowestSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     // Its own handle is already at least as wide as a native one on every side.
-    if (declaresOwnShadow({hasSsd, sideW, sideH}) && Math.min(sideW, sideH) >= RESIZE_BAND)
+    if (narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND)
         return false;
 
     return frameWidth >= MIN_BAND_WINDOW && frameHeight >= MIN_BAND_WINDOW;
@@ -307,7 +326,10 @@ export function evaluateWindowActions({
     if (!eligibility.eligible)
         return {drawShadow: false, drawClip: false, style, reason: eligibility.reason};
 
-    const {sideW, sideH} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
+    // The shadow axis asks whether either side of an axis declares a ring, so it reads
+    // the widest margin per axis (`declaringSides`).
+    const {declaringSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
+    const {sideW, sideH} = declaringSides;
     const baseline = inferDecorationBaseline({
         isX11, sideW, sideH, hasSsd, nativeLikeCorners,
     });
@@ -392,7 +414,7 @@ export function suggestedRuleState(params) {
     if (drawShadow || drawClip)
         return RuleState.NONE;
 
-    const {sideW, sideH} = declaredSides(kind);
+    const {sideW, sideH} = declaredSides(kind).declaringSides;
     if (hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, sideW, sideH}))
         return RuleState.CORNERS;
 

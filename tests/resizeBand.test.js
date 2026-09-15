@@ -198,7 +198,7 @@ describe('computeResizeBands', () => {
         }
     });
 
-    it('still tiles when the window is smaller than two handles', () => {
+    it('still tiles when the window is smaller than two corner reaches', () => {
         const frame = rect(100, 100, 10, 8);
         const bands = computeResizeBands({frame});
         const rects = RESIZE_BAND_REGIONS.map(r => bands[r]);
@@ -390,6 +390,9 @@ describe('shouldShowResizeBand', () => {
         // the zero side and skip the band.
         expect(shouldShowResizeBand(ring(0, 24, 0, 24))).toBeTrue();
         expect(shouldShowResizeBand(ring(24, 0, 24, 0))).toBeTrue();
+        // A zero on both sides of one axis, positive only on the other: the narrowest
+        // per-axis margin is 0, so the ring is not a native-width handle on every side.
+        expect(shouldShowResizeBand(ring(0, 0, 24, 24))).toBeTrue();
         // The symmetric ring of the same total is a native handle and is skipped.
         expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeFalse();
     });

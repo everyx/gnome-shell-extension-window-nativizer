@@ -8,6 +8,7 @@ import {
     computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
     isWindowTiled, checkDecorationEligibility, inferDecorationBaseline,
     evaluateWindowActions, suggestedRuleState, suggestedRuleWouldChange,
+    declaredSides, declaresOwnShadow,
 } from '../src/lib/detector.js';
 import {
     RuleState, buildRuleKey,
@@ -173,6 +174,35 @@ describe('inferDecorationBaseline', () => {
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
         expect(r.reason).toBe('has-csd(20.0x0.0)');
+    });
+});
+
+describe('declaresOwnShadow', () => {
+    // `_GTK_FRAME_EXTENTS` is a per-side ring (left, right, top, bottom), so the two
+    // readings below start from real extents and not from a symmetric total.
+    const ring = (left, right, top, bottom) => declaredSides({insets: {left, right, top, bottom}});
+
+    it('reads a ring from either side of an axis, not from both (TLBR)', () => {
+        // Mutter sets has_custom_frame_extents for the property alone, so any positive
+        // margin declares - 1px on one side is as much a ring as 40px on every side.
+        expect(declaresOwnShadow(ring(0, 0, 24, 24).declaringSides)).toBeTrue();
+        expect(declaresOwnShadow(ring(24, 0, 24, 0).declaringSides)).toBeTrue();
+        expect(declaresOwnShadow(ring(0, 0, 12, 12).declaringSides)).toBeTrue();
+        expect(declaresOwnShadow(ring(0, 0, 0, 0).declaringSides)).toBeFalse();
+    });
+
+    it('the shadow axis reads the per-axis maximum, the band the minimum', () => {
+        // The regression this pair exists for: (0,24,0,24) has a zero on each axis's
+        // narrow reading, so feeding `narrowestSides` to the shadow axis turned a declared
+        // ring into a bare window and left the client's shadow under ours (double shadow).
+        expect(declaresOwnShadow(ring(0, 24, 0, 24).narrowestSides)).toBeFalse();
+        expect(declaresOwnShadow(ring(0, 24, 0, 24).declaringSides)).toBeTrue();
+        expect(declaresOwnShadow(ring(24, 0, 24, 0).narrowestSides)).toBeFalse();
+        expect(declaresOwnShadow(ring(24, 0, 24, 0).declaringSides)).toBeTrue();
+    });
+
+    it('SSD is never a declared ring of the client\'s own', () => {
+        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeFalse();
     });
 });
 
@@ -345,12 +375,42 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'asymmetric-app',
-            bufferHeight: 324, // +24 total -> sideH = 12, sideW stays 0
+            // Real per-side extents: left, right, top, bottom = 0, 0, 12, 12.
+            insets: {left: 0, right: 0, top: 12, bottom: 12},
         });
         expect(res.drawClip).toBeTrue();
         expect(res.clearRing).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(0.0x12.0))');
+    });
+
+    it('a ring on the far side of each axis alone is still the client\'s ring (TLBR 0,0,24,24)', () => {
+        // Double-shadow regression: the shadow axis must read the per-axis maximum. A
+        // per-axis minimum answers "no ring", leaving the client's own shadow in place
+        // while we draw ours.
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'one-side-ring-app',
+            insets: {left: 0, right: 0, top: 24, bottom: 24},
+        });
+        expect(res.drawClip).toBeTrue();
+        expect(res.clearRing).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-csd(0.0x24.0))');
+    });
+
+    it('clears a ring that is positive only on one side of each axis (TLBR 0,24,0,24)', () => {
+        // The case a per-axis minimum reads as no ring at all, and so leaves the client's
+        // own shadow on screen next to ours.
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'staggered-ring-app',
+            insets: {left: 0, right: 24, top: 0, bottom: 24},
+        });
+        expect(res.drawClip).toBeTrue();
+        expect(res.clearRing).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-csd(24.0x24.0))');
     });
 
     // ---- user rules: a state names the axes that are ours ----
@@ -631,7 +691,7 @@ describe('evaluateWindowActions', () => {
     });
 
     it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {
-        // Aligns with Mutter meta-window-actor-x11.c:392
+        // Aligns with Mutter's has_shadow() snap-tile gate (meta-window-actor-x11.c)
         const snapTiledWin = evaluateWindowActions({
             ...baseWin,
             isMaximized: false,

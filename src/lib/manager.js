@@ -425,8 +425,8 @@ export class Manager {
         return {
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
-            // Per-side ring for the resize-band threshold, which asks about every side
-            // (`shouldShowResizeBand`); the shadow axis still reads the totals.
+            // Per-side ring, so each consumer keeps the aggregation it needs: the resize
+            // band asks about every side, the shadow axis whether either side declares one.
             insets: insetsFromRects(b, f),
             monitorScale: this._getMonitorScale(win),
 

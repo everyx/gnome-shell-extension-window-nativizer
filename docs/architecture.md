@@ -83,9 +83,10 @@ another window or shell chrome, and `_restackActors()` re-pins it on `restacked`
 signal the shadow is pinned below its window on). Like the shadow it is bound to the window
 actor (`Clutter.BindConstraint`, grown by 12px per side, the band's depth) and derives its
 regions from the actor's live size in `vfunc_allocate`, from the insets and monitor rect the
-manager stored; the debounced reconcile hands over those decisions, never absolute pixel
-geometry, so a resize cannot leave the band behind. The container follows the window actor's
-`visible` so a minimized window leaves no strip behind. Created and destroyed by
+manager stored; the debounced reconcile hands over those decisions - the eligibility, and the
+relative insets - while the one absolute rectangle it needs, the monitor rect it clips to,
+rides along with them, so a resize cannot leave the band behind. The container follows the
+window actor's `visible` so a minimized window leaves no strip behind. Created and destroyed by
 `_syncResizeBand()`; dropped in `_undecorate()` and, before the close animation, in
 `_forgetWindow()` — a band that outlived its window would go on taking clicks.
 See `decoration-model.md` § The resize band for why it exists and what it costs.
