@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.4.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.3.0...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* **detector:** read a declared margin as the client drawing its own decoration ([210b2f4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/210b2f462f0177bf9aee462ce5d26614b1fe14d4))
+* **effects:** widen a window's resize band to 12px, as a native window has ([da90aab](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/da90aab50c3aadfe84203008ecbae5c3bd0199b9))
+
+
+### Bug Fixes
+
+* **detector:** keep the shadow axis reading any declared side ([2eee6f9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2eee6f9a3560064e6257e504edd2689e20760a91))
+* **effects:** address review feedback on outline comparison, teardown guard, and benchmark methodology ([9c8a183](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9c8a1832fbc8efe92e041d4c48498cf94e332f0d))
+* **effects:** draw the inner outline at the strength it was meant to have ([45b15f9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/45b15f9a45a5a1599e8ceb4966099ccc50ca2b36))
+* **effects:** keep a degenerate frame from erasing the window, and gate the band ([513c49a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/513c49a0fb82fecd13790744b70c7a66b833089f))
+* **effects:** only band a narrow window, and keep the geometry live ([b10c164](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b10c1641dd6847383746e4f89ae424af6423b39d))
+* **lib:** give the SSD frame's insets back to the measurement ([2ea3da8](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2ea3da842b78a3aee4cda540acdfdf7f574a0f81))
+* **lib:** let the corner regions extend 24px along the edge ([5dcd7b1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5dcd7b10a64fd63aed0fde264422ecdef29fa6dc))
+* **lib:** skip only the toolkits that round all four corners ([7c3ae19](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7c3ae196095072ff021f073bb2136f276be8e1f4))
+* **lib:** take over square SSD frame shadow when rounding corners ([46a716c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/46a716cbcb9d7a8de0eb358c09e99e80c9476b71))
+* **lib:** take the corner assignment from GTK's order, not from a floor ([c1f2e7a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c1f2e7a2e433f2ff1baa77bb7f6ec2f7da262ebc))
+* **lib:** trim the corner blocks to the twelve pixels GTK can receive ([1c3e27c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1c3e27c41ffbcc31ccdb6d37151bbdaa148dbeb1))
+* **tools:** make the generated shader say where its numbers came from ([e3545d1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e3545d15bc60892778cdbf24de4f30bfb52867c5))
+
+
+### Performance
+
+* **effects:** guard uniform uploads and reuse actor boxes during resize ([4a442cf](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4a442cfd42a487a5c3da9e3ed77a59b708e25434))
+
+
+### Documentation
+
+* overhaul user-facing documentation, metadata, and copy across the project ([5901696](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/59016960f63e1fba03217af906acda4b1e14c72a))
+* **preview:** composite native top-left resize cursor in comparison asset ([1302ed8](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1302ed8e94cde817473092d6d153c69998985c3c))
+* read the numbers as depth and length, not two depths ([b1423eb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b1423ebf5f781b57b23e89bb2efeddb9bdaf3ce2))
+* record the grab band a native window actually has ([7a3c836](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7a3c836794f156a54882320df2260a9c84903586))
+* say where the problems actually are, and why ([d88834d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d88834d68d39c6740ae866d551d7c0d05e2ed3c7))
+* say who takes input, and fix the wording the review found ([7d76652](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7d76652e7e3012bd5ef1f1d5d3afb3122306fdf2))
+
 ## [0.3.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.2.0...v0.3.0) (2026-09-14)
 
 
