@@ -234,20 +234,23 @@ def main():
             run_single_test(True, 0, shell_pid, bus, idle_secs=1.0, stress_steps=30)
             print(">> Warm-up complete.\n")
 
-        print(">> Running interleaved performance benchmark (side-by-side per round)...")
+        print(">> Running counterbalanced interleaved performance benchmark (AB-BA per round)...")
         for r in range(1, rounds + 1):
             print(f"\n>> Round {r}/{rounds}...")
-            sys.stdout.write("   [Disabled] ")
-            sys.stdout.flush()
-            res_dis = run_single_test(False, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-            results_disabled.append(res_dis)
-            print(f"Idle: {res_dis['idle_cpu_pct']:.2f}%, Stress: {res_dis['stress_cpu_ms']:.1f}ms ({res_dis['stress_cpu_pct']:.1f}%), Delta PSS: {res_dis['window_delta_pss']:+d}KB")
-
-            sys.stdout.write("   [Enabled]  ")
-            sys.stdout.flush()
-            res_ena = run_single_test(True, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-            results_enabled.append(res_ena)
-            print(f"Idle: {res_ena['idle_cpu_pct']:.2f}%, Stress: {res_ena['stress_cpu_ms']:.1f}ms ({res_ena['stress_cpu_pct']:.1f}%), Delta PSS: {res_ena['window_delta_pss']:+d}KB")
+            # Odd rounds: Disabled first, then Enabled (A -> B)
+            # Even rounds: Enabled first, then Disabled (B -> A)
+            # This counterbalancing mathematically cancels out intra-round order bias in the mean.
+            states = [False, True] if (r % 2 == 1) else [True, False]
+            for state in states:
+                tag = "Enabled" if state else "Disabled"
+                sys.stdout.write(f"   [{tag:<8}] ")
+                sys.stdout.flush()
+                res = run_single_test(state, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
+                if state:
+                    results_enabled.append(res)
+                else:
+                    results_disabled.append(res)
+                print(f"Idle: {res['idle_cpu_pct']:.2f}%, Stress: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
 
         def avg(lst, key):
             return sum(x[key] for x in lst) / len(lst)
