@@ -108,17 +108,30 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param {boolean} [params.clearRing=false]
      */
     setParams({insets, radius, outline, clearRing = false}) {
+        const nextOutlineVec = outline
+            ? [
+                outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
+                outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
+                outline.color[2] > 1 ? outline.color[2] / 255 : outline.color[2],
+                outline.alpha,
+            ]
+            : [0, 0, 0, 0];
+        const outlineChanged = !this._outlineVec ||
+            this._outlineVec[0] !== nextOutlineVec[0] ||
+            this._outlineVec[1] !== nextOutlineVec[1] ||
+            this._outlineVec[2] !== nextOutlineVec[2] ||
+            this._outlineVec[3] !== nextOutlineVec[3];
+
         const last = this._insets;
         if (last.left === insets.left && last.top === insets.top &&
             last.right === insets.right && last.bottom === insets.bottom &&
-            this._radius === radius && this._outline === outline &&
+            this._radius === radius && !outlineChanged &&
             this._clearRing === clearRing)
             return;
 
         const insetsChanged = last.left !== insets.left || last.top !== insets.top ||
             last.right !== insets.right || last.bottom !== insets.bottom;
         const radiusChanged = this._radius !== radius;
-        const outlineChanged = this._outline !== outline;
         const clearRingChanged = this._clearRing !== clearRing;
 
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
@@ -132,14 +145,7 @@ export const RoundedClipEffect = GObject.registerClass({
         }
 
         if (outlineChanged) {
-            this._outlineVec = outline
-                ? [
-                    outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
-                    outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
-                    outline.color[2] > 1 ? outline.color[2] / 255 : outline.color[2],
-                    outline.alpha,
-                ]
-                : [0, 0, 0, 0];
+            this._outlineVec = nextOutlineVec;
             this.set_uniform_float(this._uOutline, 4, this._outlineVec);
         }
 
@@ -148,6 +154,8 @@ export const RoundedClipEffect = GObject.registerClass({
             this.set_uniform_float(this._uClearRing, 1, this._clearRingVec);
         }
 
+        // Insets changed: invalidate cached frame geometry so vfunc_paint_target
+        // is forced to recalculate and re-upload uFrame on the next paint pass.
         if (insetsChanged)
             this._lastFrameW = -1;
 

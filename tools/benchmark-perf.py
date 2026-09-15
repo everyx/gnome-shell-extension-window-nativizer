@@ -25,7 +25,12 @@ CLK_TCK = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
 
 # Performance Budgets (Regression Guards for --check)
 BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
-BUDGET_MAX_STRESS_CPU_DELTA_MS = 150.0    # Max dynamic resize CPU delta: 150ms across 150 frames (<1.0ms/frame)
+# Max dynamic resize CPU delta: 120ms across 150 frames (<0.8ms/frame).
+# Physical baseline breakdown:
+# - ~80ms for RoundedClipEffect FBO offscreen shader + ShadowActor 8-slice quads
+# - ~25ms for ResizeBand (4 bind constraints, 4 reactive hit-test actors, live allocation)
+# - ~15ms allowance for compositor scheduling jitter across 150 frames
+BUDGET_MAX_STRESS_CPU_DELTA_MS = 120.0
 BUDGET_MAX_PER_WINDOW_PSS_KB = 2048.0     # Max per-window RAM delta: 2.0 MB
 
 def ensure_session():
@@ -223,21 +228,26 @@ def main():
     results_enabled = []
 
     try:
-        print(">> Benchmarking with Extension DISABLED...")
-        for r in range(1, rounds + 1):
-            sys.stdout.write(f"   Round {r}/{rounds}... ")
-            sys.stdout.flush()
-            res = run_single_test(False, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-            results_disabled.append(res)
-            print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
+        if not args.quick:
+            print(">> Warming up session to eliminate JIT and cold-start bias...")
+            run_single_test(False, 0, shell_pid, bus, idle_secs=1.0, stress_steps=30)
+            run_single_test(True, 0, shell_pid, bus, idle_secs=1.0, stress_steps=30)
+            print(">> Warm-up complete.\n")
 
-        print("\n>> Benchmarking with Extension ENABLED...")
+        print(">> Running interleaved performance benchmark (side-by-side per round)...")
         for r in range(1, rounds + 1):
-            sys.stdout.write(f"   Round {r}/{rounds}... ")
+            print(f"\n>> Round {r}/{rounds}...")
+            sys.stdout.write("   [Disabled] ")
             sys.stdout.flush()
-            res = run_single_test(True, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-            results_enabled.append(res)
-            print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
+            res_dis = run_single_test(False, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
+            results_disabled.append(res_dis)
+            print(f"Idle: {res_dis['idle_cpu_pct']:.2f}%, Stress: {res_dis['stress_cpu_ms']:.1f}ms ({res_dis['stress_cpu_pct']:.1f}%), Delta PSS: {res_dis['window_delta_pss']:+d}KB")
+
+            sys.stdout.write("   [Enabled]  ")
+            sys.stdout.flush()
+            res_ena = run_single_test(True, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
+            results_enabled.append(res_ena)
+            print(f"Idle: {res_ena['idle_cpu_pct']:.2f}%, Stress: {res_ena['stress_cpu_ms']:.1f}ms ({res_ena['stress_cpu_pct']:.1f}%), Delta PSS: {res_ena['window_delta_pss']:+d}KB")
 
         def avg(lst, key):
             return sum(x[key] for x in lst) / len(lst)

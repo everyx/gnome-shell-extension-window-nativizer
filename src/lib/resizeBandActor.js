@@ -188,6 +188,10 @@ export const ResizeBand = GObject.registerClass({
         // boxpointer.js uses.
         this.set_allocation(box);
 
+        // Guard against late allocations arriving after or during destroy().
+        if (!this._childBox)
+            return;
+
         const containerWidth = box.x2 - box.x1;
         const containerHeight = box.y2 - box.y1;
         // The container is the actor grown by OUTER per side; undo that to place the body.
