@@ -11,6 +11,11 @@
  *   resolved to its cubic-bezier control points.
  * shadowPad: derived, not upstream - the farthest layer Gaussian reach over every
  *   shadow set below (`3 * 0.5 * blur + spread`) plus the Cogl offscreen offset.
+ * ssdFrameExtents: derived from vendor/libadwaita/_window.scss window.csd box-shadow
+ *   via GTK4's gtk_css_shadow_value_get_extents (gtk/gtkcssshadowvalue.c) and
+ *   gsk_cairo_blur_compute_pixels (gsk/gskcairoblur.c), floored at RESIZE_HANDLE_SIZE
+ *   (vendor/gtk/gtkwindow.c). Defines invisible border width mutter-x11-frames
+ *   reserves around X11 SSD windows.
  */
 
 export const ADWAITA_STYLE = {
@@ -37,5 +42,8 @@ export const ADWAITA_STYLE = {
         },
     },
     shadowPad: 28,
+    ssdFrameExtents: 25,
     transition: {durationMs: 200, easing: [0, 0, 0.58, 1]},
 };
+
+export const SSD_FRAME_EXTENTS = 25;

@@ -12,7 +12,7 @@ stops being true is a compatibility break, not a refactor.
 | `win.get_tile_match()` | 45–50 stable | the adjacent matching tile, or null |
 | `win.get_pid()` | 45–50 stable | owning process id; keys the per-process corner inference and its cache eviction |
 | `win.get_frame_rect()` | 45–50 stable | the window body, margin excluded; the rectangle `RoundedClipEffect` rounds |
-| `win.get_buffer_rect()` | 45–50 stable | what the clip target is sized from; `buffer_rect - frame_rect` is the ring the client drew its own shadow into |
+| `win.get_buffer_rect()` | 45–50 stable | what the clip target is sized from; `buffer_rect - frame_rect` is the ring the client drew its own shadow into; for X11 SSD windows where Mutter reports zero difference, `computeFrameInsets` falls back to `SSD_FRAME_EXTENTS` |
 | `/proc/pid/maps` via `Gio.File` | kernel + GIO stable | which Adwaita providers a process maps (`libadwaita-1.so`, `libhandy-1.so`); per-process, not per-window |
 | `global.display.get_monitor_scale(i)` | 45–50 stable | fractional scale, so it is not an integer; called through optional chaining |
 | `global.backend.get_monitor_manager()` | 45–50 stable | called through optional chaining |

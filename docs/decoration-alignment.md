@@ -17,7 +17,7 @@ Two things are drawn, and they have different mechanisms:
 | Part | Where it lives | Notes |
 | --- | --- | --- |
 | Rounded clip + inner outline | `RoundedClipEffect` on the window actor (surface actor on X11) | skipped entirely under some settings, see below |
-| Shadow | `WindowNativizerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — SSD keeps the frames-client shadow, bare X11 keeps Mutter's |
+| Shadow | `WindowNativizerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
 (`ScreenshotWindow`) can never contain the shadow. Only a full-desktop screenshot shows both.

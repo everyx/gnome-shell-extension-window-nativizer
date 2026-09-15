@@ -10,7 +10,7 @@
  */
 
 import {styleForWindow} from '../src/lib/style.js';
-import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
+import {ADWAITA_STYLE, SSD_FRAME_EXTENTS} from '../src/lib/adwaitaStyle.generated.js';
 
 describe('styleForWindow', () => {
     const base = {focused: true, maximized: false, fullscreen: false, tiled: false, highContrast: false};
@@ -66,4 +66,11 @@ describe('styleForWindow', () => {
         expect(styleForWindow({...base, maximized: true, tiled: true}))
             .toEqual({...w.maximized, outline: null});
     });
+
+    it('exposes positive integer ssdFrameExtents derived from upstream GTK', () => {
+        expect(ADWAITA_STYLE.ssdFrameExtents).toBeGreaterThan(0);
+        expect(Number.isInteger(ADWAITA_STYLE.ssdFrameExtents)).toBeTrue();
+        expect(SSD_FRAME_EXTENTS).toBe(ADWAITA_STYLE.ssdFrameExtents);
+    });
 });
+

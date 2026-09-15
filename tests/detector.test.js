@@ -201,8 +201,8 @@ describe('declaresOwnShadow', () => {
         expect(declaresOwnShadow(ring(24, 0, 24, 0).declaringSides)).toBeTrue();
     });
 
-    it('SSD is never a declared ring of the client\'s own', () => {
-        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeFalse();
+    it('SSD frame with margin has a shadow ring eligible to be cleared', () => {
+        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeTrue();
     });
 });
 
@@ -317,6 +317,20 @@ describe('evaluateWindowActions', () => {
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('has-ssd-frame');
+    });
+
+    it('SSD window with insets: clears frame shadow ring and draws native Adwaita shadow', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            hasSsd: true,
+            isX11: true,
+            insets: {left: 25, top: 25, right: 25, bottom: 25},
+            wmClass: 'navicat',
+        });
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
+        expect(res.clearRing).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-ssd-frame)');
     });
 
     it('corners that already look like ours: clip skipped, shadow still read from the margins', () => {

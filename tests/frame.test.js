@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {bodyFrame, frameFromInsets, insetsFromRects, ZERO_INSETS} from '../src/lib/frame.js';
+import {bodyFrame, computeFrameInsets, frameFromInsets, insetsFromRects, ZERO_INSETS} from '../src/lib/frame.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
@@ -95,3 +95,67 @@ describe('insetsFromRects', () => {
         expect(insetsFromRects(rect(0, 0, 100, 100), null)).toBeNull();
     });
 });
+
+describe('computeFrameInsets', () => {
+    it('returns measured insets when buffer is larger than frame', () => {
+        const res = computeFrameInsets({
+            buffer: rect(100, 50, 440, 280),
+            frame: rect(125, 75, 390, 230),
+            isX11: false,
+            hasSsd: false,
+            ssdFrameExtents: 25,
+        });
+        expect(res).toEqual(insets(25, 25, 25, 25));
+    });
+
+    it('falls back to ssdFrameExtents for X11 SSD windows when rect insets are zero', () => {
+        const res = computeFrameInsets({
+            buffer: rect(0, 0, 640, 480),
+            frame: rect(0, 0, 640, 480),
+            isX11: true,
+            hasSsd: true,
+            ssdFrameExtents: 25,
+        });
+        expect(res).toEqual(insets(25, 25, 25, 25));
+    });
+
+    it('does not apply ssdFrameExtents if window is not X11', () => {
+        const res = computeFrameInsets({
+            buffer: rect(0, 0, 640, 480),
+            frame: rect(0, 0, 640, 480),
+            isX11: false,
+            hasSsd: true,
+            ssdFrameExtents: 25,
+        });
+        expect(res).toEqual(ZERO_INSETS);
+    });
+
+    it('does not apply ssdFrameExtents if window does not have SSD', () => {
+        const res = computeFrameInsets({
+            buffer: rect(0, 0, 640, 480),
+            frame: rect(0, 0, 640, 480),
+            isX11: true,
+            hasSsd: false,
+            ssdFrameExtents: 25,
+        });
+        expect(res).toEqual(ZERO_INSETS);
+    });
+
+    it('retains positive rect insets if Mutter already provides them for X11 SSD', () => {
+        const res = computeFrameInsets({
+            buffer: rect(0, 0, 120, 120),
+            frame: rect(10, 10, 100, 100),
+            isX11: true,
+            hasSsd: true,
+            ssdFrameExtents: 25,
+        });
+        expect(res).toEqual(insets(10, 10, 10, 10));
+    });
+
+    it('returns null for invalid or missing rects', () => {
+        expect(computeFrameInsets({buffer: null, frame: rect(0, 0, 100, 100)})).toBeNull();
+        expect(computeFrameInsets({buffer: rect(0, 0, 100, 100), frame: null})).toBeNull();
+        expect(computeFrameInsets({buffer: rect(0, 0, 100, 100), frame: rect(0, 0, 120, 120)})).toBeNull();
+    });
+});
+

@@ -74,8 +74,8 @@ export function checkDecorationEligibility({
  * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
  * @returns {boolean}
  */
-export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
-    return !hasSsd && (sideW > 0 || sideH > 0);
+export function declaresOwnShadow({hasSsd: _hasSsd = false, sideW, sideH}) {
+    return sideW > 0 || sideH > 0;
 }
 
 /**
@@ -87,7 +87,7 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
  * @returns {boolean}
  */
 export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
-    return hasSsd || (isX11 && sideW <= 0 && sideH <= 0);
+    return !hasSsd && isX11 && sideW <= 0 && sideH <= 0;
 }
 
 /**
@@ -112,7 +112,10 @@ export function inferDecorationBaseline({
 
     if (hasUnclearableShadow({hasSsd, isX11, sideW, sideH})) {
         shadow = false;
-        reason = hasSsd ? 'has-ssd-frame' : 'x11-mutter-native-shadow';
+        reason = 'x11-mutter-native-shadow';
+    } else if (hasSsd) {
+        shadow = false;
+        reason = 'has-ssd-frame';
     } else if (declaresOwnShadow({hasSsd, sideW, sideH})) {
         shadow = false;
         reason = `has-csd(${insets})`;

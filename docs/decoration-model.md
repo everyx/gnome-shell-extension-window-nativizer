@@ -131,8 +131,8 @@ because a square body is the shape we have.
 |---|---|---|
 | the client's declared ring (`buffer_rect - frame_rect`, any positive margin on either axis) | yes | cleared, then our shadow is drawn: one shadow, for the corners we drew (for a square body, if a rule left the corners theirs) |
 | the client's declared ring | no - it already looks like ours, or a rule left it theirs | untouched: its shadow still matches the shape it was painted for |
-| none (a bare toplevel: no margin on either axis) | yes | nothing to clear; the actor is already the body |
-| Mutter's own (`has-ssd-frame`, `x11-mutter-native-shadow`) | either | out of reach: that shadow is not in the window's texture |
+| server-side frame ring (`has-ssd-frame`, `ssdFrameExtents`) | yes | cleared, and our 15px rounded shadow is drawn around the body |
+| Mutter's bare-X11 native shadow (`x11-mutter-native-shadow`) | either | out of reach: drawn by compositor outside the window square |
 
 The ring is a **declaration, not content**: `_GTK_FRAME_EXTENTS` on X11 and
 `set_window_geometry` on Wayland both say "this much of my buffer is decoration", and
@@ -151,31 +151,19 @@ ring at all.
 ## Where we deliberately differ from Mutter
 
 - **X11 / XWayland without custom frame extents & Server-Side Decorations (SSD).**
-  With no rule we never paint a redundant shadow (`shadow: false`); who owns the
-  visible one depends on the case. For SSD, Mutter's compositor draws none — `has_shadow()`
-  (`meta-window-actor-x11.c`) returns FALSE once a frame exists (*"Let the frames
-  client put a shadow around frames"*), and the frames client draws its own:
-  a GTK window carrying the `ssd-frame` CSS class (`src/frames/meta-frame.c:570`),
-  whose shadow comes from the GTK/Adwaita theme (`window.csd { box-shadow: … }`
-  in libadwaita's `src/stylesheet/widgets/_window.scss`), not from the compositor. For a bare X11 window Mutter draws
-  one only when every gate in `has_shadow()` (`vendor/mutter/meta-window-actor-x11.c:373-427`)
-  passes: not maximized or fullscreen, no snap-tile match, no frames-client frame, an
-  opaque window (not ARGB32), no custom frame extents declared, and not shaped.
-  When it does, it is painted strictly outside the window square: only into the
-  beneath-region (`shadow_clip`, strict clip), and it is a soft Gaussian blur of the
-  window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c`; *How a
-  style change is drawn* gives its values), not an opaque square. Either way
-  no square shadow sits under the corners we cut, so we clip the window's body with
-  `RoundedClipEffect` to the native 15px (`window.radius` in
-  `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and the cut corners reveal
-  desktop background. SSD is an inference (layer 2), not a
-  structural fact as it once was: a rule may override it. So is the bare-X11 shadow,
-  and overriding it with `both` or `shadow` adds ours on top of Mutter's — the user's
-  explicit choice, not something we override; `corners` is the intended look there,
-  leaving one shadow.
-  X11 windows that *do* declare frame extents make Mutter drop its native shadow, and
-  that declaration is exactly the ring we read (any positive margin), so those receive
-  both our shadow and rounded corners, with the ring cleared.
+  With no rule we previously assumed the frames client (`mutter-x11-frames`) drew an Adwaita
+  shadow matching the window. However, upstream libadwaita/GTK stylesheet explicitly sets
+  `window.csd.ssd-frame { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }`,
+  causing the frames-client's baked shadow to have square bottom corners. When `RoundedClipEffect`
+  clips the window body to a 15px radius, the square shadow leaves a transparent wedge between
+  the rounded body corner and the square shadow shoulder.
+  Because `mutter-x11-frames` draws its shadow into the invisible border ring (the `ssdFrameExtents`
+  margin on the X11 surface child), this shadow is within reach: clipping an SSD window takes
+  over its shadow (`ownRing = true`, `clearRing = true`, `shadow = true`). The square frame
+  shadow in the ring is cleared, and `ShadowActor` casts our 15px four-corner rounded shadow around
+  the body. For a bare X11 window (no SSD, no extents), Mutter paints its native shadow strictly
+  outside the window square into the beneath-region; that shadow is out of reach, so a bare
+  window without a rule retains Mutter's native shadow.
 - **A snap-tiled window loses the shadow it would get from us** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct the
   neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on

@@ -209,6 +209,38 @@ const allShadowLayers = [...shadows, ...backdropShadows, ...hcShadows, ...hcBack
 const shadowReach = Math.max(...allShadowLayers.map(s => 3 * (0.5 * s.blur) + s.spread));
 const shadowPad = Math.ceil(shadowReach) + COGL_FBO_OFFSET;
 
+// 10. GTK4 CSD shadow extents: computed from window.csd box-shadow according to
+//     GTK4's gtk_css_shadow_value_get_extents (gtk/gtkcssshadowvalue.c) and
+//     gsk_cairo_blur_compute_pixels (gsk/gskcairoblur.c), floored at RESIZE_HANDLE_SIZE
+//     (from vendor/gtk/gtkwindow.c).
+//     This defines the invisible border width that mutter-x11-frames reserves
+//     around an X11 SSD window's frame.
+const GTK_VENDOR = path.join(ROOT, 'vendor', 'gtk');
+function loadGtkResizeHandleSize() {
+    const p = path.join(GTK_VENDOR, 'gtkwindow.c');
+    if (!existsSync(p))
+        throw new Error('[gen-style] Missing vendor/gtk/gtkwindow.c');
+    const cCode = readFileSync(p, 'utf8');
+    const m = cCode.match(/^#define\s+RESIZE_HANDLE_SIZE\s+(\d+)\b/m);
+    if (!m)
+        throw new Error('[gen-style] Cannot parse RESIZE_HANDLE_SIZE from vendor/gtk/gtkwindow.c');
+    return parseInt(m[1], 10);
+}
+const RESIZE_HANDLE_SIZE = loadGtkResizeHandleSize();
+const GAUSSIAN_SCALE_FACTOR = (3.0 * Math.sqrt(2 * Math.PI)) / 4.0;
+function computeGtkShadowExtent(layerList, handleFloor = 12) {
+    let maxExtent = handleFloor;
+    for (const s of layerList) {
+        const r = s.blur / 2.0;
+        const clipRadius = Math.floor(r * GAUSSIAN_SCALE_FACTOR * 1.5 + 0.5);
+        const extent = Math.ceil(clipRadius + s.spread);
+        if (extent > maxExtent)
+            maxExtent = extent;
+    }
+    return maxExtent;
+}
+const ssdFrameExtents = computeGtkShadowExtent(shadows, RESIZE_HANDLE_SIZE);
+
 // ---------- Assertions (prevent corrupted data) ----------
 
 if (radius < 4 || radius > 40)
@@ -228,6 +260,8 @@ if (durationMs <= 0 || durationMs > 2000)
     throw new Error(`[gen-style] Assertion failed: unexpected transition duration ${durationMs}ms`);
 if (shadowPad < 1 || shadowPad > 64)
     throw new Error(`[gen-style] Assertion failed: unexpected shadow bake padding ${shadowPad}px`);
+if (ssdFrameExtents < 12 || ssdFrameExtents > 64)
+    throw new Error(`[gen-style] Assertion failed: unexpected ssdFrameExtents ${ssdFrameExtents}px`);
 
 // ---------- Serialization ----------
 
@@ -261,6 +295,11 @@ const js = `/**
  *   resolved to its cubic-bezier control points.
  * shadowPad: derived, not upstream - the farthest layer Gaussian reach over every
  *   shadow set below (\`3 * 0.5 * blur + spread\`) plus the Cogl offscreen offset.
+ * ssdFrameExtents: derived from vendor/libadwaita/_window.scss window.csd box-shadow
+ *   via GTK4's gtk_css_shadow_value_get_extents (gtk/gtkcssshadowvalue.c) and
+ *   gsk_cairo_blur_compute_pixels (gsk/gskcairoblur.c), floored at RESIZE_HANDLE_SIZE
+ *   (vendor/gtk/gtkwindow.c). Defines invisible border width mutter-x11-frames
+ *   reserves around X11 SSD windows.
  */
 
 export const ADWAITA_STYLE = {
@@ -287,8 +326,11 @@ export const ADWAITA_STYLE = {
         },
     },
     shadowPad: ${shadowPad},
+    ssdFrameExtents: ${ssdFrameExtents},
     transition: {durationMs: ${durationMs}, easing: [${easing.join(', ')}]},
 };
+
+export const SSD_FRAME_EXTENTS = ${ssdFrameExtents};
 `;
 
 // ---------- Output ----------
