@@ -65,3 +65,32 @@ export function insetsFromRects(buffer, frame) {
 
     return insets;
 }
+
+/**
+ * The per-side ring between buffer and frame (`buffer_rect - frame_rect`).
+ * Floating X11 SSD: 25px per side (`_GTK_FRAME_EXTENTS=25`, actor 550×524 vs frame
+ * 500×474). Maximized X11 SSD: zero (`buffer==frame 1920×1051`, `_GTK_FRAME_EXTENTS=0`,
+ * actor 1920×1051 == frame 1920×1051). No ring exists to clear there, so return the
+ * rect difference exactly with no fallback (see docs/decoration-model.md).
+ * @param {object} params
+ * @param {{x: number, y: number, width: number, height: number}|null} [params.buffer]
+ * @param {{x: number, y: number, width: number, height: number}|null} [params.frame]
+ * @param {boolean} [params.isX11=false]
+ * @param {boolean} [params.hasSsd=false]
+ * @param {number} [params.ssdFrameExtents=0]
+ * @returns {Insets|null}
+ */
+export function computeFrameInsets({
+    buffer,
+    frame,
+    isX11: _isX11 = false,
+    hasSsd: _hasSsd = false,
+    ssdFrameExtents: _ssdFrameExtents = 0,
+} = {}) {
+    const insets = insetsFromRects(buffer, frame);
+    if (!insets)
+        return null;
+
+    return insets;
+}
+

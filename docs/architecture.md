@@ -69,8 +69,8 @@ computed from the actor's live size at paint time (`lib/frame.js`), so a resize 
 geometry the actor has already left. When there is something to clip, the window also gets a
 `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
 On Wayland, the clip effect attaches directly to the window actor; on X11 / XWayland, it attaches
-to the surface child actor (`actor.get_first_child()`) so the native / frames-client drop shadow is preserved
-and coordinates align accurately.
+to the surface child actor (`actor.get_first_child()`) so coordinates align accurately and
+the frame ring can be cleared when taking over shadows.
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
 

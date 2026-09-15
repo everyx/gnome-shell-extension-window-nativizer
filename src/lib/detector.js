@@ -68,8 +68,13 @@ export function checkDecorationEligibility({
  * Same question Mutter answers with the boolean `has_custom_frame_extents` (set
  * whenever the property exists, 4px as much as 40px; see docs/decoration-model.md),
  * and it reads the same way: a declared extent means the client draws its own frame.
+ * An SSD window's ring is drawn by the frame client (`mutter-x11-frames`), not by the
+ * client itself, so it does not count as a declaration (`hasSsd ⇒ false`). The policy
+ * "the SSD ring is ours to clear when we clip" lives in `inferDecorationBaseline`
+ * (`hasSsd ⇒ shadow=false, reason='has-ssd-frame'`) and in the ring-clearing logic of
+ * `evaluateWindowActions`, not here.
  * @param {object} params
- * @param {boolean} [params.hasSsd=false]
+ * @param {boolean} [params.hasSsd=false] - SSD frame ring is not a client declaration
  * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
  * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
  * @returns {boolean}
@@ -87,7 +92,7 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
  * @returns {boolean}
  */
 export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
-    return hasSsd || (isX11 && sideW <= 0 && sideH <= 0);
+    return !hasSsd && isX11 && sideW <= 0 && sideH <= 0;
 }
 
 /**
@@ -112,7 +117,10 @@ export function inferDecorationBaseline({
 
     if (hasUnclearableShadow({hasSsd, isX11, sideW, sideH})) {
         shadow = false;
-        reason = hasSsd ? 'has-ssd-frame' : 'x11-mutter-native-shadow';
+        reason = 'x11-mutter-native-shadow';
+    } else if (hasSsd) {
+        shadow = false;
+        reason = 'has-ssd-frame';
     } else if (declaresOwnShadow({hasSsd, sideW, sideH})) {
         shadow = false;
         reason = `has-csd(${insets})`;
@@ -357,7 +365,13 @@ export function evaluateWindowActions({
     corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
-    const ownRing = declaresOwnShadow({hasSsd, sideW, sideH});
+    // Semantics vs strategy: declaresOwnShadow answers "did the client declare a ring?"
+    // (SSD's ring is frame-drawn ⇒ false). The strategy "SSD ring is ours to clear when
+    // we clip" is separate and handled here so the predicate can stay pure without
+    // changing observable behavior (inferDecorationBaseline already handles hasSsd first).
+    const clientOwnRing = declaresOwnShadow({hasSsd, sideW, sideH});
+    const ssdRing = hasSsd && (sideW > 0 || sideH > 0);
+    const ownRing = clientOwnRing || ssdRing;
 
     // No rule: ring was painted for the corners we replace, so the shadow becomes ours.
     if (!rule && corners && ownRing)

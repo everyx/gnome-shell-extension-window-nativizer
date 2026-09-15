@@ -14,7 +14,8 @@ import {
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
-import {insetsFromRects} from './frame.js';
+import {computeFrameInsets} from './frame.js';
+import {SSD_FRAME_EXTENTS} from './adwaitaStyle.generated.js';
 import {extractWindowProperties} from './pick.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
@@ -427,7 +428,7 @@ export class Manager {
             frameWidth: f.width, frameHeight: f.height,
             // Per-side ring, so each consumer keeps the aggregation it needs: the resize
             // band asks about every side, the shadow axis whether either side declares one.
-            insets: insetsFromRects(b, f),
+            insets: this._frameInsets(win),
             monitorScale: this._getMonitorScale(win),
 
             isMaximized,
@@ -516,14 +517,20 @@ export class Manager {
     /**
      * @param {Meta.Window} win
      * @returns {import('./frame.js').Insets|null} Ring between the actor (buffer) and the
-     * body (`frame_rect`). For an X11 SSD window Mutter sets `buffer_rect = frame->rect`,
-     * the frame grown by its invisible borders, so this is that border width (>= 0), not
-     * null. Null only when the frame does not fit inside the buffer at all. Deliberately
+     * body (`frame_rect`). For an X11 SSD window, mutter-x11-frames adds invisible borders
+     * around the frame. Modern Mutter reports buffer_rect == frame_rect, so this falls
+     * back to SSD_FRAME_EXTENTS (derived from upstream GTK/Adwaita). Deliberately
      * does not look at any actor size: the body is placed against the actor's live size at
      * paint time, so a lagging actor can never turn this into "no body".
      */
     _frameInsets(win) {
-        return insetsFromRects(win.get_buffer_rect?.(), win.get_frame_rect?.());
+        return computeFrameInsets({
+            buffer: win.get_buffer_rect?.(),
+            frame: win.get_frame_rect?.(),
+            isX11: win.get_client_type?.() === CLIENT_TYPE_X11,
+            hasSsd: Boolean(win.decorated),
+            ssdFrameExtents: SSD_FRAME_EXTENTS,
+        });
     }
 
     _applyStyle(win, style, insets, drawClip) {
