@@ -70,18 +70,14 @@ function sameBands(a, b) {
 }
 
 /**
- * @param {Record<string, object|null>} bands
- * @returns {Record<string, object|null>}
+ * @param {{x:number,y:number,width:number,height:number}|null} a
+ * @param {{x:number,y:number,width:number,height:number}|null} b
+ * @returns {boolean}
  */
-function copyBands(bands) {
-    const copy = {};
-    for (const region of RESIZE_BAND_REGIONS) {
-        const rect = bands[region];
-        copy[region] = rect
-            ? {x: rect.x, y: rect.y, width: rect.width, height: rect.height}
-            : null;
-    }
-    return copy;
+function sameBounds(a, b) {
+    if (!a || !b)
+        return a === b;
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
 export const ResizeBand = GObject.registerClass({
@@ -107,6 +103,7 @@ export const ResizeBand = GObject.registerClass({
         this._windowActor = windowActor;
         this._container = container;
         this._regions = new Map();
+        this._childBox = new Clutter.ActorBox();
         this._bands = null;
         this._frame = null;
         this._hover = null;
@@ -215,9 +212,9 @@ export const ResizeBand = GObject.registerClass({
         const bands = computeResizeBands({frame, bounds, scale: this._scale});
         const changed = !sameBands(this._bands, bands);
         if (changed)
-            this._bands = copyBands(bands);
+            this._bands = bands;
 
-        const childBox = new Clutter.ActorBox();
+        const childBox = this._childBox;
         for (const region of RESIZE_BAND_REGIONS) {
             const child = this._regions.get(region);
             const rect = bands[region];
@@ -270,6 +267,7 @@ export const ResizeBand = GObject.registerClass({
         this._visibleBinding?.unbind();
         this._visibleBinding = null;
         this._regions.clear();
+        this._childBox = null;
         this._bands = null;
         this._frame = null;
         try {
@@ -364,14 +362,3 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_STOP;
     }
 });
-
-/**
- * @param {{x:number,y:number,width:number,height:number}|null} a
- * @param {{x:number,y:number,width:number,height:number}|null} b
- * @returns {boolean}
- */
-function sameBounds(a, b) {
-    if (!a || !b)
-        return a === b;
-    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
