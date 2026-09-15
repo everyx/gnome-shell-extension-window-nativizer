@@ -145,7 +145,7 @@ exceeds the blur reach, so a strip from the middle is a settled profile. Geometr
 `SHADOW_PAD` is generated (`ADWAITA_STYLE.shadowPad`, `tools/gen-style.mjs`): the farthest
 Gaussian reach over every shadow set — `3 * 0.5 * blur + spread`, i.e. `3σ` with
 `σ = blur/2`, 26px for the largest layer — plus the 2px Cogl offscreen offset
-(`BAKE_ORIGIN`, `_clutter_actor_box_enlarge_for_effects`; not vendored). All sizes in logical px.
+(`EFFECT_PADDING_ORIGIN`, see below). All sizes in logical px.
 
 Slicing (`shadowSlices`): 8 rects (4 corners 1:1, 4 edges stretched from a 1px strip), no
 middle — the interior is the hollow mask of `decoration-model.md`.
@@ -157,9 +157,16 @@ the corner pulls the profile tighter for ~3σ along its edge, so sampling at the
 boundary would make the stretched edge darker and shorter.
 
 The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFFSET`, which
-is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from;
-both are Cogl's `_clutter_actor_box_enlarge_for_effects`, visible only in the `research/mutter`
-clone. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
+is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from.
+Both are Cogl's `_clutter_actor_box_enlarge_for_effects`, vendored at
+`vendor/mutter/clutter-actor-box.c` and parsed by `tools/gen-clutter.mjs` into
+`clutterEffectPadding.generated.js`; `shadowTexture.js`, `clipEffect.js`, `gen-shader.mjs`
+and `gen-style.mjs` all read that one generated source instead of each writing 2/3 by hand.
+Only the `3px` per-axis total is an upstream literal — it covers up to 1.75px on the
+bottom/right while leaving >0.75px on the top/left. The `2px` top/left **origin is derived**,
+not a literal: it is what `box->x1 - (ceilf (box->x2 + 0.75f) - width - 3)` yields on an
+integer-aligned box. The 2/1 split therefore only holds when the box is integer-aligned;
+the per-axis total stays 3. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
 measured role in hiding subpixel seams is in `decoration-alignment.md`.
 
 Caching (`pipelines`): a map from `styleKey(radius, shadows)` — which joins

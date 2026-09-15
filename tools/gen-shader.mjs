@@ -15,6 +15,8 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA } from '../src/lib/clutterEffectPadding.generated.js';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GTK_VENDOR = path.join(ROOT, 'vendor', 'gtk');
 const SHADER_SRC = path.join(GTK_VENDOR, 'gskgpuboxshadow.glsl');
@@ -87,10 +89,10 @@ uniform vec2 uPad;          // Shadow actor padding per side (px)
 const float PI = 3.141592653589793;
 const float SQRT1_2 = 0.7071067811865475;
 
-// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects)
+// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
 // Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
-const vec2 FBO_OFFSET = vec2(2.0, 2.0);
-const vec2 FBO_EXTRA  = vec2(3.0, 3.0);
+const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
+const vec2 FBO_EXTRA  = vec2(${EFFECT_PADDING_EXTRA.toFixed(1)}, ${EFFECT_PADDING_EXTRA.toFixed(1)});
 
 // --- GTK4 native 2D analytic Gaussian convolution kernel ---
 

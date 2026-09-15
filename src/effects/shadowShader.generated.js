@@ -17,7 +17,7 @@ uniform vec2 uPad;          // Shadow actor padding per side (px)
 const float PI = 3.141592653589793;
 const float SQRT1_2 = 0.7071067811865475;
 
-// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects)
+// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
 // Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
 const vec2 FBO_OFFSET = vec2(2.0, 2.0);
 const vec2 FBO_EXTRA  = vec2(3.0, 3.0);

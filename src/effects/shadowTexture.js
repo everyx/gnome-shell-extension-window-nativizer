@@ -5,6 +5,7 @@
 import Cogl from 'gi://Cogl';
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
+import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 
 // px; derived by tools/gen-style.mjs from the farthest Gaussian reach over every shadow
@@ -13,12 +14,12 @@ export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 
 const LAYER_COUNT = 3; // shader has 3 layers
 
-// Cogl/Clutter `_clutter_actor_box_enlarge_for_effects` (clutter-actor-box.c; not vendored,
-// source visible in the research/mutter clone): an offscreen is padded 2px top/left and 1px
-// right/bottom, 3px total per axis. The bake buffer carries the 3px (`BAKE_EXTRA`), and the
-// shader's window origin sits at the 2px offset (`BAKE_ORIGIN`, mirrors gen-shader.mjs FBO_OFFSET).
-const BAKE_ORIGIN = 2;
-const BAKE_EXTRA = 3;
+// Cogl/Clutter `_clutter_actor_box_enlarge_for_effects` (vendor/mutter/clutter-actor-box.c,
+// parsed by tools/gen-clutter.mjs): an offscreen is padded 2px top/left and 1px right/bottom,
+// 3px total per axis. The bake buffer carries the 3px (`BAKE_EXTRA`), and the shader's window
+// origin sits at the 2px offset (`BAKE_ORIGIN`), both from the single generated source.
+const BAKE_ORIGIN = EFFECT_PADDING_ORIGIN;
+const BAKE_EXTRA = EFFECT_PADDING_EXTRA;
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 

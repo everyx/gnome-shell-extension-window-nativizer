@@ -14,6 +14,7 @@ import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
+import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
 uniform vec2 uSize;       // Actor size in px
@@ -22,9 +23,9 @@ uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uClearRing; // 1 erases client shadow ring, 0 keeps it
 
-// _clutter_actor_box_enlarge_for_effects pads 2px top-left, 3px total
-const vec2 FBO_OFFSET = vec2(2.0, 2.0);
-const vec2 FBO_EXTRA  = vec2(3.0, 3.0);
+// _clutter_actor_box_enlarge_for_effects (tools/gen-clutter.mjs) pads 2px top-left, 3px total
+const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
+const vec2 FBO_EXTRA  = vec2(${EFFECT_PADDING_EXTRA.toFixed(1)}, ${EFFECT_PADDING_EXTRA.toFixed(1)});
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
