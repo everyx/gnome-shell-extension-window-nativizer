@@ -7,7 +7,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {frameFromInsets, ZERO_INSETS} from '../lib/frame.js';
+import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 import {
     setPipelineOpacity,
     shadowGeometry,
@@ -180,9 +180,10 @@ export const ShadowActor = GObject.registerClass({
     // `this.width/height` is this actor's live size (the window actor plus `2*PAD`) and the
     // body follows from the stored insets, so the cast rect tracks a resize every frame
     // instead of waiting for the manager's 50ms reconcile. No insets = the body is the
-    // whole actor, which is what a bare toplevel is.
+    // whole actor, which is what a bare toplevel is. Same fallback as the clip: insets that
+    // outrun the actor leave no body, and the whole actor is the cast then.
     _castRect() {
-        return frameFromInsets({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
+        return bodyFrame({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
     }
 
     // Cache slices/boxes per cast rect; sources are style-fixed.

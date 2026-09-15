@@ -11,7 +11,7 @@ import {
     RESIZE_BAND_REGIONS,
     RESIZE_CORNER,
 } from '../src/lib/resizeBand.js';
-import {shouldShowResizeBand} from '../src/lib/detector.js';
+import {shouldShowResizeBand, evaluateWindowActions} from '../src/lib/detector.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 
@@ -151,6 +151,26 @@ describe('computeResizeBands', () => {
                 }
             }
         }
+    });
+
+    it('gives the column at right - 24 to the corner, the one column GTK reads as the edge', () => {
+        const frame = rect(100, 50, 400, 300);
+        const bands = computeResizeBands({frame});
+
+        // GTK's get_edge_for_coordinates tests `x > right - 24` strictly, so the column at
+        // exactly right - 24 is the north edge there. Our corner region starts at
+        // `right - rx` inclusive, so we call it the corner. The two agree everywhere else;
+        // this pins the one-column difference so it cannot drift silently, and records that
+        // it is not worth a +1 offset for a single pixel (docs/decoration-model.md § The
+        // resize band).
+        const x = frame.x + frame.width - RESIZE_CORNER;
+        expect(contains(bands.ne_n, x, frame.y - RESIZE_BAND)).toBeTrue();
+        expect(contains(bands.n, x, frame.y - RESIZE_BAND)).toBeFalse();
+
+        // Same column on the south edge, and the mirrored row on the right edge.
+        const y = frame.y + frame.height - RESIZE_CORNER;
+        expect(contains(bands.se_e, frame.x + frame.width, y)).toBeTrue();
+        expect(contains(bands.e, frame.x + frame.width, y)).toBeFalse();
     });
 
     it('leaves the pixels more than 12px out from the frame to the desktop', () => {
@@ -300,6 +320,7 @@ describe('region directions', () => {
 
 describe('shouldShowResizeBand', () => {
     const plain = {frameWidth: 800, frameHeight: 600, allowsResize: true, resizeBand: true};
+    const ring = (left, right, top, bottom) => ({...plain, insets: {left, right, top, bottom}});
 
     it('shows the band on a plain resizable window', () => {
         expect(shouldShowResizeBand(plain)).toBeTrue();
@@ -307,6 +328,27 @@ describe('shouldShowResizeBand', () => {
 
     it('builds nothing when the setting is off', () => {
         expect(shouldShowResizeBand({...plain, resizeBand: false})).toBeFalse();
+    });
+
+    it('drops the band when we draw nothing on the window', () => {
+        // The band follows the decoration: a `none` rule (or a structurally ineligible
+        // window) means the window keeps every click it had.
+        expect(shouldShowResizeBand({...plain, decorated: false})).toBeFalse();
+    });
+
+    it('keeps the band on a bare X11 window, whose clip the detector still draws', () => {
+        // The WeChat/CEF case: no declared ring, so the shadow stays Mutter's, but the
+        // corners are ours (drawClip true) and the band must stay with them.
+        const actions = evaluateWindowActions({
+            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            isX11: true, wmClass: 'wechat',
+        });
+        expect(actions.drawClip).toBeTrue();
+        expect(shouldShowResizeBand({
+            ...plain,
+            insets: {left: 0, right: 0, top: 0, bottom: 0},
+            decorated: actions.drawShadow || actions.drawClip,
+        })).toBeTrue();
     });
 
     it('skips a window that cannot be resized', () => {
@@ -324,27 +366,41 @@ describe('shouldShowResizeBand', () => {
         expect(shouldShowResizeBand({...plain, nativeLikeCorners: true})).toBeFalse();
     });
 
+    it('skips an SSD window: Mutter drew the frame and runs the resize grab from it', () => {
+        expect(shouldShowResizeBand({...plain, hasSsd: true})).toBeFalse();
+        // The flag alone is enough; a wide declared ring is not needed for the skip.
+        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasSsd: true})).toBeFalse();
+    });
+
     it('skips a window whose declared margin is already a native-width handle', () => {
-        // buffer - frame = 24 on each axis → 12px per side, GTK4's floor.
-        const wide = {...plain, bufferWidth: 824, bufferHeight: 624};
-        expect(shouldShowResizeBand(wide)).toBeFalse();
+        // 12px on every side is GTK4's RESIZE_HANDLE_SIZE floor.
+        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeFalse();
+        expect(shouldShowResizeBand(ring(25, 25, 25, 25))).toBeFalse();
     });
 
     it('keeps the band while either axis is narrower than a native handle', () => {
         // One axis already native, the other a hair under: still awkward to grab.
-        expect(shouldShowResizeBand({
-            ...plain, bufferWidth: 824, bufferHeight: 622,
-        })).toBeTrue();
-        expect(shouldShowResizeBand({
-            ...plain, bufferWidth: 822, bufferHeight: 624,
-        })).toBeTrue();
+        expect(shouldShowResizeBand(ring(12, 12, 11, 11))).toBeTrue();
+        expect(shouldShowResizeBand(ring(11, 11, 12, 12))).toBeTrue();
+    });
+
+    it('reads the ring per side, not as the average of the two', () => {
+        // TLBR 0,24,0,24 averages 12 on each axis but has no margin on the left or the
+        // top, so it is not "12 on every side" and the band stays. An average would hide
+        // the zero side and skip the band.
+        expect(shouldShowResizeBand(ring(0, 24, 0, 24))).toBeTrue();
+        expect(shouldShowResizeBand(ring(24, 0, 24, 0))).toBeTrue();
+        // The symmetric ring of the same total is a native handle and is skipped.
+        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeFalse();
     });
 
     it('does not read a margin when the window has no ring at all', () => {
+        expect(shouldShowResizeBand(ring(0, 0, 0, 0))).toBeTrue();
         expect(shouldShowResizeBand({...plain, bufferWidth: 800, bufferHeight: 600})).toBeTrue();
     });
 
-    it('skips a window smaller than two handles', () => {
+    it('skips a window smaller than two corner reaches', () => {
+        expect(MIN_BAND_WINDOW).toBe(2 * RESIZE_CORNER);
         expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(shouldShowResizeBand({...plain, frameHeight: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW, frameHeight: MIN_BAND_WINDOW}))

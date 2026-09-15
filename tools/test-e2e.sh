@@ -87,9 +87,11 @@ CHECK_RESULT="$(shell_eval '
     const parent = winActor.get_parent();
     const children = parent ? parent.get_children().map(c => c.toString()) : [];
     const hasShadow = children.some(c => c.includes("WindowNativizerShadowActor"));
+    const hasBand = children.some(c => c.includes("WindowNativizerResizeBand"));
     return JSON.stringify({
         hasClip,
         hasShadow,
+        hasBand,
         actorCount: actors.length
     });
 })()
@@ -104,7 +106,11 @@ if ! echo "$CHECK_RESULT" | grep -q 'hasShadow.*true'; then
     echo "!! WindowNativizerShadowActor was not inserted below window actor!"
     exit 1
 fi
-echo ">> Clip effect and shadow actor successfully verified on active window."
+if ! echo "$CHECK_RESULT" | grep -q 'hasBand.*true'; then
+    echo "!! WindowNativizerResizeBand was not created for the narrow-margin window!"
+    exit 1
+fi
+echo ">> Clip effect, shadow actor and resize band successfully verified on active window."
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
 for i in 1 2 3 4 5; do
@@ -131,9 +137,11 @@ CLEANUP_CHECK="$(shell_eval '
     const actors = global.get_window_actors();
     const windowGroupChildren = global.window_group.get_children().map(c => c.toString());
     const leakedShadows = windowGroupChildren.filter(c => c.includes("WindowNativizerShadowActor"));
+    const leakedBands = windowGroupChildren.filter(c => c.includes("WindowNativizerResizeBand"));
     return JSON.stringify({
         actorsLength: actors.length,
-        leakedShadowCount: leakedShadows.length
+        leakedShadowCount: leakedShadows.length,
+        leakedBandCount: leakedBands.length
     });
 })()
 ')"
@@ -142,13 +150,68 @@ if ! echo "$CLEANUP_CHECK" | grep -q 'leakedShadowCount.*:0'; then
     echo "!! Leaked shadow actors detected in windowGroup after window close!"
     exit 1
 fi
+if ! echo "$CLEANUP_CHECK" | grep -q 'leakedBandCount.*:0'; then
+    echo "!! Leaked resize band detected in windowGroup after window close!"
+    exit 1
+fi
 echo ">> 0 leaked actors confirmed."
 
-# 6. Test extension disable / re-enable cycle
-echo ">> [test-e2e] Testing extension disable / re-enable lifecycle..."
+# 6. Test the band lifecycle across an extension disable / re-enable, with a window open:
+#    the band is the only actor that takes clicks, so one that survived disable would keep
+#    swallowing them. tools/probe-window.js is a plain non-CSD GTK4 window that stays open.
+echo ">> [test-e2e] Testing extension disable / re-enable lifecycle with an open window..."
+"$DEV" app gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+PROBE_PID=$!
+PROBE_UP=0
+for i in $(seq 1 30); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -gt 0 ]]; then
+        PROBE_UP=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$PROBE_UP" -ne 1 ]]; then
+    echo "!! Timeout waiting for the probe window to map!"
+    kill "$PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+sleep 0.2
+
+band_count() {
+    shell_eval '
+    (() => {
+        const bands = global.window_group.get_children().filter(c =>
+            c.toString().includes("WindowNativizerResizeBand"));
+        return JSON.stringify({bandCount: bands.length});
+    })()
+    ' | grep -o '[0-9]\+' || echo "0"
+}
+
+if [[ "$(band_count)" -lt 1 ]]; then
+    echo "!! No resize band on the open probe window!"
+    kill "$PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+
 "$DEV" ext disable "$UUID" >/dev/null
+if [[ "$(band_count)" -ne 0 ]]; then
+    echo "!! Resize band survived extension disable (it would keep taking clicks)!"
+    kill "$PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+sleep 0.1
+
 "$DEV" ext enable "$UUID" >/dev/null
-echo ">> Extension reload lifecycle completed."
+sleep 0.2
+if [[ "$(band_count)" -lt 1 ]]; then
+    echo "!! Resize band was not rebuilt after the extension was re-enabled!"
+    kill "$PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+echo ">> Band lifecycle across disable / re-enable confirmed."
+kill "$PROBE_PID" 2>/dev/null || true
+sleep 0.2
 
 # 7. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
@@ -193,12 +256,12 @@ if offending:
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
-echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect & WindowNativizerShadowActor attached)"
+echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
-echo "   - Window Destruction: PASSED (0 leaked shadow actors)"
-echo "   - Extension Reload: PASSED"
+echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
+echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 echo "   - Log Audit: PASSED (0 ERROR, 0 CRITICAL, 0 WARNING)"
 echo "================================================================"
 exit 0

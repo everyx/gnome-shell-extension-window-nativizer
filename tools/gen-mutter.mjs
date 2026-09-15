@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * gen-mutter.mjs - Parses Mutter shadow parameters from vendor/mutter/meta-shadow-factory.c
- * and MetaWindowType from vendor/mutter/window.h, generating src/lib/mutterRules.generated.js.
+ * gen-mutter.mjs - Reads vendor/mutter/meta-shadow-factory.c and vendor/mutter/window.h
+ * and generates src/lib/mutterRules.generated.js (the MetaWindowType and
+ * MetaWindowClientType enums).
  *
- * Design: narrow parser + assertions. Parses the normal window's shadow radius out of
- * default_shadow_classes, plus the window type enums, to eliminate enum drift.
+ * Design: narrow parser + assertions. The enums are generated to eliminate enum drift;
+ * default_shadow_classes is parsed too but only validated - the tuple shape is asserted so a
+ * format change in Mutter fails the build, and nothing is emitted from it (the radius the
+ * decoration threshold once used has no reader left).
  *
  * Usage: node tools/gen-mutter.mjs [--check]
  *   --check: Verifies generated results match existing files (used by CI / check-style), exits with 1 if mismatch.
@@ -33,7 +36,8 @@ function parseParams(tupleStr) {
     if (nums.length !== 5 || nums.some(n => Number.isNaN(n)))
         throw new Error(`[gen-mutter] Cannot parse MetaShadowParams: "${tupleStr}"`);
     const [radius, top_fade, x_offset, y_offset, opacity] = nums;
-    // Only radius is generated; the other four are parsed to pin Mutter's tuple shape, so a format change fails the build.
+    // Nothing is generated from this tuple: it is parsed to pin Mutter's five-field shape
+    // (and per-field type), so a format change fails the build instead of silently passing.
     return {
         radius,
         topFade: top_fade,

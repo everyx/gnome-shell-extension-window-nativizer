@@ -179,6 +179,7 @@ export function isWindowTiled(win, options = {}) {
  * @property {number} bufferHeight
  * @property {number} frameWidth
  * @property {number} frameHeight
+ * @property {import('./frame.js').Insets|null} [insets=null] - Declared ring per side; the widths above are the totals fallback
  * @property {number} [monitorScale=1]
  * @property {boolean} [isMaximized=false]
  * @property {boolean} [isFullscreen=false]
@@ -199,18 +200,36 @@ export function isWindowTiled(win, options = {}) {
  */
 
 /**
- * Whether the window gets the resize band. Input, not decoration: the band changes
- * where a drag starts, not what is drawn, so a rule does not turn it off and the
- * window's own corners do not earn it one. See docs/decoration-model.md § The resize band.
+ * Smallest declared margin on each axis. The ring is declared per side (`_GTK_FRAME_EXTENTS`
+ * LTRB, read as `buffer_rect - frame_rect`), so "at least 12 on every side" is the minimum
+ * per axis, not the per-axis average a two-sided total gives: a 0,24 ring is not 12 a side.
+ * On non-negative values `min > 0` and `avg > 0` agree, so `declaresOwnShadow()` reads the
+ * same either way. The widths are the fallback for a caller that only has totals.
+ * @param {object} params
+ * @param {import('./frame.js').Insets|null} params.insets
+ * @returns {{sideW: number, sideH: number}}
+ */
+function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {
+    if (insets)
+        return {sideW: Math.min(insets.left, insets.right), sideH: Math.min(insets.top, insets.bottom)};
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
+    return {sideW: w / 2, sideH: h / 2};
+}
+
+/**
+ * Whether the window gets the resize band. It follows the decoration: a window we draw
+ * nothing on (a `none` rule, or a structurally ineligible one) keeps every click it had,
+ * and a window that already handles its own resize never gets one. See
+ * docs/decoration-model.md § The resize band.
  *
  * The declared-margin check is a **proxy**: the client's real handle width is not
  * observable (Chromium draws 10px no matter how wide its ring is), so this only skips a
- * window whose ring is *obviously* wide enough — at least `RESIZE_BAND` on every side,
- * which is the toolkit's own floor. `Math.min` because one narrow axis is enough to make
- * the window awkward to grab, and the ring is read the one way the rest of the code reads
- * a margin (`computeInsets`/`declaresOwnShadow`, not a second reading path).
+ * window whose ring is *obviously* wide enough - at least `RESIZE_BAND` on every side, which
+ * is the toolkit's own floor. The ring is read the one way the rest of the code reads a
+ * margin (`buffer_rect - frame_rect`, `declaresOwnShadow`), per side.
  * @param {object} params
  * @param {boolean} [params.resizeBand=true]
+ * @param {boolean} [params.decorated=true] - Whether we draw anything on the window at all
  * @param {boolean} [params.allowsResize=true]
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
@@ -218,6 +237,7 @@ export function isWindowTiled(win, options = {}) {
  * @param {boolean} [params.hasTileMatch=false]
  * @param {boolean} [params.nativeLikeCorners=false]
  * @param {boolean} [params.hasSsd=false]
+ * @param {import('./frame.js').Insets|null} [params.insets=null] - Declared ring, per side
  * @param {number} [params.bufferWidth=0]
  * @param {number} [params.bufferHeight=0]
  * @param {number} [params.frameWidth=0]
@@ -226,25 +246,30 @@ export function isWindowTiled(win, options = {}) {
  */
 export function shouldShowResizeBand({
     resizeBand = true,
+    decorated = true,
     allowsResize = true,
     isMaximized = false, isFullscreen = false,
     tiled = false, hasTileMatch = false,
     nativeLikeCorners = false,
     hasSsd = false,
+    insets = null,
     bufferWidth = 0, bufferHeight = 0,
     frameWidth = 0, frameHeight = 0,
 } = {}) {
-    if (!resizeBand || !allowsResize)
+    if (!resizeBand || !allowsResize || !decorated)
         return false;
     if (isMaximized || isFullscreen || tiled || hasTileMatch)
         return false;
     // A window that already has the Adwaita look has a native-width band of its own.
     if (nativeLikeCorners)
         return false;
+    // Mutter's own frame carries the resize handles; a band would only take clicks the
+    // frame already owns. `win.decorated` is a policy flag, but no `_MUTTER_FRAME_FOR`
+    // check exists on the GJS side, and the flag is the best reading there is.
+    if (hasSsd)
+        return false;
 
-    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
-    const sideW = w / 2;
-    const sideH = h / 2;
+    const {sideW, sideH} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     // Its own handle is already at least as wide as a native one on every side.
     if (declaresOwnShadow({hasSsd, sideW, sideH}) && Math.min(sideW, sideH) >= RESIZE_BAND)
         return false;
@@ -258,6 +283,7 @@ export function shouldShowResizeBand({
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
+    insets = null,
     monitorScale = 1,
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
@@ -281,9 +307,9 @@ export function evaluateWindowActions({
     if (!eligibility.eligible)
         return {drawShadow: false, drawClip: false, style, reason: eligibility.reason};
 
-    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
+    const {sideW, sideH} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const baseline = inferDecorationBaseline({
-        isX11, sideW: w / 2, sideH: h / 2, hasSsd, nativeLikeCorners,
+        isX11, sideW, sideH, hasSsd, nativeLikeCorners,
     });
 
     const rule = resolveRule(wmClass, rules, {
@@ -306,7 +332,7 @@ export function evaluateWindowActions({
     corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
-    const ownRing = declaresOwnShadow({hasSsd, sideW: w / 2, sideH: h / 2});
+    const ownRing = declaresOwnShadow({hasSsd, sideW, sideH});
 
     // No rule: ring was painted for the corners we replace, so the shadow becomes ours.
     if (!rule && corners && ownRing)
@@ -366,8 +392,8 @@ export function suggestedRuleState(params) {
     if (drawShadow || drawClip)
         return RuleState.NONE;
 
-    const {w, h} = computeInsets(kind.bufferWidth, kind.bufferHeight, kind.frameWidth, kind.frameHeight);
-    if (hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, sideW: w / 2, sideH: h / 2}))
+    const {sideW, sideH} = declaredSides(kind);
+    if (hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, sideW, sideH}))
         return RuleState.CORNERS;
 
     return RuleState.BOTH;

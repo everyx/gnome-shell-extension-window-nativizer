@@ -65,10 +65,10 @@ inference, not to overrule a structural fact (layer 1) or a policy (layer 4). Se
 
 ## When a window's corners already look like ours
 
-`nativeLikeCorners.js` answers this, and only the corner axis consults it. Nothing
-here claims a window is native: most of what it detects reimplements the Adwaita look
-outside GNOME. Every provider is a library the process maps, and all of them are
-visible in the same place:
+`nativeLikeCorners.js` answers this, and both the corner axis and the resize band's
+eligibility consult it. Nothing here claims a window is native: most of what it detects
+reimplements the Adwaita look outside GNOME. Every provider is a library the process maps,
+and all of them are visible in the same place:
 
 | Provider | How it is visible |
 |---|---|
@@ -232,6 +232,16 @@ edge, the way the toolkit's own 8-way mapping does - and it is why the narrow st
 edge next to a corner belongs to the corner, not to the edge. The twelve regions are pairwise
 disjoint, so a point has one direction.
 
+**The one column where we differ from GTK.** `get_edge_for_coordinates` tests the reach of
+the right and bottom corner with a strict inequality (`x > right - 24`, `y > bottom - 24`), so
+the column at exactly `right - 24` is the edge there. Our corner region starts at
+`right - rx` *inclusive*, so we call that one column the corner. (The left and top reaches
+are `x < left + 24`, which is strict the other way, and there our half-open rectangles already
+agree.) The two agree on every other pixel; we do not add a `+1` offset to match, because the
+offset would have to be threaded through all twelve rectangles and every bound, for a single
+pixel whose direction is one of the two it sits between anyway. The difference is pinned by a
+test (`tests/resizeBand.test.js`) so it cannot drift silently.
+
 Three things about the extent:
 
 - **It hugs the body, not the shadow.** The band is `frame_rect` grown by 12px, so a window
@@ -247,19 +257,31 @@ Three things about the extent:
 - **It is clipped to the monitor.** A region that falls off the screen is dropped, so a window
   flush against the edge adds nothing there.
 
-Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): resizable,
-not maximized, fullscreen, tiled or tile-matched, not already Adwaita-looking (that window
-has a band), and not already declaring a margin of at least 12px per side.
+Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): a window
+we decorate at all (a `none` rule, or one that fails structural eligibility, draws nothing and
+keeps every click it had), resizable, not maximized, fullscreen, tiled or tile-matched, not
+already Adwaita-looking (that window has a band), not an SSD window (Mutter drew the frame and
+runs the resize grab from it), and not already declaring a margin of at least 12px per side.
 
 That last condition is a **proxy**, not a measurement: the width of the client's own handle is
 not introspectable (Chromium answers a 25px ring with a 10px border), so the rule only skips a
-window whose declared margin is *obviously* wide enough - at least `RESIZE_BAND` on both axes,
-compared with `Math.min` so a single narrow axis is enough to keep the band. The margin is the
-same reading the shadow axis uses (`computeInsets`/`declaresOwnShadow` over `buffer_rect -
-frame_rect`), not a second path. Below the minimum, at least 2×12px per side (a 1×1 helper is
-not a window). A rule does not turn it off - a `none` rule answers "do not draw my decoration",
-not "do not handle my input". The `resize-band` setting does, and with it off no band is built
-at all.
+window whose declared margin is *obviously* wide enough - at least `RESIZE_BAND` **on every
+side**, which is why the ring is read per side (`Math.min(left, right)`, `Math.min(top,
+bottom)`) and not as the average of a two-sided total: a 0,24 ring averages 12 but has no
+margin on one side. The margin is the same reading the shadow axis uses
+(`insetsFromRects`/`declaresOwnShadow` over `buffer_rect - frame_rect`), not a second path.
+Below the minimum, at least `2 * RESIZE_CORNER = 48px` per side - the floor that keeps the
+corner reaches from overlapping, see below - and a 1×1 helper is not a window. The
+`resize-band` setting turns the whole thing off.
+
+**Why the floor is 48, not 24.** On a side shorter than twice `RESIZE_CORNER`, the two corner
+reaches would overlap, so `computeResizeBands` halves them (`rx = min(c, w/2)`) and the two
+corners split the short side evenly. That is safe geometry, but it is no longer GTK's: GTK's
+`get_edge_for_coordinates` is first-match-wins with a fixed 24px (`x < left + 24` is tested
+before the right corner), so on a 30px side it hands the first 24px to NW and only the rest to
+NE, where we split the side 15/15. The direction would disagree with GTK, which is what this
+model claims not to do. So a window with any side under 48px gets no band, and the halving
+stays only as a safety net for a caller that reaches the geometry directly.
 
 ### It is the first thing here that takes clicks
 
@@ -306,16 +328,19 @@ the reading being one-sided; the last is simply not verified yet.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
-- **A window whose body cannot be placed inside its buffer is never rounded**,
-  and a bare one still gets our shadow: square corners under it for that pass.
-  `_frameInsets()` answers null when the two rectangles live in different coordinate
-  frames (a framed X11 window reports its buffer in frame coordinates); the guard exists
-  so the clip never cuts the client's own ring (rounding the actor instead is the cut it
-  prevents). It no longer consults any actor size: the body is placed against the actor's
-  live size at paint time, so a resize cannot turn this into "no body" for a frame. A
-  window that *declared* a ring gets no shadow in that pass either (`clearRing` without a
-  clip defers it), so the visible case is a bare framed X11 window. Tiled windows reach
-  the same square-corner-with-shadow look on purpose (`style.tiled` has radius 0 and
+- **A window whose body cannot be placed inside its buffer is never rounded.**
+  `_frameInsets()` answers null only when the frame does not fit inside the buffer at all;
+  the guard keeps the clip from cutting a ring it cannot place. A framed X11 window is not
+  that case: Mutter sets `buffer_rect = frame->rect`, and `frame->rect` is the frame grown
+  by the frame's **invisible borders** (`window-x11.c`, `meta-x11-frame.c`), so the insets
+  are that border width (≥ 0) and the body lands exactly on `frame_rect`. Measured in the
+  nested session on a GTK3 SSD window: frame 500×437, buffer 550×487, insets 25 on each
+  side, and the surface child the clip attaches to is buffer-sized (550×487) - the clip
+  cuts the frame rect, not the client surface, so it is not new harm. It no longer consults
+  any actor size: the body is placed against the actor's live size at paint time, so a
+  resize cannot turn this into "no body" for a frame. A window that *declared* a ring gets
+  no shadow in a pass without a clip (`clearRing` without a clip defers it). Tiled windows
+  reach a square-corner-with-shadow look on purpose (`style.tiled` has radius 0 and
   no outline, *Which style applies*), as does `prefer-crisp-text` on a fractional
   monitor and a `shadow` rule.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever

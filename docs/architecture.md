@@ -9,8 +9,8 @@ tested without a session; the processes only gather inputs and apply results.
 | Module | Responsibility |
 |---|---|
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
-| `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`insetsFromRects` (pure) |
-| `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted only by the corner axis |
+| `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`bodyFrame`/`insetsFromRects` (pure) |
+| `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted by the corner axis and by the resize band's eligibility |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
@@ -95,14 +95,16 @@ See `decoration-model.md` § The resize band for why it exists and what it costs
 The actor to clip is not the body: a CSD window's actor is body plus the shadow ring the
 client painted (`buffer_rect - frame_rect`). The effect stores the ring as per-side insets and
 computes the body in `vfunc_paint_target` from the actor's live width/height
-(`frameFromInsets`), then removes only the four corner caps that lie inside the body's
+(`bodyFrame`), then removes only the four corner caps that lie inside the body's
 square bounds. Geometry is thus read in the paint that uses it, after Clutter has sized the
 offscreen; `setParams` carries the decisions (insets, radius, outline, clearRing) and may stay
 debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width or height
 ≤ 0) skips the pass: the shadow comes from the same actor, so there is no visible body to
-leave square. `inSquare = 1 - max(step(bodyEdge))` keeps the client-painted ring
-intact; `uClearRing` blends that mask away when the shadow is ours (see
-`decoration-model.md`: ring cleared exactly when shadow is ours).
+leave square. A degenerate *body*, though - insets that outrun the actor for the frame a
+resize passes through - does not: `bodyFrame` falls back to the whole actor, so the pass
+still runs and the window content is never dropped. `inSquare = 1 - max(step(bodyEdge))` keeps
+the client-painted ring intact; `uClearRing` blends that mask away when the shadow is ours
+(see `decoration-model.md`: ring cleared exactly when shadow is ours).
 
 Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)` — `d < 0` inside body,
 `d > 0` in removed corners, `d == 0` on boundary. Anti-alias: `corner = 1 - clamp(d+0.5)`,
@@ -187,7 +189,7 @@ carry map/close/minimize animations with no JS per frame. Inserted with
 
 Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the ring
 (`buffer_rect - frame_rect`) per side; null insets mean the whole actor. `_castRect()` computes
-`frameFromInsets(this.width/height, insets)` from the actor's live size on every paint, so
+`bodyFrame(this.width/height, insets)` from the actor's live size on every paint, so
 `cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
 `-PAD` from the window actor, so cast is `body` shifted by zero then grown.
 `shadowSlices(shadowGeometry(radius), cast.w, cast.h)` yields dest boxes and normalized sources;

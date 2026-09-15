@@ -11,8 +11,14 @@ export const RESIZE_BAND = 12;
 /** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (gtkwindow.c); see the regions below. */
 export const RESIZE_CORNER = 24;
 
-/** Thinnest window that gets a band; below it is a helper surface (wl-clipboard's 1×1), not a window. */
-export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
+/**
+ * Thinnest window that gets a band, `2 * RESIZE_CORNER` (48px). Below this, a side is
+ * shorter than the two corner reaches, and `computeResizeBands` has to halve them, which
+ * no longer matches GTK's fixed 24px `get_edge_for_coordinates` (see the note there).
+ * The floor keeps that divergence, and the helper surfaces it would band (wl-clipboard's
+ * 1x1), out of the session entirely.
+ */
+export const MIN_BAND_WINDOW = 2 * RESIZE_CORNER;
 
 /**
  * Regions, clockwise from the top edge. The four edges are named for their direction;
@@ -79,24 +85,11 @@ function emptyBands() {
 /**
  * The twelve regions tiling `frame`'s `RESIZE_BAND`-wide ring, each clipped to `bounds`.
  *
- * The ring is exactly GTK's input region: `update_realized_window_properties` grows the CSD
- * border box by `RESIZE_HANDLE_SIZE` (12) on every side, and clicks outside it go through -
- * so 12px out from the frame is as far as a band can reach, and as far as a pointer can be
- * delivered. Within that ring GTK picks a direction with `get_edge_for_coordinates`: a
- * pointer in an edge's band is the corner whenever the other axis is within
- * `RESIZE_HANDLE_CORNER_SIZE` (24) of the frame edge ("How resize corners extend"). So the
- * ring is cut twelve ways - four edges that stop 24px short of each end, and two regions per
- * corner: the 24px it takes along each neighbouring edge. Both halves of a corner resolve to
- * one direction, so the twelve are pairwise disjoint and a point has at most one direction.
- *
- * A corner's 24px reach lies *along* the edge, never *outward*: `get_edge_for_coordinates`
- * would extend a corner outward by the shadow, but the input region stops at
- * `RESIZE_HANDLE_SIZE`, so those pixels are click-through and the band may not claim them.
- *
- * Units are logical px on every scale. `frame` and the actor tree are both logical, and
- * GTK's 12/24 are logical too, so the monitor scale cancels and is never a multiplier —
- * but it must be positive, so a caller that cannot say which space it measured in gets no
- * band rather than one that silently means something else.
+ * Units are logical px at every scale; a non-positive or non-finite `scale` gets no band,
+ * so a caller that cannot say which space it measured in is never silently misread. The
+ * model (why 12, why a corner reaches 24 along an edge but only 12 outward, and the one
+ * pixel where our corner decision differs from GTK's) is in
+ * docs/decoration-model.md § The resize band.
  *
  * @param {object} params
  * @param {Rect} params.frame - Window body (`frame_rect`), logical px
@@ -118,7 +111,9 @@ export function computeResizeBands({frame, bounds = null, scale = 1} = {}) {
     const {x, y, width, height} = frame;
     // A corner reaches c px along an edge from the frame corner; two opposite corners
     // would meet and overlap on a side shorter than 2c, so the reach is halved there.
-    // The edge that remains between them then has zero width and is dropped as empty.
+    // MIN_BAND_WINDOW (2c) keeps a real session from reaching this, but the convergence
+    // stays as a safety net and still tiles without overlap. The edge that remains between
+    // them then has zero width and is dropped as empty.
     const rx = Math.min(c, width / 2);
     const ry = Math.min(c, height / 2);
     const rects = {

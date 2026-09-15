@@ -13,7 +13,7 @@ import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 
-import {frameFromInsets, ZERO_INSETS} from '../lib/frame.js';
+import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 
 const DECLARATIONS = `
 uniform vec2 uSize;       // Actor size in px
@@ -133,9 +133,10 @@ export const RoundedClipEffect = GObject.registerClass({
         if (!(width > 0) || !(height > 0))
             return;
 
-        const frame = frameFromInsets({width, height}, this._insets);
-        if (!(frame.width > 0) || !(frame.height > 0))
-            return;
+        // The ring can outrun the actor for the frame a resize passes through (insets are
+        // debounced, the actor is not). `bodyFrame` then returns the whole actor, so the pass
+        // still runs: a body with no area is not the same as a frame with nothing to draw.
+        const frame = bodyFrame({width, height}, this._insets);
 
         this.set_uniform_float(this._uSize, 2, [width, height]);
         this.set_uniform_float(this._uFrame, 4, [frame.x, frame.y, frame.width, frame.height]);

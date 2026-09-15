@@ -300,9 +300,10 @@ export class Manager {
         const clipTarget = target ?? this._getClipTarget(win, actor);
         // Attach/detach is a decision, not a frame measurement: it no longer depends on the
         // actor's current allocation (that is why a resize used to drop the effect for a
-        // frame). The one window that gets no effect is the one whose body has no place
-        // inside the actor at all (a framed X11 window, whose buffer and frame are reported
-        // in different coordinate frames) - a fact of the window, not of the frame painted.
+        // frame). The only window that gets no effect is one whose `_frameInsets` is null -
+        // a frame that does not fit inside its buffer at all. A framed X11 window is not
+        // that case: its buffer is the frame grown by the invisible borders, so it is
+        // clipped like any other (measured: the surface child is buffer-sized).
         const wanted = wantEffect && Boolean(insets);
 
         const hasClip = Boolean(state.clip);
@@ -376,7 +377,10 @@ export class Manager {
         // No clip → client's shadow still visible; defer ours to avoid double shadow.
         this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
-        this._syncResizeBand(win, shouldShowResizeBand(inputs), inputs);
+        this._syncResizeBand(win, shouldShowResizeBand({
+            ...inputs,
+            decorated: actions.drawShadow || actions.drawClip,
+        }), inputs);
 
         if (state.clip || state.shadow)
             this._applyStyle(win, actions.style, insets, actions.drawClip);
@@ -421,6 +425,9 @@ export class Manager {
         return {
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
+            // Per-side ring for the resize-band threshold, which asks about every side
+            // (`shouldShowResizeBand`); the shadow axis still reads the totals.
+            insets: insetsFromRects(b, f),
             monitorScale: this._getMonitorScale(win),
 
             isMaximized,
@@ -509,10 +516,11 @@ export class Manager {
     /**
      * @param {Meta.Window} win
      * @returns {import('./frame.js').Insets|null} Ring between the actor (buffer) and the
-     * body (`frame_rect`); null when the frame has no place inside the buffer, which is
-     * the framed-X11 coordinate mismatch. Deliberately does not look at any actor size:
-     * the body is placed against the actor's live size at paint time, so a lagging actor
-     * can never turn this into "no body".
+     * body (`frame_rect`). For an X11 SSD window Mutter sets `buffer_rect = frame->rect`,
+     * the frame grown by its invisible borders, so this is that border width (>= 0), not
+     * null. Null only when the frame does not fit inside the buffer at all. Deliberately
+     * does not look at any actor size: the body is placed against the actor's live size at
+     * paint time, so a lagging actor can never turn this into "no body".
      */
     _frameInsets(win) {
         return insetsFromRects(win.get_buffer_rect?.(), win.get_frame_rect?.());
