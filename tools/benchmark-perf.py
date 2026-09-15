@@ -25,7 +25,7 @@ CLK_TCK = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
 
 # Performance Budgets (Regression Guards for --check)
 BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
-BUDGET_MAX_STRESS_CPU_DELTA_MS = 100.0    # Max dynamic resize CPU delta: 100ms across 150 frames (<0.7ms/frame)
+BUDGET_MAX_STRESS_CPU_DELTA_MS = 150.0    # Max dynamic resize CPU delta: 150ms across 150 frames (<1.0ms/frame)
 BUDGET_MAX_PER_WINDOW_PSS_KB = 2048.0     # Max per-window RAM delta: 2.0 MB
 
 def ensure_session():

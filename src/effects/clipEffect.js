@@ -72,13 +72,26 @@ export const RoundedClipEffect = GObject.registerClass({
         this._uOutline = this.get_uniform_location('uOutline');
         this._uClearRing = this.get_uniform_location('uClearRing');
 
-        // Decisions only; geometry lives in vfunc_paint_target. Sentinel -1: no window
-        // reaches it, first setParams always uploads.
+        // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
-        this._radius = -1;
+        this._radius = undefined;
         this._outline = undefined;
         this._outlineVec = [0, 0, 0, 0];
-        this._clearRing = false;
+        this._clearRing = undefined;
+
+        // Cached geometry and reusable arrays to avoid per-frame allocations and
+        // redundant GPU uniform uploads.
+        this._lastWidth = 0;
+        this._lastHeight = 0;
+        this._lastFrameX = -1;
+        this._lastFrameY = -1;
+        this._lastFrameW = -1;
+        this._lastFrameH = -1;
+
+        this._sizeVec = [0, 0];
+        this._frameVec = [0, 0, 0, 0];
+        this._radiusVec = [0];
+        this._clearRingVec = [0];
     }
 
     vfunc_build_pipeline() {
@@ -102,18 +115,42 @@ export const RoundedClipEffect = GObject.registerClass({
             this._clearRing === clearRing)
             return;
 
+        const insetsChanged = last.left !== insets.left || last.top !== insets.top ||
+            last.right !== insets.right || last.bottom !== insets.bottom;
+        const radiusChanged = this._radius !== radius;
+        const outlineChanged = this._outline !== outline;
+        const clearRingChanged = this._clearRing !== clearRing;
+
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
         this._radius = radius;
         this._outline = outline;
-        this._outlineVec = outline
-            ? [
-                outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
-                outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
-                outline.color[2] > 1 ? outline.color[2] / 255 : outline.color[2],
-                outline.alpha,
-            ]
-            : [0, 0, 0, 0];
         this._clearRing = clearRing;
+
+        if (radiusChanged) {
+            this._radiusVec[0] = radius;
+            this.set_uniform_float(this._uRadius, 1, this._radiusVec);
+        }
+
+        if (outlineChanged) {
+            this._outlineVec = outline
+                ? [
+                    outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
+                    outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
+                    outline.color[2] > 1 ? outline.color[2] / 255 : outline.color[2],
+                    outline.alpha,
+                ]
+                : [0, 0, 0, 0];
+            this.set_uniform_float(this._uOutline, 4, this._outlineVec);
+        }
+
+        if (clearRingChanged) {
+            this._clearRingVec[0] = clearRing ? 1 : 0;
+            this.set_uniform_float(this._uClearRing, 1, this._clearRingVec);
+        }
+
+        if (insetsChanged)
+            this._lastFrameW = -1;
+
         this.queue_repaint();
     }
 
@@ -139,11 +176,26 @@ export const RoundedClipEffect = GObject.registerClass({
         // still runs: a body with no area is not the same as a frame with nothing to draw.
         const frame = bodyFrame({width, height}, this._insets);
 
-        this.set_uniform_float(this._uSize, 2, [width, height]);
-        this.set_uniform_float(this._uFrame, 4, [frame.x, frame.y, frame.width, frame.height]);
-        this.set_uniform_float(this._uRadius, 1, [this._radius]);
-        this.set_uniform_float(this._uOutline, 4, this._outlineVec);
-        this.set_uniform_float(this._uClearRing, 1, [this._clearRing ? 1 : 0]);
+        if (this._lastWidth !== width || this._lastHeight !== height) {
+            this._sizeVec[0] = width;
+            this._sizeVec[1] = height;
+            this.set_uniform_float(this._uSize, 2, this._sizeVec);
+            this._lastWidth = width;
+            this._lastHeight = height;
+        }
+
+        if (this._lastFrameX !== frame.x || this._lastFrameY !== frame.y ||
+            this._lastFrameW !== frame.width || this._lastFrameH !== frame.height) {
+            this._frameVec[0] = frame.x;
+            this._frameVec[1] = frame.y;
+            this._frameVec[2] = frame.width;
+            this._frameVec[3] = frame.height;
+            this.set_uniform_float(this._uFrame, 4, this._frameVec);
+            this._lastFrameX = frame.x;
+            this._lastFrameY = frame.y;
+            this._lastFrameW = frame.width;
+            this._lastFrameH = frame.height;
+        }
 
         super.vfunc_paint_target(node, paintContext);
     }

@@ -196,7 +196,8 @@ export const ShadowActor = GObject.registerClass({
             previous.width === cast.width && previous.height === cast.height)
             return;
         style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
-        style.boxes = style.slices.map(() => new Clutter.ActorBox());
+        if (!style.boxes)
+            style.boxes = style.slices.map(() => new Clutter.ActorBox());
         style.cast = cast;
     }
 
