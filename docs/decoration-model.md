@@ -38,7 +38,7 @@ rounding them?             the client's own ring is cleared exactly when the sha
      `declaresOwnShadow()` is `sideW > 0 || sideH > 0`, and why its reason string
      carries the measured margin and no threshold (`has-csd(4.0x4.0)`). A radius cannot
      answer this question: GTK4 floors a CSD window's margin at 12 logical px
-     (`gtkwindow.c`: `shadow_width = MAX(css_extents, RESIZE_HANDLE_SIZE)`), so no
+     (`vendor/gtk/gtkwindow.c`: `shadow_width = MAX(css_extents, RESIZE_HANDLE_SIZE)`), so no
      radius separates a 12px resize handle from a 12px shadow. The axis is then
      **one-sided**: "something else already paints one" is reliable, while "nobody
      does, so we add one" misses a client that draws its
@@ -201,7 +201,8 @@ own, with a cache and no unit test behind it, and not part of the current model.
 
 The decoration is not the only thing a non-Adwaita window gets wrong: its grab band is
 narrower too. A native window answers a drag in the strip hugging its body - GTK4 floors its
-input region at `RESIZE_HANDLE_SIZE 12` (`gtkwindow.c`), GTK3 with adw-gtk3 takes 10px from the
+input region at `RESIZE_HANDLE_SIZE 12` (`vendor/gtk/gtkwindow.c`, generated into
+`lib/gtkRules.generated.js`), GTK3 with adw-gtk3 takes 10px from the
 theme's `decoration { margin: 10px }` - so that strip is the handle every native window offers.
 A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
 
@@ -213,9 +214,12 @@ The geometry is pure (`lib/resizeBand.js`); one actor with four children applies
 resolved from the pointer, not from which strip was entered.
 
 **The band is exactly GTK's input region.** `update_realized_window_properties`
-(`gtkwindow.c`) builds a CSD window's input region as the border box grown by
+(`vendor/gtk/gtkwindow.c`) builds a CSD window's input region as the border box grown by
 `RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
-the body is as far as a band can reach, and as far as a pointer is delivered at all.
+the body is as far as a band can reach, and as far as a pointer is delivered at all. Both it
+and `RESIZE_HANDLE_CORNER_SIZE` are generated from `vendor/gtk/gtkwindow.c`
+(`tools/gen-gtk.mjs`), so upstream drift fails `pnpm run check-style`; `research/gtk` is only
+an uncommitted clone for reading.
 
 **How a point becomes a direction.** `edgeForPoint()` (`lib/resizeBand.js`) is
 `get_edge_for_coordinates()` transcribed in order: the four side bands are tried west, east,
@@ -223,7 +227,7 @@ north, south, and inside each the two corners come before that side's edge, with
 and non-strict bounds kept. First match wins, which is what a narrow window turns on: on a
 side shorter than two corner reaches the earlier band takes the overlap instead of the two
 halves meeting at the middle - on a 30px side GTK hands the first 24px to NW and only the
-remaining 6px to NE. GTK's corner handle is `RESIZE_HANDLE_CORNER_SIZE 24` (`gtkwindow.c`,
+remaining 6px to NE. GTK's corner handle is `RESIZE_HANDLE_CORNER_SIZE 24` (`vendor/gtk/gtkwindow.c`,
 *"How resize corners extend"*): a pointer inside an edge's band is the corner as soon as the
 other axis is within 24px of the frame's edge, so a corner reaches 24px *along* each edge
 beside it. We cannot spend that reach *into the frame* - that surface belongs to the client,
@@ -279,7 +283,7 @@ turns the whole thing off.
 to fit: a window thinner than `2 * RESIZE_BAND` has no middle once the 12px band is grown on
 both sides, and a strip would come back empty. It is **not** a native boundary. GTK's input
 region is the body grown by `RESIZE_HANDLE_SIZE 12` on every side whatever the window size is
-(`update_realized_window_properties`, `gtkwindow.c`), so a native window of 24×24 - or 10×8 -
+(`update_realized_window_properties`, `vendor/gtk/gtkwindow.c`), so a native window of 24×24 - or 10×8 -
 still has a full grab ring, and ours now does too. The earlier floor of
 `2 * RESIZE_CORNER = 48px` existed only because the symmetric partition could not reproduce
 GTK's first-match order on a short side; `edgeForPoint()` does, so the floor is gone.

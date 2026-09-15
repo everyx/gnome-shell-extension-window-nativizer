@@ -141,8 +141,11 @@ is shared by all windows of that style. The bake runs the GLSL from
 Canonical bake window: square `2*(pad+radius)` — leaves a straight middle `2*pad` which
 exceeds the blur reach, so a strip from the middle is a settled profile. Geometry
 (`shadowGeometry`):
-`corner = SHADOW_PAD + radius`, `window = 2*corner`, `buffer = 2*corner + 2*SHADOW_PAD + 3`.
-`SHADOW_PAD = 28` covers max blur 14 (3σ=21) + spread 5. All sizes in logical px.
+`corner = SHADOW_PAD + radius`, `window = 2*corner`, `buffer = 2*corner + 2*SHADOW_PAD + BAKE_EXTRA`.
+`SHADOW_PAD` is generated (`ADWAITA_STYLE.shadowPad`, `tools/gen-style.mjs`): the farthest
+Gaussian reach over every shadow set — `3 * 0.5 * blur + spread`, i.e. `3σ` with
+`σ = blur/2`, 26px for the largest layer — plus the 2px Cogl offscreen offset
+(`BAKE_ORIGIN`, `_clutter_actor_box_enlarge_for_effects`; not vendored). All sizes in logical px.
 
 Slicing (`shadowSlices`): 8 rects (4 corners 1:1, 4 edges stretched from a 1px strip), no
 middle — the interior is the hollow mask of `decoration-model.md`.
@@ -154,7 +157,9 @@ the corner pulls the profile tighter for ~3σ along its edge, so sampling at the
 boundary would make the stretched edge darker and shorter.
 
 The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFFSET`, which
-is where `BAKE_ORIGIN` comes from. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
+is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from;
+both are Cogl's `_clutter_actor_box_enlarge_for_effects`, visible only in the `research/mutter`
+clone. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
 measured role in hiding subpixel seams is in `decoration-alignment.md`.
 
 Caching (`pipelines`): a map from `styleKey(radius, shadows)` — which joins
@@ -212,15 +217,16 @@ correctness and less per-frame JS reconcile, not an order-of-magnitude cheaper r
 Style change cross-fades (the transition and why nothing resizes are the model in
 `decoration-model.md`, *How a style change is drawn*). The fade is driven at
 `FADE_STEP_MS = 16ms` (~60fps) with `GLib.timeout_add`,
-stepping `bezier(t, EASE_OUT)` solved by four Newton iterations. Mid-fade arrival keeps
+Stepping `bezier(t, EASE_OUT)` solved by four Newton iterations. Mid-fade arrival keeps
 whichever side is more visible (`_progress >= 0.5`) as outgoing and carries its weight
 (`keptWeight = progress` or `(1-progress)*outgoing.weight`), so a burst of focus
 changes reads as one motion, never a pop.
 
 Lifecycle: `destroy()` removes `GLib.Source`, unbinds, disconnects `windowActor::destroy`,
 clears style/outgoing and removes from container — idempotent for disable/reload.
-See `FADE_MS`, `EASE_OUT` and `FADE_STEP_MS` for the fade constants and `_relayout` for the
-relayout cache.
+`FADE_MS` and `EASE_OUT` are both read from the generated `ADWAITA_STYLE.transition`
+(libadwaita `$backdrop_transition` = `200ms ease-out`); only `FADE_STEP_MS` is local. See
+`_relayout` for the relayout cache.
 
 ## Preferences (`src/prefs.js`)
 

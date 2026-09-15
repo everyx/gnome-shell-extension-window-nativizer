@@ -110,9 +110,13 @@ export class InspectorService {
         });
         Main.uiGroup.add_child(this._overlay);
 
+        // The accent colour is the `-st-accent-color` CSS term, not a literal:
+        // St resolves it from St.Settings:accent-color and re-resolves every mapped
+        // widget's style when that setting changes, so the highlight follows the
+        // system accent without a signal of our own to connect.
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
-            style: 'border: 3px solid #3584e4; background-color: rgba(53, 132, 228, 0.15); border-radius: 12px;',
+            style: 'border: 3px solid -st-accent-color; background-color: st-transparentize(-st-accent-color, 0.85); border-radius: 12px;',
             visible: false,
         });
         Main.uiGroup.add_child(this._highlight);

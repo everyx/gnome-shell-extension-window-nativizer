@@ -4,13 +4,21 @@
 
 import Cogl from 'gi://Cogl';
 
+import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 
-export const SHADOW_PAD = 28; // px; blur 14 (3σ=21) + spread 5
+// px; derived by tools/gen-style.mjs from the farthest Gaussian reach over every shadow
+// layer (blur 14: 3 sigma = 21, + spread 5) plus the Cogl offscreen offset below.
+export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 
 const LAYER_COUNT = 3; // shader has 3 layers
 
-const BAKE_ORIGIN = 2; // px offset from FBO padding (2 top-left, 3 total)
+// Cogl/Clutter `_clutter_actor_box_enlarge_for_effects` (clutter-actor-box.c; not vendored,
+// source visible in the research/mutter clone): an offscreen is padded 2px top/left and 1px
+// right/bottom, 3px total per axis. The bake buffer carries the 3px (`BAKE_EXTRA`), and the
+// shader's window origin sits at the 2px offset (`BAKE_ORIGIN`, mirrors gen-shader.mjs FBO_OFFSET).
+const BAKE_ORIGIN = 2;
+const BAKE_EXTRA = 3;
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
@@ -28,7 +36,7 @@ export function shadowGeometry(radius) {
     return {
         corner,
         window: 2 * corner,
-        buffer: 2 * corner + 2 * SHADOW_PAD + 3,
+        buffer: 2 * corner + 2 * SHADOW_PAD + BAKE_EXTRA,
     };
 }
 

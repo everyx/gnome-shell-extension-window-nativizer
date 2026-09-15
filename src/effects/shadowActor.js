@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
+import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 import {
     setPipelineOpacity,
@@ -17,8 +18,9 @@ import {
     SHADOW_PAD,
 } from './shadowTexture.js';
 
-const FADE_MS = 200; // libadwaita $backdrop_transition
-const EASE_OUT = [0, 0, 0.58, 1]; // CSS ease-out bezier
+// libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
+const FADE_MS = ADWAITA_STYLE.transition.durationMs;
+const EASE_OUT = ADWAITA_STYLE.transition.easing;
 const FADE_STEP_MS = 16; // ~60 fps
 
 /**

@@ -2,17 +2,19 @@
  * Resize band geometry: the strip around a window where a drag starts a compositor
  * resize grab. Two separate things live here. `edgeForPoint()` answers which direction a
  * pointer resolves to, and it is a direct transcription of GTK's
- * `get_edge_for_coordinates()` (`research/gtk/gtk/gtkwindow.c`), first match wins.
+ * `get_edge_for_coordinates()` (`vendor/gtk/gtkwindow.c`), first match wins.
  * `computeResizeBands()` answers where an event is delivered: four disjoint rectangles
  * that cover the ring, carrying no direction of their own. Pure, so both can be tested
  * without a session; the model is in docs/decoration-model.md § The resize band.
  */
 
-/** GTK4 floors its resize handle at 12 logical px (`RESIZE_HANDLE_SIZE`, gtkwindow.c). */
-export const RESIZE_BAND = 12;
+import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
 
-/** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (gtkwindow.c). */
-export const RESIZE_CORNER = 24;
+/** GTK4 floors its resize handle at 12 logical px (`RESIZE_HANDLE_SIZE`, vendor/gtk/gtkwindow.c). */
+export const RESIZE_BAND = RESIZE_HANDLE_SIZE;
+
+/** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (vendor/gtk/gtkwindow.c). */
+export const RESIZE_CORNER = RESIZE_HANDLE_CORNER_SIZE;
 
 /**
  * Thinnest window that gets a band, `2 * RESIZE_BAND` (24px). This bounds the ring itself:
