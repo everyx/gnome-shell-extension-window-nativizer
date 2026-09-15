@@ -16,7 +16,7 @@
     <key name="resize-band" type="b">
       <default>true</default>
       <summary>Widen the resize band around windows</summary>
-      <description>Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels along the sides and 24 at the corners, as native GNOME windows can. A window whose declared margin is already at least 12 pixels on every side is left alone. When off, clicks in that band go to whatever is behind the window</description>
+      <description>Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels out on every side, and 24 along the edge at each corner, as native GNOME windows can. A window whose declared margin is already at least 12 pixels on every side is left alone. When off, clicks in that band go to whatever is behind the window</description>
     </key>
   </schema>
 </schemalist>

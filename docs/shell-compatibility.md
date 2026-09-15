@@ -35,8 +35,10 @@ is in [decoration-model.md](decoration-model.md).
   `detector.evaluateWindowActions()`, and whether a window gets a resize band to
   `detector.shouldShowResizeBand()`; the shell-side modules only gather inputs and
   apply effects. That is what makes the behaviour testable outside a session.
-- **Only the resize band takes input.** Every actor the extension adds is `reactive: false`
-  except the band's twelve region children, which exist to start a resize grab.
+- **Outside the window picker, only the resize band takes input.** Every actor the extension
+  adds is `reactive: false` except the band's twelve region children, which exist to start a
+  resize grab, and the picker's full-stage overlay (`lib/inspector.js`), which is reactive and
+  takes `button-press-event` under a `pushModal` grab for the duration of a pick.
   `decoration-model.md` § The resize band records what that costs and how to turn it off.
 - **`enable()` and `disable()` are idempotent.** After `disable()` nothing of ours
   remains: no connected signals, no actors, no pending sources.

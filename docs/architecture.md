@@ -75,7 +75,7 @@ The manager keeps one state record per window and reconciles add, remove and upd
 state change.
 
 A resizable window that passes `shouldShowResizeBand()` also gets a `ResizeBand`
-(`lib/resizeBandActor.js`), the only actor here that takes input: a transparent container with
+(`lib/resizeBandActor.js`), the only actor outside the window picker that takes input: a transparent container with
 twelve reactive `St.Widget` children, one per region of the band (12px edges stopping 24px
 short of each corner, each corner split into its two 24px edge reaches). The
 container is inserted in `global.window_group` above its own window actor, so it never covers

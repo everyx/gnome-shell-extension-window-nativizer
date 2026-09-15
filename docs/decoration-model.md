@@ -287,13 +287,16 @@ limit**, not a geometry floor: we would rather draw no band than one whose corne
 disagrees with GTK's - and the halving stays only as a safety net for a caller that reaches the
 geometry directly.
 
-### It is the first thing here that takes clicks
+### It is the persistent thing that takes clicks
 
-Everything else is `reactive: false`: the shadow is painted, never picked, and until now "we
-never participate in hit testing" was true of the whole extension. It is not true of the band.
-Its twelve children are reactive, and it is inserted above its own window actor but below every
-other window and below shell chrome, because it lives in `global.window_group`, which
-`Main.layoutManager.uiGroup` keeps under the panel and the overview.
+Outside the window picker, everything else is `reactive: false`: the shadow is painted,
+never picked, and until now "we never participate in hit testing" was true of the whole
+extension. It is not true of the band. Its twelve children are reactive, and it is inserted
+above its own window actor but below every other window and below shell chrome, because it
+lives in `global.window_group`, which `Main.layoutManager.uiGroup` keeps under the panel and
+the overview. The picker's full-stage overlay (`lib/inspector.js`) is the other exception: it
+is `reactive: true`, takes `button-press-event` under a `pushModal` grab and sets a crosshair
+cursor, but only while a pick is running; the band takes clicks for as long as it exists.
 
 The cost is the ring the client does not cover. Inside the window's own surface those clicks
 were the client's to begin with, so a band as wide as the toolkit's changes nothing there;
@@ -368,9 +371,14 @@ A backend that lays monitors out physically scales the margin by the integer
 monitor scale instead. GJS cannot read that scale:
 `meta_backend_is_stage_views_scaled()` is private, and the layout mode is not in
 the GIR. The margin is therefore left as it comes, which on such a backend reads
-larger than it is — never smaller. Since the reading is only "positive or not",
-that error cannot change an answer: a declared margin stays declared and a zero
-stays zero.
+larger than it is — never smaller.
+
+On the shadow axis that cannot change an answer: `declaresOwnShadow()` only asks whether a
+side is positive, and inflating a non-negative reading keeps a declared margin declared and a
+zero zero. The resize band is not so lucky: its gate is a magnitude comparison,
+`narrowestSides >= 12` (`shouldShowResizeBand()`), so a reading inflated past 12 on a backend
+like this can skip the band for a window whose real margin is narrower than a native one. That
+is the one place the unreadable scale can change what we do.
 
 ## Which style applies
 

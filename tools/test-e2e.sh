@@ -189,14 +189,27 @@ if [[ "$PROBE_UP" -ne 1 ]]; then
 fi
 sleep 0.2
 
+# Same JSON-object parse as check_fields: a reply carrying more than one digit run must
+# yield this field rather than whatever `grep -o` matches first, or a stale count could slip
+# past the assertions below.
 band_count() {
-    shell_eval '
+    local reply
+    reply="$(shell_eval '
     (() => {
         const bands = global.window_group.get_children().filter(c =>
             c.toString().includes("WindowNativizerResizeBand"));
         return JSON.stringify({bandCount: bands.length});
     })()
-    ' | grep -o '[0-9]\+' || echo "0"
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+
+reply = sys.argv[1]
+# See check_fields: the GVariant reply carries backslash-escaped quotes, and the payload
+# itself has none, so drop them before reading the JSON object.
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+print(json.loads(match.group(0))["bandCount"] if match else 0)
+PYEOF
 }
 
 if [[ "$(band_count)" -lt 1 ]]; then

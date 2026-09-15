@@ -218,7 +218,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const bandRow = new Adw.SwitchRow({
             // Translators: The resize band is the strip around a window that can be dragged to resize it.
             title: asMarkup(_('Widen the Resize Band')),
-            subtitle: asMarkup(_('Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels along the sides and 24 at the corners, as native GNOME windows can')),
+            subtitle: asMarkup(_('Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels out on every side, and 24 along the edge at each corner, as native GNOME windows can')),
         });
         settings.bind('resize-band', bandRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         interactionGroup.add(bandRow);

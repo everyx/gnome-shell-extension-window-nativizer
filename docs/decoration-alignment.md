@@ -86,7 +86,9 @@ already 12px, and 2px on GTK3, so the band keeps to 12px and leaves the outer 13
 
 ### Who owns the cursor
 
-The band is the only place the extension sets a cursor, and it has to. Where the band covers
+Outside the window picker, the band is the only place the extension sets a cursor, and it has
+to. (The picker sets a `CROSSHAIR` on `global.stage` for the duration of a pick — see
+`lib/inspector.js`.) Where the band covers
 the ring, the pointer focus is cleared - `repick_for_event` reaches
 `meta_wayland_pointer_set_current(window, NULL)` - so our reactive child becomes the only actor
 the pointer is over and whoever else might have owned that cursor no longer does. Leaving the
