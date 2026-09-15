@@ -28,11 +28,20 @@ describe('nativeLikeCorners', () => {
             expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
-        it('takes Qt decoration plugins as providers, named by their own path', () => {
-            const qadwaita = '/usr/lib/qt6/plugins/wayland-decoration-client/libqadwaitadecorations.so';
+        it('does not take the Qt 6 built-in decoration plugin as a provider — it is top-only (ceCornerRadius=12)', () => {
             const plugin = '/usr/lib/qt6/plugins/wayland-decoration-client/libadwaita.so';
-            expect(classifyProcess(maps(qadwaita))).toBeTrue();
-            expect(classifyProcess(maps(plugin))).toBeTrue();
+            expect(classifyProcess(maps(plugin))).toBeFalse();
+        });
+
+        it('does not take QAdwaitaDecorations as a provider — it will be nativized (top-only radius)', () => {
+            const qadwaita = '/usr/lib/qt6/plugins/wayland-decoration-client/libqadwaitadecorations.so';
+            expect(classifyProcess(maps(qadwaita))).toBeFalse();
+        });
+
+        it('still takes libadwaita-1.so and libhandy-1.so as native-like (regression guard)', () => {
+            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
+            expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
+            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
         it('reports a plain GTK program as holding no provider', () => {

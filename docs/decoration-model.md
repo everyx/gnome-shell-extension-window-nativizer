@@ -73,7 +73,10 @@ and all of them are visible in the same place:
 | Provider | How it is visible |
 |---|---|
 | libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
-| Qt's Adwaita decoration | the process maps `wayland-decoration-client/libqadwaitadecorations.so`, or the same-named `libadwaita.so` plugin — a reimplementation that links no libadwaita, so only its own name gives it away |
+
+> **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 — cleared ring + our shadow + 15px four corners — with the expected top 12px vs 15px delta and the other three corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
+
+> **Qt 6 built-in Adwaita decoration** (`wayland-decoration-client/libadwaita.so`, `qt/qtwayland` `src/plugins/decorations/adwaita/qwaylandadwaitadecoration.cpp`) is **not** a provider: `QWaylandAdwaitaDecoration::paint` (`ceCornerRadius=12`, `arcTo` only on `topLeft`/`topRight`, bottom edge is `lineTo`) and `QWaylandAdwaitaDecoration::margins` (`ceShadowsWidth=10`) show it rounds only the top two corners — bottom two stay square — so it cannot supply four-corner Adwaita look and is nativized the same way (verified against `dev` and `6.8`; cached at `/tmp/qt_qwaylandadwaitadecoration.cpp`).
 
 A GTK **theme** that copies libadwaita's stylesheet — adw-gtk3 and its variants — is
 deliberately not a provider, and cannot be one. GTK3 draws a window's decoration in its

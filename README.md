@@ -34,7 +34,7 @@ The soul of native GNOME windows lies not only in their appearance, but in their
 > **Benchmark Environment**: Tested on Arch Linux (Kernel 7.2), GNOME Shell 50.4 (Wayland), 11th Gen Intel® Core™ i5-11300H @ 3.10GHz (4 cores / 8 threads), 32 GB RAM, Intel® Iris® Xe Graphics. Measured via `tools/benchmark-perf.py` in an automated headless session (150 dynamic resizes @ 60 FPS, 3 counterbalanced AB-BA rounds with warm-up; real hardware timings may vary).
 
 ### 🛡️ Surgical & Non-Invasive
-- **Leaves Native Apps Alone**: Probes process library mappings (`/proc/<pid>/maps`) and strictly skips apps that already draw native Adwaita corners (Libadwaita, Libhandy, or Qt Adwaita decoration plugins).
+- **Leaves Native Apps Alone**: Probes process library mappings (`/proc/<pid>/maps`) and strictly skips apps that already draw native Adwaita corners (Libadwaita and Libhandy).
 - **No Double Shadows**: Intelligently identifies Mutter compositor and X11 native shadows, supplementing only what is missing.
 - **Context-Aware States**: Automatically suppresses decorations for maximized and fullscreen windows; cleanly drops seam shadows on snap-tiled windows.
 
@@ -54,7 +54,7 @@ Both extensions aim to improve the Linux desktop experience, but they pursue fun
 | Dimension | Rounded Window Corners (Reborn) | Window Nativizer (This Project) |
 | :--- | :--- | :--- |
 | **Primary Focus** | **Desktop Theming & Customization**<br/>Enables a user-configurable corner radius across all windows for a custom desktop aesthetic | **GNOME Native Fidelity & Compatibility**<br/>Strictly supplements missing Adwaita appearance and interaction standards |
-| **Target Windows** | **Universal Styling**<br/>Applies custom styling broadly across windows, with opt-out settings and blacklists | **Selective Nativization**<br/>Only decorates windows lacking Adwaita styling; native libadwaita/Qt-Adwaita apps are untouched |
+| **Target Windows** | **Universal Styling**<br/>Applies custom styling broadly across windows, with opt-out settings and blacklists | **Selective Nativization**<br/>Only decorates windows lacking Adwaita styling; native libadwaita/libhandy apps are untouched |
 | **Corner Radius** | **User-Configurable**<br/>Allows setting arbitrary custom corner radii (e.g. 16px, 20px) | **Upstream Adwaita Spec**<br/>Pixel-aligned 15px radius and inner highlight directly compiled from libadwaita source |
 | **Window Resize Band** | **Retains Client Border**<br/>Relies on the client application's own declared window border | **GTK-Aligned 12px Resize Band**<br/>Transcribes GTK4 priority algorithms to restore easy mouse grabbing on borderless windows |
 | **Shadow Architecture** | **St.Bin CSS Pipeline**<br/>Creates an `St.Bin` shadow pipeline with Clutter effect clipping | **GPU 8-Slice Baked Mesh**<br/>Submits pre-baked texture quads directly to the GPU pipeline without CSS layout overhead |

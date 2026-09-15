@@ -8,10 +8,8 @@ import Gio from 'gi://Gio';
 
 // Per-process via /proc/<pid>/maps; see docs/decoration-model.md for provider table.
 const ADWAITA_PROVIDERS = [
-    'libadwaita-1.so',                                     // GTK4
-    'libhandy-1.so',                                       // GTK3 predecessor
-    'wayland-decoration-client/libqadwaitadecorations.so', // Qt reimplementation
-    'wayland-decoration-client/libadwaita.so',             // qtwayland plugin (same name, different code)
+    'libadwaita-1.so', // GTK4
+    'libhandy-1.so',  // GTK3 predecessor (window.csd.unified)
 ];
 
 /** pid -> has an Adwaita provider; freed by forgetProcess(pid) and destroy(). */
