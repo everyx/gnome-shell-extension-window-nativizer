@@ -9,6 +9,7 @@ Usage:
 
 import os
 import time
+import struct
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
@@ -93,7 +94,38 @@ def take_screenshot(target_path, env):
         if os.path.exists(target_path) and os.path.getsize(target_path) > 1000:
             break
         time.sleep(0.2)
-    time.sleep(0.5)
+def load_xcursor(names=("top_left_corner", "nw-resize"), target_size=48):
+    """Load native Adwaita cursor bitmap and hotspot at target size."""
+    if isinstance(names, str):
+        names = [names]
+    cursor_path = None
+    for name in names:
+        p = f"/usr/share/icons/Adwaita/cursors/{name}"
+        if os.path.exists(p):
+            cursor_path = p
+            break
+    if not cursor_path:
+        return None, 0, 0
+    with open(cursor_path, "rb") as f:
+        data = f.read()
+    if len(data) < 16 or data[:4] != b"Xcur":
+        return None, 0, 0
+    header_len, version, ntoc = struct.unpack("<III", data[4:16])
+    best_img = None
+    min_diff = 999
+    best_hot = (0, 0)
+    for i in range(ntoc):
+        entry_offset = 16 + i * 12
+        chunk_type, subtype, pos = struct.unpack("<III", data[entry_offset:entry_offset + 12])
+        if chunk_type == 0xfffd0002:  # XCURSOR_IMAGE_TYPE
+            c_hdr, c_type, c_sub, c_ver, w, h, xhot, yhot, delay = struct.unpack("<IIIIIIIII", data[pos:pos + 36])
+            diff = abs(w - target_size)
+            if diff < min_diff:
+                min_diff = diff
+                raw_pixels = data[pos + 36:pos + 36 + w * h * 4]
+                best_img = Image.frombytes("RGBA", (w, h), raw_pixels, "raw", "BGRA")
+                best_hot = (xhot, yhot)
+    return best_img, best_hot[0], best_hot[1]
 
 
 def main():
@@ -199,6 +231,13 @@ def main():
     right_x = 530
     right_y = 120
     canvas.paste(right_crop, (right_x - pad, right_y - pad))
+
+    # Composite native resize cursor on AFTER window top-left corner
+    cursor_img, xhot, yhot = load_xcursor(["top_left_corner", "nw-resize"], target_size=48)
+    if cursor_img:
+        canvas_rgba = canvas.convert("RGBA")
+        canvas_rgba.alpha_composite(cursor_img, (right_x - xhot, right_y - yhot))
+        canvas = canvas_rgba.convert("RGB")
 
     # 7. Render headers (2x font size = 46)
     draw = ImageDraw.Draw(canvas)
