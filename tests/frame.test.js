@@ -108,7 +108,7 @@ describe('computeFrameInsets', () => {
         expect(res).toEqual(insets(25, 25, 25, 25));
     });
 
-    it('falls back to ssdFrameExtents for X11 SSD windows when rect insets are zero', () => {
+    it('returns zero insets for X11 SSD windows when rect insets are zero (no fallback, surface is frame)', () => {
         const res = computeFrameInsets({
             buffer: rect(0, 0, 640, 480),
             frame: rect(0, 0, 640, 480),
@@ -116,7 +116,7 @@ describe('computeFrameInsets', () => {
             hasSsd: true,
             ssdFrameExtents: 25,
         });
-        expect(res).toEqual(insets(25, 25, 25, 25));
+        expect(res).toEqual(ZERO_INSETS);
     });
 
     it('does not apply ssdFrameExtents if window is not X11', () => {

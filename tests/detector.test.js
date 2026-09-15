@@ -201,8 +201,28 @@ describe('declaresOwnShadow', () => {
         expect(declaresOwnShadow(ring(24, 0, 24, 0).declaringSides)).toBeTrue();
     });
 
-    it('SSD frame with margin has a shadow ring eligible to be cleared', () => {
-        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeTrue();
+    it('SSD frame ring is not a client declaration (semantics), even when margins are positive', () => {
+        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeFalse();
+        expect(declaresOwnShadow({hasSsd: true, sideW: 0, sideH: 0})).toBeFalse();
+        expect(declaresOwnShadow({hasSsd: false, sideW: 20, sideH: 20})).toBeTrue();
+    });
+
+    it('SSD ring is still taken over by strategy: declaresOwnShadow false yet evaluate clears it', () => {
+        // Semantic predicate says SSD ring is not client-declared.
+        expect(declaresOwnShadow({hasSsd: true, sideW: 20, sideH: 20})).toBeFalse();
+        // Strategy layer (inferDecorationBaseline + evaluateWindowActions) still takes it over.
+        const res = evaluateWindowActions({
+            bufferWidth: 400, bufferHeight: 300,
+            frameWidth: 400, frameHeight: 300,
+            hasSsd: true,
+            isX11: true,
+            insets: {left: 25, top: 25, right: 25, bottom: 25},
+            wmClass: 'navicat',
+        });
+        expect(res.drawShadow).toBeTrue();
+        expect(res.clearRing).toBeTrue();
+        expect(res.drawClip).toBeTrue();
+        expect(res.reason).toBe('ring-cleared(has-ssd-frame)');
     });
 });
 

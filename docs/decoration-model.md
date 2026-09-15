@@ -151,19 +151,24 @@ ring at all.
 ## Where we deliberately differ from Mutter
 
 - **X11 / XWayland without custom frame extents & Server-Side Decorations (SSD).**
-  With no rule we previously assumed the frames client (`mutter-x11-frames`) drew an Adwaita
-  shadow matching the window. However, upstream libadwaita/GTK stylesheet explicitly sets
+  Upstream libadwaita/GTK stylesheet explicitly sets
   `window.csd.ssd-frame { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }`,
-  causing the frames-client's baked shadow to have square bottom corners. When `RoundedClipEffect`
-  clips the window body to a 15px radius, the square shadow leaves a transparent wedge between
-  the rounded body corner and the square shadow shoulder.
-  Because `mutter-x11-frames` draws its shadow into the invisible border ring (the `ssdFrameExtents`
-  margin on the X11 surface child), this shadow is within reach: clipping an SSD window takes
-  over its shadow (`ownRing = true`, `clearRing = true`, `shadow = true`). The square frame
-  shadow in the ring is cleared, and `ShadowActor` casts our 15px four-corner rounded shadow around
-  the body. For a bare X11 window (no SSD, no extents), Mutter paints its native shadow strictly
-  outside the window square into the beneath-region; that shadow is out of reach, so a bare
-  window without a rule retains Mutter's native shadow.
+  so the frame client (`mutter-x11-frames`) bakes a shadow with square bottom corners. When
+  `RoundedClipEffect` clips the body to a 15px radius, the square shadow leaves a transparent
+  wedge between the rounded body and the square shadow shoulder.
+  For a floating SSD window the invisible border ring exists and is within reach: measured
+  `frame 500×474 / buffer 550×524` (`_GTK_FRAME_EXTENTS=25,25,25,25` on the frame window,
+  `actor 550×524`, first child `550×524`) — `mutter-x11-frames` draws its shadow into that
+  ring, clipping the window takes it over (`ownRing = true`, `clearRing = true`, `shadow = true`)
+  and `ShadowActor` casts our 15px four-corner rounded shadow around the body.
+  When Mutter reports zero insets the ring does not exist: maximized SSD reports
+  `buffer 1920×1051 == frame 1920×1051`, `_GTK_FRAME_EXTENTS=0,0,0,0`, `actor 1920×1051`,
+  first child `1920×1051` — actor and child are equal to the frame, no ring to clear, so
+  no fallback assumption is made (the surface is the frame). Such windows are also
+  structurally ineligible (`maximized/fullscreen`). For a bare X11 window (no SSD, no
+  extents), Mutter paints its native shadow strictly outside the window square into the
+  beneath-region; that shadow is out of reach, so a bare window without a rule retains
+  Mutter's native shadow.
 - **A snap-tiled window loses the shadow it would get from us** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct the
   neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on

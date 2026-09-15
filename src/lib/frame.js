@@ -67,14 +67,11 @@ export function insetsFromRects(buffer, frame) {
 }
 
 /**
- * Computes frame insets between buffer and frame rects, with support for X11 SSD windows.
- *
- * For X11 SSD windows decorated by mutter-x11-frames, GTK4 allocates an invisible border
- * ring around the frame for shadows and resize handles. Modern Mutter reports
- * `buffer_rect == frame_rect` (zero insets), while the underlying X11 surface actor includes
- * this invisible border ring. When an X11 window has SSD and zero rect insets, this falls
- * back to the GTK SSD frame extents so the clip shader operates on the actual window body.
- *
+ * The per-side ring between buffer and frame (`buffer_rect - frame_rect`).
+ * Floating X11 SSD: 25px per side (`_GTK_FRAME_EXTENTS=25`, actor 550×524 vs frame
+ * 500×474). Maximized X11 SSD: zero (`buffer==frame 1920×1051`, `_GTK_FRAME_EXTENTS=0`,
+ * actor 1920×1051 == frame 1920×1051). No ring exists to clear there, so return the
+ * rect difference exactly with no fallback (see docs/decoration-model.md).
  * @param {object} params
  * @param {{x: number, y: number, width: number, height: number}|null} [params.buffer]
  * @param {{x: number, y: number, width: number, height: number}|null} [params.frame]
@@ -86,24 +83,13 @@ export function insetsFromRects(buffer, frame) {
 export function computeFrameInsets({
     buffer,
     frame,
-    isX11 = false,
-    hasSsd = false,
-    ssdFrameExtents = 0,
+    isX11: _isX11 = false,
+    hasSsd: _hasSsd = false,
+    ssdFrameExtents: _ssdFrameExtents = 0,
 } = {}) {
     const insets = insetsFromRects(buffer, frame);
     if (!insets)
         return null;
-
-    if (isX11 && hasSsd && ssdFrameExtents > 0) {
-        if (insets.left === 0 && insets.top === 0 && insets.right === 0 && insets.bottom === 0) {
-            return {
-                left: ssdFrameExtents,
-                top: ssdFrameExtents,
-                right: ssdFrameExtents,
-                bottom: ssdFrameExtents,
-            };
-        }
-    }
 
     return insets;
 }

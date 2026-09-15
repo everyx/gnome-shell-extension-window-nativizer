@@ -46,4 +46,4 @@ export const ADWAITA_STYLE = {
     transition: {durationMs: 200, easing: [0, 0, 0.58, 1]},
 };
 
-export const SSD_FRAME_EXTENTS = 25;
+export const SSD_FRAME_EXTENTS = ADWAITA_STYLE.ssdFrameExtents;

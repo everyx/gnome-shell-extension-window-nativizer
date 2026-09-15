@@ -330,7 +330,7 @@ export const ADWAITA_STYLE = {
     transition: {durationMs: ${durationMs}, easing: [${easing.join(', ')}]},
 };
 
-export const SSD_FRAME_EXTENTS = ${ssdFrameExtents};
+export const SSD_FRAME_EXTENTS = ADWAITA_STYLE.ssdFrameExtents;
 `;
 
 // ---------- Output ----------
