@@ -13,6 +13,7 @@ import {
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
 } from './pick.js';
+import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {resolveWindowIdentity} from './window.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
@@ -116,7 +117,7 @@ export class InspectorService {
         // system accent without a signal of our own to connect.
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
-            style: 'border: 3px solid -st-accent-color; background-color: st-transparentize(-st-accent-color, 0.85); border-radius: 12px;',
+            style: `border: 3px solid -st-accent-color; background-color: st-transparentize(-st-accent-color, 0.85); border-radius: ${ADWAITA_STYLE.window.radius}px;`,
             visible: false,
         });
         Main.uiGroup.add_child(this._highlight);

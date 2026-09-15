@@ -15,11 +15,35 @@ import {readFileSync, writeFileSync, existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
-import {EFFECT_PADDING_ORIGIN} from '../src/lib/clutterEffectPadding.generated.js';
-
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VENDOR = path.join(ROOT, 'vendor', 'libadwaita');
 const OUT = path.join(ROOT, 'src', 'lib', 'adwaitaStyle.generated.js');
+const PADDING_FILE = path.join(ROOT, 'src', 'lib', 'clutterEffectPadding.generated.js');
+
+function loadPaddingOrigin() {
+    let src;
+    try {
+        src = readFileSync(PADDING_FILE, 'utf8');
+    } catch (e) {
+        if (e.code === 'ENOENT') {
+            throw new Error('[gen-style] Missing generated file src/lib/clutterEffectPadding.generated.js — please run `node tools/gen-clutter.mjs` first');
+        }
+        throw e;
+    }
+    const m = src.match(/export\s+const\s+EFFECT_PADDING_ORIGIN\s*=\s*([\d.]+)/);
+    if (!m) throw new Error('[gen-style] Cannot parse EFFECT_PADDING_ORIGIN from clutterEffectPadding.generated.js');
+    const v = Number(m[1]);
+    if (!Number.isFinite(v)) throw new Error('[gen-style] Invalid EFFECT_PADDING_ORIGIN value');
+    return v;
+}
+
+let EFFECT_PADDING_ORIGIN;
+try {
+    EFFECT_PADDING_ORIGIN = loadPaddingOrigin();
+} catch (e) {
+    console.error(e.message);
+    process.exit(1);
+}
 
 const CHECK = process.argv.includes('--check');
 

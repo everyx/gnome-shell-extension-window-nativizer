@@ -160,8 +160,9 @@ The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFF
 is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from.
 Both are Cogl's `_clutter_actor_box_enlarge_for_effects`, vendored at
 `vendor/mutter/clutter-actor-box.c` and parsed by `tools/gen-clutter.mjs` into
-`clutterEffectPadding.generated.js`; `shadowTexture.js`, `clipEffect.js`, `gen-shader.mjs`
-and `gen-style.mjs` all read that one generated source instead of each writing 2/3 by hand.
+`clutterEffectPadding.generated.js`; `shadowTexture.js` and `clipEffect.js` read that one
+generated source at runtime, while `gen-shader.mjs` and `gen-style.mjs` read it at
+generation time to bake the constants, instead of each writing 2/3 by hand.
 Only the `3px` per-axis total is an upstream literal — it covers up to 1.75px on the
 bottom/right while leaving >0.75px on the top/left. The `2px` top/left **origin is derived**,
 not a literal: it is what `box->x1 - (ceilf (box->x2 + 0.75f) - width - 3)` yields on an

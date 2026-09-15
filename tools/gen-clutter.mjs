@@ -119,6 +119,10 @@ function main() {
  *   origin = box->x1 - (ceilf (box->x2 + ${roundingPad}f) - width - ${totalExtra}) = ${origin}
  * The 2/1 split only holds when the box is integer-aligned; the per-axis total stays
  * ${totalExtra}. See docs/architecture.md (Shadow baking).
+ *
+ * Note: EFFECT_ROUNDING_PAD (${roundingPad}f) is part of the upstream rule and is consumed
+ * only at generation time (to derive EFFECT_PADDING_ORIGIN); it has no runtime consumer
+ * — 规则的一部分，供推导使用；无运行时消费者。
  */
 
 export const EFFECT_ROUNDING_PAD = ${roundingPad};  // upstream literal in ceilf (box->x2 + ${roundingPad}f)
