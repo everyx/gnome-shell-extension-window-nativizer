@@ -1,9 +1,10 @@
 /**
  * ResizeBand: the strip around a window that starts a resize grab, as one transparent
- * container above its window actor with one reactive child per region. The container is
- * bound to the window actor (position and size), and the regions are placed from the
- * actor's live size on every allocation, so a resize cannot leave the band behind.
- * Model and cost in docs/decoration-model.md § The resize band; lifecycle in
+ * container above its window actor with one reactive child per side. The container is
+ * bound to the window actor (position and size), and the strips are placed from the
+ * actor's live size on every allocation, so a resize cannot leave the band behind. The
+ * children are only hit surfaces; the direction comes from `edgeForPoint()`, GTK's own
+ * order. Model and cost in docs/decoration-model.md § The resize band; lifecycle in
  * docs/architecture.md.
  */
 
@@ -15,7 +16,7 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
-import {computeResizeBands, REGION_DIRECTION, RESIZE_BAND, RESIZE_BAND_REGIONS} from './resizeBand.js';
+import {computeResizeBands, edgeForPoint, RESIZE_BAND, RESIZE_BAND_REGIONS} from './resizeBand.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
@@ -23,9 +24,9 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // larger than the window actor by that much, or the regions would be clipped out of it.
 const OUTER = RESIZE_BAND;
 
-// Twelve regions → the eight-way cursor and the matching compositor grab op. The two
-// halves of a corner collapse through REGION_DIRECTION, so a corner never resolves to a
-// straight edge.
+// The eight-way cursor and the matching compositor grab op, keyed by the direction
+// `edgeForPoint()` resolves. A corner never resolves to a straight edge unless GTK's own
+// order says so there.
 const DIRECTION_CURSOR = {
     n: Clutter.CursorType.N_RESIZE,
     ne: Clutter.CursorType.NE_RESIZE,
@@ -107,6 +108,7 @@ export const ResizeBand = GObject.registerClass({
         this._container = container;
         this._regions = new Map();
         this._bands = null;
+        this._frame = null;
         this._hover = null;
         this._insets = ZERO_INSETS;
         this._bounds = null;
@@ -131,11 +133,13 @@ export const ResizeBand = GObject.registerClass({
             });
             // connectObject attaches the handlers to this band's lifetime: destroy()
             // takes the children with it, so nothing has to be disconnected by hand.
-            child.connectObject('enter-event', () => this._applyCursor(region), this);
-            child.connectObject('motion-event', () => this._applyCursor(region), this);
+            child.connectObject('enter-event',
+                (_actor, event) => this._applyCursor(region, event), this);
+            child.connectObject('motion-event',
+                (_actor, event) => this._applyCursor(region, event), this);
             child.connectObject('leave-event', () => this._clearCursor(region), this);
             child.connectObject('button-press-event',
-                (_actor, event) => this._onButtonPress(region, event), this);
+                (_actor, event) => this._onButtonPress(event), this);
             this.add_child(child);
             this._regions.set(region, child);
         }
@@ -176,9 +180,9 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * Allocate the twelve regions from the container's own allocation plus the stored
-     * insets. Called after the BindConstraints have sized the container for this frame,
-     * so the regions are always placed against the size being painted.
+     * Allocate the four strips from the container's own allocation plus the stored insets.
+     * Called after the BindConstraints have sized the container for this frame, so the
+     * strips are always placed against the size being painted.
      * @param {Clutter.ActorBox} box
      */
     vfunc_allocate(box) {
@@ -196,6 +200,9 @@ export const ResizeBand = GObject.registerClass({
             x: body.x + OUTER, y: body.y + OUTER,
             width: body.width, height: body.height,
         };
+        // Kept in the container's coordinates: `_directionForEvent()` resolves the pointer
+        // against it with GTK's own order, in the same space.
+        this._frame = frame;
         const bounds = this._bounds
             ? {
                 x: this._bounds.x - box.x1,
@@ -264,6 +271,7 @@ export const ResizeBand = GObject.registerClass({
         this._visibleBinding = null;
         this._regions.clear();
         this._bands = null;
+        this._frame = null;
         try {
             this._container?.remove_child(this);
         } catch {
@@ -277,14 +285,32 @@ export const ResizeBand = GObject.registerClass({
     // ---------- Internal ----------
 
     /**
+     * The direction under a pointer event, resolved by GTK's own order. The strip is only
+     * the surface that delivered the event; the frame carries the geometry.
+     * @param {Clutter.Event} event
+     * @returns {'n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw'|null}
+     */
+    _directionForEvent(event) {
+        if (!this._frame)
+            return null;
+        const [x, y] = event.get_coords();
+        const [originX, originY] = this.get_transformed_position();
+        return edgeForPoint(this._frame, x - originX, y - originY);
+    }
+
+    /**
      * @param {string} region
+     * @param {Clutter.Event} event
      * @returns {boolean} Clutter.EVENT_PROPAGATE
      */
-    _applyCursor(region) {
-        if (this._hover !== region) {
-            this._hover = region;
-            this._regions.get(region)?.set_cursor_type(DIRECTION_CURSOR[REGION_DIRECTION[region]]);
-        }
+    _applyCursor(region, event) {
+        const direction = this._directionForEvent(event);
+        if (this._hover?.region === region && this._hover.direction === direction)
+            return Clutter.EVENT_PROPAGATE;
+        this._hover = direction ? {region, direction} : null;
+        this._regions.get(region)?.set_cursor_type(direction
+            ? DIRECTION_CURSOR[direction]
+            : Clutter.CursorType.DEFAULT);
         return Clutter.EVENT_PROPAGATE;
     }
 
@@ -293,7 +319,7 @@ export const ResizeBand = GObject.registerClass({
      * @returns {boolean} Clutter.EVENT_PROPAGATE
      */
     _clearCursor(region) {
-        if (this._hover === region) {
+        if (this._hover?.region === region) {
             this._hover = null;
             this._regions.get(region)?.set_cursor_type(Clutter.CursorType.DEFAULT);
         }
@@ -301,12 +327,15 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * @param {string} region
      * @param {Clutter.Event} event
      * @returns {boolean} EVENT_STOP when the grab was handed to Mutter
      */
-    _onButtonPress(region, event) {
+    _onButtonPress(event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+            return Clutter.EVENT_PROPAGATE;
+
+        const direction = this._directionForEvent(event);
+        if (!direction)
             return Clutter.EVENT_PROPAGATE;
 
         const win = this._windowActor?.meta_window ?? this._windowActor?.metaWindow;
@@ -326,7 +355,7 @@ export const ResizeBand = GObject.registerClass({
         // coordinate is that position, so no fallback is needed.
         const [x, y] = event.get_coords();
         win.begin_grab_op(
-            DIRECTION_GRAB_OP[REGION_DIRECTION[region]],
+            DIRECTION_GRAB_OP[direction],
             sprite,
             event.get_time(),
             new Graphene.Point({x, y})

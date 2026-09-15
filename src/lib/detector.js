@@ -293,6 +293,9 @@ export function shouldShowResizeBand({
     if (narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND)
         return false;
 
+    // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
+    // axis), never a native one: GTK's input region does not depend on the window size
+    // (docs/decoration-model.md § The resize band).
     return frameWidth >= MIN_BAND_WINDOW && frameHeight >= MIN_BAND_WINDOW;
 }
 

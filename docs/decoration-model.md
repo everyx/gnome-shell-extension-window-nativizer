@@ -205,42 +205,41 @@ input region at `RESIZE_HANDLE_SIZE 12` (`gtkwindow.c`), GTK3 with adw-gtk3 take
 theme's `decoration { margin: 10px }` - so that strip is the handle every native window offers.
 A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
 
-So a window we decorate also gets a **resize band**: twelve transparent, reactive
-rectangles around its body, exactly filling the 12px ring the frame grows. Four edges are 12
-logical px deep, span the frame side between the corners and stop 24px short of each end;
-each corner is two rectangles, because a corner reaches 24px along each edge next to it. The
-geometry is pure (`lib/resizeBand.js`); one actor with twelve children applies it
-(`lib/resizeBandActor.js`).
+So a window we decorate also gets a **resize band**: four transparent, reactive strips around
+its body, exactly filling the 12px ring the frame grows. The top and bottom strips span the
+full width, so the outward corners belong to them; the left and right fill the middle height.
+The geometry is pure (`lib/resizeBand.js`); one actor with four children applies it
+(`lib/resizeBandActor.js`). The strips only decide where an event lands - the direction is
+resolved from the pointer, not from which strip was entered.
 
 **The band is exactly GTK's input region.** `update_realized_window_properties`
 (`gtkwindow.c`) builds a CSD window's input region as the border box grown by
 `RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
 the body is as far as a band can reach, and as far as a pointer is delivered at all.
 
-**Why a corner reaches 24px along the edge.** GTK's corner handle is
-`RESIZE_HANDLE_CORNER_SIZE 24` (`gtkwindow.c`, *"How resize corners extend"*), and
-`get_edge_for_coordinates` resolves by proximity: a pointer inside an edge's band is the
-corner as soon as the other axis is within 24px of the frame's edge. A corner therefore owns
-24px of each edge beside it - *along* the edge, not outward. We cannot spend that reach *into
-the frame* - that surface belongs to the client, and claiming it is what breaks titlebar
-drags, GTK window buttons and Chromium tab clicks - and we cannot spend it *outward* either:
-`get_edge_for_coordinates` alone would extend a corner outward by the shadow, but the input
-region stops at 12px, so that part of the shadow is click-through upstream. So each corner is
-two regions, both only 12px deep: the 24px it takes along one edge, and the 24px it takes
-along the other. That is what makes an approach to a corner read as a corner rather than as an
-edge, the way the toolkit's own 8-way mapping does - and it is why the narrow strip hugging an
-edge next to a corner belongs to the corner, not to the edge. The twelve regions are pairwise
-disjoint, so a point has one direction.
+**How a point becomes a direction.** `edgeForPoint()` (`lib/resizeBand.js`) is
+`get_edge_for_coordinates()` transcribed in order: the four side bands are tried west, east,
+north, south, and inside each the two corners come before that side's edge, with GTK's strict
+and non-strict bounds kept. First match wins, which is what a narrow window turns on: on a
+side shorter than two corner reaches the earlier band takes the overlap instead of the two
+halves meeting at the middle - on a 30px side GTK hands the first 24px to NW and only the
+remaining 6px to NE. GTK's corner handle is `RESIZE_HANDLE_CORNER_SIZE 24` (`gtkwindow.c`,
+*"How resize corners extend"*): a pointer inside an edge's band is the corner as soon as the
+other axis is within 24px of the frame's edge, so a corner reaches 24px *along* each edge
+beside it. We cannot spend that reach *into the frame* - that surface belongs to the client,
+and claiming it is what breaks titlebar drags, GTK window buttons and Chromium tab clicks -
+and we cannot spend it *outward* either: the input region stops at 12px, so `edgeForPoint()`
+only classifies the outer ring. The four strips cover that ring as a disjoint tiling, so a
+point is delivered to exactly one handler and resolved to exactly one direction.
 
-**The one column where we differ from GTK.** `get_edge_for_coordinates` tests the reach of
-the right and bottom corner with a strict inequality (`x > right - 24`, `y > bottom - 24`), so
-the column at exactly `right - 24` is the edge there. Our corner region starts at
-`right - rx` *inclusive*, so we call that one column the corner. (The left and top reaches
-are `x < left + 24`, which is strict the other way, and there our half-open rectangles already
-agree.) The two agree on every other pixel; we do not add a `+1` offset to match, because the
-offset would have to be threaded through all twelve rectangles and every bound, for a single
-pixel whose direction is one of the two it sits between anyway. The difference is pinned by a
-test (`tests/resizeBand.test.js`) so it cannot drift silently.
+**The one remaining difference from GTK.** Past the four bands, `get_edge_for_coordinates`
+has a fallback: a pointer inside the body but within a rounded corner's box is read as that
+corner. That surface is the client's, so `edgeForPoint()` returns null there - the ring is the
+whole of our domain, and the test compares the two as an *outer projection*. On the ring
+itself the classification is GTK's verbatim, strict inequalities included: the column at
+exactly `right - 24` is the edge, which the old symmetric partition called the corner. That is
+no longer a divergence, because it is now the same expression (`tests/resizeBand.test.js`
+scans a 1px grid against a test-side oracle so it cannot drift).
 
 Three things about the extent:
 
@@ -272,26 +271,24 @@ margin on one side. The source is the same reading the shadow axis uses (`insets
 over `buffer_rect - frame_rect`), not a second path; only the per-axis aggregation differs
 (`declaredSides()` gives the band the narrowest side and the shadow axis the widest, because
 the two ask different questions).
-Below the minimum, at least `2 * RESIZE_CORNER = 48px` per side - the floor that keeps the
-corner reaches from overlapping, see below - and a 1×1 helper is not a window. The
-`resize-band` setting turns the whole thing off.
+Below the minimum, at least `2 * RESIZE_BAND = 24px` per side - the bound that keeps the ring
+itself placeable, see below - and a 1×1 helper is not a window. The `resize-band` setting
+turns the whole thing off.
 
-**Why the floor is 48, not 24.** On a side shorter than twice `RESIZE_CORNER`, the two corner
-reaches would overlap, so `computeResizeBands` halves them (`rx = min(c, w/2)`) and the two
-corners split the short side evenly. That is safe geometry, but it is no longer GTK's: GTK's
-`get_edge_for_coordinates` is first-match-wins with a fixed 24px (`x < left + 24` is tested
-before the right corner), so on a 30px side it hands the first 24px to NW and only the rest to
-NE, where we split the side 15/15. The direction would disagree with GTK, which is what this
-model claims not to do. So a window with any side under 48px gets no band - a **deliberate
-limit**, not a geometry floor: we would rather draw no band than one whose corner direction
-disagrees with GTK's - and the halving stays only as a safety net for a caller that reaches the
-geometry directly.
+**Why the size floor is 24, and why it says nothing native.** The floor only says the ring has
+to fit: a window thinner than `2 * RESIZE_BAND` has no middle once the 12px band is grown on
+both sides, and a strip would come back empty. It is **not** a native boundary. GTK's input
+region is the body grown by `RESIZE_HANDLE_SIZE 12` on every side whatever the window size is
+(`update_realized_window_properties`, `gtkwindow.c`), so a native window of 24×24 - or 10×8 -
+still has a full grab ring, and ours now does too. The earlier floor of
+`2 * RESIZE_CORNER = 48px` existed only because the symmetric partition could not reproduce
+GTK's first-match order on a short side; `edgeForPoint()` does, so the floor is gone.
 
 ### It is the persistent thing that takes clicks
 
 Outside the window picker, everything else is `reactive: false`: the shadow is painted,
 never picked, and until now "we never participate in hit testing" was true of the whole
-extension. It is not true of the band. Its twelve children are reactive, and it is inserted
+extension. It is not true of the band. Its four children are reactive, and it is inserted
 above its own window actor but below every other window and below shell chrome, because it
 lives in `global.window_group`, which `Main.layoutManager.uiGroup` keeps under the panel and
 the overview. The picker's full-stage overlay (`lib/inspector.js`) is the other exception: it

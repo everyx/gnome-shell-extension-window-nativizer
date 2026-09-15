@@ -1,12 +1,12 @@
 /**
- * resize band geometry and eligibility unit tests (jasmine-gjs).
+ * resize band geometry, direction and eligibility unit tests (jasmine-gjs).
  * Run: pnpm test
  */
 
 import {
     computeResizeBands,
+    edgeForPoint,
     MIN_BAND_WINDOW,
-    REGION_DIRECTION,
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
     RESIZE_CORNER,
@@ -15,7 +15,7 @@ import {shouldShowResizeBand, evaluateWindowActions} from '../src/lib/detector.j
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 
-/** @returns {Record<string, object|null>} All regions null */
+/** @returns {Record<string, object|null>} All surfaces null */
 function emptyBands() {
     const bands = {};
     for (const region of RESIZE_BAND_REGIONS)
@@ -37,9 +37,8 @@ function overlapArea(a, b) {
 
 /**
  * The band's expected union, stated independently of computeResizeBands: exactly the ring
- * the frame grows by RESIZE_BAND. The corners add nothing outward - GTK's input region stops
- * at RESIZE_HANDLE_SIZE, so the ring is as far as the band can reach - they only take over a
- * 24px length of each edge next to them.
+ * the frame grows by RESIZE_BAND, half-open. The corners add nothing outward - GTK's input
+ * region stops at RESIZE_HANDLE_SIZE, so the ring is as far as the band can reach.
  * @param {object} frame
  * @param {number} px
  * @param {number} py
@@ -62,6 +61,66 @@ function unionArea(frame) {
 }
 
 /**
+ * The oracle: GTK's `get_edge_for_coordinates()` transcribed straight from
+ * research/gtk/gtk/gtkwindow.c, with handle_size = RESIZE_BAND and
+ * resize_handle_size = RESIZE_CORNER. Deliberately independent of the source module, so a
+ * transcription slip in either one shows up as a disagreement. The rounded-corner fallback
+ * past the four bands is left out: it is inside the body, which is the client's surface.
+ * @param {object} frame
+ * @param {number} x
+ * @param {number} y
+ * @returns {string|null}
+ */
+function gtkEdge(frame, x, y) {
+    const left = frame.x;
+    const top = frame.y;
+    const right = left + frame.width;
+    const bottom = top + frame.height;
+    const b = RESIZE_BAND;
+    const c = RESIZE_CORNER;
+
+    if (x < left && x >= left - b) {
+        if (y < top + c && y >= top - b)
+            return 'nw';
+        if (y > bottom - c && y <= bottom + b)
+            return 'sw';
+        return 'w';
+    } else if (x > right && x <= right + b) {
+        if (y < top + c && y >= top - b)
+            return 'ne';
+        if (y > bottom - c && y <= bottom + b)
+            return 'se';
+        return 'e';
+    } else if (y < top && y >= top - b) {
+        if (x < left + c && x >= left - b)
+            return 'nw';
+        if (x > right - c && x <= right + b)
+            return 'ne';
+        return 'n';
+    } else if (y > bottom && y <= bottom + b) {
+        if (x < left + c && x >= left - b)
+            return 'sw';
+        if (x > right - c && x <= right + b)
+            return 'se';
+        return 's';
+    }
+    return null;
+}
+
+/**
+ * @param {object} frame
+ * @param {number} px
+ * @param {number} py
+ * @returns {boolean} Whether the point is in the outer ring: inside the grown box (half-open)
+ *   and outside the body (half-open), the domain the band promises to classify
+ */
+function inRing(frame, px, py) {
+    const b = RESIZE_BAND;
+    return contains(rect(frame.x - b, frame.y - b, frame.width + 2 * b, frame.height + 2 * b), px, py) &&
+        !contains(frame, px, py);
+}
+
+/**
  * @param {object} frame
  * @param {number} px
  * @param {number} py
@@ -71,31 +130,120 @@ function at(frame, px, py) {
     return `${px},${py} on ${frame.x},${frame.y} ${frame.width}x${frame.height}`;
 }
 
-describe('computeResizeBands', () => {
-    it('lays the four edges between the corners and each corner out as two regions', () => {
-        const bands = computeResizeBands({frame: rect(100, 50, 400, 300)});
+/**
+ * Every ring point on a 1px grid: our direction must equal the oracle's, and every point
+ * off the ring must be null.
+ * @param {object} frame
+ */
+function assertOracleAgreement(frame) {
+    const b = RESIZE_BAND;
+    const mismatches = [];
+    for (let px = frame.x - b; px < frame.x + frame.width + b; px += 1) {
+        for (let py = frame.y - b; py < frame.y + frame.height + b; py += 1) {
+            const actual = edgeForPoint(frame, px, py);
+            const expected = inRing(frame, px, py) ? gtkEdge(frame, px, py) : null;
+            if (actual !== expected)
+                mismatches.push(`${at(frame, px, py)}: ${actual} != ${expected}`);
+        }
+    }
+    expect(mismatches)
+        .withContext(`oracle disagreement on ${frame.x},${frame.y} ${frame.width}x${frame.height}`)
+        .toEqual([]);
+}
 
-        // Edges stop 24px short of each corner.
-        expect(bands.n).toEqual(rect(124, 38, 352, 12));
-        expect(bands.s).toEqual(rect(124, 350, 352, 12));
-        expect(bands.w).toEqual(rect(88, 74, 12, 252));
-        expect(bands.e).toEqual(rect(500, 74, 12, 252));
-
-        // Each corner is two regions, both 12px deep like the rest of the band: the edge
-        // it reaches 24px along (36px wide - 12px of outward ring plus the 24px arm), and
-        // the 24px it takes from the other edge.
-        expect(bands.nw_n).toEqual(rect(88, 38, 36, 12));
-        expect(bands.nw_w).toEqual(rect(88, 50, 12, 24));
-        expect(bands.ne_n).toEqual(rect(476, 38, 36, 12));
-        expect(bands.ne_e).toEqual(rect(500, 50, 12, 24));
-        expect(bands.sw_s).toEqual(rect(88, 350, 36, 12));
-        expect(bands.sw_w).toEqual(rect(88, 326, 12, 24));
-        expect(bands.se_s).toEqual(rect(476, 350, 36, 12));
-        expect(bands.se_e).toEqual(rect(500, 326, 12, 24));
+describe('edgeForPoint', () => {
+    // The core defence: on regular windows, on a side shorter than two corner reaches
+    // (24-47px), and on a window too small for both corners to fit, the direction must be
+    // GTK's, first-match-wins order included.
+    it('agrees with GTK on every ring pixel, across window sizes', () => {
+        for (const frame of [
+            rect(100, 50, 400, 300),   // regular
+            rect(0, 0, 24, 24),        // at the origin, the sanity floor exactly
+            rect(100, 100, 40, 600),   // 40px wide: top and bottom have no edge left
+            rect(100, 100, 600, 40),   // 40px tall: left and right have no edge left
+            rect(100, 100, 25, 300),   // 25px wide, just above the sanity floor
+            rect(100, 100, 30, 30),    // both sides overlap
+            rect(100, 100, 10, 8),     // no side reaches, all four corners live
+            rect(-500, -400, 100, 100) // negative origin
+        ])
+            assertOracleAgreement(frame);
     });
 
-    it('keeps the twelve regions pairwise disjoint, so a point has one direction', () => {
-        for (const frame of [rect(10, 20, 61, 43), rect(100, 100, 10, 8), rect(0, 0, 49, 51)]) {
+    it('hands a short side to the earlier corner, not to the midpoint', () => {
+        // 30px wide: GTK's north band tests the west corner first (`x < left + 24`), so it
+        // takes the first 24px and the remaining 6px are NE. The old half/half split would
+        // have put the boundary at left + 15.
+        const frame = rect(100, 100, 30, 30);
+        expect(edgeForPoint(frame, 123, 99)).toBe('nw');
+        expect(edgeForPoint(frame, 124, 99)).toBe('ne');
+        expect(edgeForPoint(frame, 115, 99)).toBe('nw');
+        // The west band does the same down the left edge: NW to top + 24, then SW.
+        expect(edgeForPoint(frame, 99, 123)).toBe('nw');
+        expect(edgeForPoint(frame, 99, 124)).toBe('sw');
+        // Both reaches overlap, so the straight edges never appear on this window.
+        expect(edgeForPoint(frame, 124, 99)).not.toBe('n');
+        expect(edgeForPoint(frame, 99, 124)).not.toBe('w');
+    });
+
+    it('keeps the left and right edges on a window that is narrow but tall', () => {
+        const frame = rect(100, 100, 40, 600);
+        // The top edge has no middle: NW up to left + 24, then NE.
+        expect(edgeForPoint(frame, 123, 99)).toBe('nw');
+        expect(edgeForPoint(frame, 124, 99)).toBe('ne');
+        // The left edge has one, because the height is long enough for two reaches.
+        expect(edgeForPoint(frame, 99, 123)).toBe('nw');
+        expect(edgeForPoint(frame, 99, 124)).toBe('w');
+        expect(edgeForPoint(frame, 99, 676)).toBe('w');   // bottom - 24, still the edge
+        expect(edgeForPoint(frame, 99, 677)).toBe('sw');  // one past it, the corner
+    });
+
+    it('keeps GTK strict inequality at the right and bottom corner reach', () => {
+        // `x > right - 24` and `y > bottom - 24`: the line at exactly right - 24 is the
+        // edge, which is the one column the old inclusive rectangles called the corner.
+        const frame = rect(100, 100, 400, 300);
+        const x = frame.x + frame.width - RESIZE_CORNER;
+        expect(edgeForPoint(frame, x, 99)).toBe('n');
+        expect(edgeForPoint(frame, x + 1, 99)).toBe('ne');
+        const y = frame.y + frame.height - RESIZE_CORNER;
+        expect(edgeForPoint(frame, 501, y)).toBe('e');
+        expect(edgeForPoint(frame, 501, y + 1)).toBe('se');
+    });
+
+    it('reads only the outer ring, never the body', () => {
+        const frame = rect(100, 100, 400, 300);
+        // GTK's rounded-corner fallback would call a point inside the top-left corner NW.
+        expect(edgeForPoint(frame, 105, 105)).toBeNull();
+        expect(edgeForPoint(frame, 105, 300)).toBeNull();
+        // Beyond the ring, and outside the grown box.
+        expect(edgeForPoint(frame, 88, 50)).toBeNull();
+        expect(edgeForPoint(frame, 87, 250)).toBeNull();
+        expect(edgeForPoint(frame, 250, 37)).toBeNull();
+        expect(edgeForPoint(frame, 512, 250)).toBeNull();
+    });
+
+    it('returns nothing for a degenerate or missing frame', () => {
+        expect(edgeForPoint(rect(10, 10, 0, 100), 5, 10)).toBeNull();
+        expect(edgeForPoint(rect(10, 10, 100, 0), 10, 5)).toBeNull();
+        expect(edgeForPoint(null, 0, 0)).toBeNull();
+        expect(edgeForPoint(rect(0, 0, 100, 100), Number.NaN, 0)).toBeNull();
+        expect(edgeForPoint(rect(0, 0, 100, 100), 0, Number.POSITIVE_INFINITY)).toBeNull();
+    });
+});
+
+describe('computeResizeBands', () => {
+    it('lays the ring out as four side strips', () => {
+        const bands = computeResizeBands({frame: rect(100, 50, 400, 300)});
+
+        // The top and bottom take the full width, corners included; the left and right fill
+        // the middle height. The direction is `edgeForPoint()`'s job, not the strip's.
+        expect(bands.top).toEqual(rect(88, 38, 424, 12));
+        expect(bands.bottom).toEqual(rect(88, 350, 424, 12));
+        expect(bands.left).toEqual(rect(88, 50, 12, 300));
+        expect(bands.right).toEqual(rect(500, 50, 12, 300));
+    });
+
+    it('keeps the four strips pairwise disjoint, so a point is delivered once', () => {
+        for (const frame of [rect(10, 20, 61, 43), rect(100, 100, 10, 8), rect(0, 0, 24, 24)]) {
             const bands = computeResizeBands({frame});
             const rects = RESIZE_BAND_REGIONS.map(r => bands[r]).filter(Boolean);
             for (let i = 0; i < rects.length; i++) {
@@ -106,160 +254,70 @@ describe('computeResizeBands', () => {
     });
 
     it('tiles the 12px ring, edge to edge, and nothing beyond it', () => {
-        const frame = rect(10, 20, 61, 53);
-        const bands = computeResizeBands({frame});
-        const rects = RESIZE_BAND_REGIONS.map(r => bands[r]);
+        for (const frame of [rect(10, 20, 61, 53), rect(100, 100, 10, 8), rect(0, 0, 24, 24)]) {
+            const bands = computeResizeBands({frame});
+            const rects = RESIZE_BAND_REGIONS.map(r => bands[r]);
 
-        expect(rects.every(Boolean)).toBeTrue();
-        const area = rects.reduce((sum, r) => sum + r.width * r.height, 0);
-        expect(area).toBe(unionArea(frame));
+            expect(rects.every(Boolean)).withContext(at(frame, frame.x, frame.y)).toBeTrue();
+            const area = rects.reduce((sum, r) => sum + r.width * r.height, 0);
+            expect(area).toBe(unionArea(frame));
 
-        // Every sampled point of the expected union is in exactly one region, and nothing
-        // outside it is covered.
-        for (let px = frame.x - RESIZE_CORNER; px < frame.x + frame.width + RESIZE_CORNER; px += 1) {
-            for (let py = frame.y - RESIZE_CORNER; py < frame.y + frame.height + RESIZE_CORNER; py += 1) {
-                const hits = RESIZE_BAND_REGIONS.filter(r => bands[r] && contains(bands[r], px, py));
-                const expected = inExpectedUnion(frame, px, py) ? 1 : 0;
-                if (hits.length !== expected)
-                    fail(`expected ${expected} region at ${at(frame, px, py)}, got ${hits.length}`);
-            }
-        }
-    });
-
-    it('gives the whole 24x12 strip hugging an edge next to the corner to the corner', () => {
-        const frame = rect(100, 50, 400, 300);
-        const bands = computeResizeBands({frame});
-
-        // GTK reads a pointer in an edge's band within RESIZE_HANDLE_CORNER_SIZE (24) of the
-        // frame corner as the corner (get_edge_for_coordinates), so the strip 24px long
-        // along the edge and 12px deep - the band's full depth - belongs to the corner.
-        // Previously the north edge claimed it, and the cursor flipped to N where GTK reads
-        // NW; that is the regression this change fixes. Sample it densely: every point of
-        // the 24x12 strip is the corner, and the edge only starts at its end.
-        for (const [region, edge, x0, y0] of [
-            ['nw_n', bands.n, frame.x, frame.y - RESIZE_BAND],
-            ['ne_n', bands.n, frame.x + frame.width - RESIZE_CORNER, frame.y - RESIZE_BAND],
-            ['sw_s', bands.s, frame.x, frame.y + frame.height],
-            ['se_s', bands.s, frame.x + frame.width - RESIZE_CORNER, frame.y + frame.height],
-        ]) {
-            for (let dx = 0; dx < RESIZE_CORNER; dx++) {
-                for (let dy = 0; dy < RESIZE_BAND; dy++) {
-                    const px = x0 + dx;
-                    const py = y0 + dy;
-                    expect(contains(bands[region], px, py)).withContext(`${region} at ${at(frame, px, py)}`).toBeTrue();
-                    expect(contains(edge, px, py)).withContext(`edge at ${at(frame, px, py)}`).toBeFalse();
+            // Every sampled point of the expected union is in exactly one strip, and
+            // nothing outside it is covered.
+            for (let px = frame.x - RESIZE_CORNER; px < frame.x + frame.width + RESIZE_CORNER; px += 1) {
+                for (let py = frame.y - RESIZE_CORNER; py < frame.y + frame.height + RESIZE_CORNER; py += 1) {
+                    const hits = RESIZE_BAND_REGIONS.filter(r => bands[r] && contains(bands[r], px, py));
+                    const expected = inExpectedUnion(frame, px, py) ? 1 : 0;
+                    if (hits.length !== expected)
+                        fail(`expected ${expected} region at ${at(frame, px, py)}, got ${hits.length}`);
                 }
             }
         }
     });
 
-    it('gives the column at right - 24 to the corner, the one column GTK reads as the edge', () => {
-        const frame = rect(100, 50, 400, 300);
-        const bands = computeResizeBands({frame});
-
-        // GTK's get_edge_for_coordinates tests `x > right - 24` strictly, so the column at
-        // exactly right - 24 is the north edge there. Our corner region starts at
-        // `right - rx` inclusive, so we call it the corner. The two agree everywhere else;
-        // this pins the one-column difference so it cannot drift silently, and records that
-        // it is not worth a +1 offset for a single pixel (docs/decoration-model.md § The
-        // resize band).
-        const x = frame.x + frame.width - RESIZE_CORNER;
-        expect(contains(bands.ne_n, x, frame.y - RESIZE_BAND)).toBeTrue();
-        expect(contains(bands.n, x, frame.y - RESIZE_BAND)).toBeFalse();
-
-        // Same column on the south edge, and the mirrored row on the right edge.
-        const y = frame.y + frame.height - RESIZE_CORNER;
-        expect(contains(bands.se_e, frame.x + frame.width, y)).toBeTrue();
-        expect(contains(bands.e, frame.x + frame.width, y)).toBeFalse();
-    });
-
-    it('leaves the pixels more than 12px out from the frame to the desktop', () => {
-        const frame = rect(100, 50, 400, 300);
-        const bands = computeResizeBands({frame});
-
-        // GTK builds its CSD input region as the border box grown by RESIZE_HANDLE_SIZE
-        // (update_realized_window_properties) and lets clicks outside it go through, so no
-        // region may reach further out than 12px - not even beside a corner, where
-        // get_edge_for_coordinates would call the point a corner if the input region ever
-        // delivered it. This is the invariant the 24px corner blocks broke.
-        for (const [px, py] of [
-            [frame.x - RESIZE_CORNER, frame.y - 5],
-            [frame.x - 5, frame.y - RESIZE_CORNER],
-            [frame.x - RESIZE_CORNER, frame.y - RESIZE_CORNER],
-            [frame.x - RESIZE_CORNER + 1, frame.y - RESIZE_BAND - 1],
-            [frame.x - RESIZE_BAND - 1, frame.y + frame.height / 2],
-            [frame.x + frame.width + RESIZE_BAND, frame.y + 5],
-            [frame.x + 5, frame.y + frame.height + RESIZE_CORNER],
-            [frame.x + frame.width - 5, frame.y + frame.height + RESIZE_BAND + 1],
-            [frame.x + frame.width + RESIZE_CORNER, frame.y + frame.height + RESIZE_CORNER],
-        ]) {
-            const hits = RESIZE_BAND_REGIONS.filter(r => bands[r] && contains(bands[r], px, py));
-            expect(hits).withContext(at(frame, px, py)).toEqual([]);
-        }
-    });
-
-    it('still tiles when the window is smaller than two corner reaches', () => {
+    it('still tiles a window far smaller than two corner reaches', () => {
         const frame = rect(100, 100, 10, 8);
         const bands = computeResizeBands({frame});
-        const rects = RESIZE_BAND_REGIONS.map(r => bands[r]);
 
-        // The edges vanish; the two corner reaches already meet at the midline.
-        expect(bands.n).toBeNull();
-        expect(bands.s).toBeNull();
-        expect(bands.w).toBeNull();
-        expect(bands.e).toBeNull();
+        // The strips are pure geometry now, so nothing vanishes; each is 12px deep.
+        expect(bands.top).toEqual(rect(88, 88, 34, 12));
+        expect(bands.bottom).toEqual(rect(88, 108, 34, 12));
+        expect(bands.left).toEqual(rect(88, 100, 12, 8));
+        expect(bands.right).toEqual(rect(110, 100, 12, 8));
+    });
 
-        // Split at the midline, with neither side negative; the arms are 12px deep.
-        expect(bands.nw_n).toEqual(rect(88, 88, 17, 12));
-        expect(bands.ne_n).toEqual(rect(105, 88, 17, 12));
-        expect(bands.nw_w).toEqual(rect(88, 100, 12, 4));
-        expect(bands.sw_w).toEqual(rect(88, 104, 12, 4));
-        for (const r of rects.filter(Boolean))
-            expect(r.width > 0 && r.height > 0).toBeTrue();
+    it('builds a band for a 24x24 window, the smallest the floor allows', () => {
+        const frame = rect(0, 0, 24, 24);
+        const bands = computeResizeBands({frame});
 
-        for (let px = frame.x - RESIZE_CORNER; px < frame.x + frame.width + RESIZE_CORNER; px += 1) {
-            for (let py = frame.y - RESIZE_CORNER; py < frame.y + frame.height + RESIZE_CORNER; py += 1) {
-                const hits = RESIZE_BAND_REGIONS.filter(r => bands[r] && contains(bands[r], px, py));
-                const expected = inExpectedUnion(frame, px, py) ? 1 : 0;
-                if (hits.length !== expected)
-                    fail(`expected ${expected} region at ${at(frame, px, py)}, got ${hits.length}`);
-            }
-        }
+        expect(bands.top).toEqual(rect(-12, -12, 48, 12));
+        expect(bands.bottom).toEqual(rect(-12, 24, 48, 12));
+        expect(bands.left).toEqual(rect(-12, 0, 12, 24));
+        expect(bands.right).toEqual(rect(24, 0, 12, 24));
     });
 
     it('drops every region that falls off the monitor', () => {
         const bounds = rect(0, 0, 1920, 1080);
         const bands = computeResizeBands({frame: rect(0, 0, 400, 300), bounds});
 
-        // Left and top are off screen; so are the outward halves of the two top corners.
-        expect(bands.n).toBeNull();
-        expect(bands.ne_n).toBeNull();
-        expect(bands.nw_n).toBeNull();
-        expect(bands.nw_w).toBeNull();
-        expect(bands.w).toBeNull();
-        expect(bands.sw_w).toBeNull();
-
-        // The on-screen half of a corner still counts: the south-west arm reaches 24px
-        // along the south edge, and that part is on screen.
-        expect(bands.e).toEqual(rect(400, 24, 12, 252));
-        expect(bands.se_e).toEqual(rect(400, 276, 12, 24));
-        expect(bands.se_s).toEqual(rect(376, 300, 36, 12));
-        expect(bands.s).toEqual(rect(24, 300, 352, 12));
-        expect(bands.sw_s).toEqual(rect(0, 300, 24, 12));
+        // Left and top are off screen.
+        expect(bands.top).toBeNull();
+        expect(bands.left).toBeNull();
+        // The on-screen strips survive whole.
+        expect(bands.right).toEqual(rect(400, 0, 12, 300));
+        expect(bands.bottom).toEqual(rect(0, 300, 412, 12));
     });
 
     it('clips a region to the monitor edge', () => {
         const bounds = rect(0, 0, 1920, 1080);
         const bands = computeResizeBands({frame: rect(6, 980, 200, 90), bounds});
 
-        // Left bands hang 6px over the edge: clipped, not dropped.
-        expect(bands.w).toEqual(rect(0, 1004, 6, 42));
-        expect(bands.nw_w).toEqual(rect(0, 980, 6, 24));
-        expect(bands.nw_n).toEqual(rect(0, 968, 30, 12));
-        // Bottom bands hang 2px over the bottom edge.
-        expect(bands.s).toEqual(rect(30, 1070, 152, 10));
-        expect(bands.sw_s).toEqual(rect(0, 1070, 30, 10));
-        expect(bands.sw_w).toEqual(rect(0, 1046, 6, 24));
+        // Left and top hang 6px over the edge: clipped, not dropped.
+        expect(bands.left).toEqual(rect(0, 980, 6, 90));
+        expect(bands.top).toEqual(rect(0, 968, 218, 12));
+        expect(bands.right).toEqual(rect(206, 980, 12, 90));
+        // Bottom hangs 2px over the bottom edge.
+        expect(bands.bottom).toEqual(rect(0, 1070, 218, 10));
     });
 
     it('returns nothing when the window lies outside the monitor', () => {
@@ -273,9 +331,8 @@ describe('computeResizeBands', () => {
         const whole = computeResizeBands({frame, scale: 1});
         expect(computeResizeBands({frame, scale: 1.3333})).toEqual(whole);
         expect(computeResizeBands({frame, scale: 2})).toEqual(whole);
-        expect(whole.n.height).toBe(RESIZE_BAND);
-        expect(whole.nw_n.height).toBe(RESIZE_BAND);
-        expect(whole.nw_n.width).toBe(RESIZE_CORNER + RESIZE_BAND);
+        expect(whole.top.height).toBe(RESIZE_BAND);
+        expect(whole.left.width).toBe(RESIZE_BAND);
     });
 
     it('refuses a scale that cannot place the regions', () => {
@@ -289,32 +346,6 @@ describe('computeResizeBands', () => {
         expect(computeResizeBands({frame: null})).toEqual(emptyBands());
         expect(computeResizeBands({})).toEqual(emptyBands());
         expect(computeResizeBands()).toEqual(emptyBands());
-    });
-});
-
-describe('region directions', () => {
-    it('gives every region one of the eight compass directions', () => {
-        const compass = new Set(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']);
-        for (const region of RESIZE_BAND_REGIONS)
-            expect(compass.has(REGION_DIRECTION[region])).withContext(region).toBeTrue();
-    });
-
-    it('gives both halves of a corner the same direction, never a straight edge', () => {
-        expect(REGION_DIRECTION.nw_n).toBe('nw');
-        expect(REGION_DIRECTION.nw_w).toBe('nw');
-        expect(REGION_DIRECTION.ne_n).toBe('ne');
-        expect(REGION_DIRECTION.ne_e).toBe('ne');
-        expect(REGION_DIRECTION.sw_s).toBe('sw');
-        expect(REGION_DIRECTION.sw_w).toBe('sw');
-        expect(REGION_DIRECTION.se_s).toBe('se');
-        expect(REGION_DIRECTION.se_e).toBe('se');
-    });
-
-    it('keeps the straight edges straight', () => {
-        expect(REGION_DIRECTION.n).toBe('n');
-        expect(REGION_DIRECTION.s).toBe('s');
-        expect(REGION_DIRECTION.e).toBe('e');
-        expect(REGION_DIRECTION.w).toBe('w');
     });
 });
 
@@ -402,12 +433,21 @@ describe('shouldShowResizeBand', () => {
         expect(shouldShowResizeBand({...plain, bufferWidth: 800, bufferHeight: 600})).toBeTrue();
     });
 
-    it('skips a window smaller than two corner reaches', () => {
-        expect(MIN_BAND_WINDOW).toBe(2 * RESIZE_CORNER);
+    it('keeps the band on a window only as thin as the ring itself', () => {
+        // The floor is the ring's sanity bound (`2 * RESIZE_BAND`), not a native boundary:
+        // GTK's input region does not depend on the window size, so a 24px window has a
+        // full native grab ring and ours now does too. The old floor of two corner reaches
+        // (48px) is gone.
+        expect(MIN_BAND_WINDOW).toBe(2 * RESIZE_BAND);
+        expect(MIN_BAND_WINDOW).toBe(24);
         expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(shouldShowResizeBand({...plain, frameHeight: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW, frameHeight: MIN_BAND_WINDOW}))
             .toBeTrue();
+        // The sizes that used to be refused now pass.
+        expect(shouldShowResizeBand({...plain, frameWidth: 40, frameHeight: 600})).toBeTrue();
+        expect(shouldShowResizeBand({...plain, frameWidth: 30, frameHeight: 30})).toBeTrue();
+        expect(shouldShowResizeBand({...plain, frameWidth: 25, frameHeight: 300})).toBeTrue();
     });
 
     it('does not build a band from a missing frame size', () => {

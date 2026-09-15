@@ -1,56 +1,106 @@
 /**
  * Resize band geometry: the strip around a window where a drag starts a compositor
- * resize grab. Pure, so the twelve rectangles can be tested without a session; the
- * model (why 12px, and why a corner reaches 24px along an edge but only 12px outward)
- * is in docs/decoration-model.md § The resize band.
+ * resize grab. Two separate things live here. `edgeForPoint()` answers which direction a
+ * pointer resolves to, and it is a direct transcription of GTK's
+ * `get_edge_for_coordinates()` (`research/gtk/gtk/gtkwindow.c`), first match wins.
+ * `computeResizeBands()` answers where an event is delivered: four disjoint rectangles
+ * that cover the ring, carrying no direction of their own. Pure, so both can be tested
+ * without a session; the model is in docs/decoration-model.md § The resize band.
  */
 
 /** GTK4 floors its resize handle at 12 logical px (`RESIZE_HANDLE_SIZE`, gtkwindow.c). */
 export const RESIZE_BAND = 12;
 
-/** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (gtkwindow.c); see the regions below. */
+/** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (gtkwindow.c). */
 export const RESIZE_CORNER = 24;
 
 /**
- * Thinnest window that gets a band, `2 * RESIZE_CORNER` (48px). This is a deliberate limit,
- * not a geometry floor: below it a side is shorter than the two corner reaches, and
- * `computeResizeBands` has to halve them, which no longer matches GTK's fixed 24px
- * first-match-wins `get_edge_for_coordinates` (`docs/decoration-model.md`, § The resize band,
- * "Why the floor is 48, not 24"). The floor keeps that divergence, and the helper surfaces
- * it would band (wl-clipboard's 1x1), out of the session entirely.
+ * Thinnest window that gets a band, `2 * RESIZE_BAND` (24px). This bounds the ring itself:
+ * a window this thin has no middle left once the band is grown on both sides. It has no
+ * native meaning, and is not a boundary GTK knows: GTK's input region is the body grown by
+ * `RESIZE_HANDLE_SIZE` on every side whatever the window size is
+ * (`update_realized_window_properties`, gtkwindow.c), so a native window this small or
+ * smaller still has a full grab ring.
  */
-export const MIN_BAND_WINDOW = 2 * RESIZE_CORNER;
+export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
 
 /**
- * Regions, clockwise from the top edge. The four edges are named for their direction;
- * each corner contributes two regions named `<corner>_<edge>`, the part of that edge's
- * band the corner takes over (a corner reaches 24px along the edge from the frame
- * corner). The order only fixes iteration, not geometry.
+ * The four reactive surfaces of the ring, clockwise. They are only where an event lands;
+ * the direction comes from `edgeForPoint()`, never from which one was entered. The top and
+ * bottom strips span the full width, so the outward corners belong to them and the left and
+ * right strips fill the middle. Half-open, like Clutter's picking.
  */
-export const RESIZE_BAND_REGIONS = [
-    'n', 'ne_n', 'ne_e', 'e', 'se_e', 'se_s',
-    's', 'sw_s', 'sw_w', 'w', 'nw_w', 'nw_n',
-];
-
-/**
- * The compass direction each region resolves to. A corner's two halves share one
- * direction, so they share one cursor and one grab op and the eight-way mapping never
- * degrades to a straight edge. Keys are the eight directions `Meta.GrabOp` understands.
- */
-export const REGION_DIRECTION = {
-    n: 'n',
-    ne_n: 'ne', ne_e: 'ne',
-    e: 'e',
-    se_e: 'se', se_s: 'se',
-    s: 's',
-    sw_s: 'sw', sw_w: 'sw',
-    w: 'w',
-    nw_w: 'nw', nw_n: 'nw',
-};
+export const RESIZE_BAND_REGIONS = ['top', 'right', 'bottom', 'left'];
 
 /**
  * @typedef {{x: number, y: number, width: number, height: number}} Rect
  */
+
+/**
+ * The direction GTK's `get_edge_for_coordinates()` resolves for a pointer, or null outside
+ * the `RESIZE_BAND` ring.
+ *
+ * The four side bands are tried in GTK's order - west, east, north, south - and inside each
+ * the two corners come before that side's edge, with GTK's strict and non-strict bounds
+ * kept exactly. First match wins, which is what a narrow window turns on: on a side shorter
+ * than two corner reaches, the earlier band takes the overlap instead of the two halves
+ * meeting at the middle.
+ *
+ * Only the outward ring is ours. GTK also reads an inner 24px corner when the pointer is
+ * inside the body (`gsk_rounded_rect_corner_box_contains_point`); that surface belongs to
+ * the client, so a point inside the body is null here.
+ * @param {Rect} frame - Window body, in the same space as `x`/`y`
+ * @param {number} x
+ * @param {number} y
+ * @returns {'n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw'|null}
+ */
+export function edgeForPoint(frame, x, y) {
+    if (!frame || !Number.isFinite(x) || !Number.isFinite(y) ||
+        !Number.isFinite(frame.x) || !Number.isFinite(frame.y) ||
+        !(frame.width > 0) || !(frame.height > 0))
+        return null;
+
+    const left = frame.x;
+    const top = frame.y;
+    const right = left + frame.width;
+    const bottom = top + frame.height;
+    const b = RESIZE_BAND;
+    const c = RESIZE_CORNER;
+
+    // The half-open 12px ring: as far as GTK's input region reaches, and no further.
+    if (x < left - b || x >= right + b || y < top - b || y >= bottom + b)
+        return null;
+
+    if (x < left && x >= left - b) {
+        if (y < top + c && y >= top - b)
+            return 'nw';
+        if (y > bottom - c && y <= bottom + b)
+            return 'sw';
+        return 'w';
+    }
+    if (x > right && x <= right + b) {
+        if (y < top + c && y >= top - b)
+            return 'ne';
+        if (y > bottom - c && y <= bottom + b)
+            return 'se';
+        return 'e';
+    }
+    if (y < top && y >= top - b) {
+        if (x < left + c && x >= left - b)
+            return 'nw';
+        if (x > right - c && x <= right + b)
+            return 'ne';
+        return 'n';
+    }
+    if (y > bottom && y <= bottom + b) {
+        if (x < left + c && x >= left - b)
+            return 'sw';
+        if (x > right - c && x <= right + b)
+            return 'se';
+        return 's';
+    }
+    return null;
+}
 
 /**
  * @param {Rect|null} rect
@@ -74,7 +124,7 @@ function clipToBounds(rect, bounds) {
 }
 
 /**
- * @returns {Record<string, Rect|null>} Every region present, all null
+ * @returns {Record<string, Rect|null>} Every surface present, all null
  */
 function emptyBands() {
     const bands = {};
@@ -84,19 +134,19 @@ function emptyBands() {
 }
 
 /**
- * The twelve regions tiling `frame`'s `RESIZE_BAND`-wide ring, each clipped to `bounds`.
+ * The four rectangles tiling `frame`'s `RESIZE_BAND`-wide outer ring, each clipped to
+ * `bounds`. The direction a point resolves to is `edgeForPoint()`; these rectangles only
+ * decide where an event is delivered atomically. They are disjoint and cover the ring
+ * exactly (half-open, the convention Clutter picks with), so no point is missed or
+ * delivered twice.
  *
  * Units are logical px at every scale; a non-positive or non-finite `scale` gets no band,
- * so a caller that cannot say which space it measured in is never silently misread. The
- * model (why 12, why a corner reaches 24 along an edge but only 12 outward, and the one
- * pixel where our corner decision differs from GTK's) is in
- * docs/decoration-model.md § The resize band.
- *
+ * so a caller that cannot say which space it measured in is never silently misread.
  * @param {object} params
  * @param {Rect} params.frame - Window body (`frame_rect`), logical px
  * @param {Rect|null} [params.bounds=null] - Clip rect (`get_monitor_geometry`), logical px
  * @param {number} [params.scale=1] - Monitor scale the frame was read at
- * @returns {Record<string, Rect|null>} One rect per region, null where it is empty
+ * @returns {Record<string, Rect|null>} One rect per side, null where it is empty
  */
 export function computeResizeBands({frame, bounds = null, scale = 1} = {}) {
     const bands = emptyBands();
@@ -108,28 +158,14 @@ export function computeResizeBands({frame, bounds = null, scale = 1} = {}) {
         return bands;
 
     const b = RESIZE_BAND;
-    const c = RESIZE_CORNER;
     const {x, y, width, height} = frame;
-    // A corner reaches c px along an edge from the frame corner; two opposite corners
-    // would meet and overlap on a side shorter than 2c, so the reach is halved there.
-    // MIN_BAND_WINDOW (2c) keeps a real session from reaching this, but the convergence
-    // stays as a safety net and still tiles without overlap. The edge that remains between
-    // them then has zero width and is dropped as empty.
-    const rx = Math.min(c, width / 2);
-    const ry = Math.min(c, height / 2);
+    // Half-open, so the crops meet without overlap: the top and bottom take the full width
+    // (and with it the outward corners), the left and right fill the middle height.
     const rects = {
-        n: {x: x + rx, y: y - b, width: width - 2 * rx, height: b},
-        ne_n: {x: x + width - rx, y: y - b, width: rx + b, height: b},
-        ne_e: {x: x + width, y, width: b, height: ry},
-        e: {x: x + width, y: y + ry, width: b, height: height - 2 * ry},
-        se_e: {x: x + width, y: y + height - ry, width: b, height: ry},
-        se_s: {x: x + width - rx, y: y + height, width: rx + b, height: b},
-        s: {x: x + rx, y: y + height, width: width - 2 * rx, height: b},
-        sw_s: {x: x - b, y: y + height, width: rx + b, height: b},
-        sw_w: {x: x - b, y: y + height - ry, width: b, height: ry},
-        w: {x: x - b, y: y + ry, width: b, height: height - 2 * ry},
-        nw_w: {x: x - b, y, width: b, height: ry},
-        nw_n: {x: x - b, y: y - b, width: rx + b, height: b},
+        top: {x: x - b, y: y - b, width: width + 2 * b, height: b},
+        right: {x: x + width, y, width: b, height},
+        bottom: {x: x - b, y: y + height, width: width + 2 * b, height: b},
+        left: {x: x - b, y, width: b, height},
     };
 
     for (const region of RESIZE_BAND_REGIONS)

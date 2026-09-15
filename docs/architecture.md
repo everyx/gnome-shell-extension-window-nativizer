@@ -15,8 +15,8 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
 | `lib/settings.js` | GSettings IO adapter |
-| `lib/resizeBand.js` | the window's resize band as twelve rectangles, clipped to the monitor (pure) |
-| `lib/resizeBandActor.js` | the resize band actor: one reactive child per region, hover cursor and resize grab |
+| `lib/resizeBand.js` | the window's resize band: four hit strips clipped to the monitor, plus `edgeForPoint()`, GTK's direction order (pure) |
+| `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
 | `lib/window.js` | shell-side identity gathering (`Shell.WindowTracker`, live window list) |
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
@@ -76,8 +76,9 @@ state change.
 
 A resizable window that passes `shouldShowResizeBand()` also gets a `ResizeBand`
 (`lib/resizeBandActor.js`), the only actor outside the window picker that takes input: a transparent container with
-twelve reactive `St.Widget` children, one per region of the band (12px edges stopping 24px
-short of each corner, each corner split into its two 24px edge reaches). The
+four reactive `St.Widget` children, one per side of the 12px ring (the top and bottom span the
+full width, so the outward corners belong to them). The child only says where an event landed;
+the direction is resolved from the pointer by `edgeForPoint()`, GTK's first-match order. The
 container is inserted in `global.window_group` above its own window actor, so it never covers
 another window or shell chrome, and `_restackActors()` re-pins it on `restacked` (the same
 signal the shadow is pinned below its window on). Like the shadow it is bound to the window
