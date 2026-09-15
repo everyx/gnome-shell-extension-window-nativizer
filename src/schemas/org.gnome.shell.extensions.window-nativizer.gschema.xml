@@ -6,7 +6,7 @@
     <key name="window-rules" type="a{ss}">
       <default>{}</default>
       <summary>Which decorations are ours, per window kind</summary>
-      <description>Window kinds this extension decorates, and which decoration axes are ours for each. Keyed by a window-kind fingerprint: '&lt;identity&gt;:client_type=&lt;wayland|x11&gt;,window_type=&lt;int&gt;,has_parent=&lt;bool&gt;,allows_resize=&lt;bool&gt;,attached_dialog=&lt;bool&gt;' e.g. 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false' The fingerprint is derived from the picked window's stable structural attributes, so a rule never generalizes to every window of an application. The state names the axes that are ours: 'both' (we round the corners and draw the shadow), 'none' (we draw neither; the window stays exactly as the client drew it), 'corners' (we round the corners; the client's own shadow stays untouched), or 'shadow' (we take the shadow over; the client's own corners stay). Structural disqualifiers (non-decorable window type, maximized/fullscreen) are never affected. Rules stored under the previous 'suppress-rules' / 'force-rules' keys are not migrated: the group-plus-axis form has no equivalent here.</description>
+      <description>Window kinds this extension decorates, and which decoration axes are ours for each. Keyed by a window-kind fingerprint: '&lt;identity&gt;:client_type=&lt;wayland|x11&gt;,window_type=&lt;int&gt;,has_parent=&lt;bool&gt;,allows_resize=&lt;bool&gt;,attached_dialog=&lt;bool&gt;', for example, 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false'. The fingerprint is derived from the picked window's stable structural attributes, so a rule never generalizes to every window of an application. The state names the axes that are ours: 'both' (we round the corners and draw the shadow), 'none' (we draw neither; the window stays exactly as the client drew it), 'corners' (we round the corners; the client's own shadow stays untouched), or 'shadow' (we take the shadow over; the client's own corners stay). Structural disqualifiers (non-decorable window type, maximized/fullscreen) are never affected. Rules stored under the previous 'suppress-rules' / 'force-rules' keys are not migrated: the group-plus-axis form has no equivalent here.</description>
     </key>
     <key name="prefer-crisp-text" type="b">
       <default>false</default>
@@ -16,7 +16,7 @@
     <key name="resize-band" type="b">
       <default>true</default>
       <summary>Widen the resize band around windows</summary>
-      <description>Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels out on every side, and 24 along the edge at each corner, as native GNOME windows can. A window whose declared margin is already at least 12 pixels on every side is left alone. When off, clicks in that band go to whatever is behind the window</description>
+      <description>Let windows whose own resize border is narrower than a native one be resized by dragging the band around them: 12 pixels out on every side, and 24 along the edge at each corner, as native GNOME windows can. A window whose declared margin is already at least 12 pixels on every side is left alone. When off, clicks in that band go to whatever is behind the window.</description>
     </key>
   </schema>
 </schemalist>

@@ -226,15 +226,15 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         // See docs/rule-model.md — state names which decoration axes this extension draws.
         const pickButton = new Gtk.Button({
             icon_name: 'find-location-symbolic',
-            tooltip_text: _('Pick a window that looks wrong'),
+            tooltip_text: _('Pick a window to add a rule'),
             valign: Gtk.Align.CENTER,
             margin_start: 18,
         });
-        pickButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Pick a window that looks wrong')]);
+        pickButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Pick a window to add a rule')]);
 
         const rulesGroup = new Adw.PreferencesGroup({
             title: asMarkup(_('Window Rules')),
-            description: asMarkup(_('Which decorations this extension draws for this window kind?')),
+            description: asMarkup(_('Configure decoration overrides for specific window kinds')),
             header_suffix: pickButton,
         });
         page.add(rulesGroup);
@@ -256,7 +256,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
-                    title: asMarkup(_('Use the button above to pick a window that looks wrong')),
+                    title: asMarkup(_('Use the button above to pick a window and add a rule')),
                     sensitive: false,
                 });
                 rulesGroup.add(emptyRow);

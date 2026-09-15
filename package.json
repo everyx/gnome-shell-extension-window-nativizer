@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "GNOME Shell extension: fills in missing GNOME rounded corners and shadows, each only where absent",
+  "description": "GNOME Shell extension: brings native GNOME rounded corners, GPU shadows, and resize bands to non-native windows",
   "license": "GPL-2.0-or-later",
   "repository": {
     "type": "git",

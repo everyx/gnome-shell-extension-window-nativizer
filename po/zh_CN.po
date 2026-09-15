@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 09:18+0800\n"
+"POT-Creation-Date: 2026-09-15 14:59+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -143,20 +143,20 @@ msgstr ""
 "放：每边向外 12 像素，角上沿边 24 像素"
 
 #: src/prefs.js:229 src/prefs.js:233
-msgid "Pick a window that looks wrong"
-msgstr "选取一个显示不正常的窗口"
+msgid "Pick a window to add a rule"
+msgstr "选取窗口以添加规则"
 
 #: src/prefs.js:236 src/prefs.js:254 src/prefs.js:255
 msgid "Window Rules"
 msgstr "窗口规则"
 
 #: src/prefs.js:237
-msgid "Which decorations this extension draws for this window kind?"
-msgstr "本扩展为此类窗口绘制哪些装饰？"
+msgid "Configure decoration overrides for specific window kinds"
+msgstr "针对特定类型的窗口自定义装饰规则"
 
 #: src/prefs.js:259
-msgid "Use the button above to pick a window that looks wrong"
-msgstr "用上面的按钮选取一个显示不正常的窗口"
+msgid "Use the button above to pick a window and add a rule"
+msgstr "用上面的按钮选取窗口以添加规则"
 
 #: src/prefs.js:322 src/prefs.js:324
 msgid "Remove Rule"
