@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 14:59+0800\n"
+"POT-Creation-Date: 2026-09-16 09:07+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -158,31 +158,36 @@ msgstr "針對特定類型的視窗自訂裝飾規則"
 msgid "Use the button above to pick a window and add a rule"
 msgstr "用上面的按鈕選取視窗以新增規則"
 
-#: src/prefs.js:322 src/prefs.js:324
+#: src/prefs.js:333 src/prefs.js:335
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:347
+#: src/prefs.js:358
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:348
+#: src/prefs.js:359
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:360
+#: src/prefs.js:371
 msgid "No rule added: this window could not be identified"
 msgstr "未新增規則：無法識別這個視窗"
 
-#: src/prefs.js:371
+#: src/prefs.js:382
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr "未新增規則：這條規則對此類視窗不會有任何效果"
 
-#: src/prefs.js:380
+#: src/prefs.js:394
 msgid "No rule added: the rule could not be saved"
 msgstr "未新增規則：規則未能儲存"
 
-#: src/prefs.js:388
+#: src/prefs.js:406
 #, javascript-format
-msgid "Rule set to: %s"
-msgstr "規則已設為：%s"
+msgid "Rule updated for %s: %s"
+msgstr "已更新 %s 的規則：%s"
+
+#: src/prefs.js:407
+#, javascript-format
+msgid "Rule added for %s: %s"
+msgstr "已為 %s 新增規則：%s"

@@ -241,7 +241,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
         const rows = [];
 
-        const renderRules = () => {
+        const renderRules = highlightKey => {
             for (const row of rows)
                 rulesGroup.remove(row);
             rows.length = 0;
@@ -264,10 +264,21 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 return;
             }
 
+            let focusedRow = null;
             for (const [ruleKey, state] of entries) {
                 const row = buildRuleRow(ruleKey, state);
                 rulesGroup.add(row);
                 rows.push(row);
+                if (highlightKey && ruleKey === highlightKey)
+                    focusedRow = row;
+            }
+
+            if (focusedRow) {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    if (windowAlive && focusedRow)
+                        focusedRow.grab_focus();
+                    return GLib.SOURCE_REMOVE;
+                });
             }
         };
 
@@ -373,7 +384,10 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                setWindowRules(settings, withRule(getWindowRules(settings), ruleKey, state));
+                const existingRules = getWindowRules(settings);
+                const isExisting = Object.prototype.hasOwnProperty.call(existingRules, ruleKey);
+
+                setWindowRules(settings, withRule(existingRules, ruleKey, state));
 
                 if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
                     window.add_toast(new Adw.Toast({
@@ -382,10 +396,18 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                renderRules();
+                renderRules(ruleKey);
+
+                const {baseWmClass} = parseRuleKey(ruleKey);
+                const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+                const name = appInfo?.name || baseWmClass || ruleKey;
+
+                const toastTitle = isExisting
+                    ? _('Rule updated for %s: %s').format(name, stateLabel(state))
+                    : _('Rule added for %s: %s').format(name, stateLabel(state));
 
                 window.add_toast(new Adw.Toast({
-                    title: _('Rule set to: %s').format(stateLabel(state)),
+                    title: toastTitle,
                 }));
             });
         });

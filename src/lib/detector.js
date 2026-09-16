@@ -422,6 +422,19 @@ function kindParams(params) {
 }
 
 /**
+ * Pick heuristic following the "never-maintain-status-quo" principle:
+ * A user actively invoking the window picker to add a rule is demonstrably dissatisfied
+ * with how the window currently looks. The suggestion must never maintain the status quo
+ * (i.e. it must never suggest a no-op state that keeps the window as-is). Instead, it
+ * chooses the state that inverts or breaks the current presentation:
+ *
+ *  - State 2 (Decorated / Taken over): Any axis of ours is drawn (drawShadow || drawClip)
+ *    → Suggest `RuleState.NONE` to retract our override and restore the untouched app.
+ *  - State 1 (Untouched / Native-like): No axis of ours is drawn (!drawShadow && !drawClip)
+ *    → Suggest `RuleState.BOTH` to actively bring the Adwaita appearance to the app.
+ *      (Protective fallback: if the window has an unclearable Mutter X11 shadow, suggest
+ *      `RuleState.CORNERS` to avoid adding a double shadow artifact).
+ *
  * @param {WindowEvaluationParams} params
  * @returns {string}
  */

@@ -899,16 +899,16 @@ describe('the pick heuristic', () => {
     });
 
     describe('suggestedRuleState', () => {
-        it('suggests none when any axis is already ours', () => {
+        it('suggests none in State 2 when any axis is already ours (never maintain status quo)', () => {
             expect(suggestedRuleState(plainWindow)).toBe(RuleState.NONE);
             expect(suggestedRuleState(csdWindow)).toBe(RuleState.NONE);
         });
 
-        it('suggests both when no axis is ours', () => {
+        it('suggests both in State 1 when no axis is ours (never maintain status quo)', () => {
             expect(suggestedRuleState(nativeWindow)).toBe(RuleState.BOTH);
         });
 
-        it('suggests corners when the shadow on screen is not ours to clear', () => {
+        it('suggests corners in State 1 when the shadow on screen is not ours to clear', () => {
             // A bare X11 window (no declared margin) whose corners already look like
             // ours: no axis is ours, and Mutter's shadow cannot be cleared, so `both`
             // would add a second shadow on top of it.

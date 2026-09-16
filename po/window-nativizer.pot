@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 14:59+0800\n"
+"POT-Creation-Date: 2026-09-16 09:07+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -156,31 +156,36 @@ msgstr ""
 msgid "Use the button above to pick a window and add a rule"
 msgstr ""
 
-#: src/prefs.js:322 src/prefs.js:324
+#: src/prefs.js:333 src/prefs.js:335
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:347
+#: src/prefs.js:358
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:348
+#: src/prefs.js:359
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:360
+#: src/prefs.js:371
 msgid "No rule added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:371
+#: src/prefs.js:382
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr ""
 
-#: src/prefs.js:380
+#: src/prefs.js:394
 msgid "No rule added: the rule could not be saved"
 msgstr ""
 
-#: src/prefs.js:388
+#: src/prefs.js:406
 #, javascript-format
-msgid "Rule set to: %s"
+msgid "Rule updated for %s: %s"
+msgstr ""
+
+#: src/prefs.js:407
+#, javascript-format
+msgid "Rule added for %s: %s"
 msgstr ""

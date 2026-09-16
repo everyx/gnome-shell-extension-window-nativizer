@@ -100,21 +100,46 @@ could never match it at runtime.
 
 ## The pick heuristic
 
-Picking a window means "this looks wrong", so the picker stores the state that
-corrects what the window currently shows. The suggestion follows the window's
-**kind** — the transient state (maximized, tiled, fullscreen) is normalized away,
-because a rule outlives it:
+Picking a window means "this looks wrong", so the picker proposes the state that
+corrects what the window currently shows.
 
-- any axis of ours on screen → suggest `none`
-- no axis of ours, and the shadow on screen is ours to clear → suggest `both`
-- no axis of ours, and that shadow is not ours to clear (Mutter's, or the frames
-  client's) → suggest `corners`, so the suggestion cannot add a second shadow
+### Never-Maintain-Status-Quo Principle
 
-The guess is safe because it is symmetric and cheap to reverse: whichever state it
-lands on, the dropdown on the row offers the other three, and the rule never touches
-another window kind. It is also checked before it is stored: the extension re-runs
-the evaluator with the proposed state and refuses a rule that would change nothing,
-so an inert guess is reported instead of written. `suggestedRuleState()` and
-`suggestedRuleWouldChange()` in `detector.js` are pure and unit-tested; the inspector
-passes both answers over D-Bus with the picked window's properties, and an absent
-answer means an extension too old to judge, in which case prefs stores the rule.
+A user actively invoking the window picker to add a rule is demonstrably dissatisfied
+with how the window currently looks. Therefore, the suggestion must **never maintain
+the status quo** (i.e. it must never suggest a no-op state that keeps the window as-is).
+Instead, it chooses the state that inverts or breaks the current presentation:
+
+- **State 2 (Decorated / Taken over)**: Any axis of ours is currently on screen
+  (`drawShadow || drawClip`).
+  → **Suggest `none`**. The user picked an already-decorated window because our override
+  caused issues (e.g. black clipping artifacts, shadow collision, performance glitch);
+  the most natural corrective intent is to retract our decoration and restore the
+  untouched native/client look.
+- **State 1 (Untouched / Native-like)**: No axis of ours is currently on screen
+  (`!drawShadow && !drawClip`).
+  → **Suggest `both`**. The user picked an undecorated or pass-through window because they
+  want this extension to actively step in and bring native GNOME Adwaita ergonomics
+  (rounded corners and GPU-baked shadow) to it.
+  *(Physical constraint safeguard)*: If the window is a bare X11 window whose server-side
+  Mutter shadow cannot be cleared, the suggestion safely degrades to **`corners`** to avoid
+  painting an unsightly double shadow.
+
+### Normalization and safety
+
+The suggestion follows the window's **kind** — the transient state (maximized, tiled,
+fullscreen) is normalized away by `kindParams()`, because a rule outlives transient states.
+
+The guess is safe and ergonomic because:
+1. **Never a no-op**: Under the "never maintain status quo" principle, State 1 yields `both`
+   and State 2 yields `none`, so every valid pick produces a tangible, actionable change.
+2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused,
+   and the dropdown offers all four states (`both`, `none`, `corners`, `shadow`) for instant
+   one-click adjustment.
+3. **Pre-flight verification**: The extension re-evaluates the proposed state via
+   `suggestedRuleWouldChange()` before storing, refusing any rule that would have no physical
+   effect on the target window kind. `suggestedRuleState()` and `suggestedRuleWouldChange()`
+   in `detector.js` are pure and unit-tested; the inspector passes both answers over D-Bus with
+   the picked window's properties, and an absent answer means an extension too old to judge,
+   in which case prefs stores the rule.
+
