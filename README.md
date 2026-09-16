@@ -91,7 +91,16 @@ If you prefer window edges to allow clicks to pass through to underlying windows
 ### Requirements
 - GNOME Shell 50 (Wayland or X11)
 
+### Install from Release (Recommended)
+
+Download the latest `window-nativizer@everyx.github.io.shell-extension.zip` from [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases), then install it using the GNOME CLI:
+
+```sh
+gnome-extensions install --force window-nativizer@everyx.github.io.shell-extension.zip
+```
+
 ### Install from Source
+
 ```sh
 git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
 cd gnome-shell-extension-window-nativizer

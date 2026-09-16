@@ -91,7 +91,16 @@ Window Nativizer 采取了高度务实与透明的处理策略：
 ### 系统要求
 - GNOME Shell 50（Wayland 或 X11）
 
+### 从 Release 安装（推荐）
+
+从 [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases) 下载最新的 `window-nativizer@everyx.github.io.shell-extension.zip`，然后通过命令行安装：
+
+```sh
+gnome-extensions install --force window-nativizer@everyx.github.io.shell-extension.zip
+```
+
 ### 从源码安装
+
 ```sh
 git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
 cd gnome-shell-extension-window-nativizer
