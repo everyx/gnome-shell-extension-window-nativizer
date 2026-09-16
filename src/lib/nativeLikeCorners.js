@@ -10,6 +10,7 @@ import Gio from 'gi://Gio';
 const ADWAITA_PROVIDERS = [
     'libadwaita-1.so', // GTK4
     'libhandy-1.so',  // GTK3 predecessor (window.csd.unified)
+    'libxul.so',      // Mozilla Gecko (Firefox 153+ four-corner CSD)
 ];
 
 /** pid -> has an Adwaita provider; freed by forgetProcess(pid) and destroy(). */

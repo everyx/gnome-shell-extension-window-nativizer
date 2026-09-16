@@ -34,7 +34,7 @@ Window Nativizer 不是一个无差别的“窗口裁切工具”，而是一个
 > **基准测试环境**：Arch Linux（Linux 7.2 内核），GNOME Shell 50.4 (Wayland)，11th Gen Intel® Core™ i5-11300H @ 3.10GHz（4 核 / 8 线程），32 GB 内存，Intel® Iris® Xe 核显。测试由 `tools/benchmark-perf.py` 在自动化 headless 会话中执行（150 次 60 FPS 连续动态缩放，3 轮预热与 AB-BA 对衡采样；真机硬件实测数据可能有所不同）。
 
 ### 🛡️ 外科手术式的克制（Non-Invasive）
-- **绝不打扰原生应用**：自动检测进程库映射，对已自带原生 Adwaita 圆角的应用（Libadwaita 与 Libhandy）**坚决不碰**；
+- **绝不打扰原生应用**：自动检测进程库映射，对已自带原生 Adwaita 圆角的应用（Libadwaita、Libhandy 与现代 Gecko/Firefox）**坚决不碰**；
 - **绝不叠加多层阴影**：精确识别 Mutter 合成器与 X11 既有阴影边界，只补齐缺失部分；
 - **精准感知窗口状态**：最大化、全屏贴齐屏幕边缘时自动撤销圆角与阴影；贴边对齐（Snap Tiled）窗口自动消除内侧接缝阴影。
 
@@ -54,7 +54,7 @@ Window Nativizer 采取了高度务实与透明的处理策略：
 | 维度 | Rounded Window Corners (Reborn) | Window Nativizer (本项目) |
 | :--- | :--- | :--- |
 | **核心定位** | **桌面主题美化与个性化**<br/>为所有窗口提供统一、可自定义的圆角半径，营造整体风格 | **GNOME 原生标准对齐与兼容**<br/>严格补充非原生应用缺失的 Adwaita 视觉与交互规范 |
-| **目标窗口** | **全桌面通用覆盖**<br/>对各窗口通配圆角样式，提供排除项与黑名单机制 | **选择性原生化（缺什么补什么）**<br/>仅装饰缺少 Adwaita 样式的窗口，原生 libadwaita/libhandy 应用完全不介入 |
+| **目标窗口** | **全桌面通用覆盖**<br/>对各窗口通配圆角样式，提供排除项与黑名单机制 | **选择性原生化（缺什么补什么）**<br/>仅装饰缺少 Adwaita 样式的窗口，原生 libadwaita/libhandy/Gecko 应用完全不介入 |
 | **圆角半径** | **用户自定义**<br/>支持用户自由设定任意圆角半径（如 16px、20px） | **上游 Adwaita 规范**<br/>15px 半径与内侧高光轮廓，参数直接编译自 libadwaita 源码 |
 | **边缘缩放触发区** | **保持客户端原状**<br/>依赖应用自身声明的窗口边距进行缩放 | **12px GTK 原生缩放触发区**<br/>精准复刻 GTK4 优先捕获算法，彻底恢复轻松拖拽缩放 |
 | **阴影架构** | **St.Bin CSS 管线**<br/>通过 `St.Bin` 阴影结合 Clutter 裁剪效果呈现 | **GPU 8-Slice 预烘焙网格**<br/>按样式预烘焙纹理并直接提交 GPU 网格，无运行时 CSS 布局开销 |

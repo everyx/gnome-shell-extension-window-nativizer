@@ -73,6 +73,7 @@ and all of them are visible in the same place:
 | Provider | How it is visible |
 |---|---|
 | libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
+| libxul (Gecko) | the process maps `libxul.so` (Firefox 153+ native four-corner CSD) |
 
 > **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 — cleared ring + our shadow + 15px four corners — with the expected top 12px vs 15px delta and the other three corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
 

@@ -28,6 +28,10 @@ describe('nativeLikeCorners', () => {
             expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
+        it('takes libxul as a provider (Mozilla Gecko / Firefox)', () => {
+            expect(classifyProcess(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
+        });
+
         it('does not take the Qt 6 built-in decoration plugin as a provider — it is top-only (ceCornerRadius=12)', () => {
             const plugin = '/usr/lib/qt6/plugins/wayland-decoration-client/libadwaita.so';
             expect(classifyProcess(maps(plugin))).toBeFalse();
@@ -38,10 +42,11 @@ describe('nativeLikeCorners', () => {
             expect(classifyProcess(maps(qadwaita))).toBeFalse();
         });
 
-        it('still takes libadwaita-1.so and libhandy-1.so as native-like (regression guard)', () => {
+        it('still takes libadwaita-1.so, libhandy-1.so, and libxul.so as native-like (regression guard)', () => {
             expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
             expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
-            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0'))).toBeTrue();
+            expect(classifyProcess(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
+            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0', '/usr/lib/firefox/libxul.so'))).toBeTrue();
         });
 
         it('reports a plain GTK program as holding no provider', () => {
