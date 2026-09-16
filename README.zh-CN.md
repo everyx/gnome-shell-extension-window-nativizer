@@ -12,7 +12,7 @@
 
 为所有未采用 Libadwaita 外观的窗口（Electron, Chromium, GTK3, Qt, Wine, WPS 等）带来**像素级对齐的 GNOME 官方圆角、GPU 烘焙阴影以及 GTK 原生 12px 缩放触发区**。
 
-![对比：方角窗口 vs. 同一窗口补上圆角与阴影](assets/preview.webp)
+<img src="assets/preview.webp" alt="对比：方角窗口 vs. 同一窗口补上圆角与阴影" width="500">
 
 ---
 
