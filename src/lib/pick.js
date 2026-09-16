@@ -47,9 +47,10 @@ export function extractWindowProperties(win, wmClassOverride = null) {
     const wmClass = wmClassOverride || readDeclaredIdentity(win);
     const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
     const isX11 = win.get_client_type?.() === WindowClientType.X11;
+    const f = win.get_frame_rect?.();
 
     // Values are strings for D-Bus a{ss}; prefs parses them back for buildRuleKey().
-    return {
+    const props = {
         wmClass,
         'clientType': isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         'windowType': String(windowType),
@@ -57,15 +58,25 @@ export function extractWindowProperties(win, wmClassOverride = null) {
         'allowsResize': boolString(win.allows_resize?.()),
         'isAttachedDialog': boolString(win.is_attached_dialog?.()),
     };
+
+    if (f && Number.isFinite(f.width) && Number.isFinite(f.height) && f.width > 0 && f.height > 0) {
+        props.width = String(Math.round(f.width));
+        props.height = String(Math.round(f.height));
+    }
+
+    return props;
 }
 
 /** @param {Record<string,string>} [properties] @returns {string} canonical key or '' */
 export function buildRuleKeyFromProperties(properties = {}) {
+    const allowsResize = properties.allowsResize === 'true';
     return buildRuleKey(properties.wmClass, {
         clientType: properties.clientType,
         windowType: Number(properties.windowType ?? WindowType.NORMAL),
         hasParent: properties.hasParent === 'true',
-        allowsResize: properties.allowsResize === 'true',
+        allowsResize,
         isAttachedDialog: properties.isAttachedDialog === 'true',
+        width: !allowsResize && properties.width ? Number(properties.width) : null,
+        height: !allowsResize && properties.height ? Number(properties.height) : null,
     });
 }

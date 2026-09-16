@@ -133,11 +133,14 @@ const FINGERPRINT_FIELDS = [
     {name: 'allows_resize', render: o => boolString(o.allowsResize), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
     {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
 ];
-const FINGERPRINT_SPECIFIER_PATTERN = FINGERPRINT_FIELDS
-    .map(field => `${field.name}=${field.pattern}`)
-    .join(',');
+
+// Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
+// to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
 const VALID_RULE_KEY_PATTERN = new RegExp(
-    `^[^\\s:]+:${FINGERPRINT_SPECIFIER_PATTERN}$`
+    '^[^\\s:]+:(?:' +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD}` +
+    ')$'
 );
 
 /**
@@ -148,6 +151,8 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
  * @param {boolean} [props.hasParent=false]
  * @param {boolean} [props.allowsResize=true]
  * @param {boolean} [props.isAttachedDialog=false]
+ * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
+ * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
  * @returns {string} Canonical key or '' when wmClass is missing
  */
 export function buildRuleKey(wmClass, {
@@ -156,14 +161,21 @@ export function buildRuleKey(wmClass, {
     hasParent = false,
     allowsResize = true,
     isAttachedDialog = false,
+    width = null,
+    height = null,
 } = {}) {
     if (!wmClass)
         return '';
 
     const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog};
-    const specifier = FINGERPRINT_FIELDS
+    let specifier = FINGERPRINT_FIELDS
         .map(field => `${field.name}=${field.render(fields)}`)
         .join(',');
+
+    const w = Number(width);
+    const h = Number(height);
+    if (!allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
+        specifier += `,size=${Math.round(w)}x${Math.round(h)}`;
 
     // ':'/whitespace delimit the grammar, so the identity is encoded.
     return `${encodeIdentity(wmClass)}:${specifier}`;
@@ -234,9 +246,17 @@ export function parseRuleKey(key) {
     for (const pair of specifier.split(',')) {
         const eqIdx = pair.indexOf('=');
         const name = pair.slice(0, eqIdx);
+        const val = pair.slice(eqIdx + 1);
+        if (name === 'size') {
+            properties.size = val;
+            const [w, h] = val.split('x').map(Number);
+            properties.width = w;
+            properties.height = h;
+            continue;
+        }
         const field = FINGERPRINT_FIELDS.find(f => f.name === name);
         if (field)
-            properties[name] = field.parse(pair.slice(eqIdx + 1));
+            properties[name] = field.parse(val);
     }
 
     return {baseWmClass, specifier, properties};
@@ -251,6 +271,8 @@ export function parseRuleKey(key) {
  * @param {boolean} [options.hasParent=false]
  * @param {boolean} [options.allowsResize=true]
  * @param {boolean} [options.isAttachedDialog=false]
+ * @param {number|null} [options.frameWidth=null]
+ * @param {number|null} [options.frameHeight=null]
  * @returns {Set<string>|null} Axes that are ours, or null when no rule matched
  */
 export function resolveRule(wmClass, rules = {}, options = {}) {
@@ -263,17 +285,38 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
         hasParent = false,
         allowsResize = true,
         isAttachedDialog = false,
+        frameWidth = null,
+        frameHeight = null,
     } = options;
 
-    const key = buildRuleKey(wmClass, {
+    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule if one exists.
+    if (!allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0) {
+        const exactKey = buildRuleKey(wmClass, {
+            clientType,
+            windowType,
+            hasParent,
+            allowsResize,
+            isAttachedDialog,
+            width: frameWidth,
+            height: frameHeight,
+        });
+        if (exactKey && Object.prototype.hasOwnProperty.call(rules, exactKey)) {
+            const axes = parseRuleState(rules[exactKey]);
+            if (axes)
+                return axes;
+        }
+    }
+
+    // 2. Generic rule key (without size suffix) as fallback for fixed-size, or primary for resizable.
+    const genericKey = buildRuleKey(wmClass, {
         clientType,
         windowType,
         hasParent,
         allowsResize,
         isAttachedDialog,
     });
-    if (!key)
+    if (!genericKey || !Object.prototype.hasOwnProperty.call(rules, genericKey))
         return null;
 
-    return parseRuleState(rules[key]);
+    return parseRuleState(rules[genericKey]);
 }

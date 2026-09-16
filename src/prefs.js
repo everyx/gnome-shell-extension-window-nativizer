@@ -64,7 +64,12 @@ function windowKindSentence(properties) {
     const fixedSize = _('Fixed-size');
     // Translators: A window the user can resize.
     const resizable = _('Resizable');
-    const size = properties.allows_resize === false ? fixedSize : resizable;
+    let size = properties.allows_resize === false ? fixedSize : resizable;
+    if (properties.allows_resize === false && properties.size) {
+        const formattedDimensions = String(properties.size).replace('x', '×');
+        // Translators: %s is the width and height of the window, e.g. "Fixed-size (360×420)".
+        size = _('Fixed-size (%s)').format(formattedDimensions);
+    }
     const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
 
     // Translators: The window has no parent window.

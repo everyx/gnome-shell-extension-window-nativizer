@@ -696,6 +696,38 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('ring-cleared(rule-applied(gtk4-app:shadow))');
     });
 
+    it('applies exact size rule for fixed-size windows to differentiate dialogs', () => {
+        const qrKey = buildRuleKey('multi-dlg-app', {allowsResize: false, width: 360, height: 420});
+        const toolbarKey = buildRuleKey('multi-dlg-app', {allowsResize: false, width: 240, height: 48});
+
+        const rules = {
+            [qrKey]: 'both',
+            [toolbarKey]: 'none',
+        };
+
+        const qrWin = evaluateWindowActions({
+            ...ringedWindow,
+            allowsResize: false,
+            frameWidth: 360,
+            frameHeight: 420,
+            wmClass: 'multi-dlg-app',
+            rules,
+        });
+        expect(qrWin.drawClip).toBeTrue();
+        expect(qrWin.drawShadow).toBeTrue();
+
+        const toolbarWin = evaluateWindowActions({
+            ...ringedWindow,
+            allowsResize: false,
+            frameWidth: 240,
+            frameHeight: 48,
+            wmClass: 'multi-dlg-app',
+            rules,
+        });
+        expect(toolbarWin.drawClip).toBeFalse();
+        expect(toolbarWin.drawShadow).toBeFalse();
+    });
+
     it('a tile match is about our shadow, so it no longer clears a client\'s own ring', () => {
         // Tiled means flat corners, so there is no clip; the client's ring is not
         // ours to erase just because a policy dropped the shadow we would draw.

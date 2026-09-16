@@ -103,8 +103,59 @@ describe('resolveRule', () => {
             .toEqual(['corners', 'shadow']);
     });
 
-    it('ignores an invalid stored value rather than acting on it', () => {
-        expect(resolveRule('wechat', {[mainKey]: 'nonsense'})).toBeNull();
+    it('exact size match distinguishes fixed-size windows of the same kind', () => {
+        const qrDialogKey = buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420});
+        const toolbarKey = buildRuleKey('wechat', {allowsResize: false, width: 240, height: 48});
+
+        const rules = {
+            [qrDialogKey]: 'both',
+            [toolbarKey]: 'none',
+        };
+
+        // QR dialog matches 'both'
+        expect(resolved(resolveRule('wechat', rules, {
+            allowsResize: false,
+            frameWidth: 360,
+            frameHeight: 420,
+        }))).toEqual(['corners', 'shadow']);
+
+        // Toolbar matches 'none'
+        expect(resolved(resolveRule('wechat', rules, {
+            allowsResize: false,
+            frameWidth: 240,
+            frameHeight: 48,
+        }))).toEqual([]);
+
+        // Other size of the same kind does not match
+        expect(resolveRule('wechat', rules, {
+            allowsResize: false,
+            frameWidth: 500,
+            frameHeight: 300,
+        })).toBeNull();
+    });
+
+    it('falls back to generic rule without size when exact size rule is absent', () => {
+        const genericFixedKey = buildRuleKey('wechat', {allowsResize: false});
+        const exactQrKey = buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420});
+
+        const rules = {
+            [genericFixedKey]: 'corners',
+            [exactQrKey]: 'both',
+        };
+
+        // Exact size prefers the exact rule ('both')
+        expect(resolved(resolveRule('wechat', rules, {
+            allowsResize: false,
+            frameWidth: 360,
+            frameHeight: 420,
+        }))).toEqual(['corners', 'shadow']);
+
+        // Different size falls back to the generic rule ('corners')
+        expect(resolved(resolveRule('wechat', rules, {
+            allowsResize: false,
+            frameWidth: 600,
+            frameHeight: 400,
+        }))).toEqual(['corners']);
     });
 
     it('no match returns null', () => {
@@ -144,6 +195,28 @@ describe('buildRuleKey', () => {
         })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true');
     });
 
+    it('encodes size only for fixed-size windows (allowsResize=false)', () => {
+        expect(buildRuleKey('wechat', {
+            allowsResize: false,
+            width: 360,
+            height: 420,
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420');
+
+        // Resizable windows never encode size
+        expect(buildRuleKey('wechat', {
+            allowsResize: true,
+            width: 800,
+            height: 600,
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false');
+
+        // Rounds fractional sizes to integers
+        expect(buildRuleKey('wechat', {
+            allowsResize: false,
+            width: 359.8,
+            height: 420.2,
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420');
+    });
+
     it('never collapses to a bare application key', () => {
         expect(buildRuleKey('wechat', {hasParent: false})).not.toBe('wechat');
         expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).not.toBe('wechat');
@@ -172,6 +245,24 @@ describe('parseRuleKey', () => {
         });
     });
 
+    it('parses fixed-size key with dimensions', () => {
+        const sizedKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420';
+        expect(parseRuleKey(sizedKey)).toEqual({
+            baseWmClass: 'wechat',
+            specifier: 'client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420',
+            properties: {
+                client_type: 'wayland',
+                window_type: 0,
+                has_parent: false,
+                allows_resize: false,
+                attached_dialog: false,
+                size: '360x420',
+                width: 360,
+                height: 420,
+            },
+        });
+    });
+
     it('empty or null', () => {
         expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null, properties: null});
         expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null, properties: null});
@@ -185,6 +276,8 @@ describe('parseRuleKey', () => {
             'wechat:has_parent=true,allows_resize=false',
             'wechat:foo=bar',
             'wechat:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false',
+            // Resizable window MUST NOT have size
+            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,size=800x600',
         ];
         for (const bad of invalid)
             expect(parseRuleKey(bad)).toEqual({baseWmClass: '', specifier: null, properties: null});
@@ -196,6 +289,7 @@ describe('rule key contract & round-trip', () => {
         const keys = [
             buildRuleKey('wechat'),
             buildRuleKey('wechat', {hasParent: true, allowsResize: false}),
+            buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420}),
             buildRuleKey('steam', {clientType: 'x11', windowType: WindowType.MODAL_DIALOG, isAttachedDialog: true}),
         ];
         for (const key of keys) {

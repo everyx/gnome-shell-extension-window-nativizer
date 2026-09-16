@@ -351,6 +351,8 @@ export function evaluateWindowActions({
         hasParent: Boolean(hasParent),
         allowsResize,
         isAttachedDialog,
+        frameWidth,
+        frameHeight,
     });
 
     let shadow = baseline.shadow;

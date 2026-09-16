@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-16 09:07+0800\n"
+"POT-Creation-Date: 2026-09-16 09:34+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -66,74 +66,80 @@ msgstr "固定尺寸"
 msgid "Resizable"
 msgstr "可缩放"
 
-#: src/prefs.js:68
+#. Translators: %s is the width and height of the window, e.g. "Fixed-size (360×420)".
+#: src/prefs.js:71
+#, javascript-format
+msgid "Fixed-size (%s)"
+msgstr "固定尺寸（%s）"
+
+#: src/prefs.js:73
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:68
+#: src/prefs.js:73
 msgid "Wayland"
 msgstr "Wayland"
 
 #. Translators: The window has no parent window.
-#: src/prefs.js:71
+#: src/prefs.js:76
 msgid "with no parent"
 msgstr "无父窗口"
 
 #. Translators: The window is attached to its parent window.
-#: src/prefs.js:73
+#: src/prefs.js:78
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/prefs.js:75
+#: src/prefs.js:80
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the size, the client type, the window type and the
 #. parent, in that order. Reorder the placeholders to fit the language.
-#: src/prefs.js:87
+#: src/prefs.js:92
 #, javascript-format
 msgid "%s %s %s, %s"
 msgstr "%s %s %s，%s"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:175
+#: src/prefs.js:180
 msgid "Close"
 msgstr "关闭"
 
-#: src/prefs.js:192
+#: src/prefs.js:197
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:198
+#: src/prefs.js:203
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:199
+#: src/prefs.js:204
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:204
+#: src/prefs.js:209
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:205
+#: src/prefs.js:210
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上跳过圆角（保留阴影），避免重采样带来的文字模糊与性能开销"
 
-#: src/prefs.js:214
+#: src/prefs.js:219
 msgid "Window Interaction"
 msgstr "窗口交互"
 
 #. Translators: The resize band is the strip around a window that can be dragged to resize it.
-#: src/prefs.js:220
+#: src/prefs.js:225
 msgid "Widen the Resize Band"
 msgstr "加宽窗口缩放触发区"
 
-#: src/prefs.js:221
+#: src/prefs.js:226
 msgid ""
 "Let windows whose own resize border is narrower than a native one be resized "
 "by dragging the band around them: 12 pixels out on every side, and 24 along "
@@ -142,52 +148,52 @@ msgstr ""
 "让自身缩放边框比原生更窄的窗口，也能像原生 GNOME 窗口一样拖动周围的触发区来缩"
 "放：每边向外 12 像素，角上沿边 24 像素"
 
-#: src/prefs.js:229 src/prefs.js:233
+#: src/prefs.js:234 src/prefs.js:238
 msgid "Pick a window to add a rule"
 msgstr "选取窗口以添加规则"
 
-#: src/prefs.js:236 src/prefs.js:254 src/prefs.js:255
+#: src/prefs.js:241 src/prefs.js:259 src/prefs.js:260
 msgid "Window Rules"
 msgstr "窗口规则"
 
-#: src/prefs.js:237
+#: src/prefs.js:242
 msgid "Configure decoration overrides for specific window kinds"
 msgstr "针对特定类型的窗口自定义装饰规则"
 
-#: src/prefs.js:259
+#: src/prefs.js:264
 msgid "Use the button above to pick a window and add a rule"
 msgstr "用上面的按钮选取窗口以添加规则"
 
-#: src/prefs.js:333 src/prefs.js:335
+#: src/prefs.js:338 src/prefs.js:340
 msgid "Remove Rule"
 msgstr "删除规则"
 
-#: src/prefs.js:358
+#: src/prefs.js:363
 msgid "Window Inspection Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:359
+#: src/prefs.js:364
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 
-#: src/prefs.js:371
+#: src/prefs.js:376
 msgid "No rule added: this window could not be identified"
 msgstr "未添加规则：无法识别这个窗口"
 
-#: src/prefs.js:382
+#: src/prefs.js:387
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr "未添加规则：这条规则对此类窗口不会有任何效果"
 
-#: src/prefs.js:394
+#: src/prefs.js:399
 msgid "No rule added: the rule could not be saved"
 msgstr "未添加规则：规则未能保存"
 
-#: src/prefs.js:406
+#: src/prefs.js:411
 #, javascript-format
 msgid "Rule updated for %s: %s"
 msgstr "已更新 %s 的规则：%s"
 
-#: src/prefs.js:407
+#: src/prefs.js:412
 #, javascript-format
 msgid "Rule added for %s: %s"
 msgstr "已为 %s 添加规则：%s"

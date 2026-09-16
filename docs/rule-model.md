@@ -7,11 +7,12 @@ description of what a key means.
 
 ## Key grammar
 
-    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>
+    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>[,size=<W>x<H>]
 
 For example:
 
     wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false
+    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420
 
 - Field **order is part of the format**: `rules.js` renders it canonically, so string
   comparison is enough to match.
@@ -20,14 +21,22 @@ For example:
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies
   `has_parent=true`. That is why the prefs sentence can fold both into one phrase
   (`windowKindSentence()` in `prefs.js`) without losing a case.
+- The **`size=<W>x<H>` specifier is exclusively for fixed-size windows** (`allows_resize=false`):
+  One application often creates multiple distinct fixed dialogs or floating bars (e.g. login
+  QR code dialog, screenshot toolbar, about box) that share identical window type and parent
+  attributes. Because fixed-size windows cannot be resized by the user, their dimensions are
+  inherently stable static fingerprints. Adding the logical dimensions (`frame_rect` width and
+  height rounded to integers) distinguishes these dialogs without collision.
+  Resizable windows (`allows_resize=true`) **must never** have a `size` specifier, as manual
+  resizing would immediately invalidate the rule.
+- **Matching priority and fallback**: For fixed-size windows, `resolveRule()` prefers an
+  exact-size key first; if no exact match is stored, it gracefully falls back to a generic
+  rule without size (if present).
 - The identity is percent-encoded, because `:` and whitespace are delimiters.
   Realistic identities (WM_CLASS, Flatpak id, reverse-DNS app id) pass through
   unchanged; only exotic ones are escaped, and parsing decodes them back.
-- Those five attributes are the whole key. There is deliberately **no app-wide form**
-  — a rule never generalises to every window of an application — and no specificity
-  hierarchy or fallback: a rule applies if and only if the kind matches exactly.
-- `title`, `role` and the size hints are deliberately *not* part of the key. They
-  change while a window lives, so they cannot define a kind.
+- `title` and `role` are deliberately *not* part of the key. They change while a window lives
+  or across locales, so they cannot define a stable structural kind.
 
 The rules live in one settings key, `window-rules` (`a{ss}`), fingerprint → state. The
 old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
