@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.4.0...v0.5.0) (2026-09-16)
+
+
+### Features
+
+* **rules:** support size specifier for fixed-size window keys to resolve collision ([ee74833](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ee74833050bed9e408902ad42f635261238a49d3))
+
+
+### Bug Fixes
+
+* **prefs:** correct pick suggestion to break status quo and clarify feedback ([79a7c17](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/79a7c17083eeb5a11a0f2f2afcda5fbc5e4d5a5b))
+
+
+### Documentation
+
+* **schema:** name the size specifier in the fingerprint grammar ([1263cfe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1263cfe1561548d6dcf5304ee14a2c8fd21d1c76))
+
 ## [0.4.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.3.0...v0.4.0) (2026-09-16)
 
 
