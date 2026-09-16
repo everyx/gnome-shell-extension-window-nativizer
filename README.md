@@ -12,6 +12,8 @@
 
 Brings **pixel-perfect GNOME rounded corners, GPU-baked shadows, and a GTK-aligned 12px resize band** to all non-Adwaita windows (Electron, Chromium, GTK3, Qt, Wine, WPS, etc.).
 
+> 🤖 **Note**: This is an LLM-assisted (vibe coding) project, personally tested and verified in real-world daily use, and strictly backed by automated upstream parity tests.
+
 <img src="assets/preview.webp" alt="Before and after: a square window next to the same window with rounded corners and a shadow" width="500">
 
 ---
