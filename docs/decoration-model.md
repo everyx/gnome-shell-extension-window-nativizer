@@ -96,6 +96,16 @@ is skipped along with the rest. Both ways of being wrong are harmless: a window 
 when we should not keeps the corners its toolkit drew, and a window we clip when we
 need not costs one offscreen pass and comes out identical.
 
+**The probe is asynchronous.** Reading `/proc` synchronously in shell code is what
+EGO-X-004 flags, and it blocks the compositor, so the maps go through GIO's async API and
+the answer lands a frame or two later. A window whose process is still being read is not
+decided at all: nothing of ours is drawn for those frames, so the window keeps the decoration
+its toolkit gave it, and the manager runs the decision again when the answer lands
+(`setOnProcessKnown()`). Drawing first and taking it back would flash our corners and a second
+shadow over a window that has its own, the direction this axis is built to avoid. What it
+costs is a decoration arriving a frame or two late on the *first* window of a process; every
+later window of the same process reads the cache.
+
 ## Which rectangle the clip lands on
 
 The actor a clip is attached to is not the rectangle to round: for a client-side
