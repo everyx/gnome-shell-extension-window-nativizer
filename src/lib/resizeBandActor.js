@@ -16,7 +16,13 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
-import {computeResizeBands, edgeForPoint, RESIZE_BAND, RESIZE_BAND_REGIONS} from './resizeBand.js';
+import {
+    computeResizeBands,
+    edgeForPoint,
+    normalizeConstrainedEdges,
+    RESIZE_BAND,
+    RESIZE_BAND_REGIONS,
+} from './resizeBand.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
@@ -80,6 +86,19 @@ function sameBounds(a, b) {
     return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
+/**
+ * @param {{top:boolean,right:boolean,bottom:boolean,left:boolean}|null} a
+ * @param {{top:boolean,right:boolean,bottom:boolean,left:boolean}|null} b
+ * @returns {boolean}
+ */
+function sameConstrainedEdges(a, b) {
+    if (!a && !b)
+        return true;
+    if (!a || !b)
+        return false;
+    return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;
+}
+
 export const ResizeBand = GObject.registerClass({
     GTypeName: RESIZE_BAND_G_TYPE,
 }, class ResizeBand extends St.Widget {
@@ -110,6 +129,7 @@ export const ResizeBand = GObject.registerClass({
         this._insets = ZERO_INSETS;
         this._bounds = null;
         this._scale = 1;
+        this._constrainedEdges = null;
 
         // The actor is the ground truth for the band's geometry: it is the thing Mutter
         // resizes every frame, while our reconcile is debounced. Binding here (rather than
@@ -157,12 +177,15 @@ export const ResizeBand = GObject.registerClass({
      * @param {import('./frame.js').Insets|null} params.insets - Ring between actor and body
      * @param {{x:number,y:number,width:number,height:number}|null} [params.bounds=null] - Monitor rect
      * @param {number} [params.scale=1] - Monitor scale the frame was read at
+     * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null]
      */
-    setGeometry({insets, bounds = null, scale = 1}) {
+    setGeometry({insets, bounds = null, scale = 1, constrainedEdges = null}) {
         const nextInsets = insets ?? ZERO_INSETS;
+        const nextConstrained = normalizeConstrainedEdges({constrainedEdges});
         if (this._insets.left === nextInsets.left && this._insets.top === nextInsets.top &&
             this._insets.right === nextInsets.right && this._insets.bottom === nextInsets.bottom &&
-            this._scale === scale && sameBounds(this._bounds, bounds))
+            this._scale === scale && sameBounds(this._bounds, bounds) &&
+            sameConstrainedEdges(this._constrainedEdges, nextConstrained))
             return;
 
         this._insets = {
@@ -173,6 +196,7 @@ export const ResizeBand = GObject.registerClass({
             ? {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height}
             : null;
         this._scale = scale;
+        this._constrainedEdges = nextConstrained;
         this.queue_relayout();
     }
 
@@ -213,7 +237,12 @@ export const ResizeBand = GObject.registerClass({
             }
             : null;
 
-        const bands = computeResizeBands({frame, bounds, scale: this._scale});
+        const bands = computeResizeBands({
+            frame,
+            bounds,
+            scale: this._scale,
+            constrainedEdges: this._constrainedEdges,
+        });
         const changed = !sameBands(this._bands, bands);
         if (changed)
             this._bands = bands;
@@ -274,6 +303,7 @@ export const ResizeBand = GObject.registerClass({
         this._childBox = null;
         this._bands = null;
         this._frame = null;
+        this._constrainedEdges = null;
         try {
             this._container?.remove_child(this);
         } catch {
@@ -297,7 +327,9 @@ export const ResizeBand = GObject.registerClass({
             return null;
         const [x, y] = event.get_coords();
         const [originX, originY] = this.get_transformed_position();
-        return edgeForPoint(this._frame, x - originX, y - originY);
+        return edgeForPoint(this._frame, x - originX, y - originY, {
+            constrainedEdges: this._constrainedEdges,
+        });
     }
 
     /**

@@ -898,6 +898,21 @@ describe('isWindowTiled', () => {
         expect(isWindowTiled(floatingWin)).toBeFalse();
     });
 
+    it('does not call a window tiled just because its frame sits flush', () => {
+        const win = {
+            is_maximized: () => false,
+            maximized_horizontally: false,
+            maximized_vertically: false,
+            get_tile_match: () => null,
+            // The same rectangle a left tile would occupy, placed by hand: Mutter reports no
+            // tiling state for it, so the frame is not evidence and must not be read as any.
+            get_frame_rect: () => ({x: 0, y: 29, width: 960, height: 1051}),
+            get_monitor: () => 0,
+            get_work_area_for_monitor: () => ({x: 0, y: 29, width: 1920, height: 1051}),
+        };
+        expect(isWindowTiled(win)).toBeFalse();
+    });
+
     it('handles null/undefined gracefully', () => {
         expect(isWindowTiled(null)).toBeFalse();
         expect(isWindowTiled(undefined)).toBeFalse();

@@ -7,6 +7,7 @@ import {
     computeResizeBands,
     edgeForPoint,
     MIN_BAND_WINDOW,
+    normalizeConstrainedEdges,
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
     RESIZE_CORNER,
@@ -221,12 +222,114 @@ describe('edgeForPoint', () => {
         expect(edgeForPoint(frame, 512, 250)).toBeNull();
     });
 
+    it('restricts directions when axes are vertically or horizontally maximized', () => {
+        const frame = rect(100, 100, 400, 300);
+        // Vertically maximized (e.g. left/right tiled window):
+        // East edge allows 'e' even near corners, suppress vertical directions
+        expect(edgeForPoint(frame, 505, 200, {maximizedVertically: true})).toBe('e');
+        expect(edgeForPoint(frame, 505, 105, {maximizedVertically: true})).toBe('e');
+        expect(edgeForPoint(frame, 505, 395, {maximizedVertically: true})).toBe('e');
+        expect(edgeForPoint(frame, 95, 200, {maximizedVertically: true})).toBe('w');
+        expect(edgeForPoint(frame, 95, 105, {maximizedVertically: true})).toBe('w');
+        expect(edgeForPoint(frame, 95, 395, {maximizedVertically: true})).toBe('w');
+        // North / South edges and out-of-bounds corners return null
+        expect(edgeForPoint(frame, 300, 95, {maximizedVertically: true})).toBeNull();
+        expect(edgeForPoint(frame, 300, 405, {maximizedVertically: true})).toBeNull();
+        expect(edgeForPoint(frame, 505, 95, {maximizedVertically: true})).toBeNull();
+        expect(edgeForPoint(frame, 505, 405, {maximizedVertically: true})).toBeNull();
+
+        // Horizontally maximized (e.g. top/bottom tiled window):
+        expect(edgeForPoint(frame, 300, 95, {maximizedHorizontally: true})).toBe('n');
+        expect(edgeForPoint(frame, 105, 95, {maximizedHorizontally: true})).toBe('n');
+        expect(edgeForPoint(frame, 495, 95, {maximizedHorizontally: true})).toBe('n');
+        expect(edgeForPoint(frame, 300, 405, {maximizedHorizontally: true})).toBe('s');
+        expect(edgeForPoint(frame, 105, 405, {maximizedHorizontally: true})).toBe('s');
+        expect(edgeForPoint(frame, 495, 405, {maximizedHorizontally: true})).toBe('s');
+        // East / West edges and out-of-bounds corners return null
+        expect(edgeForPoint(frame, 95, 200, {maximizedHorizontally: true})).toBeNull();
+        expect(edgeForPoint(frame, 505, 200, {maximizedHorizontally: true})).toBeNull();
+        expect(edgeForPoint(frame, 95, 95, {maximizedHorizontally: true})).toBeNull();
+        expect(edgeForPoint(frame, 505, 95, {maximizedHorizontally: true})).toBeNull();
+
+        // Both maximized (fully maximized window):
+        expect(edgeForPoint(frame, 505, 200, {maximizedHorizontally: true, maximizedVertically: true})).toBeNull();
+        expect(edgeForPoint(frame, 300, 95, {maximizedHorizontally: true, maximizedVertically: true})).toBeNull();
+    });
+
+    it('restricts directions according to constrainedEdges on tiled windows', () => {
+        const frame = rect(100, 100, 400, 300);
+
+        // Left-tiled window: top, bottom, left are constrained touching work area boundary.
+        // Only right edge is resizable ('e').
+        const leftTiled = {top: true, bottom: true, left: true, right: false};
+        expect(edgeForPoint(frame, 505, 200, {constrainedEdges: leftTiled})).toBe('e');
+        expect(edgeForPoint(frame, 505, 105, {constrainedEdges: leftTiled})).toBe('e');
+        expect(edgeForPoint(frame, 505, 395, {constrainedEdges: leftTiled})).toBe('e');
+        // Out of vertical bounds returns null
+        expect(edgeForPoint(frame, 505, 95, {constrainedEdges: leftTiled})).toBeNull();
+        expect(edgeForPoint(frame, 505, 405, {constrainedEdges: leftTiled})).toBeNull();
+        // Constrained edges return null
+        expect(edgeForPoint(frame, 95, 200, {constrainedEdges: leftTiled})).toBeNull();
+        expect(edgeForPoint(frame, 300, 95, {constrainedEdges: leftTiled})).toBeNull();
+        expect(edgeForPoint(frame, 300, 405, {constrainedEdges: leftTiled})).toBeNull();
+
+        // Right-tiled window: top, bottom, right are constrained.
+        // Only left edge is resizable ('w').
+        const rightTiled = {top: true, bottom: true, left: false, right: true};
+        expect(edgeForPoint(frame, 95, 200, {constrainedEdges: rightTiled})).toBe('w');
+        expect(edgeForPoint(frame, 95, 105, {constrainedEdges: rightTiled})).toBe('w');
+        expect(edgeForPoint(frame, 95, 395, {constrainedEdges: rightTiled})).toBe('w');
+        expect(edgeForPoint(frame, 505, 200, {constrainedEdges: rightTiled})).toBeNull();
+        expect(edgeForPoint(frame, 300, 95, {constrainedEdges: rightTiled})).toBeNull();
+        expect(edgeForPoint(frame, 300, 405, {constrainedEdges: rightTiled})).toBeNull();
+
+        // Top-left quarter tiled: top and left are constrained.
+        // East ('e'), South ('s'), and SE corner ('se') are resizable.
+        const topLeftQuarter = {top: true, bottom: false, left: true, right: false};
+        expect(edgeForPoint(frame, 95, 200, {constrainedEdges: topLeftQuarter})).toBeNull();
+        expect(edgeForPoint(frame, 300, 95, {constrainedEdges: topLeftQuarter})).toBeNull();
+        expect(edgeForPoint(frame, 505, 200, {constrainedEdges: topLeftQuarter})).toBe('e');
+        expect(edgeForPoint(frame, 300, 405, {constrainedEdges: topLeftQuarter})).toBe('s');
+        // SE corner allows diagonal resize
+        expect(edgeForPoint(frame, 505, 405, {constrainedEdges: topLeftQuarter})).toBe('se');
+        // Top-right area along east resolves to 'e' because top is constrained
+        expect(edgeForPoint(frame, 505, 105, {constrainedEdges: topLeftQuarter})).toBe('e');
+        // Bottom-left area along south resolves to 's' because left is constrained
+        expect(edgeForPoint(frame, 105, 405, {constrainedEdges: topLeftQuarter})).toBe('s');
+    });
+
     it('returns nothing for a degenerate or missing frame', () => {
         expect(edgeForPoint(rect(10, 10, 0, 100), 5, 10)).toBeNull();
         expect(edgeForPoint(rect(10, 10, 100, 0), 10, 5)).toBeNull();
         expect(edgeForPoint(null, 0, 0)).toBeNull();
         expect(edgeForPoint(rect(0, 0, 100, 100), Number.NaN, 0)).toBeNull();
         expect(edgeForPoint(rect(0, 0, 100, 100), 0, Number.POSITIVE_INFINITY)).toBeNull();
+    });
+});
+
+describe('normalizeConstrainedEdges', () => {
+    it('reads the maximize flags as the edges Mutter holds fixed', () => {
+        expect(normalizeConstrainedEdges({maximizedVertically: true})).toEqual({
+            top: true, right: false, bottom: true, left: false,
+        });
+        expect(normalizeConstrainedEdges({maximizedHorizontally: true})).toEqual({
+            top: false, right: true, bottom: false, left: true,
+        });
+        // A maximized window reports both flags, and both flags are all four edges.
+        expect(normalizeConstrainedEdges({maximizedHorizontally: true, maximizedVertically: true})).toEqual({
+            top: true, right: true, bottom: true, left: true,
+        });
+    });
+
+    it('defaults to no constrained edge', () => {
+        expect(normalizeConstrainedEdges()).toEqual({top: false, right: false, bottom: false, left: false});
+    });
+
+    it('keeps edges the caller already knows and adds the flags to them', () => {
+        expect(normalizeConstrainedEdges({
+            constrainedEdges: {top: true, bottom: false, left: false, right: false},
+            maximizedHorizontally: true,
+        })).toEqual({top: true, right: true, bottom: false, left: true});
     });
 });
 
@@ -340,6 +443,63 @@ describe('computeResizeBands', () => {
             expect(computeResizeBands({frame: rect(0, 0, 100, 100), scale})).toEqual(emptyBands());
     });
 
+    it('suppresses strips along maximized axes', () => {
+        const frame = rect(100, 50, 400, 300);
+
+        const vertMax = computeResizeBands({frame, maximizedVertically: true});
+        expect(vertMax.top).toBeNull();
+        expect(vertMax.bottom).toBeNull();
+        expect(vertMax.left).toEqual(rect(88, 50, 12, 300));
+        expect(vertMax.right).toEqual(rect(500, 50, 12, 300));
+
+        const horizMax = computeResizeBands({frame, maximizedHorizontally: true});
+        expect(horizMax.left).toBeNull();
+        expect(horizMax.right).toBeNull();
+        expect(horizMax.top).toEqual(rect(88, 38, 424, 12));
+        expect(horizMax.bottom).toEqual(rect(88, 350, 424, 12));
+
+        const bothMax = computeResizeBands({
+            frame,
+            maximizedHorizontally: true,
+            maximizedVertically: true,
+        });
+        expect(bothMax).toEqual(emptyBands());
+    });
+
+    it('suppresses strips along constrained edges (tiled windows)', () => {
+        const frame = rect(100, 50, 400, 300);
+
+        // Left-tiled window: top, bottom, left are constrained
+        const leftTiled = computeResizeBands({
+            frame,
+            constrainedEdges: {top: true, bottom: true, left: true, right: false},
+        });
+        expect(leftTiled.top).toBeNull();
+        expect(leftTiled.left).toBeNull();
+        expect(leftTiled.bottom).toBeNull();
+        expect(leftTiled.right).toEqual(rect(500, 50, 12, 300));
+
+        // Right-tiled window: top, bottom, right are constrained
+        const rightTiled = computeResizeBands({
+            frame,
+            constrainedEdges: {top: true, bottom: true, left: false, right: true},
+        });
+        expect(rightTiled.top).toBeNull();
+        expect(rightTiled.right).toBeNull();
+        expect(rightTiled.bottom).toBeNull();
+        expect(rightTiled.left).toEqual(rect(88, 50, 12, 300));
+
+        // Top-left quarter tiled window: top, left are constrained
+        const quarterTiled = computeResizeBands({
+            frame,
+            constrainedEdges: {top: true, left: true, bottom: false, right: false},
+        });
+        expect(quarterTiled.top).toBeNull();
+        expect(quarterTiled.left).toBeNull();
+        expect(quarterTiled.right).toEqual(rect(500, 50, 12, 300));
+        expect(quarterTiled.bottom).toEqual(rect(88, 350, 424, 12));
+    });
+
     it('returns nothing for a degenerate or missing frame', () => {
         expect(computeResizeBands({frame: rect(10, 10, 0, 100)})).toEqual(emptyBands());
         expect(computeResizeBands({frame: rect(10, 10, 100, 0)})).toEqual(emptyBands());
@@ -386,11 +546,30 @@ describe('shouldShowResizeBand', () => {
         expect(shouldShowResizeBand({...plain, allowsResize: false})).toBeFalse();
     });
 
-    it('skips maximized, fullscreen, tiled and tile-matched windows', () => {
+    it('skips maximized and fullscreen windows, but keeps tiled and tile-matched windows', () => {
         expect(shouldShowResizeBand({...plain, isMaximized: true})).toBeFalse();
         expect(shouldShowResizeBand({...plain, isFullscreen: true})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, tiled: true})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, hasTileMatch: true})).toBeFalse();
+        expect(shouldShowResizeBand({...plain, tiled: true})).toBeTrue();
+        expect(shouldShowResizeBand({...plain, hasTileMatch: true})).toBeTrue();
+    });
+
+    it('keeps the band when tiled with tile-match using untiled action fallback', () => {
+        const inputs = {
+            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            isX11: true, wmClass: 'wechat', tiled: true, hasTileMatch: true,
+            allowsResize: true, resizeBand: true,
+        };
+        const actions = evaluateWindowActions(inputs);
+        expect(actions.drawShadow).toBeFalse();
+        expect(actions.drawClip).toBeFalse();
+
+        const untiledActions = evaluateWindowActions({...inputs, tiled: false, hasTileMatch: false});
+        expect(untiledActions.drawClip).toBeTrue();
+
+        expect(shouldShowResizeBand({
+            ...inputs,
+            decorated: untiledActions.drawShadow || untiledActions.drawClip,
+        })).toBeTrue();
     });
 
     it('skips a window whose own corners already look native', () => {

@@ -18,6 +18,7 @@ import {computeFrameInsets} from './frame.js';
 import {SSD_FRAME_EXTENTS} from './adwaitaStyle.generated.js';
 import {extractWindowProperties} from './pick.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
+import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners, isAdwaitaLookPending, setOnProcessKnown} from './nativeLikeCorners.js';
@@ -394,9 +395,13 @@ export class Manager {
         // No clip → client's shadow still visible; defer ours to avoid double shadow.
         this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
+        const untiledActions = inputs.tiled || inputs.hasTileMatch
+            ? evaluateWindowActions({...inputs, tiled: false, hasTileMatch: false})
+            : actions;
+
         this._syncResizeBand(win, shouldShowResizeBand({
             ...inputs,
-            decorated: actions.drawShadow || actions.drawClip,
+            decorated: untiledActions.drawShadow || untiledActions.drawClip,
         }), inputs);
 
         if (state.clip || state.shadow)
@@ -448,6 +453,8 @@ export class Manager {
             monitorScale: this._getMonitorScale(win),
 
             isMaximized,
+            maximizedHorizontally: Boolean(win.maximized_horizontally),
+            maximizedVertically: Boolean(win.maximized_vertically),
             isFullscreen: win.is_fullscreen(),
             hasSsd: Boolean(win.decorated),
             isX11: clientType === CLIENT_TYPE_X11,
@@ -514,13 +521,23 @@ export class Manager {
 
         const monitor = win.get_monitor();
         const bounds = monitor >= 0 ? global.display.get_monitor_geometry(monitor) : null;
+
+        // Which edges Mutter holds fixed is a decision, and it changes on Mutter's own
+        // signals, so it is derived here and the actor only carries the result.
+        const constrainedEdges = normalizeConstrainedEdges({
+            maximizedHorizontally: inputs.maximizedHorizontally,
+            maximizedVertically: inputs.maximizedVertically,
+        });
+
         // Geometry, not decisions: the actor carries it live and the band derives its
         // regions from the actor's size on every allocation, so this only has to hand over
-        // the insets and the monitor rect. A frameless window's null insets read as zero.
+        // the insets, the constrained edges and the monitor rect. A frameless window's null
+        // insets read as zero.
         state.resizeBand.setGeometry({
             insets: this._frameInsets(win),
             bounds,
             scale: inputs.monitorScale,
+            constrainedEdges,
         });
     }
 
