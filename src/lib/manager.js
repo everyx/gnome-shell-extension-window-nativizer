@@ -21,6 +21,7 @@ import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners} from './nativeLikeCorners.js';
+import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
@@ -278,17 +279,6 @@ export class Manager {
         return 1;
     }
 
-    /**
-     * @param {Meta.Window} win
-     * @param {Clutter.Actor} actor
-     * @returns {Clutter.Actor} Clip target; X11 uses surface child to avoid Mutter shadow margin mismatch.
-     */
-    _getClipTarget(win, actor) {
-        if (win.get_client_type?.() === CLIENT_TYPE_X11)
-            return actor.get_first_child?.() ?? actor;
-        return actor;
-    }
-
     /** Sync clip; clearRing erases client's shadow ring even when corners stay square (see docs/decoration-model.md § Rounding a window takes its shadow over). */
     _syncClip(win, wantEffect, clearRing = false, target = null, insets = null) {
         const state = this._windows.get(win);
@@ -298,7 +288,7 @@ export class Manager {
         if (!actor)
             return;
 
-        const clipTarget = target ?? this._getClipTarget(win, actor);
+        const clipTarget = target ?? resolveClipTarget(win, actor, St);
         // Attach/detach is a decision, not a frame measurement: it no longer depends on the
         // actor's current allocation (that is why a resize used to drop the effect for a
         // frame). The only window that gets no effect is one whose `_frameInsets` is null -
@@ -370,7 +360,7 @@ export class Manager {
         const actions = evaluateWindowActions(inputs);
 
         // One inset set for clip and shadow so they cannot drift mid-resize.
-        const target = this._getClipTarget(win, actor);
+        const target = resolveClipTarget(win, actor, St);
         const insets = this._frameInsets(win);
 
         this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
