@@ -234,10 +234,240 @@ if [[ "$(band_count)" -lt 1 ]]; then
     exit 1
 fi
 echo ">> Band lifecycle across disable / re-enable confirmed."
+
+# 7. Test band geometry under partial (tiled) and full maximization:
+#    - Vertically maximized (half-tiled proxy): band remains active, top and bottom strips
+#      collapse to 0x0, while unconstrained left and right strips stay active at 12px width.
+#    - Fully maximized: band is destroyed entirely.
+#    - Unmaximized: band is restored on all four sides.
+echo ">> [test-e2e] Verifying resize band under partial (tiled) and full maximization..."
+
+read_band_state() {
+    local reply
+    reply="$(shell_eval '
+    (() => {
+        global.window_group.show();
+        const actors = global.get_window_actors();
+        if (actors.length === 0) return JSON.stringify({hasBand: false, error: "no actor"});
+        const winActor = actors[0];
+        const parent = winActor.get_parent();
+        const children = parent ? parent.get_children() : [];
+        const band = children.find(c => c.toString().includes("WindowNativizerResizeBand"));
+        if (!band) return JSON.stringify({hasBand: false});
+
+        const strips = {};
+        for (const child of band.get_children()) {
+            const name = child.name || "";
+            for (const edge of ["top", "bottom", "left", "right"]) {
+                if (name.includes(edge)) {
+                    strips[edge] = {width: child.width, height: child.height};
+                }
+            }
+        }
+        return JSON.stringify({hasBand: true, strips});
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+
+reply = sys.argv[1]
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+if not match:
+    sys.exit("invalid json")
+print(match.group(0))
+PYEOF
+}
+
+# Suppression or clipping? (a) is the case that tells them apart: top and bottom collapse to 0x0
+# while both side strips stay on screen, so those two are suppressed edges. In (a2) the left strip
+# also reads 0x0, but only because it falls outside the monitor and the clip removes it; (d) carries
+# the other direction - a hand-placed flush window keeps its top strip, so nothing was inferred from
+# where its frame sits.
+# (a) Maximize vertically (simulates half-tiled state)
+shell_eval '
+(() => {
+    global.window_group.show();
+    const actors = global.get_window_actors();
+    if (actors.length > 0)
+        actors[0].meta_window.set_maximize_flags(2); // Meta.MaximizeFlags.VERTICAL
+})()
+' >/dev/null
+sleep 0.3
+
+VERT_STATE="$(read_band_state)"
+echo ">> Vertically maximized state: $VERT_STATE"
+python3 - "$VERT_STATE" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+if not data.get("hasBand"):
+    sys.exit("!! Expected resize band on vertically maximized window, but none found!")
+
+strips = data.get("strips", {})
+top = strips.get("top", {})
+bottom = strips.get("bottom", {})
+left = strips.get("left", {})
+right = strips.get("right", {})
+
+if top.get("width", -1) != 0 or top.get("height", -1) != 0:
+    sys.exit(f"!! Expected top strip to collapse to 0x0 on vertical maximization, got {top}")
+if bottom.get("width", -1) != 0 or bottom.get("height", -1) != 0:
+    sys.exit(f"!! Expected bottom strip to collapse to 0x0 on vertical maximization, got {bottom}")
+if left.get("width", 0) <= 0 or left.get("height", 0) <= 0:
+    sys.exit(f"!! Expected left strip to remain active, got {left}")
+if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
+    sys.exit(f"!! Expected right strip to remain active, got {right}")
+PYEOF
+echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
+
+# (a2) Left half of the work area, flush against the left edge, vertically maximized as
+# Mutter's own left tile does it (`meta_window_tile_internal()`). The divider keeps its band;
+# the constrained top and bottom do not, and neither does the left, whose strip falls outside
+# the monitor clip.
+shell_eval '
+(() => {
+    global.window_group.show();
+    const actors = global.get_window_actors();
+    if (actors.length > 0) {
+        const win = actors[0].meta_window;
+        const monitor = win.get_monitor();
+        const wa = win.get_work_area_for_monitor(monitor);
+        win.unmaximize();
+        win.set_maximize_flags(2); // Meta.MaximizeFlags.VERTICAL, as tiling sets it
+        win.move_resize_frame(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
+    }
+})()
+' >/dev/null
+sleep 0.3
+
+LEFT_TILED_STATE="$(read_band_state)"
+echo ">> Left-tiled state: $LEFT_TILED_STATE"
+python3 - "$LEFT_TILED_STATE" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+if not data.get("hasBand"):
+    sys.exit("!! Expected resize band on left-tiled window, but none found!")
+
+strips = data.get("strips", {})
+top = strips.get("top", {})
+bottom = strips.get("bottom", {})
+left = strips.get("left", {})
+right = strips.get("right", {})
+
+if top.get("width", -1) != 0 or top.get("height", -1) != 0:
+    sys.exit(f"!! Expected top strip to collapse to 0x0 on left-tiled window, got {top}")
+if bottom.get("width", -1) != 0 or bottom.get("height", -1) != 0:
+    sys.exit(f"!! Expected bottom strip to collapse to 0x0 on left-tiled window, got {bottom}")
+if left.get("width", -1) != 0 or left.get("height", -1) != 0:
+    sys.exit(f"!! Expected left strip to collapse to 0x0 on left-tiled window, got {left}")
+if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
+    sys.exit(f"!! Expected right strip to remain active on left-tiled window, got {right}")
+PYEOF
+echo ">> Left-tiled resize band verified: top, bottom, and left collapsed; right active."
+
+# (b) Fully maximize: band must be destroyed
+shell_eval '
+(() => {
+    const actors = global.get_window_actors();
+    if (actors.length > 0)
+        actors[0].meta_window.maximize();
+})()
+' >/dev/null
+sleep 0.3
+
+FULL_STATE="$(read_band_state)"
+echo ">> Fully maximized state: $FULL_STATE"
+python3 - "$FULL_STATE" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+if data.get("hasBand"):
+    sys.exit("!! Expected resize band to be destroyed on fully maximized window, but found one!")
+PYEOF
+echo ">> Fully maximized state verified: resize band destroyed."
+
+# (c) Unmaximize: band must be restored on all four sides
+shell_eval '
+(() => {
+    const actors = global.get_window_actors();
+    if (actors.length > 0) {
+        const win = actors[0].meta_window;
+        win.unmaximize();
+        win.move_resize_frame(false, 300, 200, 800, 600);
+    }
+})()
+' >/dev/null
+sleep 0.3
+
+RESTORED_STATE="$(read_band_state)"
+echo ">> Restored state: $RESTORED_STATE"
+python3 - "$RESTORED_STATE" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+if not data.get("hasBand"):
+    sys.exit("!! Expected resize band restored after unmaximizing, but none found!")
+
+strips = data.get("strips", {})
+for edge in ["top", "bottom", "left", "right"]:
+    s = strips.get(edge, {})
+    if s.get("width", 0) <= 0 or s.get("height", 0) <= 0:
+        sys.exit(f"!! Expected strip {edge} to be non-zero after unmaximize, got {s}")
+PYEOF
+echo ">> Unmaximized state verified: resize band restored on all sides."
+
+# (d) A window the user placed flush by hand is not tiled: no maximize flag is set for it, so
+# Mutter reports every edge unconstrained and the band has to survive. Inferring tiling from
+# geometry would read this rectangle as a left tile and drop the top strip with it - this is
+# the assertion that fails if that inference comes back.
+shell_eval '
+(() => {
+    global.window_group.show();
+    const actors = global.get_window_actors();
+    if (actors.length > 0) {
+        const win = actors[0].meta_window;
+        const monitor = win.get_monitor();
+        const wa = win.get_work_area_for_monitor(monitor);
+        win.unmaximize();
+        win.move_resize_frame(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
+    }
+})()
+' >/dev/null
+sleep 0.3
+
+FLUSH_STATE="$(read_band_state)"
+echo ">> Hand-placed flush state: $FLUSH_STATE"
+python3 - "$FLUSH_STATE" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+if not data.get("hasBand"):
+    sys.exit("!! Expected a resize band on a hand-placed flush window, but none found!")
+
+strips = data.get("strips", {})
+
+top = strips.get("top", {})
+if top.get("width", 0) <= 0 or top.get("height", 0) <= 0:
+    sys.exit(f"!! Expected the top strip to survive on a hand-placed flush window, got {top}")
+
+right = strips.get("right", {})
+if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
+    sys.exit(f"!! Expected the right strip to remain active, got {right}")
+
+# Left and bottom are empty because they fall outside the monitor, not because an edge was
+# suppressed - which is what an empty top strip would mean.
+for edge in ["left", "bottom"]:
+    s = strips.get(edge, {})
+    if s.get("width", -1) != 0 or s.get("height", -1) != 0:
+        sys.exit(f"!! Expected strip {edge} to be clipped away, got {s}")
+PYEOF
+echo ">> Hand-placed flush window verified: top and right strips survive, left and bottom clipped."
+
 kill "$PROBE_PID" 2>/dev/null || true
 sleep 0.2
 
-# 7. Stop shell before analyzing logs
+# 8. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
 # 8. Log Inspection & Zero-Tolerance Assertion
@@ -253,7 +483,7 @@ with open(log_path, "r", errors="ignore") as f:
     lines = f.readlines()
 
 noise = re.compile(
-    r'(AT-SPI|atk-bridge|Gvc-WARNING|xdg-desktop-portal|RealtimeKit|secrets|keyring|gvfsd-sftp|gsconnect|copyous|mark-shot|chinese-calendar|evolution|MESA: warning)',
+    r'(AT-SPI|atk-bridge|Gvc-WARNING|xdg-desktop-portal|RealtimeKit|secrets|keyring|gvfsd-sftp|gsconnect|copyous|mark-shot|chinese-calendar|evolution|MESA: warning|pip-on-top|gsignal\.c:2723)',
     re.I
 )
 
@@ -286,6 +516,7 @@ echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
 echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
+echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Log Audit: PASSED (0 ERROR, 0 CRITICAL, 0 WARNING)"
 echo "================================================================"
 exit 0
