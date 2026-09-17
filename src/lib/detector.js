@@ -178,6 +178,11 @@ export function isWindowTiled(win, options = {}) {
     const hasMatch = options.hasTileMatch ?? Boolean(win.get_tile_match?.());
     const hMax = Boolean(win.maximized_horizontally);
     const vMax = Boolean(win.maximized_vertically);
+    // Mutter's tile modes land here: `meta_window_tile_internal()` gives every mode but
+    // META_TILE_MAXIMIZED `META_MAXIMIZE_VERTICAL` - so one flag alone is a half tile - a
+    // pair of tiles matches each other, and a full maximize is both flags, the case that is
+    // not tiled. Read from these rather than from where the frame sits: a window the user
+    // merely placed flush against the work area is not tiled.
     return (hMax !== vMax) || hasMatch;
 }
 
@@ -260,8 +265,6 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
  * @param {boolean} [params.allowsResize=true]
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
- * @param {boolean} [params.tiled=false]
- * @param {boolean} [params.hasTileMatch=false]
  * @param {boolean} [params.nativeLikeCorners=false]
  * @param {boolean} [params.hasSsd=false]
  * @param {import('./frame.js').Insets|null} [params.insets=null] - Declared ring, per side
@@ -276,7 +279,6 @@ export function shouldShowResizeBand({
     decorated = true,
     allowsResize = true,
     isMaximized = false, isFullscreen = false,
-    tiled = false, hasTileMatch = false,
     nativeLikeCorners = false,
     hasSsd = false,
     insets = null,
@@ -285,7 +287,7 @@ export function shouldShowResizeBand({
 } = {}) {
     if (!resizeBand || !allowsResize || !decorated)
         return false;
-    if (isMaximized || isFullscreen || tiled || hasTileMatch)
+    if (isMaximized || isFullscreen)
         return false;
     // A window that already has the Adwaita look has a native-width band of its own.
     if (nativeLikeCorners)
