@@ -20,7 +20,7 @@ import {extractWindowProperties} from './pick.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
-import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners} from './nativeLikeCorners.js';
+import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners, isAdwaitaLookPending, setOnProcessKnown} from './nativeLikeCorners.js';
 import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
@@ -45,6 +45,9 @@ export class Manager {
 
     enable() {
         shadowTexture.reset();
+
+        // A provider answer can land after a window has been decided (see hasAdwaitaLook()).
+        setOnProcessKnown(pid => this._onProcessKnown(pid));
 
         this._connect(this._signals, global.display, 'window-created', (_, win) => this._trackWindow(win));
         this._connect(this._signals, global.display, 'grab-op-end', () => {
@@ -251,6 +254,18 @@ export class Manager {
         }
     }
 
+    /**
+     * A process's answer landed after nothing could be decided for its windows: decide them now.
+     * Not debounced - this is one event per process, not a burst of signals.
+     * @param {number} pid
+     */
+    _onProcessKnown(pid) {
+        for (const win of this._windows.keys()) {
+            if (win.get_pid?.() === pid)
+                this._reconcileWindow(win);
+        }
+    }
+
     _reconcileDebounced() {
         if (this._reconcileTimeout)
             return;
@@ -359,6 +374,12 @@ export class Manager {
             return;
         const actor = win.get_compositor_private();
         if (!actor || actor.width === 0 || actor.height === 0)
+            return;
+
+        // Whether the process maps an Adwaita provider decides this window, and that answer is
+        // still being read: wait for it rather than drawing a shadow we would have to take back.
+        // `_onProcessKnown()` runs this again when the answer lands.
+        if (isAdwaitaLookPending(win.get_pid?.()))
             return;
 
         const inputs = this._decorationInputs(win);
