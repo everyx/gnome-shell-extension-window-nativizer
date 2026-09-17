@@ -211,6 +211,11 @@ export class Manager {
                     this._reconcileWindowDebounced(win);
                 }
             }, true);
+            // React to late-injection or dynamic removal of foreign extension widgets (e.g. Blur my Shell).
+            // Precondition: tracks direct child mutations on MetaWindowActor; deeper nested widget injections
+            // are not monitored.
+            this._connect(state.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
+            this._connect(state.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
         }
         if (actor && actor.width > 0 && actor.height > 0) {
             state.firstFrameDone = true;
