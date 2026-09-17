@@ -243,14 +243,18 @@ and we cannot spend it *outward* either: the input region stops at 12px, so `edg
 only classifies the outer ring. The four strips cover that ring as a disjoint tiling, so a
 point is delivered to exactly one handler and resolved to exactly one direction.
 
-**The one remaining difference from GTK.** Past the four bands, `get_edge_for_coordinates`
-has a fallback: a pointer inside the body but within a rounded corner's box is read as that
-corner. That surface is the client's, so `edgeForPoint()` returns null there - the ring is the
-whole of our domain, and the test compares the two as an *outer projection*. On the ring
-itself the classification is GTK's verbatim, strict inequalities included: the column at
-exactly `right - 24` is the edge, which the old symmetric partition called the corner. That is
-no longer a divergence, because it is now the same expression (`tests/resizeBand.test.js`
-scans a 1px grid against a test-side oracle so it cannot drift).
+**Two deliberate differences from GTK.**
+1. Past the four bands, `get_edge_for_coordinates` has a fallback: a pointer inside the body but
+within a rounded corner's box is read as that corner. That surface is the client's, so `edgeForPoint()`
+returns null there - the ring is the whole of our domain, and the test compares the two as an
+*outer projection*. On the ring itself the classification is GTK's verbatim, strict inequalities included:
+the column at exactly `right - 24` is the edge, which the old symmetric partition called the corner.
+2. In corner regions when an axis is constrained (such as a tiled window touching the top monitor boundary),
+GTK's `edge_or_minus_one()` macro returns -1, dropping grabs near corners along the split divider. We
+intentionally extend this rule: corner regions along unconstrained edges resolve strictly to that straight
+edge (e.g. `e` or `w` throughout the frame's height), preserving grabbability along the full divider.
+Suppressing the edge strips themselves is **not** a deviation - GTK suppresses a constrained edge as well
+(*Which edges get one*, above); only the corner behaviour at the end of the divider is ours.
 
 Three things about the extent:
 
@@ -268,10 +272,30 @@ Three things about the extent:
   flush against the edge adds nothing there.
 
 Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): a window
-we decorate at all (a `none` rule, or one that fails structural eligibility, draws nothing and
-keeps every click it had), resizable, not maximized, fullscreen, tiled or tile-matched, not
-already Adwaita-looking (that window has a band), not an SSD window (Mutter drew the frame and
-runs the resize grab from it), and not already declaring a margin of at least 12px per side.
+we decorate at all in its untiled baseline state (`untiledActions`: a `none` rule, or one that
+fails structural eligibility, draws nothing and keeps every click it had; evaluating against
+untiled actions ensures tile-matched windows—which render with radius 0 and suppressed shadow—remain
+recognized as managed windows and keep their resize band), resizable, not maximized or fullscreen,
+not already Adwaita-looking (that window has a band), not an SSD window (Mutter drew the frame
+and runs the resize grab from it), and not already declaring a margin of at least 12px per side.
+**Which edges get one is Mutter's call, read from the window's state.** Mutter derives a per-edge
+constraint (`update_edge_constraints()`, mutter `src/core/window.c`) from the window's tile mode and
+its maximize flags, and publishes it per client type: Wayland windows receive the xdg-shell `TILED_*`
+states (`meta-wayland-xdg-shell.c`), X11 windows the `_GTK_EDGE_CONSTRAINTS` property (`window-x11.c`).
+A constraint of `META_EDGE_CONSTRAINT_MONITOR` means the edge is fixed against the monitor, and that is
+the one GTK refuses to resize (`edge_or_minus_one()`, and `priv->maximized` returning -1 for every edge,
+in `vendor/gtk/gtkwindow.c`); `META_EDGE_CONSTRAINT_WINDOW` - the edge shared with a tile match - counts
+as resizable (`is_edge_constraint_resizable()`, `window-x11.c`), which is why the central split divider
+keeps its band. We therefore read the two maximize flags and nothing else. Not the geometry: a window the
+user merely placed flush against the work area is not tiled, and calling it tiled would both take away a
+band it can still use and hand the style layer a tile look it never had. The lateral edge of a half
+tile is the one constraint the flags cannot carry: Mutter marks it MONITOR as well, out of the tile
+mode, and GJS has no tile mode to read - `Meta.Window` offers the maximize flags and
+`get_tile_match()` and nothing else. It is left unconstrained instead, which is safe here for a reason
+that is reasoned rather than measured: that edge is the outer one, flush against the work area, so its
+strip falls off the monitor or under the panel or dock that pushed the work area in - and neither is
+ours to pick. Suppressing it would also cost the strip this whole change exists for: the divider,
+which `edgeForPoint()` keeps alive to the end of the frame.
 
 That last condition is a **proxy**, not a measurement: the width of the client's own handle is
 not introspectable (Chromium answers a 25px ring with a 10px border), so the rule only skips a
