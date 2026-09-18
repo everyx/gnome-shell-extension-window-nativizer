@@ -29,6 +29,26 @@ stops being true is a compatibility break, not a refactor.
 What GJS cannot see at all — the window geometry scale, Mutter's own shadow gates —
 is in [decoration-model.md](decoration-model.md).
 
+## Known upstream log noise
+
+The e2e log audit fails on anything the shell prints that is not in its noise list, so an upstream
+defect that fires on a normal path has to be dealt with here rather than worked around. One is:
+
+- **`clutter_actor_set_color_state: assertion 'CLUTTER_IS_COLOR_STATE (color_state)' failed`**, from
+  `meta_wayland_actor_surface_real_sync_actor_state()` in Mutter's
+  `src/wayland/meta-wayland-actor-surface.c`. The function reads the actor's colour state and writes
+  it straight back, but `clutter_actor_get_color_state()` returns NULL for an actor that never had one
+  (it does not inherit), and `clutter_actor_set_color_state()` requires a non-NULL argument, so the
+  write is rejected with a CRITICAL. Both NULL sources are the normal case - a client that does not
+  use colour management has no `surface->color_state` either - so it fires on nearly every commit
+  that carries a buffer. Introduced in `63fa79c878` (2024-07-16) and still present in 50.4; the
+  rejected call returns immediately and there was nothing to write back, so the line is its whole
+  effect.
+  **Measured, not assumed**: one window mapped and resized produces one of these with the extension
+  enabled and one with it disabled, so it is proportional to window activity and not to us. The audit
+  exempts exactly that assertion, counts the lines it skipped and prints the count, so a change in
+  how often it appears is still visible.
+
 ## Working rules
 
 - **The decisions are pure.** Everything that decides decoration delegates to
