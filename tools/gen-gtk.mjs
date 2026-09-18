@@ -11,7 +11,7 @@
  *   --check: Verifies generated results match existing files (used by CI / check-style), exits with 1 if mismatch.
  */
 
-import {readFileSync, writeFileSync, existsSync} from 'node:fs';
+import {readFileSync, readdirSync, writeFileSync, existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
@@ -35,6 +35,30 @@ function parseDefine(cCode, name) {
     if (!m)
         throw new Error(`[gen-gtk] Assertion failed: #define ${name} not found in gtkwindow.c`);
     return parseInt(m[1], 10);
+}
+
+/**
+ * The two sizes a user reads are written out in full in two places that cannot interpolate the
+ * constants: the compiled schema description, and the prefs subtitle, which has to stay a
+ * literal for xgettext. A change upstream therefore has to be mirrored by hand, and this is
+ * where a missed mirror is caught rather than shipped.
+ */
+function assertCopyCarriesSizes(handleSize, cornerSize) {
+    const band = `${handleSize} pixels out on every side, and ${cornerSize} along the edge`;
+    const own = `at least ${handleSize} pixels on every side`;
+
+    const prefs = readFileSync(path.join(ROOT, 'src', 'prefs.js'), 'utf8');
+    if (!prefs.includes(band))
+        throw new Error(`[gen-gtk] src/prefs.js does not carry the generated sizes: expected "${band}"`);
+
+    const schemaDir = path.join(ROOT, 'src', 'schemas');
+    for (const file of readdirSync(schemaDir).filter(name => name.endsWith('.gschema.xml'))) {
+        const text = readFileSync(path.join(schemaDir, file), 'utf8');
+        for (const phrase of [band, own]) {
+            if (!text.includes(phrase))
+                throw new Error(`[gen-gtk] src/schemas/${file} does not carry the generated sizes: expected "${phrase}"`);
+        }
+    }
 }
 
 function main() {
@@ -70,7 +94,8 @@ export const RESIZE_HANDLE_CORNER_SIZE = ${cornerSize};
             console.error(`[gen-gtk] --check failed: ${OUT} does not match vendor/gtk/gtkwindow.c`);
             process.exit(1);
         }
-        console.log(`[gen-gtk] --check passed: generated file matches vendor source code (commit ${commit.slice(0, 8)})`);
+        assertCopyCarriesSizes(handleSize, cornerSize);
+        console.log(`[gen-gtk] --check passed: generated file and user-facing sizes match vendor source code (commit ${commit.slice(0, 8)})`);
         return;
     }
 
