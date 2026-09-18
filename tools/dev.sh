@@ -25,13 +25,13 @@ LOG="$STATE_DIR/shell.log"
 mkdir -p "$STATE_DIR"
 
 cmd_shell() {
-    if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    if [[ -f "$STATE_DIR/ready" ]] && [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo ">> Nested shell is already running (PID $(cat "$PIDFILE"))"
         return
     fi
     # Sync latest extension code + compile GSettings schema
     deploy_ext
-    rm -f "$PIDFILE" "$LOG"   # Clear old logs to avoid mixing session outputs
+    rm -f "$PIDFILE" "$LOG" "$STATE_DIR/ready"   # Clear old logs to avoid mixing session outputs
 
     echo ">> Starting headless nested shell (background, log: $LOG)"
     chmod +x "$ROOT/tools/dev-shell.sh"
@@ -39,9 +39,8 @@ cmd_shell() {
     disown
     # Wait until ready
     for i in $(seq 1 30); do
-        if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        if [[ -f "$STATE_DIR/ready" ]] && [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
             echo ">> Nested shell ready (PID $(cat "$PIDFILE"))"
-            sleep 2
             tail -5 "$LOG"
             return
         fi
@@ -81,7 +80,7 @@ cmd_stop() {
         # Kill entire process tree (dbus-run-session cleans up along with it)
         pkill -f "wayland-display=$WL_DISPLAY" 2>/dev/null || true
         kill "$(cat "$PIDFILE")" 2>/dev/null || true
-        rm -f "$PIDFILE"
+        rm -f "$PIDFILE" "$STATE_DIR/ready"
     fi
     echo ">> Cleaned up"
 }

@@ -68,21 +68,29 @@ gdbus call --address "$BUS" --dest org.gnome.Shell --object-path /org/gnome/Shel
     --method org.gnome.Shell.Eval 'global.get_window_actors().length + " windows"'
 ```
 
-Four things about it cost time to find:
+Things about it that cost time to find:
 
+- **Session readiness contract (`$STATE_DIR/ready`).** Starting the nested shell
+  asynchronously is prone to races if callers probe before actors and the extension settle.
+  `tools/dev-shell.sh` guarantees readiness by forcing `global.window_group.show()`,
+  polling until the initial overview is genuinely dismissed (`Main.overview.hide()`),
+  and verifying that the extension reports `State: ACTIVE`. Only when all conditions hold
+  does it touch `/tmp/window-nativizer-dev/ready`. `tools/dev.sh` gates on this marker
+  alongside the pidfile, ensuring that every downstream caller (`tools/test-e2e.sh`,
+  the benchmark tools) reaches readiness through `dev.sh shell`.
 - **The stage has to be shown, all of it.** `tools/dev-shell.sh` calls
   `global.window_group.show()`, which is not enough: without the GDM activation flow
   nothing below the stage is painted, so an offscreen effect never allocates its
   framebuffer (`get_texture()` comes back null) and actors report a stale allocation
   instead of their geometry. Walking the stage and calling `show()` on every actor
   fixes it.
-- **`Eval` takes one line.** GVariant decodes a `\n` in the argument into a real
-  newline before the shell evals the string, so a multi-line script fails with
-  `SyntaxError: "" string literal contains an unescaped line break`. The same decoding
-  eats a single backslash, so a regular expression has to be written as `[0-9]` rather
-  than `\d`. Join statements with a separator and split the answer afterwards, and use
-  double quotes throughout: a file or a heredoc cannot see how the wrapper quotes what
-  it is given.
+- **`Eval` escaping rules.** GVariant decodes a `\n` escape sequence into a real
+  newline before the shell evals the string, so an unescaped `\n` inside a JS string
+  literal fails with `SyntaxError: "" string literal contains an unescaped line break`
+  (literal newlines in the script body itself are permitted). The same decoding eats a
+  single backslash, so a regular expression has to be written as `[0-9]` rather than
+  `\d`. Where compact, join statements with semicolons and split the answer afterwards;
+  a heredoc or multi-line script can be passed if internal strings avoid raw `\n` escapes.
 - **This session does not reproduce the rendering.** Compiling, allocating and painting
   all succeed, and the offscreen sizes are right, but what reaches the screen is not
   what a real session shows: a shadow can be missing here and correct in the developer's

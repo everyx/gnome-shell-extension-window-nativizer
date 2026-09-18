@@ -48,8 +48,9 @@ set).
 
 `Manager.enable()` connects only the global signals a decoration input can change on —
 `window-created`, `grab-op-end`, `restacked`, `notify::focus-window`,
-`notify::high-contrast`, `monitors-changed` — and deliberately no workspace signal: no
-decoration input depends on the workspace, so switching workspaces cannot change any
+`notify::high-contrast`, `monitors-changed` — plus `Main.overview`'s `showing` and `hidden`
+signals to toggle clip effect suspension during overview mode, and deliberately no workspace
+signal: no decoration input depends on the workspace, so switching workspaces cannot change any
 window's appearance.
 
 `enable()` sets that field before `manager.enable()`, so a failure after that point would
