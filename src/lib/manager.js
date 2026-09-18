@@ -14,14 +14,13 @@ import {
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
-import {computeFrameInsets} from './frame.js';
-import {SSD_FRAME_EXTENTS} from './adwaitaStyle.generated.js';
+import {insetsFromRects} from './frame.js';
 import {extractWindowProperties} from './pick.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
-import {destroy as destroyNativeLikeCorners, forgetProcess, hasNativeLikeCorners, isAdwaitaLookPending, setOnProcessKnown} from './nativeLikeCorners.js';
+import {destroy as destroyNativeLikeCorners, forgetProcess, hasGtk4Client, hasNativeLikeCorners, isAdwaitaLookPending, setOnProcessKnown} from './nativeLikeCorners.js';
 import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
@@ -459,6 +458,7 @@ export class Manager {
             hasSsd: Boolean(win.decorated),
             isX11: clientType === CLIENT_TYPE_X11,
             nativeLikeCorners: hasNativeLikeCorners(win),
+            hasGtk4Client: hasGtk4Client(win.get_pid?.()),
             windowType: win.get_window_type(),
             hasParent: Boolean(win.get_transient_for?.()),
             isAttachedDialog: Boolean(win.is_attached_dialog?.()),
@@ -550,20 +550,12 @@ export class Manager {
     /**
      * @param {Meta.Window} win
      * @returns {import('./frame.js').Insets|null} Ring between the actor (buffer) and the
-     * body (`frame_rect`). For an X11 SSD window, mutter-x11-frames adds invisible borders
-     * around the frame. Modern Mutter reports buffer_rect == frame_rect, so this falls
-     * back to SSD_FRAME_EXTENTS (derived from upstream GTK/Adwaita). Deliberately
-     * does not look at any actor size: the body is placed against the actor's live size at
-     * paint time, so a lagging actor can never turn this into "no body".
+     * body (`frame_rect`), measured from the two rects and nothing else. Deliberately does not
+     * look at any actor size: the body is placed against the actor's live size at paint time,
+     * so a lagging actor can never turn this into "no body".
      */
     _frameInsets(win) {
-        return computeFrameInsets({
-            buffer: win.get_buffer_rect?.(),
-            frame: win.get_frame_rect?.(),
-            isX11: win.get_client_type?.() === CLIENT_TYPE_X11,
-            hasSsd: Boolean(win.decorated),
-            ssdFrameExtents: SSD_FRAME_EXTENTS,
-        });
+        return insetsFromRects(win.get_buffer_rect?.(), win.get_frame_rect?.());
     }
 
     _applyStyle(win, style, insets, drawClip) {

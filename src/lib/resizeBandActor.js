@@ -240,6 +240,9 @@ export const ResizeBand = GObject.registerClass({
         const bands = computeResizeBands({
             frame,
             bounds,
+            // The container is the actor grown by OUTER, so the actor itself is this rect: the ring
+            // only exists inside it, and a window that reserves no margin gets no strips.
+            surface: {x: OUTER, y: OUTER, width: actorSize.width, height: actorSize.height},
             scale: this._scale,
             constrainedEdges: this._constrainedEdges,
         });
