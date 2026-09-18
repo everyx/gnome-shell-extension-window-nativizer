@@ -510,10 +510,13 @@ describe('computeResizeBands', () => {
 });
 
 describe('shouldShowResizeBand', () => {
-    const plain = {frameWidth: 800, frameHeight: 600, allowsResize: true, resizeBand: true};
+    // A window that reserves no ring at all has no ring of ours to give (below), so the baseline is
+    // one that reserves a shadow margin - the ground the band lives on.
+    const plain = {frameWidth: 800, frameHeight: 600, allowsResize: true, resizeBand: true,
+        insets: {left: 25, right: 25, top: 25, bottom: 25}};
     const ring = (left, right, top, bottom) => ({...plain, insets: {left, right, top, bottom}});
 
-    it('shows the band on a plain resizable window', () => {
+    it('shows the band on a resizable window that reserves a ring', () => {
         expect(shouldShowResizeBand(plain)).toBeTrue();
     });
 
@@ -527,9 +530,10 @@ describe('shouldShowResizeBand', () => {
         expect(shouldShowResizeBand({...plain, decorated: false})).toBeFalse();
     });
 
-    it('keeps the band on a bare X11 window, whose clip the detector still draws', () => {
-        // The WeChat/CEF case: no declared ring, so the shadow stays Mutter's, but the
-        // corners are ours (drawClip true) and the band must stay with them.
+    it('gives no band to a bare window, which reserves no ring to fill', () => {
+        // The WeChat/CEF case: no declared ring, so the shadow stays Mutter's and the corners are
+        // ours - but a ring of ours would sit outside the window, on whatever is behind it. Its own
+        // handle inside the surface stays its own, as it does on a native window with no margin.
         const actions = evaluateWindowActions({
             bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
             isX11: true, wmClass: 'wechat',
@@ -539,7 +543,7 @@ describe('shouldShowResizeBand', () => {
             ...plain,
             insets: {left: 0, right: 0, top: 0, bottom: 0},
             decorated: actions.drawShadow || actions.drawClip,
-        })).toBeTrue();
+        })).toBeFalse();
     });
 
     it('skips a window that cannot be resized', () => {
@@ -556,6 +560,7 @@ describe('shouldShowResizeBand', () => {
     it('keeps the band when tiled with tile-match using untiled action fallback', () => {
         const inputs = {
             bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            insets: {left: 25, right: 25, top: 25, bottom: 25},
             isX11: true, wmClass: 'wechat', tiled: true, hasTileMatch: true,
             allowsResize: true, resizeBand: true,
         };
@@ -572,8 +577,22 @@ describe('shouldShowResizeBand', () => {
         })).toBeTrue();
     });
 
-    it('skips a window whose own corners already look native', () => {
-        expect(shouldShowResizeBand({...plain, nativeLikeCorners: true})).toBeFalse();
+    it('leaves a GTK4 client alone once its declared margins are native', () => {
+        // GTK4 sizes the input region from RESIZE_HANDLE_SIZE whatever its shadow is, so
+        // declared margins at least that wide mean its own handle is already native.
+        expect(shouldShowResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
+        expect(shouldShowResizeBand({...ring(25, 25, 25, 25), hasGtk4Client: true})).toBeFalse();
+    });
+
+    it('keeps the band when the margins cannot prove the client has a handle', () => {
+        // GTK3 declares max(box-shadow, decoration margin) + border + padding while the grip it
+        // offers is margin + border + padding alone (gtk-3-24 gtkwindow.c), so a theme's shadow
+        // inflates the ring past the handle: the ring says nothing about the handle, and the band
+        // is what brings a GTK3 window up to native width. The sizes here are ordinary margins.
+        expect(shouldShowResizeBand(ring(24, 24, 21, 27))).toBeTrue();
+        expect(shouldShowResizeBand(ring(25, 25, 25, 25))).toBeTrue();
+        // The same ring a GTK4 client is skipped on, on a client that cannot prove it.
+        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeTrue();
     });
 
     it('skips an SSD window: Mutter drew the frame and runs the resize grab from it', () => {
@@ -582,16 +601,10 @@ describe('shouldShowResizeBand', () => {
         expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasSsd: true})).toBeFalse();
     });
 
-    it('skips a window whose declared margin is already a native-width handle', () => {
-        // 12px on every side is GTK4's RESIZE_HANDLE_SIZE floor.
-        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeFalse();
-        expect(shouldShowResizeBand(ring(25, 25, 25, 25))).toBeFalse();
-    });
-
     it('keeps the band while either axis is narrower than a native handle', () => {
         // One axis already native, the other a hair under: still awkward to grab.
-        expect(shouldShowResizeBand(ring(12, 12, 11, 11))).toBeTrue();
-        expect(shouldShowResizeBand(ring(11, 11, 12, 12))).toBeTrue();
+        expect(shouldShowResizeBand({...ring(12, 12, 11, 11), hasGtk4Client: true})).toBeTrue();
+        expect(shouldShowResizeBand({...ring(11, 11, 12, 12), hasGtk4Client: true})).toBeTrue();
     });
 
     it('reads the ring per side, not as the average of the two', () => {
@@ -603,13 +616,20 @@ describe('shouldShowResizeBand', () => {
         // A zero on both sides of one axis, positive only on the other: the narrowest
         // per-axis margin is 0, so the ring is not a native-width handle on every side.
         expect(shouldShowResizeBand(ring(0, 0, 24, 24))).toBeTrue();
-        // The symmetric ring of the same total is a native handle and is skipped.
-        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeFalse();
+        // The symmetric ring of the same total is a native handle on a GTK4 client, and skipped.
+        expect(shouldShowResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
     });
 
-    it('does not read a margin when the window has no ring at all', () => {
-        expect(shouldShowResizeBand(ring(0, 0, 0, 0))).toBeTrue();
-        expect(shouldShowResizeBand({...plain, bufferWidth: 800, bufferHeight: 600})).toBeTrue();
+    it('gives no band to a window that reserves no ring, provider process or not (the Firefox PiP shape)', () => {
+        // A video popup fills its own surface: there is no margin inside it to carry a handle, and a
+        // ring outside it would sit on whatever is behind - the press would have two owners unless we
+        // held the pointer, and a compositor-driven resize cannot track a client that keeps an aspect
+        // ratio anyway (measured: the popup ignores requested sizes). Its own handle inside the
+        // surface is the native one and tracks the pointer exactly.
+        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasGtk4Client: false})).toBeFalse();
+        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasGtk4Client: true})).toBeFalse();
+        // A window that reserves a margin on one axis only still has that ring to fill.
+        expect(shouldShowResizeBand(ring(0, 0, 25, 25))).toBeTrue();
     });
 
     it('keeps the band on a window only as thin as the ring itself', () => {

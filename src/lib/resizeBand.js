@@ -10,7 +10,8 @@
 
 import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
 
-/** GTK4 floors its resize handle at 12 logical px (`RESIZE_HANDLE_SIZE`, vendor/gtk/gtkwindow.c). */
+/** GTK4's own handle width: `RESIZE_HANDLE_SIZE` from vendor/gtk/gtkwindow.c, the input region
+ * of a CSD window grown on every side (`update_realized_window_properties`). */
 export const RESIZE_BAND = RESIZE_HANDLE_SIZE;
 
 /** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (vendor/gtk/gtkwindow.c). */
@@ -207,6 +208,8 @@ function emptyBands() {
  * @param {object} params
  * @param {Rect} params.frame - Window body (`frame_rect`), logical px
  * @param {Rect|null} [params.bounds=null] - Clip rect (`get_monitor_geometry`), logical px
+ * @param {Rect|null} [params.surface=null] - The window's own surface: the ring only exists inside
+ *        it, so a window that reserves no margin has no band of ours to give
  * @param {number} [params.scale=1] - Monitor scale the frame was read at
  * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null]
  * @param {boolean} [params.maximizedHorizontally=false]
@@ -216,6 +219,7 @@ function emptyBands() {
 export function computeResizeBands({
     frame,
     bounds = null,
+    surface = null,
     scale = 1,
     constrainedEdges = null,
     maximizedHorizontally = false,
@@ -248,7 +252,7 @@ export function computeResizeBands({
     };
 
     for (const region of RESIZE_BAND_REGIONS)
-        bands[region] = clipToBounds(rects[region], bounds);
+        bands[region] = clipToBounds(clipToBounds(rects[region], bounds), surface);
 
     return bands;
 }

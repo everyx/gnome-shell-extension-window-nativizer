@@ -2,6 +2,7 @@ import {
     classifyProcess,
     destroy,
     forgetProcess,
+    hasGtk4Client,
     hasNativeLikeCorners,
     hasAdwaitaLook,
     isAdwaitaLookPending,
@@ -21,50 +22,97 @@ describe('nativeLikeCorners', () => {
     });
 
     describe('classifyProcess', () => {
-        it('takes libadwaita as a provider', () => {
+        // The two answers a process gives: the Adwaita look (any provider) and whether the
+        // client is GTK4 (libadwaita only), which is the one the resize band reads.
+        const look = mapsText => classifyProcess(mapsText).adwaitaLook;
+        const gtk4 = mapsText => classifyProcess(mapsText).gtk4;
+
+        it('takes libadwaita as a provider, and as the GTK4 one', () => {
             const mapsText = maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libadwaita-1.so.0');
-            expect(classifyProcess(mapsText)).toBeTrue();
+            expect(look(mapsText)).toBeTrue();
+            expect(gtk4(mapsText)).toBeTrue();
         });
 
-        it('takes libhandy as a provider', () => {
-            expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
+        it('takes libhandy as a provider, but not as a GTK4 client', () => {
+            const mapsText = maps('/usr/lib/libhandy-1.so.0');
+            expect(look(mapsText)).toBeTrue();
+            expect(gtk4(mapsText)).toBeFalse();
         });
 
-        it('takes libxul as a provider (Mozilla Gecko / Firefox)', () => {
-            expect(classifyProcess(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
+        it('takes libxul as a provider (Mozilla Gecko / Firefox), but not as a GTK4 client', () => {
+            const mapsText = maps('/usr/lib/firefox/libxul.so');
+            expect(look(mapsText)).toBeTrue();
+            expect(gtk4(mapsText)).toBeFalse();
         });
 
         it('does not take the Qt 6 built-in decoration plugin as a provider — it is top-only (ceCornerRadius=12)', () => {
             const plugin = '/usr/lib/qt6/plugins/wayland-decoration-client/libadwaita.so';
-            expect(classifyProcess(maps(plugin))).toBeFalse();
+            expect(look(maps(plugin))).toBeFalse();
+            expect(gtk4(maps(plugin))).toBeFalse();
         });
 
         it('does not take QAdwaitaDecorations as a provider — it will be nativized (top-only radius)', () => {
             const qadwaita = '/usr/lib/qt6/plugins/wayland-decoration-client/libqadwaitadecorations.so';
-            expect(classifyProcess(maps(qadwaita))).toBeFalse();
+            expect(look(maps(qadwaita))).toBeFalse();
         });
 
         it('still takes libadwaita-1.so, libhandy-1.so, and libxul.so as native-like (regression guard)', () => {
-            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
-            expect(classifyProcess(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
-            expect(classifyProcess(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
-            expect(classifyProcess(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0', '/usr/lib/firefox/libxul.so'))).toBeTrue();
+            expect(look(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
+            expect(look(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
+            expect(look(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
+            expect(look(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0', '/usr/lib/firefox/libxul.so'))).toBeTrue();
         });
 
-        it('reports a plain GTK program as holding no provider', () => {
-            expect(classifyProcess(maps('/usr/lib/libgtk-4.so.1'))).toBeFalse();
-            expect(classifyProcess(maps('/usr/lib/libgtk-3.so.0'))).toBeFalse();
+        it('reports a plain GTK program as holding no provider, GTK4 included', () => {
+            expect(look(maps('/usr/lib/libgtk-4.so.1'))).toBeFalse();
+            expect(look(maps('/usr/lib/libgtk-3.so.0'))).toBeFalse();
+            // A GTK4 program without libadwaita has the same handle, but nothing readable says so.
+            expect(gtk4(maps('/usr/lib/libgtk-4.so.1'))).toBeFalse();
         });
 
         it('reports Qt, Chromium and libc as holding no provider', () => {
-            expect(classifyProcess(maps('/usr/lib/libc.so.6', '/usr/lib/libQt6Core.so.6',
+            expect(look(maps('/usr/lib/libc.so.6', '/usr/lib/libQt6Core.so.6',
                 '/usr/lib/chromium/chromium'))).toBeFalse();
         });
 
         it('treats missing input as holding no provider', () => {
             for (const input of [null, undefined, '']) {
-                expect(classifyProcess(input)).toBeFalse();
+                expect(look(input)).toBeFalse();
+                expect(gtk4(input)).toBeFalse();
             }
+        });
+    });
+
+    describe('hasGtk4Client', () => {
+        const reader = mapsText => (pid, done) => done(mapsText);
+
+        it('returns false for an invalid pid', () => {
+            expect(hasGtk4Client(null)).toBeFalse();
+            expect(hasGtk4Client(0)).toBeFalse();
+            expect(hasGtk4Client(-1)).toBeFalse();
+        });
+
+        it('answers yes for a libadwaita process', () => {
+            expect(hasGtk4Client(828282, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))}))
+                .toBeTrue();
+        });
+
+        it('answers no for the GTK3 providers, whose handle is not theirs to report', () => {
+            expect(hasGtk4Client(828283, {readMaps: reader(maps('/usr/lib/firefox/libxul.so'))}))
+                .toBeFalse();
+            expect(hasGtk4Client(828284, {readMaps: reader(maps('/usr/lib/libhandy-1.so.0'))}))
+                .toBeFalse();
+        });
+
+        it('reads as no while the answer is in flight, then yes once it lands', () => {
+            // Only a landed answer may take a band away from a window, so this default is the
+            // opposite of `hasAdwaitaLook()`'s - that one counts an answer still coming as yes.
+            let finish;
+            const readMaps = (pid, done) => { finish = done; };
+            expect(hasGtk4Client(838383, {readMaps})).toBeFalse();
+            expect(hasAdwaitaLook(838383, {readMaps})).toBeTrue();
+            finish(maps('/usr/lib/libadwaita-1.so.0'));
+            expect(hasGtk4Client(838383, {readMaps})).toBeTrue();
         });
     });
 

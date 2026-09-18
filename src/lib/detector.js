@@ -219,9 +219,9 @@ export function isWindowTiled(win, options = {}) {
  *  - `declaringSides` is the widest margin on each axis. A positive value then means "a ring
  *    on either side of this axis" - the question `declaresOwnShadow()` asks. On non-negative
  *    values `max > 0` is exactly "some side on this axis is positive".
- *  - `narrowestSides` is the smallest margin on each axis. "At least 12 on every side" is
- *    that minimum, not the per-axis average a two-sided total gives: a 0,24 ring is not 12 a
- *    side, so `shouldShowResizeBand()` reads this pair.
+ *  - `narrowestSides` is the smallest margin on each axis. "At least `RESIZE_BAND` on every
+ *    side" is that minimum, not the per-axis average a two-sided total gives: a 0,24 ring is
+ *    not 12 a side, so `shouldShowResizeBand()` reads this pair.
  * With only the two-sided totals both pairs are equal, which is right for a symmetric
  * measure. The widths are the fallback for a caller that only has totals.
  * @param {object} params
@@ -249,23 +249,22 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
 
 /**
  * Whether the window gets the resize band. It follows the decoration: a window we draw
- * nothing on (a `none` rule, or a structurally ineligible one) keeps every click it had,
- * and a window that already handles its own resize never gets one. See
+ * nothing on (a `none` rule, or a structurally ineligible one) keeps every click it had, and
+ * a window whose toolkit already offers a native-width handle of its own never gets one. See
  * docs/decoration-model.md § The resize band.
  *
- * The declared-margin check is a **proxy**: the client's real handle width is not
- * observable (Chromium draws 10px no matter how wide its ring is), so this only skips a
- * window whose ring is *obviously* wide enough - at least `RESIZE_BAND` on every side, which
- * is the toolkit's own floor. The ring is the same reading the shadow axis uses
- * (`buffer_rect - frame_rect`), but the threshold is per side, so this asks for the
- * *narrowest* margin on each axis and not the widest one `declaresOwnShadow()` asks for.
+ * Only a GTK4 client's handle can be proven from the outside: GTK4 sizes its CSD input region
+ * from `RESIZE_HANDLE_SIZE`, so its declared margins reaching that width on every side mean its
+ * own handle is already native. Every other window keeps its band - a GTK3 client's margins are
+ * its shadow, and its real handle is the theme's, which is not observable from here.
  * @param {object} params
  * @param {boolean} [params.resizeBand=true]
  * @param {boolean} [params.decorated=true] - Whether we draw anything on the window at all
  * @param {boolean} [params.allowsResize=true]
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
- * @param {boolean} [params.nativeLikeCorners=false]
+ * @param {boolean} [params.hasGtk4Client=false] - Whether the client is GTK4, whose own handle
+ *        the declared margins can prove
  * @param {boolean} [params.hasSsd=false]
  * @param {import('./frame.js').Insets|null} [params.insets=null] - Declared ring, per side
  * @param {number} [params.bufferWidth=0]
@@ -279,7 +278,7 @@ export function shouldShowResizeBand({
     decorated = true,
     allowsResize = true,
     isMaximized = false, isFullscreen = false,
-    nativeLikeCorners = false,
+    hasGtk4Client = false,
     hasSsd = false,
     insets = null,
     bufferWidth = 0, bufferHeight = 0,
@@ -289,18 +288,26 @@ export function shouldShowResizeBand({
         return false;
     if (isMaximized || isFullscreen)
         return false;
-    // A window that already has the Adwaita look has a native-width band of its own.
-    if (nativeLikeCorners)
-        return false;
     // Mutter's own frame carries the resize handles; a band would only take clicks the
     // frame already owns. `win.decorated` is a policy flag, but no `_MUTTER_FRAME_FOR`
     // check exists on the GJS side, and the flag is the best reading there is.
     if (hasSsd)
         return false;
 
-    const {narrowestSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
-    // Its own handle is already at least as wide as a native one on every side.
-    if (narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND)
+    const {declaringSides, narrowestSides} =
+        declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
+
+    // The band is the inner part of the ring the client reserved for its own shadow, clipped to the
+    // window's surface. A window that reserves nothing - an undecorated toplevel, a video popup -
+    // has no ring of ours to give, and a native window with no margin has none either: its handle
+    // is its own, inside its surface (docs/decoration-model.md § The resize band).
+    if (!declaringSides.sideW && !declaringSides.sideH)
+        return false;
+    // Its own handle is already at least as wide as a native one on every side. Only GTK4 can
+    // be read this way: it sizes the handle itself, so its declared margins prove it, while a
+    // GTK3 window's margins are its shadow and say nothing about the theme's handle
+    // (docs/decoration-model.md § The resize band).
+    if (hasGtk4Client && narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND)
         return false;
 
     // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
