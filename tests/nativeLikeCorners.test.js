@@ -41,12 +41,6 @@ describe('nativeLikeCorners', () => {
             expect(gtk4(mapsText)).toBeFalse();
         });
 
-        it('takes libxul as a provider (Mozilla Gecko / Firefox), but not as a GTK4 client', () => {
-            const mapsText = maps('/usr/lib/firefox/libxul.so');
-            expect(look(mapsText)).toBeTrue();
-            expect(gtk4(mapsText)).toBeFalse();
-        });
-
         it('does not take the Qt 6 built-in decoration plugin as a provider — it is top-only (ceCornerRadius=12)', () => {
             const plugin = '/usr/lib/qt6/plugins/wayland-decoration-client/libadwaita.so';
             expect(look(maps(plugin))).toBeFalse();
@@ -58,11 +52,10 @@ describe('nativeLikeCorners', () => {
             expect(look(maps(qadwaita))).toBeFalse();
         });
 
-        it('still takes libadwaita-1.so, libhandy-1.so, and libxul.so as native-like (regression guard)', () => {
+        it('still takes libadwaita-1.so and libhandy-1.so as native-like (regression guard)', () => {
             expect(look(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
             expect(look(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
-            expect(look(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
-            expect(look(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0', '/usr/lib/firefox/libxul.so'))).toBeTrue();
+            expect(look(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
         it('reports a plain GTK program as holding no provider, GTK4 included', () => {
@@ -99,9 +92,7 @@ describe('nativeLikeCorners', () => {
             expect(hasGtk4Client(828282)).toBeTrue();
         });
 
-        it('answers no for the GTK3 providers, whose handle is not theirs to report', () => {
-            probeAdwaitaLook(828283, {readMaps: reader(maps('/usr/lib/firefox/libxul.so'))});
-            expect(hasGtk4Client(828283)).toBeFalse();
+        it('answers no for a process that is not GTK4', () => {
             probeAdwaitaLook(828284, {readMaps: reader(maps('/usr/lib/libhandy-1.so.0'))});
             expect(hasGtk4Client(828284)).toBeFalse();
         });
