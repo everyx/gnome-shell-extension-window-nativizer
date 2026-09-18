@@ -61,6 +61,9 @@ shadow is click-through:
 | GTK4 / libadwaita | 25px | **12px** |
 | GTK3 + adw-gtk3 | 24/21/24/27px | **10px** |
 
+The GTK3 row is one theme's numbers, quoted because that is what this machine runs; the rule behind it
+is GTK3's own, and the theme supplies every number in it.
+
 - GTK4 floors the handle at `RESIZE_HANDLE_SIZE 12` (`gtkwindow.c:191`) and builds the input
   region as the border box plus 12px (`update_realized_window_properties`, `:4229-4232`), so
   the outer 13px of the shadow belongs to nobody. The declared margin says the same thing from
@@ -72,10 +75,12 @@ shadow is click-through:
 
 "It looks like the whole shadow can be grabbed and only a strip of it can" is therefore
 **native behaviour**, not something the drawing introduced: we draw the same shadow (aligned to
-within 5/255), and the grab band we add stops at 12px from the body - the toolkit's own width -
-so a decorated window has the same band as the same window undecorated. That band is the one
-place the extension participates in hit testing at all (`decoration-model.md` § The resize
-band); the shadow itself is still painted and never picked.
+within 5/255), and the band we add is 12px from the body - GTK4's width, and the width a GTK4
+client's own input region already has. A GTK4 client therefore keeps its own handle and gets no
+band from us; every other window we decorate gets ours, which brings it up to that width where its
+own is the theme's (10px with the theme here), and GTK4's 24px corner reach where its toolkit reaches
+20. That band is the one place the extension participates in hit testing at all
+(`decoration-model.md` § The resize band); the shadow itself is still painted and never picked.
 
 What was rejected is turning the **whole visible shadow** into an input region. That means
 claiming a band the toolkit leaves click-through on purpose - 13px per side on GTK4 - and every

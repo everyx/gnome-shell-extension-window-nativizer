@@ -209,8 +209,9 @@ own, with a cache and no unit test behind it, and not part of the current model.
 The decoration is not the only thing a non-Adwaita window gets wrong: its grab band is
 narrower too. A native window answers a drag in the strip hugging its body - GTK4 floors its
 input region at `RESIZE_HANDLE_SIZE 12` (`vendor/gtk/gtkwindow.c`, generated into
-`lib/gtkRules.generated.js`), GTK3 with adw-gtk3 takes 10px from the
-theme's `decoration { margin: 10px }` - so that strip is the handle every native window offers.
+`lib/gtkRules.generated.js`), GTK3 takes its grip from the theme's decoration node - margin + border
++ padding, a number the theme sets and GTK does not fix (10px with adw-gtk3 as installed here) - so
+that strip is the handle every native window offers.
 A window whose own band is 4px wide, or absent, is resizable but awkward to grab.
 
 So a window we decorate also gets a **resize band**: four transparent, reactive strips around
@@ -276,8 +277,9 @@ we decorate at all in its untiled baseline state (`untiledActions`: a `none` rul
 fails structural eligibility, draws nothing and keeps every click it had; evaluating against
 untiled actions ensures tile-matched windows—which render with radius 0 and suppressed shadow—remain
 recognized as managed windows and keep their resize band), resizable, not maximized or fullscreen,
-not already Adwaita-looking (that window has a band), not an SSD window (Mutter drew the frame
-and runs the resize grab from it), and not already declaring a margin of at least 12px per side.
+not already the client's own to size (only a GTK4 client can be *shown* to own a native-width
+handle, and then the band is skipped), and not an SSD window (mutter-x11-frames drew that frame
+and the client that owns it runs the grab from the invisible border).
 **Which edges get one is Mutter's call, read from the window's state.** Mutter derives a per-edge
 constraint (`update_edge_constraints()`, mutter `src/core/window.c`) from the window's tile mode and
 its maximize flags, and publishes it per client type: Wayland windows receive the xdg-shell `TILED_*`
@@ -297,18 +299,77 @@ strip falls off the monitor or under the panel or dock that pushed the work area
 ours to pick. Suppressing it would also cost the strip this whole change exists for: the divider,
 which `edgeForPoint()` keeps alive to the end of the frame.
 
-That last condition is a **proxy**, not a measurement: the width of the client's own handle is
-not introspectable (Chromium answers a 25px ring with a 10px border), so the rule only skips a
-window whose declared margin is *obviously* wide enough - at least `RESIZE_BAND` **on every
-side**, which is why the ring is read per side (`Math.min(left, right)`, `Math.min(top,
-bottom)`) and not as the average of a two-sided total: a 0,24 ring averages 12 but has no
-margin on one side. The source is the same reading the shadow axis uses (`insetsFromRects`
-over `buffer_rect - frame_rect`), not a second path; only the per-axis aggregation differs
-(`declaredSides()` gives the band the narrowest side and the shadow axis the widest, because
-the two ask different questions).
+That last condition reads the client, because the declared ring does not mean the same thing
+everywhere. It is a *shadow* for a CSD window and a *handle* only where Mutter's own frame draws
+it: for X11 SSD it is the invisible border `mutter-x11-frames` grabs, but on the client side GTK3
+computes `_GTK_FRAME_EXTENTS` as `max(box-shadow, decoration margin) + border + padding`
+(`get_shadow_width`, gtk-3-24 `gtk/gtkwindow.c`) while the handle it actually offers is just
+`margin + border + padding` (`update_realized_window_properties`, same file) - the margin being,
+in GTK3's own words, *"the margin size, which we use for resize grips"*. Any theme's shadow inflates
+that: adw-gtk3 as installed here declares a 24/21/24/27px ring around a 10px grip, and the numbers are
+the theme's throughout - GTK fixes no constant on this side - so a rule that reads margins reads a
+shadow as a handle and leaves a window like Firefox's alone with a 10px grip. Only GTK4 escapes this:
+there the
+handle is the constant, so the ring is sufficient evidence - and only there. The ring is read per side
+(`Math.min(left, right)`, `Math.min(top, bottom)`) and not as the average of a two-sided total: a
+0,24 ring averages 12 but has no margin on one side. The source is the same reading the shadow axis
+uses (`insetsFromRects` over `buffer_rect - frame_rect`), not a second path; only the per-axis
+aggregation differs (`declaredSides()` gives the band the narrowest side and the shadow axis the
+widest, because the two ask different questions).
 Below the minimum, at least `2 * RESIZE_BAND = 24px` per side - the bound that keeps the ring
 itself placeable, see below - and a 1×1 helper is not a window. The `resize-band` setting
 turns the whole thing off.
+
+**What it costs.** Measured by flipping this setting alone on the same window in a nested session
+(`pnpm run benchmark:perf`'s band phase; the shell's CPU read from schedstat nanoseconds): no idle
+CPU at all, because a window that does not move neither re-allocates nor gets picked; 6.4 KB
+resident per window; and about 34 us of shell CPU per resize step per window, measured over ten
+windows at once since one window's share sits inside that comparison's noise. Pointer motion adds
+a microsecond or two per window for the pick traversal. For the ten or so windows a desktop has,
+that is tens of KB and well under one percent of a core while one of them is dragged.
+
+One case is knowingly not 1:1, and it is the price of not guessing: a GTK4 client that does not
+map libadwaita cannot be told from a GTK3 one in `/proc`, so it keeps our band on top of the one
+its toolkit already offers - the same width and the same action, but ours rather than the
+client's. The e2e case `tools/e2e-client.py --decorated` is exactly that window, so the behaviour
+is pinned rather than assumed; the alternative would be to skip the band for every client whose
+toolkit we cannot name, which is the Firefox PiP bug this rule exists to fix.
+
+**A strip is an ordinary pick, and the window in front of it keeps the press.** The band is inserted
+immediately above its own window actor and re-pinned there whenever Mutter restacks
+(`insert_child_above()` and the `restacked` handler in `src/lib/resizeBandActor.js`), so a window in
+front of it draws - and picks - above it: a strip can only be pressed where its own window is the
+topmost surface. Measured in a nested session with one client in front of another,
+`global.window_group` runs `WIN(lower)`, `BAND(lower)`, `WIN(upper)`, `BAND(upper)`.
+
+That is what keeps the press unambiguous. The topmost surface under a strip is the strip's own window,
+so the Wayland pointer focus reaches that window's own client - which may answer with its own handle
+where its input region covers the point, since a GTK4 client's grip is the same 12px ring - and the
+compositor only then delivers the event to the shell actor whose strip it is:
+`meta_wayland_compositor_handle_event()` runs inside `meta_display_handle_event()`, which Clutter
+calls as an event *filter* (`research/mutter/src/core/events.c`), before the event reaches any actor.
+Both paths resolve the edge the pointer is on, so whichever one ends up driving Mutter's grab, the user
+gets the resize they aimed at, and a click can never reach a window they are not looking at. An earlier
+build held the pointer with `clutter_stage_grab()` while it was on a strip; that existed to keep a
+press from reaching a window *under* the ring, which was only possible while the band could reach past
+its own window's surface.
+
+**A window is only given a ring it reserved.** The band is the inner edge of the margin a client
+declares for its own shadow - that strip is inside the window's own surface, so a press there lands
+on ground the client itself would use. A window that declares no margin (an undecorated toplevel, a
+video popup) reserves no such ground, and a ring of ours would sit outside the window, on whatever
+is behind it: the press would have two owners unless we held the pointer, and we would be taking
+clicks from a neighbour to hand the window a handle it did not ask for. Native windows are in the
+same position - GTK only builds an input region wider than the frame when the window is decorated
+and has a shadow (`gtk_window_update_realized_window_properties` returns early otherwise), so an
+undecorated window has no handle outside itself either. Such a window keeps the handle its own
+toolkit draws inside its surface, which is the precise one: measured on the Firefox video popup,
+`move_resize_frame(true, ...)` at 403/443/493/553 logical px leaves it at 373x280 (4:3) every time.
+A client that keeps an aspect ratio cannot be tracked by a compositor-driven drag anyway - the
+compositor proposes the size the pointer implies for the dragged edge, the client re-derives the
+other dimension, and the two drift apart. Wayland offers no ratio to read (`xdg_toplevel` carries
+minimum and maximum sizes, not an aspect), so no amount of care in the drag path fixes it, while the
+client's own handle has the ratio and tracks the pointer exactly.
 
 **Why the size floor is 24, and why it says nothing native.** The floor only says the ring has
 to fit: a window thinner than `2 * RESIZE_BAND` has no middle once the 12px band is grown on
@@ -443,8 +504,11 @@ The clip pass is skipped when there is nothing to clip (radius 0 and no outline)
 window with no shadow never touches a baked buffer. It costs nothing while nothing
 damages the window: it is one framebuffer, re-rendered whole whenever the window paints,
 local damage included. Measured against one 500x350 target (`pnpm run benchmark:perf`):
-no idle CPU difference, about 0.9 ms of shell CPU per frame while dragging a resize, and
-the framebuffer's size in the shell's memory.
+no idle CPU difference, about 0.59 ms of shell CPU per frame while dragging a resize (five
+counterbalanced rounds of `pnpm run benchmark:perf`, the shell's CPU read from schedstat
+nanoseconds; the 0.9 ms recorded earlier came from a jiffy clock that cannot resolve it), and the
+framebuffer's size in the shell's memory. The harness' budget for that is 120 ms per 150 frames,
+which the measured 88 ms leaves about a third of.
 
 That per-window cost is what `nativeLikeCorners.js` exists to avoid paying where the
 clip would be an identity — a window already drawn with libadwaita's radius.
