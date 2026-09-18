@@ -13,7 +13,7 @@ const GTK4_PROVIDER = 'libadwaita-1.so';
 const ADWAITA_PROVIDERS = [
     GTK4_PROVIDER,
     'libhandy-1.so',  // GTK3 predecessor (window.csd.unified)
-    'libxul.so',      // Mozilla Gecko (Firefox 153+ four-corner CSD)
+    'libxul.so',      // Mozilla Gecko (Firefox 153+ bug 1850827: 4-corner CSD via GtkCssProvider injection)
 ];
 
 /** What a process maps, for the two questions asked of it. */
