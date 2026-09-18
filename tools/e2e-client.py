@@ -6,6 +6,10 @@ Creates a non-CSD GTK4 window and executes a deterministic sequence of operation
 2. Multi-step dynamic resizing (enlarge, shrink, extreme aspect ratios)
 3. Window maximize & unmaximize
 4. Window close & cleanup
+
+With --decorated the window keeps its own CSD instead, so it declares margins; with --hold <ms>
+it just maps and stays for that long, which is what the declared-margin case needs. --title names
+it, so a caller can pick this window out of a stage another client already occupies.
 """
 
 import sys
@@ -14,12 +18,20 @@ import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 
-app = Gtk.Application(application_id='org.test.windownativizer.e2e')
+def option(name, fallback=None):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else fallback
+
+# Two of these run in one suite, so the id has to be choosable: GTK's single-instance handling
+# would forward a second process with the same id and it would never map a window.
+app = Gtk.Application(application_id=option('--app-id', 'org.test.windownativizer.e2e'))
 
 def on_activate(app):
     win = Gtk.ApplicationWindow(application=app)
-    win.set_title("Window Nativizer E2E Client")
-    win.set_decorated(False)
+    win.set_title(option('--title', "Window Nativizer E2E Client"))
+    # A decorated window draws its own CSD and declares margins with it: GTK4 builds that ring
+    # from its shadow, which is what a `declared margin is already a handle` reading would skip
+    # the band on. Undecorated is the bare case the resize timeline below is written for.
+    win.set_decorated('--decorated' in sys.argv)
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     box.set_margin_top(20)
@@ -44,6 +56,15 @@ def on_activate(app):
         (1900, lambda: win.unmaximize(), "Unmaximize window"),
         (2200, lambda: win.close(), "Close window"),
     ]
+
+    hold_ms = int(option('--hold', 0))
+
+    if hold_ms:
+        def close_later():
+            win.close()
+            return GLib.SOURCE_REMOVE
+        GLib.timeout_add(hold_ms, close_later)
+        return
 
     for delay, action, desc in steps:
         def make_cb(act, d):

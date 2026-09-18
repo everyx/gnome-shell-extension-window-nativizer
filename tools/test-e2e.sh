@@ -74,7 +74,7 @@ PYEOF
 
 # 3. Launch GTK4 test client in background
 echo ">> [test-e2e] Launching GTK4 client (resize, maximize, close sequence)..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" &
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated &
 CLIENT_PID=$!
 
 # Wait for client window actor to be mapped
@@ -171,7 +171,8 @@ echo ">> 0 leaked actors confirmed."
 #    the band is the only actor that takes clicks, so one that survived disable would keep
 #    swallowing them. tools/probe-window.js is a plain non-CSD GTK4 window that stays open.
 echo ">> [test-e2e] Testing extension disable / re-enable lifecycle with an open window..."
-"$DEV" app gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+# Decorated: the band lives in the ring the client reserved (docs/decoration-model.md).
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
 PROBE_PID=$!
 PROBE_UP=0
 for i in $(seq 1 30); do
@@ -252,7 +253,7 @@ read_band_state() {
         const winActor = actors[0];
         const parent = winActor.get_parent();
         const children = parent ? parent.get_children() : [];
-        const band = children.find(c => c.toString().includes("WindowNativizerResizeBand"));
+        const band = children.find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
         if (!band) return JSON.stringify({hasBand: false});
 
         const strips = {};
@@ -265,6 +266,56 @@ read_band_state() {
             }
         }
         return JSON.stringify({hasBand: true, strips});
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+
+reply = sys.argv[1]
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+if not match:
+    sys.exit("invalid json")
+print(match.group(0))
+PYEOF
+}
+
+# The same reading with the frame rect and the strip origins, for the case that turns on where
+# the strips sit relative to the body rather than on which of them exist. It picks its window by
+# title: the probe window of the section above can still be on the stage.
+read_declared_band_state() {
+    local reply
+    reply="$(shell_eval '
+    (() => {
+        global.window_group.show();
+        const actors = global.get_window_actors();
+        const winActor = actors.find(a => a.meta_window &&
+            a.meta_window.get_title() === "Window Nativizer E2E Declared");
+        if (!winActor) return JSON.stringify({hasBand: false, error: "declared-margin window not on stage"});
+        const win = winActor.meta_window;
+        const buf = win.get_buffer_rect();
+        const frame = win.get_frame_rect();
+        const parent = winActor.get_parent();
+        const children = parent ? parent.get_children() : [];
+        const band = children.find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+        if (!band) return JSON.stringify({hasBand: false, error: "no band on this window"});
+
+        const strips = {};
+        for (const child of band.get_children()) {
+            const name = child.name || "";
+            const [x, y] = child.get_transformed_position();
+            for (const edge of ["top", "bottom", "left", "right"]) {
+                if (name.includes(edge)) {
+                    strips[edge] = {x: Math.round(x), y: Math.round(y),
+                                    width: child.width, height: child.height};
+                }
+            }
+        }
+        return JSON.stringify({
+            hasBand: true,
+            buffer: {x: buf.x, y: buf.y, width: buf.width, height: buf.height},
+            frame: {x: frame.x, y: frame.y, width: frame.width, height: frame.height},
+            strips,
+        });
     })()
     ')"
     python3 - "$reply" << 'PYEOF'
@@ -468,6 +519,133 @@ kill "$PROBE_PID" 2>/dev/null || true
 sleep 0.2
 
 # 8. Stop shell before analyzing logs
+
+# (e) A client that draws its own CSD declares margins with it. The old reading took any wide
+# enough ring for a native-width handle and skipped the band; only GTK4 can prove that from the
+# outside, so this window keeps its band - and the band is the ring around the frame, not the
+# actor, which is what the strip origins say.
+# The expected band width comes from the generated constant, never from a literal here.
+BAND_PX="$(rg -o 'RESIZE_HANDLE_SIZE = ([0-9]+)' -r '$1' "$ROOT/src/lib/gtkRules.generated.js")"
+echo ">> [test-e2e] Verifying the band on a window that declares its own margins..."
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 4000 >/dev/null 2>&1 &
+for i in $(seq 1 60); do
+    found="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$found" = "1" ] && break
+    sleep 0.25
+done
+sleep 0.6
+
+DECLARED_STATE="$(read_declared_band_state)"
+echo ">> Declared-margin window state: $DECLARED_STATE"
+python3 - "$DECLARED_STATE" "$BAND_PX" << 'PYEOF'
+import json, sys
+
+data = json.loads(sys.argv[1])
+band = int(sys.argv[2])
+if not data.get("hasBand"):
+    sys.exit("!! Expected a resize band on a window that declares its own margins, but none found!")
+
+buf, frame, strips = data["buffer"], data["frame"], data["strips"]
+# The window has to declare a ring, or this case is the bare one the sections above cover.
+ring = {
+    "left": frame["x"] - buf["x"],
+    "top": frame["y"] - buf["y"],
+    "right": buf["x"] + buf["width"] - (frame["x"] + frame["width"]),
+    "bottom": buf["y"] + buf["height"] - (frame["y"] + frame["height"]),
+}
+for edge, value in ring.items():
+    if value <= 0:
+        sys.exit(f"!! Expected the client to declare a margin on the {edge}, got {value}")
+
+# The band is frame grown by the constant on every side - the whole of it outside the body.
+expected = {
+    "top": {"x": frame["x"] - band, "y": frame["y"] - band,
+            "width": frame["width"] + 2 * band, "height": band},
+    "right": {"x": frame["x"] + frame["width"], "y": frame["y"],
+              "width": band, "height": frame["height"]},
+    "bottom": {"x": frame["x"] - band, "y": frame["y"] + frame["height"],
+               "width": frame["width"] + 2 * band, "height": band},
+    "left": {"x": frame["x"] - band, "y": frame["y"],
+             "width": band, "height": frame["height"]},
+}
+for edge, want in expected.items():
+    got = strips.get(edge)
+    if not got:
+        sys.exit(f"!! Expected a {edge} strip on a declared-margin window, got none")
+    for key in ("x", "y", "width", "height"):
+        if got.get(key) != want[key]:
+            sys.exit(f"!! {edge} strip {key}: expected {want[key]}, got {got.get(key)}"
+                     f" (the band must hug the frame, not the actor)")
+PYEOF
+echo ">> Declared-margin window verified: band present, all four strips hug the frame."
+
+# (f) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
+# it. It is also the only end-to-end evidence for the skip side of the band criterion, which rests
+# on the process (libadwaita in /proc/<pid>/maps) rather than on the window's declared ring.
+LIBNATIVE_APP=""
+LIBNATIVE_CLASS=""
+# Any libadwaita client will do: what matters is that its process maps the provider. The wmclass is
+# the app id on Wayland, which is steadier to match than a process name (`pgrep -x` cannot match one
+# longer than 15 characters, and these are).
+for pair in gnome-calculator:org.gnome.Calculator gnome-text-editor:org.gnome.TextEditor nautilus:org.gnome.Nautilus; do
+    if command -v "${pair%%:*}" >/dev/null 2>&1; then
+        LIBNATIVE_APP="${pair%%:*}"
+        LIBNATIVE_CLASS="${pair##*:}"
+        break
+    fi
+done
+LIBNATIVE_RESULT="SKIPPED (no libadwaita client installed)"
+if [ -n "$LIBNATIVE_APP" ]; then
+    echo ">> [test-e2e] Verifying a libadwaita client is left alone ($LIBNATIVE_APP)..."
+    "$DEV" app "$LIBNATIVE_APP" >/dev/null 2>&1 &
+    for i in $(seq 1 80); do
+        found="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
+        [ "$found" = "1" ] && break
+        sleep 0.25
+    done
+    sleep 1.0
+    NATIVE_STATE="$(shell_eval "
+    (() => {
+        global.window_group.show();
+        const kids = global.window_group.get_children();
+        const actor = global.get_window_actors()
+            .find(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS');
+        if (!actor) return 'window-not-found';
+        const band = kids.some(c => c.name === 'WindowNativizerResizeBand' && c._windowActor === actor);
+        const effects = (actor.get_effects ? actor.get_effects() : []).map(e => String(e)).join(',');
+        return 'band=' + (band ? 1 : 0) + ';effects=' + (effects || 'none');
+    })()
+    ")"
+    echo ">> Libadwaita client state: $NATIVE_STATE"
+    python3 - "$NATIVE_STATE" << 'PYEOF'
+import sys
+
+state = sys.argv[1]
+if "window-not-found" in state:
+    sys.exit(f"!! The libadwaita client's window never appeared: {state}")
+if "band=0" not in state:
+    sys.exit(f"!! Expected no resize band on a libadwaita client, got: {state}")
+if "effects=none" not in state:
+    sys.exit(f"!! Expected no clip effect on a libadwaita client, got: {state}")
+PYEOF
+    echo ">> Libadwaita client verified: no band, no clip, nothing of ours."
+    LIBNATIVE_RESULT="PASSED ($LIBNATIVE_APP)"
+    pkill -f "bin/$LIBNATIVE_APP" 2>/dev/null || true
+else
+    echo ">> (skipped: none of gnome-calculator, gnome-text-editor or nautilus is installed, so the"
+    echo "   skip side of the band criterion has no end-to-end case on this machine)"
+fi
+
+# The client closes itself (--hold); wait for it to go, leaving the stage as it found it. No
+# delete() on the way: asking Mutter to close a window from here pings it with a serial it
+# calls bad, which the log audit below would rightly fail on.
+for i in $(seq 1 40); do
+    left="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$left" = "0" ] && break
+    sleep 0.25
+done
+
+# 8. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
 # 8. Log Inspection & Zero-Tolerance Assertion
@@ -483,7 +661,7 @@ with open(log_path, "r", errors="ignore") as f:
     lines = f.readlines()
 
 noise = re.compile(
-    r'(AT-SPI|atk-bridge|Gvc-WARNING|xdg-desktop-portal|RealtimeKit|secrets|keyring|gvfsd-sftp|gsconnect|copyous|mark-shot|chinese-calendar|evolution|MESA: warning|pip-on-top|gsignal\.c:2723)',
+    r'(AT-SPI|atk-bridge|Gvc-WARNING|xdg-desktop-portal|RealtimeKit|secrets|keyring|gvfsd-sftp|gsconnect|copyous|mark-shot|chinese-calendar|evolution|MESA: warning|pip-on-top|gsignal\.c:2723|gnome-calculator)',
     re.I
 )
 
@@ -518,5 +696,6 @@ echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize b
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Log Audit: PASSED (0 ERROR, 0 CRITICAL, 0 WARNING)"
+echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "================================================================"
 exit 0
