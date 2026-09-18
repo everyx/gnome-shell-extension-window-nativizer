@@ -12,12 +12,13 @@ Usage:
 import sys
 import os
 import time
-import subprocess
+from subprocess import run, call, Popen, check_output, DEVNULL
 import argparse
+import tempfile
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE_DIR = "/tmp/window-nativizer-dev"
+STATE_DIR = os.path.join(tempfile.gettempdir(), "window-nativizer-dev")
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 
@@ -33,10 +34,13 @@ BASELINE_NATIVE = [
 def ensure_session():
     if not os.path.exists(PID_FILE):
         print(">> Starting nested shell via dev.sh...")
-        subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
+        subprocess.run([os.path.join(ROOT, "tools", "dev.sh"), "shell"], check=True)
         time.sleep(2.0)
     pid = open(PID_FILE).read().strip()
-    raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
+    if not pid.isdigit():
+        raise ValueError(f"Invalid PID in {PID_FILE!r}: {pid!r}")
+    environ_path = os.path.join("/proc", pid, "environ")
+    raw_env = open(environ_path, "rb").read().split(b"\0")
     bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
     return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
 
