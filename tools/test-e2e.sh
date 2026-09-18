@@ -665,14 +665,34 @@ noise = re.compile(
     re.I
 )
 
+# One upstream defect is exempted on purpose, narrowly and with its evidence, rather than dropped
+# into the noise bag above. Mutter hands a NULL colour state to a setter that requires one:
+#
+#   meta_wayland_actor_surface_real_sync_actor_state() (src/wayland/meta-wayland-actor-surface.c)
+#     color_state = clutter_actor_get_color_state (surface_actor);   -> NULL when never set
+#     if (surface->color_state) color_state = surface->color_state;  -> NULL without colour mgmt
+#     clutter_actor_set_color_state (surface_actor, color_state);    -> g_return_if_fail prints this
+#
+# Introduced in 63fa79c878 (2024-07-16, "wayland/surface: Add double-buffered color state") and
+# still in Mutter 50.4, so it fires for almost every client; the failed call returns immediately and
+# there was nothing to write back, so the line is its only effect. Measured, not assumed: one window
+# mapped and resized produces one of these with the extension enabled and one with it disabled.
+# docs/shell-compatibility.md records it; the count is reported rather than swallowed.
+mutter_color_state = re.compile(
+    r"clutter_actor_set_color_state: assertion 'CLUTTER_IS_COLOR_STATE \(color_state\)' failed")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
 csd_issue = re.compile(r'window-nativizer.*(warning|critical|error|exception)', re.I)
 
 offending = []
+exempted = 0
 for idx, line in enumerate(lines, start=1):
     if noise.search(line):
+        continue
+    if mutter_color_state.search(line):
+        exempted += 1
         continue
     if glib_issue.search(line) or csd_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -685,6 +705,8 @@ if offending:
     print("----------------------------------------------------------------")
     sys.exit(1)
 
+if exempted:
+    print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
@@ -695,7 +717,7 @@ echo "   - Maximize / Unmaximize: PASSED"
 echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
-echo "   - Log Audit: PASSED (0 ERROR, 0 CRITICAL, 0 WARNING)"
+echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter lines counted above)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "================================================================"
 exit 0
