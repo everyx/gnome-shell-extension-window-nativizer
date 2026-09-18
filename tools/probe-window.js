@@ -2,8 +2,9 @@
 //
 //   ./tools/dev.sh app gjs tools/probe-window.js
 //
-// CSD is off, so the window declares no frame extents and the extension draws the
-// decoration. The size is fixed and the content is the theme's box background, so
+// CSD is off by default, so the window declares no frame extents and the extension draws the
+// decoration. WINDOW_NATIVIZER_DECORATED=1 keeps GTK's own decoration instead, which declares a
+// shadow margin: a subject that reserves the ring the resize band lives in. The size is fixed and the content is the theme's box background, so
 // two screenshots of the same session are comparable.
 //
 // WINDOW_NATIVIZER_MODE=native draws the same size and content through libadwaita instead, which
@@ -24,6 +25,7 @@ const Gtk = imports.gi.Gtk;
 
 const native = GLib.getenv('WINDOW_NATIVIZER_MODE') === 'native';
 const backdrop = Boolean(GLib.getenv('WINDOW_NATIVIZER_BACKDROP'));
+const decorated = Boolean(GLib.getenv('WINDOW_NATIVIZER_DECORATED'));
 // WINDOW_NATIVIZER_BODY=#rrggbb paints the window body a known colour. Against a white backdrop and
 // a black shadow the three channels then separate three different things in one profile, and
 // a missing corner clip becomes visible, which it is not when everything is white.
@@ -65,7 +67,7 @@ app.connect('activate', () => {
         default_width: sizeW,
         default_height: sizeH,
     });
-    if (!native)
+    if (!native && !decorated)
         win.set_decorated(false);
     // The backdrop is meant to fill the work area behind the subject, so the
     // shadow is measured against a uniform white surface.
