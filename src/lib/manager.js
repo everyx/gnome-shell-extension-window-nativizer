@@ -6,6 +6,8 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
 import {
     evaluateWindowActions,
     isWindowMaximized,
@@ -41,6 +43,7 @@ export class Manager {
         this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];
         this._rules = null;         // fingerprint -> RuleState, invalidated on settings change
+        this._inOverview = false;
     }
 
     enable() {
@@ -48,6 +51,10 @@ export class Manager {
 
         // A provider answer can land after a window has been decided (see hasAdwaitaLook()).
         setOnProcessKnown(pid => this._onProcessKnown(pid));
+
+        this._inOverview = Boolean(Main.overview.visible);
+        this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
+        this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
         this._connect(this._signals, global.display, 'window-created', (_, win) => this._trackWindow(win));
         this._connect(this._signals, global.display, 'grab-op-end', () => {
@@ -83,6 +90,8 @@ export class Manager {
     }
 
     disable() {
+        this._inOverview = false;
+
         if (this._reconcileTimeout) {
             GLib.Source.remove(this._reconcileTimeout);
             this._reconcileTimeout = null;
@@ -321,6 +330,8 @@ export class Manager {
         if (wanted !== hasClip) {
             if (wanted) {
                 state.clip = new RoundedClipEffect();
+                if (this._inOverview)
+                    state.clip.set_enabled(false);
                 state.clipTarget = clipTarget;
                 state.clipTarget.add_effect(state.clip);
             } else {
@@ -338,6 +349,24 @@ export class Manager {
         }
         state.clipInsets = state.clip ? insets : null;
         state.clearRing = state.clip ? Boolean(clearRing) : false;
+    }
+
+    _onOverviewShowing() {
+        this._inOverview = true;
+        this._setClipsEnabled(false);
+    }
+
+    _onOverviewHidden() {
+        this._inOverview = false;
+        this._setClipsEnabled(true);
+    }
+
+    /** Suspend or resume clip effects across all managed windows (see docs/decoration-model.md § Overview downscaling and offscreen effects). */
+    _setClipsEnabled(enabled) {
+        for (const state of this._windows.values()) {
+            if (state.clip)
+                state.clip.set_enabled(enabled);
+        }
     }
 
     /** Detach clip; tolerates X11 surface child already destroyed. */

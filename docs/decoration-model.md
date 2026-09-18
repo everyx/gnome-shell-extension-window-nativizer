@@ -573,3 +573,45 @@ style for the whole session; what runs per frame is eight textured rectangles.
 something else is painting and the reading layer 2 makes cannot say so: reimplementing
 the gate partially would add a second shadow rather than skip one, so they are left to
 a `none` rule - the one-sided error above, with the remedy that fits it.
+
+## Overview downscaling and offscreen effects
+
+When GNOME Shell enters the Overview, window preview clones are rendered downscaled to
+around ~0.25x scale.
+
+Mutter's `MetaShapedTexture` (`src/compositor/meta-shaped-texture.c`) handles native window
+scaling with high visual fidelity: when downscaled below 0.5x, if `create_mipmaps` is enabled,
+it switches its minification filter to `COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST` (bilinear
+mipmapped filtering), ensuring sharp and alias-free thumbnails.
+
+However, `RoundedClipEffect` subclasses `Shell.GLSLEffect` (which inherits `Clutter.OffscreenEffect`).
+When an effect redirects an actor's subtree to an offscreen FBO texture, the actor preview in the
+overview clones this FBO texture instead of sampling directly from `MetaShapedTexture`.
+In `Clutter.OffscreenEffect` (`ensure_pipeline_filter_for_scale()` in Mutter's
+`clutter/clutter/clutter-offscreen-effect.c`):
+- The pipeline min/mag filter decision is based strictly on actor / display `resource_scale`
+  (integer vs fractional monitor scale), NOT the preview clone's ~0.25x downscaling factor.
+- Crucially, `ClutterOffscreenEffect` creates an ordinary FBO target texture and does not generate
+  a mipmap chain.
+
+As a consequence, downscaling the full-resolution offscreen FBO texture to ~0.25x in overview
+thumbnails suffers from severe aliasing, moiré patterns, and text blur (GNOME Shell upstream
+issue #7903).
+
+### Design trade-off: Suspending decoration in overview
+
+From geometric scaling, an ~8–12px corner radius contracts to ~2–3 pixels at ~0.25x overview
+scale. We treat this as an acceptable engineering trade-off: suspending the offscreen pass
+prioritizes sharp text and interior content over sub-3px corner curvature in miniature
+thumbnails, without requiring custom mipmapped FBO machinery in Mutter.
+
+The suspension lifecycle:
+- When `Main.overview` emits `showing`, we set `state.clip.set_enabled(false)` on all active window clips.
+- When `Main.overview` emits `hidden`, we re-enable them (`state.clip.set_enabled(true)`).
+- Newly managed windows inherit `set_enabled(false)` if created during overview.
+
+Disabling the effect bypasses the intermediate FBO pass entirely, allowing Mutter's
+`MetaShapedTexture` to perform native mipmapped downsampling directly. Neither `ShadowActor`
+nor `ResizeBand` redirect the window actor into an FBO (both are sibling actors placed in
+`global.window_group`), so suspending `RoundedClipEffect` fully eliminates the source of blur.
+

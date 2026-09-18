@@ -72,6 +72,19 @@ if wrong:
 PYEOF
 }
 
+# Ensure shell has settled onto the desktop (overview dismissed by dev-shell.sh)
+OVERVIEW_INIT_STATE="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    return JSON.stringify({overviewVisible: Main.overview.visible});
+})()
+')"
+if ! check_fields "$OVERVIEW_INIT_STATE" '{"overviewVisible": false}'; then
+    echo "!! Shell failed to settle onto desktop: initial headless overview is still visible!"
+    exit 1
+fi
+echo ">> Shell session confirmed settled onto desktop."
+
 # 3. Launch GTK4 test client in background
 echo ">> [test-e2e] Launching GTK4 client (resize, maximize, close sequence)..."
 "$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated &
@@ -220,16 +233,30 @@ if [[ "$(band_count)" -lt 1 ]]; then
 fi
 
 "$DEV" ext disable "$UUID" >/dev/null
-if [[ "$(band_count)" -ne 0 ]]; then
+BAND_REMOVED=0
+for _ in $(seq 1 20); do
+    if [[ "$(band_count)" -eq 0 ]]; then
+        BAND_REMOVED=1
+        break
+    fi
+    sleep 0.05
+done
+if [[ "$BAND_REMOVED" -ne 1 ]]; then
     echo "!! Resize band survived extension disable (it would keep taking clicks)!"
     kill "$PROBE_PID" 2>/dev/null || true
     exit 1
 fi
-sleep 0.1
 
 "$DEV" ext enable "$UUID" >/dev/null
-sleep 0.2
-if [[ "$(band_count)" -lt 1 ]]; then
+BAND_RESTORED=0
+for _ in $(seq 1 20); do
+    if [[ "$(band_count)" -ge 1 ]]; then
+        BAND_RESTORED=1
+        break
+    fi
+    sleep 0.05
+done
+if [[ "$BAND_RESTORED" -ne 1 ]]; then
     echo "!! Resize band was not rebuilt after the extension was re-enabled!"
     kill "$PROBE_PID" 2>/dev/null || true
     exit 1
@@ -579,7 +606,64 @@ for edge, want in expected.items():
 PYEOF
 echo ">> Declared-margin window verified: band present, all four strips hug the frame."
 
-# (f) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
+# (f) Overview lifecycle assertion: RoundedClipEffect must be suspended (enabled=false)
+# during overview showing, and restored (enabled=true) upon returning to desktop (hidden).
+# This prevents low-res downsampling blur on overview preview clones (issue #7903).
+echo ">> [test-e2e] Verifying clip effect suspension in overview..."
+OVERVIEW_SUSPEND_STATE="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    const GLib = imports.gi.GLib;
+    const actors = global.get_window_actors();
+    const target = actors.find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
+    if (!target) return JSON.stringify({error: "window not found"});
+
+    const getClip = () => target.get_effects().find(e => e.toString().includes("RoundedClipEffect"));
+
+    const initialClip = getClip();
+    const initialEnabled = initialClip ? initialClip.get_enabled() : null;
+
+    const pollState = async (expectedOverview, expectedClipEnabled, maxRetries = 20) => {
+        for (let i = 0; i < maxRetries; i++) {
+            await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
+            const clip = getClip();
+            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() === expectedClipEnabled) {
+                return { matched: true, overviewVisible: Main.overview.visible, clipEnabled: clip.get_enabled(), hasClip: true };
+            }
+        }
+        const clip = getClip();
+        return {
+            matched: false,
+            overviewVisible: Main.overview.visible,
+            hasClip: Boolean(clip),
+            clipEnabled: clip ? clip.get_enabled() : null
+        };
+    };
+
+    Main.overview.show();
+    const overviewRes = await pollState(true, false);
+
+    Main.overview.hide();
+    const desktopRes = await pollState(false, true);
+
+    return JSON.stringify({
+        hasClip: Boolean(initialClip) && overviewRes.hasClip && desktopRes.hasClip,
+        initialEnabled,
+        overviewVisible: overviewRes.overviewVisible,
+        inOverviewEnabled: overviewRes.clipEnabled,
+        desktopOverviewVisible: desktopRes.overviewVisible,
+        restoredEnabled: desktopRes.clipEnabled
+    });
+})()
+')"
+echo ">> Overview suspend check: $OVERVIEW_SUSPEND_STATE"
+if ! check_fields "$OVERVIEW_SUSPEND_STATE" '{"hasClip": true, "initialEnabled": true, "overviewVisible": true, "inOverviewEnabled": false, "desktopOverviewVisible": false, "restoredEnabled": true}'; then
+    echo "!! Overview suspend assertion failed: clip effect was not properly toggled during overview!"
+    exit 1
+fi
+echo ">> Overview clip effect suspension verified: disabled during overview, restored on desktop."
+
+# (g) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
 # it. It is also the only end-to-end evidence for the skip side of the band criterion, which rests
 # on the process (libadwaita in /proc/<pid>/maps) rather than on the window's declared ring.
 LIBNATIVE_APP=""
@@ -716,6 +800,7 @@ echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
 echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
+echo "   - Overview Clip Suspension: PASSED (disabled during overview, restored on desktop)"
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter lines counted above)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"

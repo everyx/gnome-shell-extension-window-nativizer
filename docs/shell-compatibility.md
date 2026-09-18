@@ -23,6 +23,8 @@ stops being true is a compatibility break, not a refactor.
 | `Clutter.Actor:set_cursor_type()` | 45–50 stable | the hover cursor; per-actor, `Clutter.CursorType.*_RESIZE` and `DEFAULT`. `Clutter.CursorType.INHERIT` is the reset `screenshot.js` uses |
 | `Clutter.BindConstraint` | 45–50 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
 | `Clutter.Effect:vfunc_paint_target()` / `get_actor()` | 45–50 stable | the hook `RoundedClipEffect` reads the live actor size in; the shell's own `FadeEffect` (`messageList.js`) uses the same pair |
+| `Clutter.Effect:set_enabled()` | 45–50 stable | canonical `clutter_effect_set_enabled` in `clutter/clutter/clutter-effect.c`; toggles the offscreen pass without detaching the effect |
+| `Main.overview` (`visible`, `showing`, `hidden`) | 45–50 stable | canonical Shell overview lifecycle API (`js/ui/overview.js`); gates clip effect suspension during overview to prevent blurry downscaled previews |
 | `global.window_group.set_child_above_sibling()` | 45–50 stable | re-pins the band above its window actor on `restacked` |
 | `Meta.Cursor` / `global.display.set_cursor()` | **does not exist** | 50.4 has no such API; the cursor is the actor property above |
 
