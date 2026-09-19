@@ -21,8 +21,9 @@ WL_DISPLAY="wayland-window-nativizer"
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
+export XDG_CONFIG_HOME="$STATE_DIR/config"
 
-mkdir -p "$STATE_DIR"
+mkdir -p "$STATE_DIR" "$XDG_CONFIG_HOME"
 
 cmd_shell() {
     if [[ -f "$STATE_DIR/ready" ]] && [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -31,11 +32,12 @@ cmd_shell() {
     fi
     # Sync latest extension code + compile GSettings schema
     deploy_ext
-    rm -f "$PIDFILE" "$LOG" "$STATE_DIR/ready"   # Clear old logs to avoid mixing session outputs
+    rm -rf "$PIDFILE" "$LOG" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"   # Clear old logs to avoid mixing session outputs
+    mkdir -p "$XDG_CONFIG_HOME"
 
     echo ">> Starting headless nested shell (background, log: $LOG)"
     chmod +x "$ROOT/tools/dev-shell.sh"
-    WINDOW_NATIVIZER_UUID="$UUID" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
+    WINDOW_NATIVIZER_UUID="$UUID" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
     disown
     # Wait until ready
     for i in $(seq 1 30); do
@@ -68,7 +70,7 @@ cmd_ext() {
     pid="$(cat "$PIDFILE")"
     bus="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true)"
     if [[ -n "$bus" ]]; then
-        env DBUS_SESSION_BUS_ADDRESS="$bus" gnome-extensions "$@"
+        env XDG_CONFIG_HOME="$XDG_CONFIG_HOME" DBUS_SESSION_BUS_ADDRESS="$bus" gnome-extensions "$@"
     else
         echo "!! Cannot find nested session bus address, please verify with ./dev.sh shell"; exit 1
     fi
@@ -80,7 +82,7 @@ cmd_stop() {
         # Kill entire process tree (dbus-run-session cleans up along with it)
         pkill -f "wayland-display=$WL_DISPLAY" 2>/dev/null || true
         kill "$(cat "$PIDFILE")" 2>/dev/null || true
-        rm -f "$PIDFILE" "$STATE_DIR/ready"
+        rm -rf "$PIDFILE" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"
     fi
     echo ">> Cleaned up"
 }

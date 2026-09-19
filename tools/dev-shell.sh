@@ -11,6 +11,14 @@ PIDFILE="$STATE_DIR/shell.pid"
 # Note: this script runs inside dbus-run-session bash (see dev.sh)
 export G_MESSAGES_DEBUG='GNOME Shell'
 export WINDOW_NATIVIZER_UUID="$UUID"
+export XDG_CONFIG_HOME="$STATE_DIR/config"
+mkdir -p "$XDG_CONFIG_HOME"
+
+# Pre-populate isolated dconf so only our extension is enabled (isolating from host extensions)
+if ! gsettings set org.gnome.shell enabled-extensions "['$UUID']"; then
+    echo "!! Failed to pre-populate isolated enabled-extensions in test sandbox!" >&2
+    exit 1
+fi
 
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
     --virtual-monitor 1920x1080 --unsafe-mode &
