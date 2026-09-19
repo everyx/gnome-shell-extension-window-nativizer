@@ -34,6 +34,20 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
 }
 
 /**
+ * Whether the window type has an independent, full-fledged form that can accept
+ * Adwaita decoration. Transient menus, popups, tooltips, DND layers, and desktop
+ * docks are excluded.
+ * @param {number} [windowType=WindowType.NORMAL]
+ * @returns {boolean}
+ */
+export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
+    return windowType === WindowType.NORMAL ||
+           windowType === WindowType.DIALOG ||
+           windowType === WindowType.MODAL_DIALOG ||
+           windowType === WindowType.UTILITY;
+}
+
+/**
  * @param {object} [params={}]
  * @param {number} [params.windowType=WindowType.NORMAL]
  * @param {boolean} [params.isMaximized=false]
@@ -48,8 +62,7 @@ export function checkDecorationEligibility({
     frameWidth = Number.POSITIVE_INFINITY,
     frameHeight = Number.POSITIVE_INFINITY,
 } = {}) {
-    if (windowType !== WindowType.NORMAL && windowType !== WindowType.DIALOG &&
-        windowType !== WindowType.MODAL_DIALOG && windowType !== WindowType.UTILITY)
+    if (!isDecoratableWindowType(windowType))
         return {eligible: false, reason: `window-type=${windowType}`};
 
     // libadwaita: maximized/fullscreen have square corners, no shadow.

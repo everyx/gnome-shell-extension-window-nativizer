@@ -543,9 +543,14 @@ PYEOF
 echo ">> Hand-placed flush window verified: top and right strips survive, left and bottom clipped."
 
 kill "$PROBE_PID" 2>/dev/null || true
-sleep 0.2
-
-# 8. Stop shell before analyzing logs
+pkill -f "probe-window[.]js" 2>/dev/null || true
+for i in $(seq 1 30); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -eq 0 ]]; then
+        break
+    fi
+    sleep 0.1
+done
 
 # (e) A client that draws its own CSD declares margins with it. The old reading took any wide
 # enough ring for a native-width handle and skipped the band; only GTK4 can prove that from the
@@ -756,6 +761,7 @@ LIBNATIVE_RESULT="SKIPPED (no libadwaita client installed)"
 if [ -n "$LIBNATIVE_APP" ]; then
     echo ">> [test-e2e] Verifying a libadwaita client is left alone ($LIBNATIVE_APP)..."
     "$DEV" app "$LIBNATIVE_APP" >/dev/null 2>&1 &
+    LIBNATIVE_PID=$!
     for i in $(seq 1 80); do
         found="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
         [ "$found" = "1" ] && break
@@ -788,16 +794,148 @@ if "effects=none" not in state:
 PYEOF
     echo ">> Libadwaita client verified: no band, no clip, nothing of ours."
     LIBNATIVE_RESULT="PASSED ($LIBNATIVE_APP)"
-    pkill -f "bin/$LIBNATIVE_APP" 2>/dev/null || true
+    pkill -x "$LIBNATIVE_APP" 2>/dev/null || true
+    pkill -f "$LIBNATIVE_APP" 2>/dev/null || true
+    kill "$LIBNATIVE_PID" 2>/dev/null || true
+    for i in $(seq 1 40); do
+        left="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
+        [ "$left" = "0" ] && break
+        sleep 0.25
+    done
 else
     echo ">> (skipped: none of gnome-calculator, gnome-text-editor or nautilus is installed, so the"
     echo "   skip side of the band criterion has no end-to-end case on this machine)"
 fi
 
+# Ensure all background test windows have completely vanished before testing popup lifecycle
+for i in $(seq 1 40); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -eq 0 ]]; then
+        break
+    fi
+    sleep 0.1
+done
+
+# (i) Test transient popup menu gate & unmanaged focus protection (Issue #13):
+#    - Layer 1: When an application opens a transient popup/dropdown menu, Mutter creates a
+#      menu window actor, but manager._trackWindow must reject it (trackedCount strictly remains 1, not 2).
+#    - Layer 2: While the unmanaged popup menu holds grab/focus, manager must not schedule debounced
+#      reconciliation (reconcilePending must remain false).
+echo ">> [test-e2e] Verifying transient popup rejection and focus protection (Issue #13)..."
+"$DEV" app python3 "$ROOT/tools/repro-popup-menu.py" --auto --timeout 2500 >/dev/null 2>&1 &
+REPRO_PID=$!
+
+POPUP_MAPPED=0
+for i in $(seq 1 40); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -ge 2 ]]; then
+        POPUP_MAPPED=1
+        break
+    fi
+    sleep 0.1
+done
+
+if [[ "$POPUP_MAPPED" -ne 1 ]]; then
+    echo "!! Timeout waiting for popup menu actor to map!"
+    kill "$REPRO_PID" 2>/dev/null || true
+    exit 1
+fi
+
+POPUP_CHECK="$(shell_eval '
+(() => {
+    const ext = Main.extensionManager.lookup("'$UUID'");
+    const manager = ext?.stateObj?._manager;
+    const actors = global.get_window_actors();
+    return JSON.stringify({
+        actorCount: actors.length,
+        trackedCount: manager ? manager._windows.size : -1,
+        reconcilePending: Boolean(manager?._reconcileTimeout)
+    });
+})()
+')"
+echo ">> Popup check: $POPUP_CHECK"
+if ! check_fields "$POPUP_CHECK" '{"actorCount": 2, "trackedCount": 1, "reconcilePending": false}'; then
+    echo "!! Transient popup was incorrectly tracked or scheduled unmanaged reconcile!"
+    kill "$REPRO_PID" 2>/dev/null || true
+    exit 1
+fi
+
+# Both layers are about what happens *while the menu is open*, so sample its whole lifetime
+# instead of one instant: a single look cannot tell "never scheduled" from "not scheduled
+# yet", and it says nothing about the symptom the issue reported, a menu that vanishes.
+# The sample covers the global debounced reconcile - the path this fix gates. A window that
+# loses focus to the popup still reconciles through its own `notify::appears-focused` signal,
+# which is reported, not asserted. The synchronous paths (`grab-op-end`, `restacked`) are not
+# observable this way at all. Reading the manager's own bookkeeping is what the assertion is
+# about: "the popup is not tracked" is a statement about `_windows`.
+shell_eval '
+(() => {
+    global.__wnPopupSamples = [];
+    global.__wnPopupTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
+        const ext = Main.extensionManager.lookup("'$UUID'");
+        const manager = ext?.stateObj?._manager;
+        global.__wnPopupSamples.push({
+            actors: global.get_window_actors().length,
+            tracked: manager ? manager._windows.size : -1,
+            pending: Boolean(manager?._reconcileTimeout),
+            windowPending: [...(manager?._windows?.values?.() ?? [])].some(s => s.reconcileTimeout),
+        });
+        return global.__wnPopupSamples.length < 150 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
+    });
+    return "started";
+})()
+' >/dev/null
+sleep 2
+
+POPUP_SAMPLES="$(shell_eval '
+(() => {
+    if (global.__wnPopupTimer) {
+        GLib.Source.remove(global.__wnPopupTimer);
+        global.__wnPopupTimer = null;
+    }
+    const samples = global.__wnPopupSamples ?? [];
+    global.__wnPopupSamples = [];
+    // Only the samples with the menu open say anything: those are "the menu is still there",
+    // and in them it must neither be tracked nor have a reconcile queued. After the menu
+    // closes a reconcile is expected, so those samples are not counted.
+    const open = samples.filter(s => s.actors >= 2);
+    // Scale-free on purpose: a busy machine slows the sampling down, so the claim is that
+    // the menu was there for most of what we sampled, not a wall-clock count of samples. The
+    // floor only rules out a sample set too short for "most of" to mean anything.
+    const survived = open.length >= 10 && open.length * 2 >= samples.length;
+    return JSON.stringify({
+        sampleCount: samples.length,
+        openSamples: open.length,
+        survived,
+        trackedBad: open.filter(s => s.tracked !== 1).length,
+        reconcileScheduled: open.filter(s => s.pending).length,
+        // A window that loses focus to the popup still reconciles through its own
+        // `notify::appears-focused` signal: that path is not what this fix gates, so it is
+        // reported rather than asserted.
+        windowReconciles: open.filter(s => s.windowPending).length,
+    });
+})()
+')"
+echo ">> Popup samples: $POPUP_SAMPLES"
+if ! check_fields "$POPUP_SAMPLES" '{"survived": true, "trackedBad": 0, "reconcileScheduled": 0}'; then
+    echo "!! The menu did not stay open, or was tracked, or queued a reconcile while it was open!"
+    kill "$REPRO_PID" 2>/dev/null || true
+    exit 1
+fi
+wait $REPRO_PID 2>/dev/null || true
+for i in $(seq 1 30); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -eq 0 ]]; then
+        break
+    fi
+    sleep 0.1
+done
+echo ">> Menu survived most of the sampled window, was never tracked, and left no debounced reconcile pending (Layer 1 + Layer 2 passed)."
+
 # 8. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
-# 8. Log Inspection & Zero-Tolerance Assertion
+# 9. Log Inspection & Zero-Tolerance Assertion
 echo "================================================================"
 echo " Analyzing Shell Log for Warnings, Errors, and Criticals"
 echo "================================================================"
@@ -881,7 +1019,8 @@ echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)
 echo "   - Overview Clip Suspension: PASSED (disabled during overview, restored on desktop)"
 echo "   - Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
-echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
+echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
+echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "================================================================"
 exit 0

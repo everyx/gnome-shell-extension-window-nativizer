@@ -14,6 +14,7 @@ import {
     extractWindowProperties,
 } from './pick.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
+import {isDecoratableWindowType} from './detector.js';
 import {resolveWindowIdentity} from './window.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
@@ -89,7 +90,7 @@ export class InspectorService {
                 continue;
 
             const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
-            if (type === Meta.WindowType.DESKTOP || type === Meta.WindowType.DOCK)
+            if (!isDecoratableWindowType(type))
                 continue;
 
             const frame = win.get_frame_rect();
