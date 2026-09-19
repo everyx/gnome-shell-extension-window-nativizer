@@ -53,24 +53,16 @@ function windowTypeNoun(windowType) {
 }
 
 /**
- * @param {{client_type:string,window_type:number,has_parent:boolean,allows_resize:boolean,attached_dialog:boolean}|null} properties
+ * @param {{client_type:string,window_type:number,has_parent:boolean,allows_resize:boolean,attached_dialog:boolean,has_ring?:boolean}|null} properties
  * @returns {string}
  */
 function windowKindSentence(properties) {
     if (!properties)
         return '';
 
-    // Translators: A window the user cannot resize.
-    const fixedSize = _('Fixed-size');
-    // Translators: A window the user can resize.
-    const resizable = _('Resizable');
-    let size = properties.allows_resize === false ? fixedSize : resizable;
-    if (properties.allows_resize === false && properties.size) {
-        const formattedDimensions = String(properties.size).replace('x', '×');
-        // Translators: %s is the width and height of the window, e.g. "Fixed-size (360×420)".
-        size = _('Fixed-size (%s)').format(formattedDimensions);
-    }
     const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
+    // Translators: %s is the client type and the window type, e.g. "Wayland window".
+    const entity = _('%s %s').format(server, windowTypeNoun(properties.window_type));
 
     // Translators: The window has no parent window.
     const noParent = _('with no parent');
@@ -87,9 +79,28 @@ function windowKindSentence(properties) {
     else
         parent = hasParent;
 
-    // Translators: %s is the size, the client type, the window type and the
-    // parent, in that order. Reorder the placeholders to fit the language.
-    return _('%s %s %s, %s').format(size, server, windowTypeNoun(properties.window_type), parent);
+    let size;
+    if (properties.allows_resize === false) {
+        if (properties.size) {
+            const formattedDimensions = String(properties.size).replace('x', '×');
+            // Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
+            size = _('fixed-size (%s)').format(formattedDimensions);
+        } else {
+            // Translators: A window the user cannot resize.
+            size = _('fixed-size');
+        }
+    } else {
+        // Translators: A window the user can resize.
+        size = _('resizable');
+    }
+
+    if (properties.has_ring === false) {
+        // Translators: %s is the entity, parent, without shadow margins, and size, in that order.
+        return _('%s, %s, %s, %s').format(entity, parent, _('without shadow margins'), size);
+    }
+
+    // Translators: %s is the entity, parent, and size, in that order.
+    return _('%s, %s, %s').format(entity, parent, size);
 }
 
 /**

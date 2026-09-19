@@ -36,6 +36,7 @@ describe('extractWindowProperties', () => {
             hasParent: 'true',
             allowsResize: 'false',
             isAttachedDialog: 'false',
+            hasRing: 'false',
         });
     });
 
@@ -55,7 +56,37 @@ describe('extractWindowProperties', () => {
             hasParent: 'false',
             allowsResize: 'true',
             isAttachedDialog: 'true',
+            hasRing: 'false',
         });
+    });
+
+    it('detects client declared ring when buffer_rect is larger than frame_rect', () => {
+        const ringedWin = {
+            get_wm_class: () => 'firefox',
+            get_window_type: () => WindowType.NORMAL,
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 30, y: 30, width: 800, height: 600}),
+            get_buffer_rect: () => ({x: 0, y: 0, width: 860, height: 660}),
+            decorated: false,
+            get_transient_for: () => null,
+            allows_resize: () => true,
+            is_attached_dialog: () => false,
+        };
+        expect(extractWindowProperties(ringedWin).hasRing).toBe('true');
+
+        // Borderless video surface (PiP): buffer_rect matches frame_rect
+        const pipWin = {
+            get_wm_class: () => 'firefox',
+            get_window_type: () => WindowType.NORMAL,
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 100, y: 100, width: 400, height: 225}),
+            get_buffer_rect: () => ({x: 100, y: 100, width: 400, height: 225}),
+            decorated: false,
+            get_transient_for: () => null,
+            allows_resize: () => true,
+            is_attached_dialog: () => false,
+        };
+        expect(extractWindowProperties(pipWin).hasRing).toBe('false');
     });
 
     it('falls back to get_sandboxed_app_id when wm_class is unavailable', () => {
@@ -98,6 +129,7 @@ describe('extractWindowProperties', () => {
             hasParent: 'false',
             allowsResize: 'true',
             isAttachedDialog: 'false',
+            hasRing: 'false',
         });
     });
 

@@ -2,6 +2,7 @@
 
 import {WindowType, WindowClientType} from './mutterRules.generated.js';
 
+import {hasDeclaredMarginRing} from './frame.js';
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
     CLIENT_TYPE_TOKEN_X11,
@@ -48,6 +49,13 @@ export function extractWindowProperties(win, wmClassOverride = null) {
     const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
     const isX11 = win.get_client_type?.() === WindowClientType.X11;
     const f = win.get_frame_rect?.();
+    const b = win.get_buffer_rect?.();
+
+    let hasRing = false;
+    if (typeof win.hasRing === 'boolean')
+        hasRing = win.hasRing;
+    else if (f && b)
+        hasRing = hasDeclaredMarginRing({buffer: b, frame: f, hasSsd: Boolean(win.decorated)});
 
     // Values are strings for D-Bus a{ss}; prefs parses them back for buildRuleKey().
     const props = {
@@ -57,6 +65,7 @@ export function extractWindowProperties(win, wmClassOverride = null) {
         'hasParent': boolString(win.get_transient_for?.()),
         'allowsResize': boolString(win.allows_resize?.()),
         'isAttachedDialog': boolString(win.is_attached_dialog?.()),
+        'hasRing': boolString(hasRing),
     };
 
     if (f && Number.isFinite(f.width) && Number.isFinite(f.height) && f.width > 0 && f.height > 0) {
@@ -76,6 +85,7 @@ export function buildRuleKeyFromProperties(properties = {}) {
         hasParent: properties.hasParent === 'true',
         allowsResize,
         isAttachedDialog: properties.isAttachedDialog === 'true',
+        hasRing: properties.hasRing === 'true',
         width: !allowsResize && properties.width ? Number(properties.width) : null,
         height: !allowsResize && properties.height ? Number(properties.height) : null,
     });
