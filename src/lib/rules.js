@@ -125,13 +125,12 @@ const FINGERPRINT_FIELDS = [
     {
         name: 'client_type',
         render: o => o.clientType,
-        pattern: `(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11})`,
         parse: raw => raw,
     },
-    {name: 'window_type', render: o => o.windowType, pattern: '\\d+', parse: raw => Number(raw)},
-    {name: 'has_parent', render: o => boolString(o.hasParent), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
-    {name: 'allows_resize', render: o => boolString(o.allowsResize), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
-    {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
+    {name: 'window_type', render: o => o.windowType, parse: raw => Number(raw)},
+    {name: 'has_parent', render: o => boolString(o.hasParent), parse: raw => raw === 'true'},
+    {name: 'allows_resize', render: o => boolString(o.allowsResize), parse: raw => raw === 'true'},
+    {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), parse: raw => raw === 'true'},
 ];
 
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
