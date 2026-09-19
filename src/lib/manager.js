@@ -10,6 +10,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
     evaluateWindowActions,
+    isDecoratableWindowType,
     isWindowMaximized,
     isWindowTiled,
     shouldShowResizeBand,
@@ -76,7 +77,14 @@ export class Manager {
         this._connect(this._signals, global.display, 'restacked', () => this._restackActors());
         this._connect(this._signals, global.display, 'notify::focus-window', () => {
             this._resetBandCursors();
-            this._reconcileDebounced();
+
+            const focusWin = global.display.focus_window;
+            // Focus landing on an unmanaged window (a transient popup menu, a tooltip) leaves
+            // `appears_focused` as the only input we decide from that changes - and the app
+            // whose menu is open should keep the focused tone it has. Writing to the scene
+            // graph from here is what issue #13 is about; the menu closing re-decides.
+            if (!focusWin || this._windows.has(focusWin))
+                this._reconcileDebounced();
         });
 
         this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => this._reconcile());
@@ -198,7 +206,7 @@ export class Manager {
     }
 
     _trackWindow(win) {
-        if (this._windows.has(win))
+        if (!win || !isDecoratableWindowType(win.get_window_type?.()) || this._windows.has(win))
             return;
         const state = {
             clip: null, clipTarget: null, clipInsets: null, clearRing: false, shadow: null,

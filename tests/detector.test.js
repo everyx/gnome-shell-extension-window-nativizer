@@ -6,7 +6,7 @@
 import {WindowType} from '../src/lib/mutterRules.generated.js';
 import {
     computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
-    isWindowTiled, checkDecorationEligibility, inferDecorationBaseline,
+    isWindowTiled, isDecoratableWindowType, checkDecorationEligibility, inferDecorationBaseline,
     evaluateWindowActions, suggestedRuleState, suggestedRuleWouldChange,
     declaredSides, declaresOwnShadow,
 } from '../src/lib/detector.js';
@@ -40,6 +40,53 @@ describe('computeInsets', () => {
         const {w, h} = computeInsets(400, 300, 440, 340);
         expect(w).toBe(0);
         expect(h).toBe(0);
+    });
+});
+
+describe('isDecoratableWindowType', () => {
+    const KNOWN_DECORATABLE = Object.freeze([
+        WindowType.NORMAL,
+        WindowType.DIALOG,
+        WindowType.MODAL_DIALOG,
+        WindowType.UTILITY,
+    ]);
+
+    const KNOWN_NON_DECORATABLE = Object.freeze([
+        WindowType.DESKTOP,
+        WindowType.DOCK,
+        WindowType.TOOLBAR,
+        WindowType.MENU,
+        WindowType.SPLASHSCREEN,
+        WindowType.DROPDOWN_MENU,
+        WindowType.POPUP_MENU,
+        WindowType.TOOLTIP,
+        WindowType.NOTIFICATION,
+        WindowType.COMBO,
+        WindowType.DND,
+        WindowType.OVERRIDE_OTHER,
+    ]);
+
+    it('partitions the entire WindowType enum with every member explicitly classified (canary test)', () => {
+        const classifiedSet = new Set([...KNOWN_DECORATABLE, ...KNOWN_NON_DECORATABLE]);
+        const upstreamValues = new Set(Object.values(WindowType));
+
+        // The enum comes from the vendored generator output, so a member upstream adds fails
+        // here until it is classified on purpose - and the test stays offline.
+        expect(classifiedSet).toEqual(upstreamValues);
+    });
+
+    it('returns true for all decoratable window types', () => {
+        for (const type of KNOWN_DECORATABLE)
+            expect(isDecoratableWindowType(type)).toBeTrue();
+    });
+
+    it('returns false for transient menus, popups, tooltips, and auxiliary surfaces', () => {
+        for (const type of KNOWN_NON_DECORATABLE)
+            expect(isDecoratableWindowType(type)).toBeFalse();
+    });
+
+    it('defaults to WindowType.NORMAL when called without arguments', () => {
+        expect(isDecoratableWindowType()).toBeTrue();
     });
 });
 
