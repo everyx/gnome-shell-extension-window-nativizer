@@ -890,6 +890,18 @@ describe('isWindowMaximized', () => {
         expect(isWindowMaximized(winFalse)).toBeFalse();
     });
 
+    it('falls back to win.get_maximized() on GNOME 45–48', () => {
+        const win45True = {
+            get_maximized: () => 3, // MetaMaximizeFlags.BOTH
+        };
+        expect(isWindowMaximized(win45True)).toBeTrue();
+
+        const win45False = {
+            get_maximized: () => 0,
+        };
+        expect(isWindowMaximized(win45False)).toBeFalse();
+    });
+
     it('handles null/undefined gracefully', () => {
         expect(isWindowMaximized(null)).toBeFalse();
         expect(isWindowMaximized(undefined)).toBeFalse();

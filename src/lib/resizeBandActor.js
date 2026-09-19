@@ -287,7 +287,7 @@ export const ResizeBand = GObject.registerClass({
     resetCursor() {
         this._hover = null;
         for (const child of this._regions.values())
-            child.set_cursor_type(Clutter.CursorType.DEFAULT);
+            child.set_cursor_type?.(Clutter.CursorType.DEFAULT);
     }
 
     destroy() {
@@ -345,7 +345,7 @@ export const ResizeBand = GObject.registerClass({
         if (this._hover?.region === region && this._hover.direction === direction)
             return Clutter.EVENT_PROPAGATE;
         this._hover = direction ? {region, direction} : null;
-        this._regions.get(region)?.set_cursor_type(direction
+        this._regions.get(region)?.set_cursor_type?.(direction
             ? DIRECTION_CURSOR[direction]
             : Clutter.CursorType.DEFAULT);
         return Clutter.EVENT_PROPAGATE;
@@ -358,7 +358,7 @@ export const ResizeBand = GObject.registerClass({
     _clearCursor(region) {
         if (this._hover?.region === region) {
             this._hover = null;
-            this._regions.get(region)?.set_cursor_type(Clutter.CursorType.DEFAULT);
+            this._regions.get(region)?.set_cursor_type?.(Clutter.CursorType.DEFAULT);
         }
         return Clutter.EVENT_PROPAGATE;
     }
@@ -391,12 +391,24 @@ export const ResizeBand = GObject.registerClass({
         // Graphene.Point and Mutter uses it instead of querying the seat. The press
         // coordinate is that position, so no fallback is needed.
         const [x, y] = event.get_coords();
-        win.begin_grab_op(
-            DIRECTION_GRAB_OP[direction],
-            sprite,
-            event.get_time(),
-            new Graphene.Point({x, y})
-        );
+        const posHint = new Graphene.Point({x, y});
+        try {
+            win.begin_grab_op(
+                DIRECTION_GRAB_OP[direction],
+                sprite,
+                event.get_time(),
+                posHint
+            );
+        } catch {
+            // GNOME 45–48 compatibility: begin_grab_op took (op, device, sequence, time, pos_hint)
+            win.begin_grab_op?.(
+                DIRECTION_GRAB_OP[direction],
+                event.get_device?.(),
+                event.get_event_sequence?.(),
+                event.get_time(),
+                posHint
+            );
+        }
 
         return Clutter.EVENT_STOP;
     }

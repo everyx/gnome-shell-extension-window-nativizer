@@ -10,7 +10,7 @@
 
 <p>
   <a href="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml"><img src="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/GNOME%20Shell-50-blue.svg" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/GNOME%20Shell-50%20%7C%2051-blue.svg" alt="GNOME Shell">
   <img src="https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg" alt="License">
 </p>
 
@@ -90,7 +90,7 @@ Window Nativizer 对绝大多数应用能自动识别，但也支持针对单个
 ## 安装使用
 
 ### 环境要求
-- GNOME Shell 50（Wayland 或 X11）
+- GNOME Shell 50、51（Wayland 或 X11）
 
 ### 从 Release 安装（推荐）
 从 [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases) 下载 `window-nativizer@everyx.github.io.shell-extension.zip`，直接执行：
