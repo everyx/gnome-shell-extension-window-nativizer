@@ -10,7 +10,7 @@
 
 <p>
   <a href="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml"><img src="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/GNOME%20Shell-50-blue.svg" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/GNOME%20Shell-50%20%7C%2051-blue.svg" alt="GNOME Shell">
   <img src="https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg" alt="License">
 </p>
 
@@ -90,7 +90,7 @@ To fix a misbehaving window, open **Preferences** and click **Pick Window** to g
 ## Installation
 
 ### Requirements
-- GNOME Shell 50 (Wayland or X11)
+- GNOME Shell 50, 51 (Wayland or X11)
 
 ### From Release (Recommended)
 Download `window-nativizer@everyx.github.io.shell-extension.zip` from [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases):

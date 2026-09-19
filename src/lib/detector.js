@@ -172,7 +172,7 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
  * @returns {boolean}
  */
 export function isWindowMaximized(win) {
-    return Boolean(win?.is_maximized?.());
+    return Boolean(win?.is_maximized ? win.is_maximized() : win?.get_maximized?.());
 }
 
 /**
