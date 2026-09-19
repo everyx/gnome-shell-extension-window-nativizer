@@ -1,18 +1,26 @@
-![](assets/logo.svg)
+<div align="center">
+
+<img src="assets/logo.svg" alt="Window Nativizer Logo" width="128">
 
 # Window Nativizer
 
-[English](README.md) | [简体中文](README.zh-CN.md)
-
-[![CI](https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg)](https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml)
-![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-50-blue.svg)
-![License](https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg)
-
 **Seamlessly nativize non-native applications into the GNOME desktop.**
 
-Brings authentic Adwaita rounded corners, GPU-baked shadows, and a GTK-standard 12px resize border to non-conforming windows (Electron, Chromium, GTK3, Qt, Wine, etc.).
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-<img src="assets/preview.webp" alt="Before and after: a square window next to the same window with rounded corners and a shadow" width="500">
+<p>
+  <a href="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml"><img src="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/GNOME%20Shell-50-blue.svg" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg" alt="License">
+</p>
+
+<p>
+Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard resize ergonomics to non-conforming windows (Qt, GTK3, Wine, custom CSD applications, etc.).
+</p>
+
+<img src="assets/preview.webp" alt="Before and after: a square window next to the same window with rounded corners and a shadow" width="560">
+
+</div>
 
 ---
 
@@ -20,24 +28,27 @@ Brings authentic Adwaita rounded corners, GPU-baked shadows, and a GTK-standard 
 
 ### 🎯 Authentic Libadwaita Styling
 Non-native apps often feel out of place on a modern GNOME desktop. Window Nativizer brings them in line with official styling:
-- **15px standard corners** with subtle inner outline highlights
+- **Standard Adwaita corners** with subtle inner outline highlights
 - **Multi-layer Gaussian shadows** tailored for light and dark themes
 - Curves and metrics compiled directly from upstream GNOME sources
 
-### 🪟 12px GTK-Standard Resize Margins
-Undecorated Wayland windows (such as VS Code, Chrome, and Discord) often provide a frustratingly thin 0~1px edge, making them hard to grab with a mouse.
-- **Invisible 12px outer grab area**: Effortless, natural edge resizing
-- **24px corner reach priority**: Smooth diagonal resizing
-- Edge clicks pass cleanly through to underlying windows when disabled
+### 🖱️ Effortless Drag-to-Resize Ergonomics
+Visual rounding is only half the story — non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
+- **Zero-Pixel Hunt**: Expands elusive 0~1px borders into an invisible, comfortable grab area aligned with GTK's native input region
+- **Smooth Corner Reach**: Faithfully transcribes GTK's coordinate heuristics, ensuring diagonal corner resizing doesn't slip
+- **Native Mutter Grab-Ops**: Triggers compositor-level resize grabs and dynamic 8-way directional cursors without lag
+- **Non-Intrusive**: Only covers the outer perimeter — never intercepts client titlebar drags, window buttons, or tab clicks
 
 ### ⚡ Smooth GPU Shaders
-- **Pre-baked 8-slice shadow meshes**: Zero CSS re-layout overhead at runtime
+- **Pre-baked GPU shadow meshes**: Zero CSS re-layout overhead at runtime
 - **Direct pipeline hook**: Corners stay locked to the window during live resize without lag
-- **Low resource footprint**: Lightweight GPU execution with minimal memory usage
+- **Seamless close transitions**: Shadow pipeline opacity continuously modulates with GNOME Shell's exit animation, eliminating jarring shadow popping
+- **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
 
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips Libadwaita, Libhandy, and Firefox
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
+- **Overview-aware**: Suspends corner clipping during GNOME Shell overview mode to keep downscaled window previews sharp
 - **State-aware**: Automatically removes decorations when windows are maximized, fullscreen, or snap-tiled
 
 ### 🔍 Crisp Text Protection
@@ -53,8 +64,8 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 | :--- | :--- | :--- |
 | **Primary Goal** | Desktop theming & custom aesthetics | GNOME / Adwaita native consistency |
 | **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates non-native windows only; leaves native apps untouched |
-| **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Fixed 15px matching official Libadwaita |
-| **Window Resizing** | Retains application's declared border | Adds invisible 12px GTK grab margin |
+| **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Authentic curvature matching official Libadwaita |
+| **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Expands outer perimeter with GTK-standard grab margins and 8-way directional cursors |
 | **Shadow Pipeline** | St.Bin CSS layout tree | GPU-baked texture mesh |
 
 ---

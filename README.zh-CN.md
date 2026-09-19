@@ -1,18 +1,26 @@
-![](assets/logo.svg)
+<div align="center">
+
+<img src="assets/logo.svg" alt="Window Nativizer 图标" width="128">
 
 # Window Nativizer
 
-[English](README.md) | [简体中文](README.zh-CN.md)
-
-[![CI](https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg)](https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml)
-![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-50-blue.svg)
-![License](https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg)
-
 **让非原生应用无缝融入 GNOME 桌面。**
 
-为所有未遵循 Adwaita 样式的第三方窗口（Electron, Chromium, GTK3, Qt, Wine 等）带来**官方对齐的圆角、GPU 烘焙阴影以及 GTK 原生 12px 窗口缩放边距**。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-<img src="assets/preview.webp" alt="对比：方角窗口 vs. 同一窗口补上圆角与阴影" width="500">
+<p>
+  <a href="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml"><img src="https://github.com/everyx/gnome-shell-extension-window-nativizer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/GNOME%20Shell-50-blue.svg" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg" alt="License">
+</p>
+
+<p>
+为所有未遵循 Adwaita 样式的第三方窗口（Qt, GTK3, Wine, 各类自绘 CSD 应用等）带来官方对齐的圆角、GPU 烘焙阴影以及与 GTK 原生一致的窗口缩放体验。
+</p>
+
+<img src="assets/preview.webp" alt="对比：方角窗口 vs. 同一窗口补上圆角与阴影" width="560">
+
+</div>
 
 ---
 
@@ -20,24 +28,27 @@
 
 ### 🎯 原汁原味的 Libadwaita 规范
 拒绝肉眼调参。视觉指标直接从 GNOME / Libadwaita 官方源码编译生成：
-- **15px 标准圆角** 与内侧细腻微光轮廓
+- **原生标准圆角** 与内侧细腻微光轮廓
 - **多层高斯阴影**，深度贴合深色与浅色主题
 - 完美契合 GNOME 整体视觉风格
 
-### 🪟 12px GTK 原生缩放边距
-Wayland 下的无边框应用（如 VS Code、Chrome、微信等）边缘常只有 1px，鼠标极难瞄准抓取。
-- **12px 隐形外延触发区**：告别像素级微操，随手拖拽调整窗口大小
-- **24px 拐角优先捕获**：斜向拉伸顺滑自然
-- 支持边缘点击穿透至下层窗口（可在首选项中按需关闭）
+### 🖱️ 丝滑的原生拖拽缩放手感
+圆角只是视觉的一半，非原生窗口最折磨人的是“边框太窄极难拉伸”。Window Nativizer 从交互人体工学上彻底解决这一痛点：
+- **告别像素级微操**：将许多第三方窗口难以瞄准的 0~1px 边缘，扩展为与 GTK 原生完全一致的隐形舒适抓取区
+- **斜向拉伸不脱手**：忠实复刻 GTK 拐角坐标捕获算法，拐角拖拽判定范围大幅拓宽，顺滑自然
+- **Mutter 原生拖拽联动**：直接触发合成器级 8 向原生缩放手势（Grab-Op）与自适应光标，零撕裂零延迟
+- **绝不误触**：抓取区严格位于窗口外围，绝不侵占内部标题栏拖拽、窗口控制按钮或浏览器标签页点击
 
 ### ⚡ 平滑流畅的 GPU 着色器
-- **GPU 8-Slice 阴影预烘焙**：运行期零 CSS 解析重排开销
+- **GPU 阴影纹理预烘焙**：运行期零 CSS 解析重排开销
 - **管线直连挂钩**：连续拉伸窗口时圆角零延迟、无撕裂
-- **超轻资源开销**：单窗显存与内存增量极小
+- **退出动效无缝淡出**：阴影管线透明度实时同步 GNOME Shell 关闭与最小化动画，彻底消灭生硬的阴影闪烁
+- **超轻资源开销**：全透明时自动剔除着色（Zero Overdraw），单窗显存与内存增量极小
 
 ### 🛡️ 智能识别与非侵入设计
 - **不打扰原生应用**：自动识别并跳过 Libadwaita、Libhandy 与 Firefox
 - **消除多层阴影**：精确识别 Mutter 与系统既有阴影，只补缺失部分
+- **Overview 视图自适应**：进入 GNOME Shell Overview 时自动挂起圆角裁剪，防止缩略图出现发虚与边缘锯齿
 - **状态感知**：窗口最大化、全屏或分屏贴边对齐时，自动撤销外侧多余装饰与接缝阴影
 
 ### 🔍 分数缩放文字清晰度保护
@@ -53,8 +64,8 @@ Wayland 下的无边框应用（如 VS Code、Chrome、微信等）边缘常只�
 | :--- | :--- | :--- |
 | **核心目标** | 桌面主题美化与个性化风格定制 | 专注 GNOME / Adwaita 原生一致性补齐 |
 | **覆盖范围** | 全桌面窗口通配（黑名单排除机制） | 仅修饰非原生应用；原生程序绝不介入 |
-| **圆角半径** | 用户自由设定（如 12px、16px、20px） | 固定 15px，严格遵循官方 Libadwaita 标准 |
-| **缩放边距** | 保持客户端原有边框不变 | 补齐 12px 原生 GTK 拖拽判定带 |
+| **圆角半径** | 用户自由设定（如 12px、16px、20px） | 严格遵循官方 Libadwaita 标准规范 |
+| **拖拽缩放体验** | 仅做视觉圆角，保留客户端极窄边框（常为 0~1px，极难抓取） | 补齐 GTK 原生外延抓取区与 8 向自适应光标，拉伸顺滑自然 |
 | **阴影架构** | St.Bin CSS 控件树布局 | GPU 纹理预烘焙切片网格 |
 
 ---
