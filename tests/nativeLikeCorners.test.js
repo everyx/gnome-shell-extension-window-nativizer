@@ -41,9 +41,9 @@ describe('nativeLikeCorners', () => {
             expect(gtk4(mapsText)).toBeFalse();
         });
 
-        it('takes libxul as a provider (Mozilla Gecko / Firefox), but not as a GTK4 client', () => {
+        it('does not take libxul as a provider (Mozilla Gecko / Firefox)', () => {
             const mapsText = maps('/usr/lib/firefox/libxul.so');
-            expect(look(mapsText)).toBeTrue();
+            expect(look(mapsText)).toBeFalse();
             expect(gtk4(mapsText)).toBeFalse();
         });
 
@@ -58,11 +58,10 @@ describe('nativeLikeCorners', () => {
             expect(look(maps(qadwaita))).toBeFalse();
         });
 
-        it('still takes libadwaita-1.so, libhandy-1.so, and libxul.so as native-like (regression guard)', () => {
+        it('still takes libadwaita-1.so and libhandy-1.so as native-like (regression guard)', () => {
             expect(look(maps('/usr/lib/libadwaita-1.so.0'))).toBeTrue();
             expect(look(maps('/usr/lib/libhandy-1.so.0'))).toBeTrue();
-            expect(look(maps('/usr/lib/firefox/libxul.so'))).toBeTrue();
-            expect(look(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0', '/usr/lib/firefox/libxul.so'))).toBeTrue();
+            expect(look(maps('/usr/lib/libadwaita-1.so.0', '/usr/lib/libhandy-1.so.0'))).toBeTrue();
         });
 
         it('reports a plain GTK program as holding no provider, GTK4 included', () => {
@@ -99,7 +98,7 @@ describe('nativeLikeCorners', () => {
                 .toBeTrue();
         });
 
-        it('answers no for the GTK3 providers, whose handle is not theirs to report', () => {
+        it('answers no for a process that is not GTK4', () => {
             expect(hasGtk4Client(828283, {readMaps: reader(maps('/usr/lib/firefox/libxul.so'))}))
                 .toBeFalse();
             expect(hasGtk4Client(828284, {readMaps: reader(maps('/usr/lib/libhandy-1.so.0'))}))
