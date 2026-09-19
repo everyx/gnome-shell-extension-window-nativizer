@@ -144,7 +144,7 @@ because a square body is the shape we have.
 |---|---|---|
 | the client's declared ring (`buffer_rect - frame_rect`, any positive margin on either axis) | yes | cleared, then our shadow is drawn: one shadow, for the corners we drew (for a square body, if a rule left the corners theirs) |
 | the client's declared ring | no - it already looks like ours, or a rule left it theirs | untouched: its shadow still matches the shape it was painted for |
-| server-side frame ring (`has-ssd-frame`, `ssdFrameExtents`) | yes | cleared, and our 15px rounded shadow is drawn around the body |
+| server-side frame ring (`has-ssd-frame`, declared frame extents) | yes | cleared, and our 15px rounded shadow is drawn around the body |
 | Mutter's bare-X11 native shadow (`x11-mutter-native-shadow`) | either | out of reach: drawn by compositor outside the window square |
 
 The ring is a **declaration, not content**: `_GTK_FRAME_EXTENTS` on X11 and

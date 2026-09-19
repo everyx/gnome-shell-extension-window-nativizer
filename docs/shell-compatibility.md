@@ -6,6 +6,7 @@ stops being true is a compatibility break, not a refactor.
 | Used | Status | Notes |
 |---|---|---|
 | `win.get_client_type()` | 45–50 stable | returns `Meta.WindowClientType`; the only reliable way to tell a Wayland client from an X11 one |
+| `win.get_window_type()` | 45–50 stable | returns `Meta.WindowType`; gates non-decoratable window kinds (menus, popups, docks) in eligibility checks and rule fingerprints |
 | `win.decorated` | 45–50 stable | policy flag from `mwm_decorated` (default TRUE), not proof of a live frame — the real frame test is `priv->frame != NULL` (`meta_window_x11_is_ssd`); consumed here as "has frame decorations (SSD)" |
 | `win.is_client_decorated()` | **does not exist** | a GTK concept; `Meta.Window` has no counterpart |
 | `win.is_maximized()` | 45–50 stable | canonical `meta_window_is_maximized` |
