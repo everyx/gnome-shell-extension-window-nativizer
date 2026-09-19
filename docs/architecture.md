@@ -13,7 +13,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted by the corner axis and by the resize band's eligibility |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
-| `lib/style.js` | which decoration parameters a window state gets (pure) |
+| `lib/style.js` | which decoration parameters a window state gets, and pipeline opacity modulation (pure) |
 | `lib/settings.js` | GSettings IO adapter |
 | `lib/resizeBand.js` | the window's resize band: four hit strips clipped to the monitor, plus `edgeForPoint()`, GTK's direction order (pure) |
 | `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
@@ -216,7 +216,11 @@ buys.
 Paint (`vfunc_paint_node`): obtains `Cogl.Context` from the framebuffer (only exists
 inside paint), gets `Cogl.Pipeline` via `_pipelineFor` (lazy `shadowPipelineFor`),
 then adds a `Clutter.PipelineNode` with eight `add_texture_rectangle`s. Opacity is
-set via `setPipelineOpacity` (alpha 0-255).
+set via `setPipelineOpacity` (0..1, converted internally to 0-255 alpha), modulating style transition weights via
+`pipelineOpacityFor(weight, this.get_paint_opacity() / 255)` (culled early if `<= 0`
+for zero overdraw, settling any completed outgoing fade first) so window close/minimize
+fade animations (propagated via `bind_property`) smoothly fade the shadow with zero
+per-frame JS timers.
 
 The style (and therefore the baked texture) still changes only on a decision: `styleKey` ignores
 the window size, so a resize never re-bakes, and the actor is not rebuilt. What runs per frame

@@ -9,7 +9,7 @@
  * drop for the square states.
  */
 
-import {styleForWindow} from '../src/lib/style.js';
+import {pipelineOpacityFor, styleForWindow} from '../src/lib/style.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 
 describe('styleForWindow', () => {
@@ -65,6 +65,31 @@ describe('styleForWindow', () => {
         // keeps a border layer the maximized one does not.
         expect(styleForWindow({...base, maximized: true, tiled: true}))
             .toEqual({...w.maximized, outline: null});
+    });
+});
+
+describe('pipelineOpacityFor', () => {
+    it('returns base opacity when paint opacity is 1', () => {
+        expect(pipelineOpacityFor(1, 1)).toBe(1);
+        expect(pipelineOpacityFor(0.8, 1)).toBeCloseTo(0.8, 5);
+        expect(pipelineOpacityFor(0, 1)).toBe(0);
+    });
+
+    it('modulates base opacity by fractional paint opacity', () => {
+        expect(pipelineOpacityFor(1, 0.5)).toBeCloseTo(0.5, 5);
+        expect(pipelineOpacityFor(0.8, 0.5)).toBeCloseTo(0.4, 5);
+        expect(pipelineOpacityFor(0.5, 0.25)).toBeCloseTo(0.125, 5);
+    });
+
+    it('returns 0 when paint opacity is 0 or negative (culling / invisible)', () => {
+        expect(pipelineOpacityFor(1, 0)).toBe(0);
+        expect(pipelineOpacityFor(0.5, -0.1)).toBe(0);
+        expect(pipelineOpacityFor(0, 0)).toBe(0);
+    });
+
+    it('clamps inputs to [0, 1]', () => {
+        expect(pipelineOpacityFor(1.5, 1.5)).toBe(1);
+        expect(pipelineOpacityFor(-0.5, 0.8)).toBe(0);
     });
 });
 

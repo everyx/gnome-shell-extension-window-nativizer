@@ -29,3 +29,16 @@ export function styleForWindow(winState) {
     style.outline = outline;
     return style;
 }
+
+/**
+ * @param {number} base - Base style transition weight (0..1)
+ * @param {number} paintOpacity - Normalized actor paint opacity (0..1)
+ * @returns {number} Modulated pipeline opacity in [0, 1]
+ */
+export function pipelineOpacityFor(base, paintOpacity) {
+    if (paintOpacity <= 0)
+        return 0;
+    const clampedBase = Math.max(0, Math.min(1, base));
+    const clampedPaint = Math.min(1, paintOpacity);
+    return clampedBase * clampedPaint;
+}
