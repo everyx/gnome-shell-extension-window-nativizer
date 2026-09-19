@@ -5,7 +5,9 @@ import {
     hasGtk4Client,
     hasNativeLikeCorners,
     hasAdwaitaLook,
+    init,
     isAdwaitaLookPending,
+    probeAdwaitaLook,
     setOnProcessKnown,
 } from '../src/lib/nativeLikeCorners.js';
 
@@ -14,7 +16,7 @@ const maps = (...paths) => paths.map(mapped).join('');
 
 describe('nativeLikeCorners', () => {
     beforeEach(() => {
-        destroy();
+        init();
     });
 
     afterEach(() => {
@@ -220,40 +222,61 @@ describe('nativeLikeCorners', () => {
             finish(maps('/usr/lib/libgtk-4.so.1'));
 
             expect(known).toEqual([]);
-            // A stale `false` from that read must not stand as this pid's answer.
+            // A stale `false` from that read must not stand as this pid's answer;
+            // query defaults to true when destroyed without firing new I/O.
             expect(hasAdwaitaLook(616100, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))}))
                 .toBeTrue();
         });
     });
 
     describe('isAdwaitaLookPending', () => {
-        it('is true while the read is in flight, and false once it lands', () => {
+        it('returns false for an invalid pid', () => {
+            expect(isAdwaitaLookPending(null)).toBeFalse();
+            expect(isAdwaitaLookPending(0)).toBeFalse();
+            expect(isAdwaitaLookPending(-1)).toBeFalse();
+        });
+
+        it('is false before probing, true while probe is in flight, and false once it lands', () => {
             let finish;
             const readMaps = (pid, done) => { finish = done; };
 
-            expect(isAdwaitaLookPending(272727)).toBeFalse();
-            hasAdwaitaLook(272727, {readMaps});
-            expect(isAdwaitaLookPending(272727)).toBeTrue();
+            expect(isAdwaitaLookPending(272727)).toBeFalse(); // pure query before command
+            probeAdwaitaLook(272727, {readMaps});             // command initiates I/O
+            expect(isAdwaitaLookPending(272727)).toBeTrue();  // now pending
             finish(maps('/usr/lib/libc.so.6'));
-            expect(isAdwaitaLookPending(272727)).toBeFalse();
+            expect(isAdwaitaLookPending(272727)).toBeFalse(); // landed
+        });
+
+        it('returns false immediately when probe resolves synchronously', () => {
+            const readMaps = (pid, done) => done(maps('/usr/lib/libc.so.6'));
+            probeAdwaitaLook(282828, {readMaps});
+            expect(isAdwaitaLookPending(282828)).toBeFalse();
         });
 
         it('is false once the pid is forgotten or the module is destroyed', () => {
-            hasAdwaitaLook(373737, {readMaps: () => {}});
+            probeAdwaitaLook(373737, {readMaps: () => {}});
+            expect(isAdwaitaLookPending(373737)).toBeTrue();
             forgetProcess(373737);
             expect(isAdwaitaLookPending(373737)).toBeFalse();
 
-            hasAdwaitaLook(383838, {readMaps: () => {}});
+            probeAdwaitaLook(383838, {readMaps: () => {}});
+            expect(isAdwaitaLookPending(383838)).toBeTrue();
             destroy();
             expect(isAdwaitaLookPending(383838)).toBeFalse();
+
+            let readAttempted = false;
+            probeAdwaitaLook(393939, {readMaps: () => { readAttempted = true; }});
+            expect(isAdwaitaLookPending(393939)).toBeFalse();
+            expect(readAttempted).toBeFalse();
         });
     });
 
     describe('hasNativeLikeCorners', () => {
-        it('probes the pid the window reports', () => {
-            let asked = 0;
-            hasNativeLikeCorners({get_pid: () => { asked++; return 9999999; }});
-            expect(asked).toBe(1);
+        it('probes maps for the pid the window reports', () => {
+            let probedPid;
+            const readMaps = pid => { probedPid = pid; };
+            hasNativeLikeCorners({get_pid: () => 9999999}, {readMaps});
+            expect(probedPid).toBe(9999999);
         });
 
         it('returns false for a window without a usable pid', () => {
