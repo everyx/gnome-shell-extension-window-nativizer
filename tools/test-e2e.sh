@@ -663,7 +663,81 @@ if ! check_fields "$OVERVIEW_SUSPEND_STATE" '{"hasClip": true, "initialEnabled":
 fi
 echo ">> Overview clip effect suspension verified: disabled during overview, restored on desktop."
 
-# (g) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
+# The declared-margin client closes itself (--hold); wait for it to go before proceeding.
+for i in $(seq 1 40); do
+    left="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$left" = "0" ] && break
+    sleep 0.25
+done
+
+# (g) Verify shadow actor opacity synchronization during window close animation
+echo ">> [test-e2e] Verifying shadow actor opacity synchronization during window close animation..."
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --app-id "org.test.windownativizer.fade" --title "ShadowFadeProbe" --hold 2000 &
+SHADOW_FADE_CLIENT_PID=$!
+MAPPED=0
+for i in $(seq 1 40); do
+    found="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === 'ShadowFadeProbe') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
+    if [ "$found" = "1" ]; then
+        MAPPED=1
+        break
+    fi
+    sleep 0.05
+done
+if [ "$MAPPED" -ne 1 ]; then
+    echo "!! Timeout waiting for ShadowFadeProbe window actor to map!"
+    kill "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+    exit 1
+fi
+
+SHADOW_FADE_STATE="$(shell_eval '
+(async () => {
+    const GLib = imports.gi.GLib;
+    const actor = global.get_window_actors().find(a => a.meta_window && a.meta_window.get_title() === "ShadowFadeProbe");
+    if (!actor) return JSON.stringify({error: "actor not found"});
+
+    // Allow manager process-detection (/proc/<pid>/maps) and idle attachment to complete.
+    let shadow = null;
+    for (let i = 0; i < 40; i++) {
+        shadow = global.window_group.get_children().find(c => c.name === "WindowNativizerShadowActor" && c._windowActor === actor);
+        if (shadow) break;
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => { r(); return GLib.SOURCE_REMOVE; }));
+    }
+    if (!shadow) return JSON.stringify({error: "shadow not found"});
+
+    const samples = [];
+    shadow.connect("notify::opacity", () => {
+        samples.push(shadow.opacity);
+    });
+
+    // Window has --hold 2000 so it will call win.close() ~2s after launch.
+    let settled = false;
+    for (let i = 0; i < 80; i++) {
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
+        const stillThere = global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "ShadowFadeProbe");
+        if (!stillThere) {
+            settled = true;
+            break;
+        }
+    }
+
+    const hasFaded = samples.some(op => op > 0 && op < 255);
+    return JSON.stringify({
+        settled,
+        sampleCount: samples.length,
+        hasFaded
+    });
+})()
+')"
+echo ">> Shadow actor close sync check: $SHADOW_FADE_STATE"
+if ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
+    echo "!! Shadow actor close sync assertion failed: shadow opacity was not synchronized with window close!"
+    wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+    exit 1
+fi
+wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+echo ">> Shadow actor close sync verified: shadow opacity synchronized during window close."
+
+# (h) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
 # it. It is also the only end-to-end evidence for the skip side of the band criterion, which rests
 # on the process (libadwaita in /proc/<pid>/maps) rather than on the window's declared ring.
 LIBNATIVE_APP=""
@@ -720,15 +794,6 @@ else
     echo "   skip side of the band criterion has no end-to-end case on this machine)"
 fi
 
-# The client closes itself (--hold); wait for it to go, leaving the stage as it found it. No
-# delete() on the way: asking Mutter to close a window from here pings it with a serial it
-# calls bad, which the log audit below would rightly fail on.
-for i in $(seq 1 40); do
-    left="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
-    [ "$left" = "0" ] && break
-    sleep 0.25
-done
-
 # 8. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
@@ -765,6 +830,13 @@ noise = re.compile(
 mutter_color_state = re.compile(
     r"clutter_actor_set_color_state: assertion 'CLUTTER_IS_COLOR_STATE \(color_state\)' failed")
 
+# Upstream ibus-portal logs a warning on D-Bus daemon shutdown during test teardown:
+#   (ibus-portal:<pid>): GLib-GIO-WARNING **: ...: Error releasing name org.freedesktop.portal.IBus: The connection is closed
+# It occurs when `dev.sh stop` terminates the test D-Bus broker while ibus-portal is still running.
+# Like the Mutter colour state assertion above, this is counted and reported rather than swallowed silently.
+ibus_teardown = re.compile(
+    r"\(ibus-portal:\d+\): GLib-GIO-WARNING \*\*: .*: Error releasing name org\.freedesktop\.portal\.IBus: The connection is closed")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -772,11 +844,15 @@ csd_issue = re.compile(r'window-nativizer.*(warning|critical|error|exception)', 
 
 offending = []
 exempted = 0
+exempted_ibus = 0
 for idx, line in enumerate(lines, start=1):
     if noise.search(line):
         continue
     if mutter_color_state.search(line):
         exempted += 1
+        continue
+    if ibus_teardown.search(line):
+        exempted_ibus += 1
         continue
     if glib_issue.search(line) or csd_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -791,6 +867,8 @@ if offending:
 
 if exempted:
     print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
+if exempted_ibus:
+    print(f">> {exempted_ibus} known upstream ibus teardown line(s) exempted (see docs/shell-compatibility.md).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
@@ -801,8 +879,9 @@ echo "   - Maximize / Unmaximize: PASSED"
 echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 echo "   - Overview Clip Suspension: PASSED (disabled during overview, restored on desktop)"
+echo "   - Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
-echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter lines counted above)"
+echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "================================================================"
 exit 0

@@ -51,6 +51,12 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   exempts exactly that assertion, counts the lines it skipped and prints the count, so a change in
   how often it appears is still visible.
 
+- **`(ibus-portal:<pid>): GLib-GIO-WARNING **: ...: Error releasing name org.freedesktop.portal.IBus: The connection is closed`**,
+  from `ibus-portal` when the test headless session D-Bus daemon shuts down on `tools/dev.sh stop`.
+  The daemon process attempts to release its well-known name after the bus has already severed client
+  connections. The audit exempts this single message by matching its exact signature and reporting its
+  count.
+
 ## Working rules
 
 - **The decisions are pure.** Everything that decides decoration delegates to

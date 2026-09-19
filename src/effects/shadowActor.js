@@ -9,6 +9,7 @@ import GObject from 'gi://GObject';
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
+import {pipelineOpacityFor} from '../lib/style.js';
 import {
     setPipelineOpacity,
     shadowGeometry,
@@ -137,6 +138,14 @@ export const ShadowActor = GObject.registerClass({
         if (!this._style)
             return;
 
+        if (this._outgoing && this._progress >= 1)
+            this._finishFade();
+
+        // Scale by paint opacity; see docs/architecture.md § ShadowActor.
+        const paintOpacity = this.get_paint_opacity() / 255;
+        if (paintOpacity <= 0)
+            return;
+
         const context = paintContext.get_framebuffer().get_context();
         const pipeline = this._pipelineFor(context, this._style);
         if (!pipeline)
@@ -146,16 +155,13 @@ export const ShadowActor = GObject.registerClass({
             const {style, weight} = this._outgoing;
             const outgoing = this._pipelineFor(context, style);
             if (outgoing) {
-                setPipelineOpacity(outgoing, (1 - this._progress) * weight);
+                setPipelineOpacity(outgoing, pipelineOpacityFor((1 - this._progress) * weight, paintOpacity));
                 this._addRects(node, outgoing, style);
             }
         }
 
-        setPipelineOpacity(pipeline, this._outgoing ? this._progress : 1);
+        setPipelineOpacity(pipeline, pipelineOpacityFor(this._outgoing ? this._progress : 1, paintOpacity));
         this._addRects(node, pipeline, this._style);
-
-        if (this._outgoing && this._progress >= 1)
-            this._finishFade();
     }
 
     _addRects(node, pipeline, style) {
