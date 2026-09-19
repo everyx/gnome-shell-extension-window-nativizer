@@ -31,6 +31,7 @@ const inFlight = new Map();
 
 /** Fires with the pid when an answer lands; Manager re-decides that process's windows. */
 let onProcessKnown = null;
+let destroyed = false;
 
 /**
  * Reads /proc/<pid>/maps off the main loop: GIO runs a local file's async read in a worker thread,
@@ -76,6 +77,28 @@ function startRead(pid, reader) {
 }
 
 /**
+ * @param {*} pid
+ * @returns {boolean}
+ */
+function isValidPid(pid) {
+    return typeof pid === 'number' && Number.isInteger(pid) && pid > 0;
+}
+
+/**
+ * Initiates an async read of /proc/<pid>/maps if not already cached, in flight, or destroyed.
+ * @param {number} pid
+ * @param {object} [deps]
+ * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
+ */
+export function probeAdwaitaLook(pid, deps = {}) {
+    if (destroyed || !isValidPid(pid))
+        return;
+    if (processCache.has(pid) || inFlight.has(pid))
+        return;
+    startRead(pid, deps.readMaps ?? readMaps);
+}
+
+/**
  * @param {string} mapsText - Contents of /proc/pid/maps
  * @returns {{adwaitaLook: boolean, gtk4: boolean}} Whether the process maps an Adwaita provider,
  *          and whether that provider is the GTK4 one
@@ -99,33 +122,32 @@ export function setOnProcessKnown(cb) {
 }
 
 /**
- * Whether a process has the Adwaita look. The read is asynchronous, so the first query counts as
- * native-like; a caller that can wait asks `isAdwaitaLookPending()` first instead of acting on that
- * guess (docs/decoration-model.md has the reasoning and the cost).
+ * @param {number} pid
+ * @param {object} [deps]
+ * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
+ * @returns {{adwaitaLook: boolean, gtk4: boolean}|undefined}
+ */
+function answerFor(pid, deps = {}) {
+    if (!isValidPid(pid))
+        return undefined;
+    if (!processCache.has(pid) && !inFlight.has(pid))
+        probeAdwaitaLook(pid, deps);
+    // A reader that answers synchronously lands above, so the cache decides first.
+    return processCache.get(pid);
+}
+
+/**
+ * Whether a process has the Adwaita look.
  * @param {number} pid
  * @param {object} [deps]
  * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
  * @returns {boolean} Whether process has Adwaita look (cached per pid; a read in flight reads as true)
  */
 export function hasAdwaitaLook(pid, deps = {}) {
-    if (!pid || typeof pid !== 'number' || pid <= 0)
+    if (!isValidPid(pid))
         return false;
 
-    // A reader that answers synchronously has landed by this line, so the cache decides first.
     return answerFor(pid, deps)?.adwaitaLook ?? true;
-}
-
-/**
- * The answer a pid has, reading it once when nobody has yet. A read in flight leaves the cache
- * empty: the caller's own default is what "not known yet" means to it.
- * @param {number} pid
- * @param {object} deps
- * @returns {{adwaitaLook: boolean, gtk4: boolean}|undefined}
- */
-function answerFor(pid, deps) {
-    if (!processCache.has(pid) && !inFlight.has(pid))
-        startRead(pid, deps.readMaps ?? readMaps);
-    return processCache.get(pid);
 }
 
 /**
@@ -141,7 +163,7 @@ function answerFor(pid, deps) {
  * @returns {boolean} Whether the process is a GTK4 client (cached per pid; a read in flight reads as false)
  */
 export function hasGtk4Client(pid, deps = {}) {
-    if (!pid || typeof pid !== 'number' || pid <= 0)
+    if (!isValidPid(pid))
         return false;
 
     // Unlike `hasAdwaitaLook()`, a read still in flight is not a yes: only a landed answer may
@@ -150,27 +172,30 @@ export function hasGtk4Client(pid, deps = {}) {
 }
 
 /**
- * Whether a provider answer is still on its way for a pid. The caller waits for it instead of
- * deciding on `hasAdwaitaLook()`'s pending answer, which cannot tell a native window from one
- * that needs us.
+ * Whether an asynchronous answer is currently in flight for a pid.
  * @param {number} pid
  * @returns {boolean}
  */
 export function isAdwaitaLookPending(pid) {
+    if (destroyed || !isValidPid(pid))
+        return false;
     return inFlight.has(pid);
 }
 
 /**
+ * Whether window's own process already rounds corners.
  * @param {object} win - Meta.Window
+ * @param {object} [deps]
  * @returns {boolean} Whether window's own process already rounds corners.
  */
-export function hasNativeLikeCorners(win) {
+export function hasNativeLikeCorners(win, deps = {}) {
     if (!win)
         return false;
-    return hasAdwaitaLook(win.get_pid?.());
+    return hasAdwaitaLook(win.get_pid?.(), deps);
 }
 
 /**
+ * Forgets a process from the cache and cancels any read in flight.
  * @param {number} pid
  */
 export function forgetProcess(pid) {
@@ -180,12 +205,25 @@ export function forgetProcess(pid) {
     entry?.cancellable.cancel();
 }
 
-/** Clear the cache and the callback, and cancel every read in flight (extension disable()). */
+/**
+ * Clear the cache and the callback, and cancel every read in flight (extension disable()).
+ */
 export function destroy() {
+    destroyed = true;
+    onProcessKnown = null;
     const entries = [...inFlight.values()];
     inFlight.clear();
     processCache.clear();
-    onProcessKnown = null;
     for (const entry of entries)
         entry.cancellable.cancel();
+}
+
+/**
+ * Initializes or re-arms the module state for an active extension session, preserving any registered callback.
+ */
+export function init() {
+    const cb = onProcessKnown;
+    destroy();
+    destroyed = false;
+    onProcessKnown = cb;
 }

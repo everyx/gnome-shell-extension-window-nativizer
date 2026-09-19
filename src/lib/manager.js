@@ -22,7 +22,16 @@ import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
-import {destroy as destroyNativeLikeCorners, forgetProcess, hasGtk4Client, hasNativeLikeCorners, isAdwaitaLookPending, setOnProcessKnown} from './nativeLikeCorners.js';
+import {
+    destroy as destroyNativeLikeCorners,
+    forgetProcess,
+    hasGtk4Client,
+    hasNativeLikeCorners,
+    init as initNativeLikeCorners,
+    isAdwaitaLookPending,
+    probeAdwaitaLook,
+    setOnProcessKnown,
+} from './nativeLikeCorners.js';
 import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
@@ -48,6 +57,7 @@ export class Manager {
 
     enable() {
         shadowTexture.reset();
+        initNativeLikeCorners();
 
         // A provider answer can land after a window has been decided (see hasAdwaitaLook()).
         setOnProcessKnown(pid => this._onProcessKnown(pid));
@@ -408,7 +418,9 @@ export class Manager {
         // Whether the process maps an Adwaita provider decides this window, and that answer is
         // still being read: wait for it rather than drawing a shadow we would have to take back.
         // `_onProcessKnown()` runs this again when the answer lands.
-        if (isAdwaitaLookPending(win.get_pid?.()))
+        const pid = win.get_pid?.();
+        probeAdwaitaLook(pid);
+        if (isAdwaitaLookPending(pid))
             return;
 
         const inputs = this._decorationInputs(win);
@@ -430,7 +442,7 @@ export class Manager {
         this._syncResizeBand(win, shouldShowResizeBand({
             ...inputs,
             decorated: untiledActions.drawShadow || untiledActions.drawClip,
-        }), inputs);
+        }), inputs, insets);
 
         if (state.clip || state.shadow)
             this._applyStyle(win, actions.style, insets, actions.drawClip);
@@ -529,8 +541,9 @@ export class Manager {
      * @param {Meta.Window} win
      * @param {boolean} want
      * @param {object} inputs - From _decorationInputs(): frame size and monitor scale
+     * @param {import('./frame.js').Insets|null} [insets]
      */
-    _syncResizeBand(win, want, inputs) {
+    _syncResizeBand(win, want, inputs, insets) {
         const state = this._windows.get(win);
         if (!state)
             return;
@@ -563,7 +576,7 @@ export class Manager {
         // the insets, the constrained edges and the monitor rect. A frameless window's null
         // insets read as zero.
         state.resizeBand.setGeometry({
-            insets: this._frameInsets(win),
+            insets: insets !== undefined ? insets : this._frameInsets(win),
             bounds,
             scale: inputs.monitorScale,
             constrainedEdges,
