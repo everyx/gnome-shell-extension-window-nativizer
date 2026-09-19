@@ -56,9 +56,28 @@ window's appearance.
 
 `enable()` sets that field before `manager.enable()`, so a failure after that point would
 leave the guard set and make every later `enable()` return early; the catch therefore rolls
-the half-enabled state back through `disable()`. `disable()` clears the guard only as its
-last step, so a teardown that throws midway leaves it set as well, and the only recovery is
-reloading the extension.
+the half-enabled state back through `disable()` (relying on the teardown invariants below).
+`disable()` clears the guard only as its last step, so a teardown that throws midway leaves
+it set as well, and the only recovery is reloading the extension.
+
+### Lifecycle ownership and invariants
+
+Lifecycles strictly govern session boundaries and per-window teardown:
+- **Session enable**: `Manager.enable()` re-arms sub-modules, resetting baked shadow texture caches
+  and process classification state.
+- **Session disable**: `Manager.disable()` guarantees zero resource leaks across session teardown
+  (also invoked if `enable()` fails midway). Orphaned shadow actors and resize bands are swept
+  from `global.window_group`, active rounded clip effects are removed from window actors, in-flight
+  asynchronous process probes are cancelled (`Gio.Cancellable`), and baked shadow texture resources
+  are destroyed.
+- **Window close (phased teardown)**: When a window is unmanaged (`_forgetWindow`), interactive
+  decorators (`ResizeBand`) are destroyed immediately to avoid blocking clicks, while visual
+  decorators (`ShadowActor` and `RoundedClipEffect`) remain attached to fade alongside the
+  window actor. Once the actor emits `destroy`, `ShadowActor` tears itself down cleanly and
+  `RoundedClipEffect` is released alongside the actor.
+- **Process cache eviction**: When a closing window is the last active window for its process,
+  its cached classification entry is evicted via `forgetProcess(pid)`, keeping memory bounded
+  across long sessions without clearing active sibling state.
 
 ## Actors
 
@@ -128,11 +147,19 @@ Clutter enlarges the offscreen by `FBO_OFFSET` and `FBO_EXTRA` (what those pixel
 the measured split, are in `decoration-alignment.md`). The shader computes
 `quadSize = uSize + FBO_EXTRA` and `frameCenter = uFrame.xy + uFrame.zw*0.5 + FBO_OFFSET`.
 
-Upload cost: `setParams` deduplicates the decisions (insets, radius, outline, clearRing) and
-`queue_repaint`s only when one changes, so the debounced reconcile is cheap. The paint then
-uploads five uniforms per frame, which is what reading live geometry costs;
-`set_uniform_float` dirties Cogl pipeline state but does not schedule a frame (the paint is
-already running). See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
+Upload cost: `setParams` deduplicates decoration decisions (radius, outline, clearRing) and
+queues a repaint only on change. During paint, live geometry is guarded by dirty checks,
+synchronising only when dimensions or frame insets actually shift. Static repaints therefore
+incur no uniform uploads, and dynamic resizing avoids redundant pipeline state changes.
+See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
+
+During GNOME Shell overview mode, `RoundedClipEffect` is suspended (`set_enabled(false)`)
+to prevent aliasing artifacts on downscaled window previews; newly created windows inherit
+the suspended state until overview exit.
+
+During window close transitions, Clutter property bindings (opacity, scale, transform) keep
+`ShadowActor` synchronized with `windowActor` until actor destruction, preventing jarring shadow
+popping mid-transition.
 
 ## Effects — Shadow baking and slicing (`effects/shadowTexture.js`)
 
