@@ -113,6 +113,9 @@ jobs:
   pack:
     name: Extension Package Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -149,3 +152,97 @@ jobs:
           name: window-nativizer-extension
           path: dist/*.zip
           if-no-files-found: error
+
+      - name: Provide extension package in PR comment and summary
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const path = require('path');
+
+            const distDir = 'dist';
+            const files = fs.readdirSync(distDir).filter(f => f.endsWith('.zip'));
+            if (files.length === 0) {
+              core.setFailed('No zip package found in dist/');
+              return;
+            }
+
+            const fileName = files[0];
+            const filePath = path.join(distDir, fileName);
+            const fileStats = fs.statSync(filePath);
+            const fileSizeKB = (fileStats.size / 1024).toFixed(1);
+
+            const fileBuffer = fs.readFileSync(filePath);
+            const sha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+            const runId = context.runId;
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+            const commitSha = context.sha.substring(0, 7);
+
+            const directDownloadUrl = `https://nightly.link/${repoOwner}/${repoName}/actions/runs/${runId}/window-nativizer-extension.zip`;
+            const artifactPageUrl = `https://github.com/${repoOwner}/${repoName}/actions/runs/${runId}#artifacts`;
+
+            const commentTag = '<!-- window-nativizer-pr-package -->';
+            const body = [
+              commentTag,
+              `### 📦 Test Extension Build Available`,
+              ``,
+              `A test package has been automatically built from commit \`${commitSha}\`:`,
+              ``,
+              `| Package | Size | SHA256 Checksum |`,
+              `| :--- | :--- | :--- |`,
+              `| **\`${fileName}\`** | ${fileSizeKB} KiB | \`${sha256.substring(0, 16)}...\` |`,
+              ``,
+              `#### 📥 Direct Download`,
+              `- **[Download Extension ZIP (Direct / No Login Required)](${directDownloadUrl})**`,
+              `- [View on GitHub Actions Artifacts](${artifactPageUrl})`,
+              ``,
+              `#### 🚀 How to Install & Test`,
+              `\`\`\`bash`,
+              `# 1. Install via terminal:`,
+              `gnome-extensions install --force ${fileName}`,
+              ``,
+              `# 2. Restart GNOME Shell:`,
+              `#    - X11: Alt + F2, type 'r', and press Enter`,
+              `#    - Wayland: Log out and log back in`,
+              `\`\`\``,
+              `*(This comment will be automatically updated on new commits to this PR.)*`
+            ].join('\n');
+
+            await core.summary.addRaw(body).write();
+
+            if (context.eventName === 'pull_request') {
+              const issue_number = context.payload.pull_request.number;
+              try {
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: repoOwner,
+                  repo: repoName,
+                  issue_number,
+                });
+
+                const existingComment = comments.find(c => c.body && c.body.includes(commentTag));
+
+                if (existingComment) {
+                  await github.rest.issues.updateComment({
+                    owner: repoOwner,
+                    repo: repoName,
+                    comment_id: existingComment.id,
+                    body,
+                  });
+                  core.info(`Updated existing package comment on PR #${issue_number}`);
+                } else {
+                  await github.rest.issues.createComment({
+                    owner: repoOwner,
+                    repo: repoName,
+                    issue_number,
+                    body,
+                  });
+                  core.info(`Created new package comment on PR #${issue_number}`);
+                }
+              } catch (error) {
+                core.warning(`Could not post/update PR comment (likely a fork without write permissions): ${error.message}`);
+              }
+            }
