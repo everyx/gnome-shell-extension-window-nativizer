@@ -8,6 +8,7 @@ tested without a session; the processes only gather inputs and apply results.
 
 | Module | Responsibility |
 |---|---|
+| `lib/clipTarget.js` | clip effect target resolution: selects window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry (pure) |
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
 | `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`bodyFrame`/`insetsFromRects` (pure) |
 | `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted by the corner axis and by the resize band's eligibility |
@@ -69,9 +70,11 @@ that client reserved for its own shadow. Both the shadow's cast rect and the cli
 computed from the actor's live size at paint time (`lib/frame.js`), so a resize never shows a
 geometry the actor has already left. When there is something to clip, the window also gets a
 `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
-On Wayland, the clip effect attaches directly to the window actor; on X11 / XWayland, it attaches
-to the surface child actor (`actor.get_first_child()`) so coordinates align accurately and
-the frame ring can be cleared when taking over shadows.
+The clip effect's target actor is resolved via `resolveClipTarget` (`lib/clipTarget.js`):
+by default it attaches directly to the window actor on Wayland and to the surface child actor
+on X11 / XWayland (so coordinates align accurately and the frame ring can be cleared when taking over shadows);
+when foreign extensions (e.g. Blur my Shell) inject an `St.Widget` inside the window actor, it safely
+bypasses injected widgets to attach directly to the compatible surface actor so the blur effect remains functional.
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
 
