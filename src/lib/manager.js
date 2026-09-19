@@ -62,6 +62,7 @@ export class Manager {
         // A provider answer can land after a window has been decided (see hasAdwaitaLook()).
         setOnProcessKnown(pid => this._onProcessKnown(pid));
 
+        // Suspend clip effects during overview to preserve downscaled preview sharpness.
         this._inOverview = Boolean(Main.overview.visible);
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());

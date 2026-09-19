@@ -106,7 +106,11 @@ its toolkit gave it, and the manager runs the decision again when the answer lan
 (`setOnProcessKnown()`). Drawing first and taking it back would flash our corners and a second
 shadow over a window that has its own, the direction this axis is built to avoid. What it
 costs is a decoration arriving a frame or two late on the *first* window of a process; every
-later window of the same process reads the cache.
+later window of the same process reads the cache. Queries strictly inspect memory snapshots
+(`processCache`/`inFlight`), while `/proc` I/O is driven exclusively by lifecycle commands
+(`probeAdwaitaLook`). Reading I/O lazily inside queries or predicates (violating Command-Query
+Separation) is prohibited: it creates timing inversions where query evaluation order mutates state
+and triggers transient visual flicker.
 
 ## Which rectangle the clip lands on
 

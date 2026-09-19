@@ -60,10 +60,11 @@ defect that fires on a normal path has to be dealt with here rather than worked 
 
 ## Working rules
 
-- **The decisions are pure.** Everything that decides decoration delegates to
-  `detector.evaluateWindowActions()`, and whether a window gets a resize band to
-  `detector.shouldShowResizeBand()`; the shell-side modules only gather inputs and
-  apply effects. That is what makes the behaviour testable outside a session.
+- **The decisions and queries are pure (Command-Query Separation).** Everything that decides
+  decoration delegates to pure functions (`detector.js`); shell-side queries and predicates
+  (`is*`, `has*`, `should*`) strictly read in-memory cache/state snapshots without mutating state
+  or launching implicit I/O. Asynchronous operations (such as `/proc/<pid>/maps` reads) are
+  triggered exclusively by explicit lifecycle commands, preventing timing inversions and flicker.
 - **Outside the window picker, only the resize band takes input.** Every actor the extension
   adds is `reactive: false` except the band's four strip children, which exist to start a
   resize grab, and the picker's full-stage overlay (`lib/inspector.js`), which is reactive and

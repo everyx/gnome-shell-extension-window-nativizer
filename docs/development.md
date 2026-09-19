@@ -157,3 +157,9 @@ from the names and structure around it, or already in `docs/` — compress while
 drop. JSDoc on an export keeps types, what it returns, and when it throws; the reasoning
 goes to `docs/`. The concern is that comment density rots: `comment-density` in ego-lint
 (over 50% of a file, ignoring its first ten lines) is a signal, not the goal.
+
+**Prefer durable domain contracts over volatile micro-implementation metrics.** When writing or
+updating documentation and user-facing explanations, avoid hardcoding transient pixel values
+(such as specific corner radii or margin depths) unless citing an upstream literal. Refer instead
+to domain concepts (e.g. Libadwaita continuous curvature, GTK standard input regions, GPU-baked
+meshes) to prevent documentation drift as upstream styling and rendering heuristics evolve.
