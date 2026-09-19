@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-16 09:34+0800\n"
+"POT-Creation-Date: 2026-09-19 22:32+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -56,90 +56,105 @@ msgstr "工具視窗"
 msgid "window"
 msgstr "視窗"
 
-#. Translators: A window the user cannot resize.
-#: src/prefs.js:64
-msgid "Fixed-size"
-msgstr "固定尺寸"
-
-#. Translators: A window the user can resize.
-#: src/prefs.js:66
-msgid "Resizable"
-msgstr "可縮放"
-
-#. Translators: %s is the width and height of the window, e.g. "Fixed-size (360×420)".
-#: src/prefs.js:71
-#, javascript-format
-msgid "Fixed-size (%s)"
-msgstr "固定尺寸（%s）"
-
-#: src/prefs.js:73
+#: src/prefs.js:63
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:73
+#: src/prefs.js:63
 msgid "Wayland"
 msgstr "Wayland"
 
+#. Translators: %s is the client type and the window type, e.g. "Wayland window".
+#: src/prefs.js:65
+#, javascript-format
+msgid "%s %s"
+msgstr "%s %s"
+
 #. Translators: The window has no parent window.
-#: src/prefs.js:76
+#: src/prefs.js:68
 msgid "with no parent"
 msgstr "無父視窗"
 
 #. Translators: The window is attached to its parent window.
-#: src/prefs.js:78
+#: src/prefs.js:70
 msgid "attached to its parent"
 msgstr "附加到父視窗"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/prefs.js:80
+#: src/prefs.js:72
 msgid "with a parent"
 msgstr "有父視窗"
 
-#. Translators: %s is the size, the client type, the window type and the
-#. parent, in that order. Reorder the placeholders to fit the language.
-#: src/prefs.js:92
+#. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
+#: src/prefs.js:87
 #, javascript-format
-msgid "%s %s %s, %s"
-msgstr "%s %s %s，%s"
+msgid "fixed-size (%s)"
+msgstr "固定大小（%s）"
+
+#. Translators: A window the user cannot resize.
+#: src/prefs.js:90
+msgid "fixed-size"
+msgstr "固定大小"
+
+#. Translators: A window the user can resize.
+#: src/prefs.js:94
+msgid "resizable"
+msgstr "大小可調"
+
+#. Translators: %s is the entity, parent, without shadow margins, and size, in that order.
+#: src/prefs.js:99
+#, javascript-format
+msgid "%s, %s, %s, %s"
+msgstr "%s，%s，%s，%s"
+
+#: src/prefs.js:99
+msgid "without shadow margins"
+msgstr "無陰影邊距"
+
+#. Translators: %s is the entity, parent, and size, in that order.
+#: src/prefs.js:103
+#, javascript-format
+msgid "%s, %s, %s"
+msgstr "%s，%s，%s"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:180
+#: src/prefs.js:191
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs.js:197
+#: src/prefs.js:208
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:203
+#: src/prefs.js:214
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:204
+#: src/prefs.js:215
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
 
-#: src/prefs.js:209
+#: src/prefs.js:220
 msgid "Prioritize Crisp Text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:210
+#: src/prefs.js:221
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分數縮放螢幕上跳過圓角（保留陰影），避免重新取樣造成的文字模糊與效能損耗"
 
-#: src/prefs.js:219
+#: src/prefs.js:230
 msgid "Window Interaction"
 msgstr "視窗互動"
 
 #. Translators: The resize band is the strip around a window that can be dragged to resize it.
-#: src/prefs.js:225
+#: src/prefs.js:236
 msgid "Widen the Resize Band"
 msgstr "加寬視窗縮放觸發區"
 
-#: src/prefs.js:226
+#: src/prefs.js:237
 msgid ""
 "Let windows whose own resize border is narrower than a native one be resized "
 "by dragging the band around them: 12 pixels out on every side, and 24 along "
@@ -148,52 +163,52 @@ msgstr ""
 "讓自身縮放邊框比原生更窄的視窗，也能像原生 GNOME 視窗一樣拖曳周圍的觸發區來縮"
 "放：每邊向外 12 像素，角上沿邊 24 像素"
 
-#: src/prefs.js:234 src/prefs.js:238
+#: src/prefs.js:245 src/prefs.js:249
 msgid "Pick a window to add a rule"
 msgstr "選取視窗以新增規則"
 
-#: src/prefs.js:241 src/prefs.js:259 src/prefs.js:260
+#: src/prefs.js:252 src/prefs.js:270 src/prefs.js:271
 msgid "Window Rules"
 msgstr "視窗規則"
 
-#: src/prefs.js:242
+#: src/prefs.js:253
 msgid "Configure decoration overrides for specific window kinds"
 msgstr "針對特定類型的視窗自訂裝飾規則"
 
-#: src/prefs.js:264
+#: src/prefs.js:275
 msgid "Use the button above to pick a window and add a rule"
 msgstr "用上面的按鈕選取視窗以新增規則"
 
-#: src/prefs.js:338 src/prefs.js:340
+#: src/prefs.js:349 src/prefs.js:351
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:363
+#: src/prefs.js:374
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:364
+#: src/prefs.js:375
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:376
+#: src/prefs.js:387
 msgid "No rule added: this window could not be identified"
 msgstr "未新增規則：無法識別這個視窗"
 
-#: src/prefs.js:387
+#: src/prefs.js:398
 msgid "No rule added: it would have no effect on a window of this kind"
 msgstr "未新增規則：這條規則對此類視窗不會有任何效果"
 
-#: src/prefs.js:399
+#: src/prefs.js:410
 msgid "No rule added: the rule could not be saved"
 msgstr "未新增規則：規則未能儲存"
 
-#: src/prefs.js:411
+#: src/prefs.js:422
 #, javascript-format
 msgid "Rule updated for %s: %s"
 msgstr "已更新 %s 的規則：%s"
 
-#: src/prefs.js:412
+#: src/prefs.js:423
 #, javascript-format
 msgid "Rule added for %s: %s"
 msgstr "已為 %s 新增規則：%s"

@@ -177,12 +177,47 @@ describe('resolveRule', () => {
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: true, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: false, isAttachedDialog: true})).toBeNull();
     });
+
+    it('resolves legacy 5-field rules without has_ring as backward compatibility fallback', () => {
+        const legacyKey = 'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false';
+        const rules = {[legacyKey]: 'corners'};
+
+        // Both ringed and non-ringed windows fall back to matching the legacy rule when no 6-field rule exists
+        const matchedMain = resolveRule('firefox', rules, {hasRing: true});
+        const matchedPip = resolveRule('firefox', rules, {hasRing: false});
+
+        expect(matchedMain).not.toBeNull();
+        expect(matchedMain.has('corners')).toBeTrue();
+        expect(matchedPip).not.toBeNull();
+        expect(matchedPip.has('corners')).toBeTrue();
+
+        // But when a specific 6-field rule is added, it takes precedence
+        const specificKey = buildRuleKey('firefox', {hasRing: true});
+        const updatedRules = {...rules, [specificKey]: 'both'};
+        expect(resolveRule('firefox', updatedRules, {hasRing: true}).has('shadow')).toBeTrue();
+        // PiP still falls back to legacy corners rule
+        expect(resolveRule('firefox', updatedRules, {hasRing: false}).has('shadow')).toBeFalse();
+    });
+
+    it('terminates rule resolution when 6-field generic key has invalid state and does not fall back to legacy key', () => {
+        const generic6Key = buildRuleKey('firefox', {hasRing: true});
+        const legacyGenericKey = buildRuleKey('firefox', {legacy: true});
+
+        // 6-field key exists but contains invalid state; legacy key contains valid state
+        const rules = {
+            [generic6Key]: 'invalid-state-value',
+            [legacyGenericKey]: 'both',
+        };
+
+        // Must return null instead of falling through to legacyGenericKey
+        expect(resolveRule('firefox', rules, {hasRing: true})).toBeNull();
+    });
 });
 
 describe('buildRuleKey', () => {
     it('always emits the full window-kind fingerprint', () => {
         expect(buildRuleKey('wechat')).toBe(
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false');
+            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false');
     });
 
     it('encodes every structural field', () => {
@@ -192,7 +227,71 @@ describe('buildRuleKey', () => {
             hasParent: true,
             allowsResize: false,
             isAttachedDialog: true,
-        })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true');
+            hasRing: true,
+        })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true,has_ring=true');
+    });
+
+    it('orders has_ring before size in 6-field canonical key', () => {
+        const key = buildRuleKey('wechat', {
+            clientType: 'wayland',
+            windowType: WindowType.NORMAL,
+            hasParent: false,
+            allowsResize: false,
+            isAttachedDialog: false,
+            hasRing: true,
+            width: 360,
+            height: 420,
+        });
+        expect(key).toBe(
+            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=true,size=360x420'
+        );
+        expect(key.indexOf('has_ring=true')).toBeLessThan(key.indexOf('size=360x420'));
+    });
+
+    it('generates legacy 5-field key byte-identical to pre-has_ring format', () => {
+        const waylandLegacy = buildRuleKey('firefox', {
+            clientType: 'wayland',
+            windowType: WindowType.NORMAL,
+            hasParent: false,
+            allowsResize: true,
+            isAttachedDialog: false,
+            legacy: true,
+        });
+        expect(waylandLegacy).toBe(
+            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false'
+        );
+
+        const fixedLegacy = buildRuleKey('wechat', {
+            clientType: 'wayland',
+            windowType: WindowType.NORMAL,
+            hasParent: false,
+            allowsResize: false,
+            isAttachedDialog: false,
+            width: 360,
+            height: 420,
+            legacy: true,
+        });
+        expect(fixedLegacy).toBe(
+            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420'
+        );
+    });
+
+    it('distinguishes Firefox main window and Picture-in-Picture window via has_ring', () => {
+        // Main browser window declares shadow margin ring
+        const firefoxMain = buildRuleKey('firefox', {hasRing: true});
+        // PiP player window is a compact borderless video surface with no shadow margin ring
+        const firefoxPip = buildRuleKey('firefox', {hasRing: false});
+
+        expect(firefoxMain).toBe(
+            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true');
+        expect(firefoxPip).toBe(
+            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false');
+        expect(firefoxMain).not.toBe(firefoxPip);
+
+        // Rules for main window do not collide with PiP window
+        const userRules = {[firefoxMain]: 'both'};
+        expect(resolveRule('firefox', userRules, {hasRing: true})).not.toBeNull();
+        expect(resolveRule('firefox', userRules, {hasRing: false})).toBeNull();
     });
 
     it('encodes size only for fixed-size windows (allowsResize=false)', () => {
@@ -200,21 +299,21 @@ describe('buildRuleKey', () => {
             allowsResize: false,
             width: 360,
             height: 420,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420');
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,size=360x420');
 
         // Resizable windows never encode size
         expect(buildRuleKey('wechat', {
             allowsResize: true,
             width: 800,
             height: 600,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false');
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false');
 
         // Rounds fractional sizes to integers
         expect(buildRuleKey('wechat', {
             allowsResize: false,
             width: 359.8,
             height: 420.2,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420');
+        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,size=360x420');
     });
 
     it('never collapses to a bare application key', () => {

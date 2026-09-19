@@ -367,12 +367,19 @@ export function evaluateWindowActions({
         isX11, sideW, sideH, hasSsd, nativeLikeCorners,
     });
 
+    // Semantics vs strategy: declaresOwnShadow answers "did the client declare a ring?"
+    // (SSD's ring is frame-drawn ⇒ false). The strategy "SSD ring is ours to clear when
+    // we clip" is separate and handled here so the predicate can stay pure without
+    // changing observable behavior (inferDecorationBaseline already handles hasSsd first).
+    const clientOwnRing = declaresOwnShadow({hasSsd, sideW, sideH});
+
     const rule = resolveRule(wmClass, rules, {
         clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         windowType,
         hasParent: Boolean(hasParent),
         allowsResize,
         isAttachedDialog,
+        hasRing: clientOwnRing,
         frameWidth,
         frameHeight,
     });
@@ -389,11 +396,6 @@ export function evaluateWindowActions({
     corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
-    // Semantics vs strategy: declaresOwnShadow answers "did the client declare a ring?"
-    // (SSD's ring is frame-drawn ⇒ false). The strategy "SSD ring is ours to clear when
-    // we clip" is separate and handled here so the predicate can stay pure without
-    // changing observable behavior (inferDecorationBaseline already handles hasSsd first).
-    const clientOwnRing = declaresOwnShadow({hasSsd, sideW, sideH});
     const ssdRing = hasSsd && (sideW > 0 || sideH > 0);
     const ownRing = clientOwnRing || ssdRing;
 

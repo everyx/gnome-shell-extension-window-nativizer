@@ -1,21 +1,36 @@
 # The rule model
 
-A rule is keyed by an application identity plus five structural attributes of the
+A rule is keyed by an application identity plus six structural attributes of the
 window, and its state names which decoration axes are ours. The picker writes rules,
 the runtime matches them, and the settings layer sanitises them; this is the shared
 description of what a key means.
 
 ## Key grammar
 
-    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>[,size=<W>x<H>]
+    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>,has_ring=<bool>[,size=<W>x<H>]
 
 For example:
 
-    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false
-    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,size=360x420
+    # Firefox main browser window (declares client shadow ring):
+    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true
+
+    # Firefox Picture-in-Picture (PiP) window (compact borderless video surface without shadow margin ring):
+    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false
+
+    # Fixed-size dialog with explicit dimensions:
+    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,size=360x420
 
 - Field **order is part of the format**: `rules.js` renders it canonically, so string
   comparison is enough to match.
+- **`has_ring=<bool>` distinguishes standard CSD windows from compact/PiP windows**:
+  A standard CSD window reserves a margin ring for its own shadow (`buffer_rect - frame_rect > 0`,
+  evaluated by `declaresOwnShadow()` in the runtime and `hasDeclaredMarginRing()` in the picker / frame layer). In contrast, media players, floating video popups
+  (such as Firefox Picture-in-Picture), or borderless utility windows do not declare any shadow margin
+  ring (`buffer_rect === frame_rect`). Incorporating `has_ring` separates these two kinds cleanly,
+  preventing rules intended for browser main windows from unintentionally clipping or darkening PiP video surfaces.
+- **Backward compatibility and fallback**: `VALID_RULE_KEY_PATTERN` accepts both the standard 6-field
+  grammar and legacy 5-field keys (without `has_ring`). When resolving rules, `resolveRule()` first attempts
+  an exact match against the 6-field key; if absent, it gracefully falls back to a legacy 5-field rule.
 - An **attached dialog always has a parent** — Mutter only attaches a transient whose
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies

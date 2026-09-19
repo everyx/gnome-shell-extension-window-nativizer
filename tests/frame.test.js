@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {bodyFrame, frameFromInsets, insetsFromRects, ZERO_INSETS} from '../src/lib/frame.js';
+import {bodyFrame, frameFromInsets, insetsFromRects, hasDeclaredMarginRing, ZERO_INSETS} from '../src/lib/frame.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
@@ -93,6 +93,66 @@ describe('insetsFromRects', () => {
         expect(insetsFromRects(rect(0, 0, 0, 100), rect(0, 0, 100, 100))).toBeNull();
         expect(insetsFromRects(null, rect(0, 0, 100, 100))).toBeNull();
         expect(insetsFromRects(rect(0, 0, 100, 100), null)).toBeNull();
+        expect(insetsFromRects(rect(0, 0, 100, 100), rect(10, 10, -10, 80))).toBeNull();
+        expect(insetsFromRects(rect(0, 0, -100, 100), rect(0, 0, 100, 100))).toBeNull();
+    });
+
+    it('reads insets with fractional / subpixel coordinates', () => {
+        expect(insetsFromRects(rect(0.5, 0.5, 100.5, 100.5), rect(12.5, 0.5, 84.0, 80.0)))
+            .toEqual(insets(12, 0, 4.5, 20.5));
+    });
+});
+
+describe('hasDeclaredMarginRing', () => {
+    it('returns true when buffer extends past frame on any side', () => {
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0, 0, 860, 660),
+            frame: rect(30, 30, 800, 600),
+        })).toBeTrue();
+    });
+
+    it('returns false when buffer exactly matches frame (compact/PiP window)', () => {
+        expect(hasDeclaredMarginRing({
+            buffer: rect(100, 100, 400, 225),
+            frame: rect(100, 100, 400, 225),
+        })).toBeFalse();
+    });
+
+    it('returns false for SSD windows even when buffer extends past frame', () => {
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0, 0, 860, 660),
+            frame: rect(30, 30, 800, 600),
+            hasSsd: true,
+        })).toBeFalse();
+    });
+
+    it('returns false for null or degenerate rects', () => {
+        expect(hasDeclaredMarginRing({buffer: null, frame: null})).toBeFalse();
+        expect(hasDeclaredMarginRing()).toBeFalse();
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0, 0, 100, 100),
+            frame: rect(10, 10, 0, 80),
+        })).toBeFalse();
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0, 0, -100, 100),
+            frame: rect(0, 0, 50, 50),
+        })).toBeFalse();
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0, 0, 100, 100),
+            frame: rect(10, 10, -20, -20),
+        })).toBeFalse();
+    });
+
+    it('handles fractional / subpixel rect coordinates correctly', () => {
+        expect(hasDeclaredMarginRing({
+            buffer: rect(0.5, 0.5, 860.5, 660.5),
+            frame: rect(30.5, 30.5, 800.0, 600.0),
+        })).toBeTrue();
+
+        expect(hasDeclaredMarginRing({
+            buffer: rect(10.25, 20.75, 400.0, 300.0),
+            frame: rect(10.25, 20.75, 400.0, 300.0),
+        })).toBeFalse();
     });
 });
 

@@ -279,9 +279,9 @@ State labels and type nouns are thunks (`() => _('...')`) because the module loa
 before the prefs process binds the gettext domain — a plain `_()` would capture the
 untranslated string (`STATE_LABELS`, `WINDOW_TYPE_NOUNS`).
 
-`windowKindSentence` names all five structural attributes of a rule key (and folds
-`has_parent`/`attached_dialog` into one phrase); see `docs/rule-model.md` for the
-full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
+`windowKindSentence` names all six structural attributes of a rule key (and folds
+`has_parent`/`attached_dialog` into one phrase, and indicates windows without margin
+rings); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
 (Pango markup); `Adw.Toast`/`AlertDialog` and bare `Gtk.Label` take plain text.
 
 The rule list shows a count in the group title so the group need not be opened to

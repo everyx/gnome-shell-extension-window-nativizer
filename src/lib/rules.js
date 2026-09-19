@@ -131,14 +131,16 @@ const FINGERPRINT_FIELDS = [
     {name: 'has_parent', render: o => boolString(o.hasParent), parse: raw => raw === 'true'},
     {name: 'allows_resize', render: o => boolString(o.allowsResize), parse: raw => raw === 'true'},
     {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), parse: raw => raw === 'true'},
+    {name: 'has_ring', render: o => boolString(o.hasRing), parse: raw => raw === 'true'},
 ];
 
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
 // to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
+// has_ring is standard in 6-field keys, while optional for backward compatibility with legacy 5-field keys.
 const VALID_RULE_KEY_PATTERN = new RegExp(
     '^[^\\s:]+:(?:' +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD}` +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD}(?:,has_ring=${BOOL_FIELD})?(?:,size=\\d+x\\d+)?|` +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD}(?:,has_ring=${BOOL_FIELD})?` +
     ')$'
 );
 
@@ -150,6 +152,8 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
  * @param {boolean} [props.hasParent=false]
  * @param {boolean} [props.allowsResize=true]
  * @param {boolean} [props.isAttachedDialog=false]
+ * @param {boolean} [props.hasRing=false]
+ * @param {boolean} [props.legacy=false] - Whether to omit has_ring for legacy 5-field key formatting
  * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
  * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
  * @returns {string} Canonical key or '' when wmClass is missing
@@ -160,14 +164,19 @@ export function buildRuleKey(wmClass, {
     hasParent = false,
     allowsResize = true,
     isAttachedDialog = false,
+    hasRing = false,
+    legacy = false,
     width = null,
     height = null,
 } = {}) {
     if (!wmClass)
         return '';
 
-    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog};
-    let specifier = FINGERPRINT_FIELDS
+    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing};
+    const activeFields = legacy
+        ? FINGERPRINT_FIELDS.filter(f => f.name !== 'has_ring')
+        : FINGERPRINT_FIELDS;
+    let specifier = activeFields
         .map(field => `${field.name}=${field.render(fields)}`)
         .join(',');
 
@@ -270,6 +279,7 @@ export function parseRuleKey(key) {
  * @param {boolean} [options.hasParent=false]
  * @param {boolean} [options.allowsResize=true]
  * @param {boolean} [options.isAttachedDialog=false]
+ * @param {boolean} [options.hasRing=false]
  * @param {number|null} [options.frameWidth=null]
  * @param {number|null} [options.frameHeight=null]
  * @returns {Set<string>|null} Axes that are ours, or null when no rule matched
@@ -284,38 +294,46 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
         hasParent = false,
         allowsResize = true,
         isAttachedDialog = false,
+        hasRing = false,
         frameWidth = null,
         frameHeight = null,
     } = options;
 
-    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule if one exists.
-    if (!allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0) {
+    const isFixed = !allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0;
+
+    const has = key => Boolean(key && Object.prototype.hasOwnProperty.call(rules, key));
+    const lookup = key => has(key)
+        ? parseRuleState(rules[key])
+        : null;
+
+    // 1. For fixed-size windows with known dimensions, prefer exact-size rules (exact 6-field -> legacy 5-field).
+    if (isFixed) {
         const exactKey = buildRuleKey(wmClass, {
-            clientType,
-            windowType,
-            hasParent,
-            allowsResize,
-            isAttachedDialog,
-            width: frameWidth,
-            height: frameHeight,
+            clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing,
+            width: frameWidth, height: frameHeight,
         });
-        if (exactKey && Object.prototype.hasOwnProperty.call(rules, exactKey)) {
-            const axes = parseRuleState(rules[exactKey]);
-            if (axes)
-                return axes;
-        }
+        const legacyExactKey = buildRuleKey(wmClass, {
+            clientType, windowType, hasParent, allowsResize, isAttachedDialog,
+            width: frameWidth, height: frameHeight,
+            legacy: true,
+        });
+        const matched = lookup(exactKey) || lookup(legacyExactKey);
+        if (matched)
+            return matched;
     }
 
-    // 2. Generic rule key (without size suffix) as fallback for fixed-size, or primary for resizable.
+    // 2. Generic rule key as fallback for fixed-size, or primary for resizable (generic 6-field -> legacy 5-field).
     const genericKey = buildRuleKey(wmClass, {
-        clientType,
-        windowType,
-        hasParent,
-        allowsResize,
-        isAttachedDialog,
+        clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing,
     });
-    if (!genericKey || !Object.prototype.hasOwnProperty.call(rules, genericKey))
-        return null;
+    const legacyGenericKey = buildRuleKey(wmClass, {
+        clientType, windowType, hasParent, allowsResize, isAttachedDialog,
+        legacy: true,
+    });
 
-    return parseRuleState(rules[genericKey]);
+    if (has(genericKey))
+        return parseRuleState(rules[genericKey]);
+    if (has(legacyGenericKey))
+        return parseRuleState(rules[legacyGenericKey]);
+    return null;
 }

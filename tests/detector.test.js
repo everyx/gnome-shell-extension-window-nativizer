@@ -548,7 +548,7 @@ describe('evaluateWindowActions', () => {
         const actionsFor = state => evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app')]: state},
+            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
         });
 
         const both = actionsFor('both');
@@ -709,7 +709,7 @@ describe('evaluateWindowActions', () => {
         const clearRingFor = state => evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app')]: state},
+            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
         }).clearRing;
 
         expect(clearRingFor('both')).toBeTrue();
@@ -723,7 +723,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app')]: 'corners'},
+            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'corners'},
         });
         expect(res.drawClip).toBeTrue();
         expect(res.drawShadow).toBeFalse();
@@ -735,7 +735,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app')]: 'shadow'},
+            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'shadow'},
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
@@ -744,8 +744,8 @@ describe('evaluateWindowActions', () => {
     });
 
     it('applies exact size rule for fixed-size windows to differentiate dialogs', () => {
-        const qrKey = buildRuleKey('multi-dlg-app', {allowsResize: false, width: 360, height: 420});
-        const toolbarKey = buildRuleKey('multi-dlg-app', {allowsResize: false, width: 240, height: 48});
+        const qrKey = buildRuleKey('multi-dlg-app', {hasRing: true, allowsResize: false, width: 360, height: 420});
+        const toolbarKey = buildRuleKey('multi-dlg-app', {hasRing: true, allowsResize: false, width: 240, height: 48});
 
         const rules = {
             [qrKey]: 'both',
@@ -990,6 +990,7 @@ describe('the pick heuristic', () => {
         hasParent: 'false',
         allowsResize: 'true',
         isAttachedDialog: 'false',
+        hasRing: String(!win.hasSsd && (win.bufferWidth > win.frameWidth || win.bufferHeight > win.frameHeight)),
     });
 
     describe('suggestedRuleState', () => {
@@ -1010,7 +1011,7 @@ describe('the pick heuristic', () => {
                 ...plainWindow,
                 isX11: true,
                 nativeLikeCorners: true,
-                wmClass: 'x11-adw-app',
+                wmClass: 'x11-bare-adw-app',
             };
             expect(suggestedRuleState(x11Bare)).toBe(RuleState.CORNERS);
         });
@@ -1030,7 +1031,7 @@ describe('the pick heuristic', () => {
         it('counts the rule already stored for the kind', () => {
             const decorated = {
                 ...nativeWindow,
-                rules: {[buildRuleKey('adw-app')]: 'both'},
+                rules: {[buildRuleKey('adw-app', {hasRing: true})]: 'both'},
             };
             expect(suggestedRuleState(decorated)).toBe(RuleState.NONE);
         });
