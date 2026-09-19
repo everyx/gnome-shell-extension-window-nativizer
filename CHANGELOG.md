@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.0...v0.5.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **dev:** isolate test sandbox xdg config and enforce extension enablement ([5169d58](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5169d58042887822f5ade3b9cebe001086e33903))
+* **manager:** ignore non-decoratable window types and guard focus reconcile ([ec67441](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ec674412c2d8975b177e6095160996fa6e2c4c7f)), closes [#13](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/13)
+* **manager:** resolve clip target to surface container when foreign widgets injected ([69ed0ee](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/69ed0eefbf0b87597fa199b6e73c2f926ace516b)), closes [#16](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/16)
+* **manager:** verify compat coordinate space and react to late child injection ([462bdc1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/462bdc16ffb2edfac298ed6aeb10dac17050b200))
+* **nativeLikeCorners:** read /proc/&lt;pid&gt;/maps asynchronously ([8611225](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/86112253027b2eb679f3af93afdef9104726bc48))
+* **probe:** resolve probe timing inversion, enforce symmetrical lifecycle, and optimize band insets ([61a9b57](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/61a9b57fa125fe52f7de0d762a3cbdd4365f46f1))
+* **resize-band:** keep the band on tiled and tile-matched windows ([1b3f59c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1b3f59cd9814631efffcf95d1108733c338562cc))
+* **resize-band:** read the client and the ring it reserved, not the declared margin ([062adf1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/062adf1d7e2c289c00755172d7a7ec7e82641df7))
+* **shadow:** modulate pipeline opacity with paint opacity to fade on window close ([c918f27](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c918f27359b30c495cd3e3b192d0bb605ae54310))
+* suspend clip effect during overview to prevent blurry downscaled previews ([0fd03d5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0fd03d58564afc89b7725db330e2a701d61162c2))
+
+
+### Documentation
+
+* **decoration-model:** record how a tiled window's edges are decided ([284fd7d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/284fd7db281d7bd06449d7e72141aa9672f3cbf5))
+* **decoration-model:** record who gets a resize band, and why ([55c47fc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/55c47fcf8ace2d854b2ea55ff4551b930f1388b5))
+* decouple implementation details and define architectural invariants ([84ea8b3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/84ea8b37b57142c2d2509e8e2bf0c64a4e311de4))
+* formalize CQS purity rules, decoupled metrics, and overview suspension rationale ([590cc5b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/590cc5b5f3450bc6ac9d7dc83d7a71737c7cf8a8))
+* **lib:** document libxul Gecko rounded corners implementation and Bug 1850827 ([02573de](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/02573de056ac9f1a5d4cf5c1148a7bc2214fdb44))
+* **readme:** decouple metrics, elevate drag ergonomics, and polish hero layout ([c08dc8a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c08dc8a8d64261b67849d0b2c3dc25b599ba894c))
+* **readme:** disclose LLM-assisted (vibe coding) development and real-world testing ([ca16724](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ca1672480bb1abe45a3a4f38008a8c8fbca9a532))
+* **readme:** document installation via release zip archive ([fd200bb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fd200bb5419851952e3acd92500fa9a891deab65))
+* **readme:** streamline copy, improve readability, and offload deep specs to docs ([5fb9b00](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5fb9b00e701e01fb0d228fb0349add2fe44b8039))
+
 ## [0.5.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.4.0...v0.5.0) (2026-09-16)
 
 
