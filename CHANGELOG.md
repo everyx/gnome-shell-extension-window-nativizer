@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.1...v0.6.0) (2026-09-19)
+
+
+### Features
+
+* **rules:** distinguish windows with and without declared margin rings via has_ring ([592e00e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/592e00ed7ba49726c5b2f743b34ad5e38a918e2d))
+
 ## [0.5.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.0...v0.5.1) (2026-09-19)
 
 
