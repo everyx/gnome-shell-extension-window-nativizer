@@ -160,8 +160,9 @@ Instead, it chooses the state that inverts or breaks the current presentation:
 - **State 1 (Untouched / Native-like)**: No axis of ours is currently effective.
   → **Reverse the corners**, plus the shadow unless it is an unclearable Mutter X11
   shadow (that would paint a double shadow). The resize axis is never reversed by
-  default: a window with no ring has no band to retract, and putting one on the
-  desktop is a policy the user opts into by hand.
+  default: bare windows already get the band from the decision, so reversing it
+  would retract a band the user just gained - and a fixed-ratio popup reverses it
+  by hand instead.
   The user picked an undecorated window because they want this extension to step in.
 
 ### Normalization and safety

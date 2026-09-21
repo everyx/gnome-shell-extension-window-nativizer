@@ -152,12 +152,11 @@ PERF_RULE_KEY = ("dev.windownativizer.perf:client_type=wayland,window_type=0,"
 
 def set_band(enabled, bus, verify=True):
     """Reverse the resize axis for the perf client's kind through the nested session's own bus and
-    dconf store: the axis reversed when the band is wanted, and no rule (the reading) when it is
-    not. The perf client reserves no ring, so the reading leaves it alone. With
+    dconf store: no rule (the heuristic) when enabled, the resize axis reversed when not. With
     `verify`, wait for the band actors to follow - a rule that never arrived would
     otherwise look like a saving. Without it (no window on stage to carry a band yet)
     only the write is done, and the caller checks the band on the window it measures."""
-    rules = "{'%s': 'resize'}" % PERF_RULE_KEY if enabled else "{}"
+    rules = "{}" if enabled else "{'%s': 'resize'}" % PERF_RULE_KEY
     subprocess.check_call(
         ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "window-rules",
          rules],
