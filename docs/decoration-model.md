@@ -286,9 +286,8 @@ own to size (only a GTK4 client can be *shown* to own a native-width handle, and
 band is skipped), and is not an SSD window (mutter-x11-frames drew that frame and the client
 that owns it runs the grab from the invisible border). Reversing the axis is the only lever,
 and it is bidirectional: it adds a band where the reading left the window without one, and
-retracts the one the reading drew. The reading keeps the band inside a ring the client
-reserved, so a window that reserves nothing gets the desktop around it only once a rule
-reverses the axis.
+retracts the one the reading drew. A bare window with no ring gets
+the desktop around it by default; opting out is one reversal away.
 **Which edges get one is Mutter's call, read from the window's state.** Mutter derives a per-edge
 constraint (`update_edge_constraints()`, mutter `src/core/window.c`) from the window's tile mode and
 its maximize flags, and publishes it per client type: Wayland windows receive the xdg-shell `TILED_*`
@@ -363,14 +362,14 @@ build held the pointer with `clutter_stage_grab()` while it was on a strip; that
 press from reaching a window *under* the ring, which was only possible while the band could reach past
 its own window's surface.
 
-**A window that declares no margin gets no band by default.** The band is the inner edge of the
+**A bare window gets the desktop around it, by default.** The band is the inner edge of the
 margin a client declares for its own shadow where one exists - that strip is inside the window's
 own surface, so a press there lands on ground the client itself would use. A window that declares
-no margin (an undecorated toplevel, a video popup) has that ground only if the user asks for it:
-reversing the resize axis puts the 12px of the desktop around the body under the pointer, and the
-window keeps every click it had until then. A strip can still
+no margin (an undecorated toplevel, a video popup) gets the 12px of the desktop around its body
+instead: that is the tradeoff the default accepts, because a resizable window with no grabbable
+edge is the worse outcome, and opting out is one rule reversal away. A strip can still
 only be pressed where its own window is topmost (above), so the neighbour's clicks are safe
-wherever the neighbour covers; the cost the user accepts is desktop pixels answering a resize.
+wherever the neighbour covers; the exposed cost is desktop pixels answering a resize.
 
 The known imprecise case is the fixed-ratio client: measured on the Firefox video popup,
 `move_resize_frame(true, ...)` at 403/443/493/553 logical px leaves it at 373x280 (4:3) every time.
@@ -478,9 +477,10 @@ larger than it is — never smaller.
 
 On the shadow axis that cannot change an answer: `declaresOwnShadow()` only asks whether a
 side is positive, and inflating a non-negative reading keeps a declared margin declared and a
-zero zero. The resize band is not so lucky: it lives inside that same positive-side test, and
-its GTK4 skip compares `narrowestSides >= 12`, so a reading inflated from zero on a backend
-like this can give a window a band it declared no ring for. That
+zero zero. The resize band is not so lucky: its gate is a magnitude comparison,
+`narrowestSides >= 12` (only inside `decideResizeBand()`'s GTK4-client gate - the `auto`
+path bands bare windows regardless), so a reading inflated past 12 on a backend
+like this can skip the band for a window whose real margin is narrower than a native one. That
 is the one place the unreadable scale can change what we do.
 
 ## Which style applies

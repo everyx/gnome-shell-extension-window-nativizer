@@ -81,7 +81,7 @@ Each rule names the axes — **Corners**, **Shadow**, **Resize** — whose autom
 | Nothing | Default. The automatic decision stands; most windows need no rule at all |
 | Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
 | Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
-| Resize | Add the band where the decision left the window without one (it reserves no ring, or its own handle reads as native), or retract it on a fixed-ratio popup it cannot track |
+| Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
 To fix a misbehaving window, open **Preferences** and click **Pick Window** to generate a rule with one click.
 

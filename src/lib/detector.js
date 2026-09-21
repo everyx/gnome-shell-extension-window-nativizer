@@ -307,22 +307,18 @@ export function decideResizeBand({
     if (!(frameWidth >= MIN_BAND_WINDOW) || !(frameHeight >= MIN_BAND_WINDOW))
         return false;
 
-    // The automatic reading. The band is the inner part of the ring the client reserved for
-    // its own shadow, so a window that reserves nothing - an undecorated toplevel, a video
-    // popup - gets none unless a rule reverses this axis.
-    const {declaringSides, narrowestSides} =
+    // The automatic reading: its own handle is already at least as wide as a native one on
+    // every side. Only GTK4 can be read this way: it sizes the handle itself, so its declared
+    // margins prove it, while a GTK3 window's margins are its shadow and say nothing about the
+    // theme's handle (docs/decoration-model.md § The resize band). A bare window reserves no
+    // ring, so its band sits on the desktop around it.
+    const {narrowestSides} =
         declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
-    const hasRing = declaringSides.sideW > 0 || declaringSides.sideH > 0;
-    // Its own handle is already at least as wide as a native one on every side. Only GTK4 can
-    // be read this way: it sizes the handle itself, so its declared margins prove it, while a
-    // GTK3 window's margins are its shadow and say nothing about the theme's handle
-    // (docs/decoration-model.md § The resize band).
     const hasNativeHandle = hasGtk4Client &&
         narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND;
-    const heuristic = hasRing && !hasNativeHandle;
 
     // A rule reverses that reading and nothing else: the gates above are physics.
-    return reversed ? !heuristic : heuristic;
+    return reversed ? hasNativeHandle : !hasNativeHandle;
 }
 
 /**

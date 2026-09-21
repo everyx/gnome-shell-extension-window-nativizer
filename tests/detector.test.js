@@ -342,11 +342,10 @@ describe('evaluateWindowActions', () => {
     it('a window too small for corners keeps its band: the axes are independent', () => {
         // 25px sits below MIN_DECORABLE_SIZE (30) but above MIN_BAND_WINDOW (24), so
         // decoration is off while the band still fits - the resize axis must not inherit
-        // the decoration gate. The window declares a ring, which is where the band lives.
+        // the decoration gate.
         const res = evaluateWindowActions({
             ...baseWin,
-            frameWidth: 25, frameHeight: 300,
-            insets: {left: 25, right: 25, top: 25, bottom: 25},
+            bufferWidth: 25, bufferHeight: 300, frameWidth: 25, frameHeight: 300,
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -525,13 +524,11 @@ describe('evaluateWindowActions', () => {
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
         expect(res.clearRing).toBeFalse();
-        expect(res.drawResize).toBeFalse();
+        expect(res.drawResize).toBeTrue();
         expect(res.reason).toBe('rule-applied(custom-tool:corners,shadow)');
     });
 
-    it('a rule naming all three axes reverses each one', () => {
-        // A window with no ring: the two decoration axes turn off, and the band is the one
-        // axis this window's decision keeps off, so naming it is what turns one on.
+    it('a rule naming all three axes leaves nothing of ours', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
@@ -540,7 +537,7 @@ describe('evaluateWindowActions', () => {
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
         expect(res.clearRing).toBeFalse();
-        expect(res.drawResize).toBeTrue();
+        expect(res.drawResize).toBeFalse();
         expect(res.reason).toBe('rule-applied(overlay-app:corners,shadow,resize)');
     });
 
@@ -1037,9 +1034,9 @@ describe('the pick heuristic', () => {
 
     describe('suggestedRuleState', () => {
         it('reverses each effective axis in State 2 (never maintain status quo)', () => {
-            // plainWindow draws shadow and clip (no ring, so no band): both are reversed.
-            expect(suggestedRuleState(plainWindow)).toBe('corners,shadow');
-            // csdWindow carries a ring, so its band is reversed too.
+            // plainWindow draws shadow, clip and band: all three are reversed.
+            expect(suggestedRuleState(plainWindow)).toBe('corners,shadow,resize');
+            // csdWindow also carries a heuristic band: all three are reversed.
             expect(suggestedRuleState(csdWindow)).toBe('corners,shadow,resize');
         });
 
@@ -1059,17 +1056,16 @@ describe('the pick heuristic', () => {
             expect(suggestedRuleState(nativeWindow)).toBe('resize');
         });
 
-        it('steps in on the corners when a bare X11 window draws nothing', () => {
-            // No ring, and corners that already look like ours: nothing of ours is on
-            // screen, so the suggestion reverses the corners - Mutter's X11 shadow stays
-            // unclearable, and the band needs a ring to live in.
+        it('reverses only the band when the band is all we draw on a bare X11 window', () => {
+            // Bare X11, native-like corners: Mutter's shadow cannot be cleared and the
+            // corners are already ours, so the heuristic band is the whole complaint.
             const x11Bare = {
                 ...plainWindow,
                 isX11: true,
                 nativeLikeCorners: true,
                 wmClass: 'x11-bare-adw-app',
             };
-            expect(suggestedRuleState(x11Bare)).toBe('corners');
+            expect(suggestedRuleState(x11Bare)).toBe('resize');
         });
 
         it('still reverses only the band when the X11 window declares a ring we never took', () => {
@@ -1082,8 +1078,8 @@ describe('the pick heuristic', () => {
         it('judges the kind, not the transient state the window is in', () => {
             // A maximized or tiled window is not decorated while it is in that state,
             // but the rule outlives it, so the suggestion follows the kind.
-            expect(suggestedRuleState({...plainWindow, isMaximized: true})).toBe('corners,shadow');
-            expect(suggestedRuleState({...plainWindow, hasTileMatch: true, tiled: true})).toBe('corners,shadow');
+            expect(suggestedRuleState({...plainWindow, isMaximized: true})).toBe('corners,shadow,resize');
+            expect(suggestedRuleState({...plainWindow, hasTileMatch: true, tiled: true})).toBe('corners,shadow,resize');
         });
 
         it('counts the rule already stored for the kind', () => {
