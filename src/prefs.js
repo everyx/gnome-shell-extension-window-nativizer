@@ -343,14 +343,23 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // See docs/rule-model.md - a rule corrects the automatic decision on the axes it names.
+        // Adwaita's group-with-a-header-suffix pattern: the button names its action and wears
+        // the add icon, flat, so it reads as part of the header rather than a control in the
+        // list. ButtonContent, not Button's own label/icon-name: GTK4 keeps those two in one
+        // child slot, so setting both leaves only the last one. The button's label is its
+        // accessible name, so it needs no explicit one.
         const pickButton = new Gtk.Button({
-            icon_name: 'find-location-symbolic',
-            tooltip_text: _('Pick a window that looks wrong'),
+            child: new Adw.ButtonContent({
+                icon_name: 'list-add-symbolic',
+                label: _('Pick window'),
+            }),
+            css_classes: ['flat'],
+            // The tooltip carries what the label cannot - the scope. Restating the label
+            // ("pick a window") would be the noise the HIG warns about.
+            tooltip_text: _('The correction applies to every window of its kind'),
             valign: Gtk.Align.CENTER,
             margin_start: 18,
         });
-        pickButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Pick a window that looks wrong')]);
 
         const rulesGroup = new Adw.PreferencesGroup({
             title: asMarkup(_('Corrections')),
@@ -368,11 +377,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
             const rules = getWindowRules(settings);
             const entries = Object.entries(rules);
-
-            // Count in header avoids opening group to see if it has items.
-            rulesGroup.title = entries.length > 0
-                ? `${asMarkup(_('Corrections'))} <span size="small" alpha="55%">· ${entries.length}</span>`
-                : asMarkup(_('Corrections'));
 
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
@@ -475,7 +479,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 title: asMarkup(name),
                 subtitle: asMarkup(windowKindSentence(properties)),
                 subtitle_lines: 2,
-                tooltip_text: ruleKey,
             });
             row.update_property([Gtk.AccessibleProperty.LABEL], [name]);
 
