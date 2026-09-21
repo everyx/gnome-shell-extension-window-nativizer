@@ -275,21 +275,21 @@ clears style/outgoing and removes from container — idempotent for disable/relo
 
 `prefs.js` runs in the preferences process with no window actors. It reads/writes
 `window-rules` via `lib/settings.js` and calls the extension over D-Bus (`PickWindow`).
-Axis names, axis modes and type nouns are thunks (`() => _('...')`) because the module loads
-before the prefs process binds the gettext domain — a plain `_()` would capture the
-untranslated string (`AXIS_NAMES`, `AXIS_MODE_NAMES`, `WINDOW_TYPE_NOUNS`).
+Axis names, axis corrections and type nouns are thunks (`() => _('...')`) because the module
+loads before the prefs process binds the gettext domain — a plain `_()` would capture the
+untranslated string (`AXIS_NAMES`, `AXIS_CORRECTIONS`, `WINDOW_TYPE_NOUNS`).
 
 Each rule is an `Adw.ExpanderRow`: the header names the app, the subtitle the kind
-sentence, the suffix one bundled icon per **reversed** axis (`src/icons/`, drawn on the GNOME
+sentence, the suffix one bundled icon per **corrected** axis (`src/icons/`, drawn on the GNOME
 symbolic grid from one window: its rounded corner, the shadow it casts, the resize cursor's
 arrow; registered on a bare icon-theme search path as `*-symbolic` so recoloring applies
 without an `index.theme`, in the row's own foreground). The delete button is a
 header suffix left of the expander arrow - `ExpanderRow` prepends suffixes to keep its arrow
 last, so siblings are added in reverse visual order - spaced apart from the icon group. The
-expanded body opens with a line stating the two positions, then carries the three
-Automatic/Reverse toggle groups
-(`Adw.ToggleGroup` with text labels; unavailable axes show their reason across the
-full suffix width) - conditions are not repeated per line.
+expanded body carries one `Adw.SwitchRow` per axis, titled with the correction it makes
+("Correct corners"; an unavailable axis shows its reason across the full suffix width
+instead) - conditions are not repeated per line, and the group description says what the
+switches do.
 
 `windowKindSentence` names all seven structural attributes of a rule key (and folds
 `has_parent`/`attached_dialog` into one phrase; the frame clause carries `has_ring` and
@@ -301,7 +301,8 @@ know it has items. Rows are destroyed from within their own signal handlers,
 so rebuild is deferred to `GLib.PRIORITY_DEFAULT_IDLE`; one pending idle is enough
 because it reads the rules when it runs. The prefs window may be hidden for the
 modal picker and still be closed — `windowAlive` guards the D-Bus reply. An empty
-reply means cancelled/abandoned pick and is silent; a missing suggestion falls
-back to reversing the corners (the shadow too, unless a bare X11 window). Writes are verified (`hasOwnProperty`) before claiming success.
+reply means cancelled/abandoned pick and is silent; a missing suggestion (a Shell that has
+not reloaded since an update) is refused with its own toast, because there is no correction
+to apply. Writes are verified (`hasOwnProperty`) before claiming success.
 Translator note in `windowKindSentence()` explains why the sentence template is the
 translatable unit and fragments are translated separately.

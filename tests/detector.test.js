@@ -1033,60 +1033,47 @@ describe('the pick heuristic', () => {
     });
 
     describe('suggestedRuleState', () => {
-        it('reverses each effective axis in State 2 (never maintain status quo)', () => {
-            // plainWindow draws shadow, clip and band: all three are reversed.
+        it('corrects every axis the kind can be corrected on', () => {
+            // Both are ordinary resizable windows: all three axes can be acted on.
             expect(suggestedRuleState(plainWindow)).toBe('corners,shadow,resize');
-            // csdWindow also carries a heuristic band: all three are reversed.
             expect(suggestedRuleState(csdWindow)).toBe('corners,shadow,resize');
         });
 
-        it('reverses corners and shadow in State 1, leaving resize to the heuristic', () => {
-            // Bare SSD window whose corners already look like ours: nothing of ours
-            // is effective (no Mutter shadow to clear, no band on SSD), so the
-            // suggestion reverses both decoration axes and never resize.
-            const ssdNative = {
-                ...plainWindow, hasSsd: true, nativeLikeCorners: true, wmClass: 'ssd-adw-app',
-            };
+        it('corrects the axes of a window that already looks right too', () => {
+            // nativeWindow looks like us and paints its own shadow, and Firefox's PiP is
+            // deliberately left native-like: the heuristic draws no clip of ours on either.
+            // The pick still proposes the full correction - the user picked the window
+            // because it looks wrong, and correcting corners is how it gets rounded.
+            expect(suggestedRuleState(nativeWindow)).toBe('corners,shadow,resize');
+            expect(suggestedRuleState({...nativeWindow, wmClass: 'firefox'})).toBe('corners,shadow,resize');
+        });
+
+        it('leaves out an axis the runtime could not act on', () => {
+            // The compositor's own frame owns the handles of an SSD window, so the resize
+            // axis has no decision to reverse - a rule naming it could not take effect.
+            const ssdNative = {...plainWindow, hasSsd: true, wmClass: 'ssd-adw-app'};
             expect(suggestedRuleState(ssdNative)).toBe('corners,shadow');
+            // Same for a window that cannot be resized at all.
+            expect(suggestedRuleState({...plainWindow, allowsResize: false, wmClass: 'fixed-app'}))
+                .toBe('corners,shadow');
         });
 
-        it('reverses only the band when the band is all we draw', () => {
-            // nativeWindow draws nothing but a heuristic band: the minimal reversal
-            // is resize, with corners and shadow following the heuristic.
-            expect(suggestedRuleState(nativeWindow)).toBe('resize');
-        });
-
-        it('reverses only the band when the band is all we draw on a bare X11 window', () => {
-            // Bare X11, native-like corners: Mutter's shadow cannot be cleared and the
-            // corners are already ours, so the heuristic band is the whole complaint.
-            const x11Bare = {
-                ...plainWindow,
-                isX11: true,
-                nativeLikeCorners: true,
-                wmClass: 'x11-bare-adw-app',
-            };
-            expect(suggestedRuleState(x11Bare)).toBe('resize');
-        });
-
-        it('still reverses only the band when the X11 window declares a ring we never took', () => {
-            // Native-like corners plus a client-owned ring: neither decoration axis is
-            // ours, so the band is the whole complaint.
-            const x11Ring = {...nativeWindow, isX11: true, wmClass: 'x11-csd-adw-app'};
-            expect(suggestedRuleState(x11Ring)).toBe('resize');
+        it('suggests nothing for a kind we never decorate', () => {
+            expect(suggestedRuleState({...plainWindow, windowType: WindowType.MENU})).toBe('');
         });
 
         it('judges the kind, not the transient state the window is in', () => {
-            // A maximized or tiled window is not decorated while it is in that state,
-            // but the rule outlives it, so the suggestion follows the kind.
+            // A maximized or tiled window is not decorated while it is in that state, but
+            // the rule outlives it, and the axes are the kind's either way.
             expect(suggestedRuleState({...plainWindow, isMaximized: true})).toBe('corners,shadow,resize');
             expect(suggestedRuleState({...plainWindow, hasTileMatch: true, tiled: true})).toBe('corners,shadow,resize');
         });
 
-        it('counts the rule already stored for the kind', () => {
+        it('proposes the same correction for a kind that already has a rule', () => {
+            // The suggestion answers for the kind's capability, so a stored rule neither
+            // adds nor removes an axis; prefs separately refuses a pick that changes nothing.
             const decorated = {
                 ...nativeWindow,
-                // Naming corners makes the ring takeover draw the client's shadow, so
-                // the suggestion counts corners and shadow alongside the band.
                 rules: {[buildRuleKey('adw-app', {hasRing: true})]: 'corners'},
             };
             expect(suggestedRuleState(decorated)).toBe('corners,shadow,resize');
@@ -1151,12 +1138,12 @@ describe('the pick heuristic', () => {
             expect(suggestedRuleWouldChange(propertiesFor(nativeLike), nativeLike, '')).toBeFalse();
         });
 
-        it('a suggestion can still be a no-op, and the picker refuses it', () => {
-            // A menu is structurally ineligible, so the suggestion to decorate it is inert.
+        it('suggests nothing for a structurally ineligible window, and any rule is inert', () => {
+            // A menu is never decorated, so there is nothing to correct - and a state
+            // stored for it would have no effect, which is what the pre-flight reports.
             const menu = {...plainWindow, windowType: WindowType.MENU};
-            const state = suggestedRuleState(menu);
-            expect(state).toBe('corners,shadow');
-            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, state)).toBeFalse();
+            expect(suggestedRuleState(menu)).toBe('');
+            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'corners,shadow')).toBeFalse();
         });
 
         it('returns null when the window declares no identity', () => {

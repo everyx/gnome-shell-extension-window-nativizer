@@ -15,7 +15,7 @@ import {
     parseRuleState,
     withRule,
 } from './lib/rules.js';
-import {hasUnclearableShadow, isDecoratableWindowType} from './lib/detector.js';
+import {isDecoratableWindowType, ruleAxisCapabilities} from './lib/detector.js';
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
@@ -40,34 +40,29 @@ function axisName(axis) {
     return (AXIS_NAMES.get(axis) ?? (() => axis))();
 }
 
-// The two positions of an axis control: follow the extension's own decision, or
-// reverse it. A rule exists to say "this judgement is wrong for this kind".
-const AXIS_MODE = Object.freeze({
-    AUTOMATIC: 'automatic',
-    REVERSE: 'reverse',
-});
-
-const AXIS_MODE_NAMES = new Map([
-    // Translators: A rule axis follows the extension's own decision.
-    [AXIS_MODE.AUTOMATIC, () => _('Automatic')],
-    // Translators: A rule axis does the opposite of the extension's own decision.
-    [AXIS_MODE.REVERSE, () => _('Reverse')],
+// An axis row is the correction itself: the switch inverts that axis's automatic
+// decision. A rule exists to say "this judgement is wrong for this kind", so the row
+// names the correction rather than the axis - "Correct corners", not "Corners".
+const AXIS_CORRECTIONS = new Map([
+    // Translators: A rule axis row: invert the automatic decision about the window's corners.
+    [RuleAxis.CORNERS, () => _('Correct corners')],
+    // Translators: A rule axis row: invert the automatic decision about the window shadow.
+    [RuleAxis.SHADOW, () => _('Correct shadow')],
+    // Translators: A rule axis row: invert the automatic decision about the resize band.
+    [RuleAxis.RESIZE, () => _('Correct resize')],
 ]);
 
-function axisModeName(mode) {
-    return (AXIS_MODE_NAMES.get(mode) ?? (() => mode))();
+function axisCorrectionName(axis) {
+    return (AXIS_CORRECTIONS.get(axis) ?? (() => axis))();
 }
-
-// CJK words take no space; Latin ones do. A format string cannot serve both
-// ('%s %s' is already the kind sentence), so the separator is chosen from the locale.
-const WORD_JOINER = (GLib.get_language_names()[0] ?? '').match(/^(zh|ja|ko)/) ? '' : ' ';
 
 /**
  * @param {string} axis
- * @returns {string} e.g. "Corners reversed" (no space in CJK locales)
+ * @returns {string} e.g. "Corners: corrected"
  */
-function reversedAxisWord(axis) {
-    return `${axisName(axis)}${WORD_JOINER}${axisModeName(AXIS_MODE.REVERSE)}`;
+function correctedAxisWord(axis) {
+    // Translators: %s is the axis name, e.g. "Corners".
+    return _('%s: corrected').format(axisName(axis));
 }
 
 /**
@@ -82,22 +77,16 @@ function isDecoratableKind(properties) {
 }
 
 /**
- * Which axes a window kind can even configure. Capability, not choice: a rule only
- * reverses a decision the runtime could act on, so an axis we are powerless on is
- * not offered at all.
+ * The shared capability answer, adapted from a rule key's own field names.
  * @param {{window_type:number,allows_resize:boolean,has_ssd:boolean}|null} properties
  * @returns {Record<string, boolean>}
  */
-function ruleAxisCapabilities(properties) {
-    const caps = {[RuleAxis.CORNERS]: false, [RuleAxis.SHADOW]: false, [RuleAxis.RESIZE]: false};
-    if (!isDecoratableKind(properties))
-        return caps;
-    caps[RuleAxis.CORNERS] = true;
-    caps[RuleAxis.SHADOW] = true;
-    // The compositor's own frame already owns the handles of an SSD window, so
-    // there is nothing here for the resize axis to reverse.
-    caps[RuleAxis.RESIZE] = properties.allows_resize !== false && !properties.has_ssd;
-    return caps;
+function keyAxisCapabilities(properties) {
+    return ruleAxisCapabilities({
+        windowType: Number(properties?.window_type ?? WindowType.NORMAL),
+        allowsResize: properties?.allows_resize !== false,
+        hasSsd: Boolean(properties?.has_ssd),
+    });
 }
 
 // Translators: Shown where no rule axis applies at all.
@@ -127,17 +116,17 @@ function axisUnavailableReason(axis, decoratable = true, properties = null) {
 }
 
 /**
- * Compact per-axis state for toasts, e.g. "Corners reversed, Shadow reversed".
+ * The axes a state corrects, for toasts, e.g. "Corners, Shadow".
  * @param {string} state Canonical stored state
  * @returns {string}
  */
 function ruleSummaryText(state) {
-    const reversed = parseRuleState(state);
-    if (!reversed)
+    const corrected = parseRuleState(state);
+    if (!corrected)
         return state;
     return RULE_AXES
-        .filter(axis => reversed.has(axis))
-        .map(axis => reversedAxisWord(axis))
+        .filter(axis => corrected.has(axis))
+        .map(axis => axisName(axis))
         .join(', ');
 }
 
@@ -354,18 +343,18 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // See docs/rule-model.md - a rule names the axes to reverse.
+        // See docs/rule-model.md - a rule corrects the automatic decision on the axes it names.
         const pickButton = new Gtk.Button({
             icon_name: 'find-location-symbolic',
-            tooltip_text: _('Pick a window to add a rule'),
+            tooltip_text: _('Pick a window that looks wrong'),
             valign: Gtk.Align.CENTER,
             margin_start: 18,
         });
-        pickButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Pick a window to add a rule')]);
+        pickButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Pick a window that looks wrong')]);
 
         const rulesGroup = new Adw.PreferencesGroup({
-            title: asMarkup(_('Window Rules')),
-            description: asMarkup(_('Per-window-kind rules that reverse the automatic decoration')),
+            title: asMarkup(_('Corrections')),
+            description: asMarkup(_('Per window kind - where the automatic decision was wrong; anything not listed follows it')),
             header_suffix: pickButton,
         });
         page.add(rulesGroup);
@@ -382,12 +371,12 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
             // Count in header avoids opening group to see if it has items.
             rulesGroup.title = entries.length > 0
-                ? `${asMarkup(_('Window Rules'))} <span size="small" alpha="55%">· ${entries.length}</span>`
-                : asMarkup(_('Window Rules'));
+                ? `${asMarkup(_('Corrections'))} <span size="small" alpha="55%">· ${entries.length}</span>`
+                : asMarkup(_('Corrections'));
 
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
-                    title: asMarkup(_('Use the button above to pick a window and add a rule')),
+                    title: asMarkup(_('Use the button above to pick a window that looks wrong')),
                     sensitive: false,
                 });
                 rulesGroup.add(emptyRow);
@@ -429,35 +418,27 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             });
         };
 
-        // Adwaita toggle group with labels: the platform's own segmented control.
-        // A rule only reverses the automatic decision, so an axis has two positions.
-        const buildAxisSegment = (axis, reversed, onChange) => {
-            const group = new Adw.ToggleGroup({
-                homogeneous: true,
-                valign: Gtk.Align.CENTER,
+        // The platform's own switch: an axis is binary (follow the decision, or correct it),
+        // and the row's title names the correction, so its state is unambiguous.
+        const buildAxisSwitch = (axis, corrected, onChange) => {
+            const switchRow = new Adw.SwitchRow({
+                title: asMarkup(axisCorrectionName(axis)),
+                active: corrected.has(axis),
             });
-            for (const mode of [AXIS_MODE.AUTOMATIC, AXIS_MODE.REVERSE])
-                group.add(new Adw.Toggle({name: mode, label: axisModeName(mode)}));
-            group.set_active_name(reversed.has(axis) ? AXIS_MODE.REVERSE : AXIS_MODE.AUTOMATIC);
-            // Translators: %s is the axis name, e.g. "Corners".
-            group.update_property([Gtk.AccessibleProperty.LABEL], [_('%s setting').format(axisName(axis))]);
-            group.connect('notify::active-name', () => {
-                const active = group.get_active_name();
-                if (active)
-                    onChange(axis, active === AXIS_MODE.REVERSE);
-            });
-            return group;
+            switchRow.update_property([Gtk.AccessibleProperty.LABEL], [axisCorrectionName(axis)]);
+            switchRow.connect('notify::active', () => onChange(axis, switchRow.active));
+            return switchRow;
         };
 
         const buildRuleRow = (ruleKey, state) => {
             const {baseWmClass, properties} = parseRuleKey(ruleKey);
             const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
             const name = appInfo?.name || baseWmClass || ruleKey;
-            const reversed = parseRuleState(state) ?? new Set();
-            const caps = ruleAxisCapabilities(properties);
+            const corrected = parseRuleState(state) ?? new Set();
+            const caps = keyAxisCapabilities(properties);
             const decoratable = isDecoratableKind(properties);
 
-            // The suffix shows one icon per reversed axis, and nothing for an axis that
+            // The suffix shows one icon per corrected axis, and nothing for an axis that
             // still follows the decision: presence is the whole state, so the icon wears
             // no colour of its own. Tooltips state the same in words, so the channel is
             // never colour alone.
@@ -469,7 +450,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     valign: Gtk.Align.CENTER,
                 });
             };
-            const fillAxisIcons = (box, reversedAxes) => {
+            const fillAxisIcons = (box, correctedAxes) => {
                 let child = box.get_first_child();
                 while (child) {
                     const next = child.get_next_sibling();
@@ -478,9 +459,9 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 }
                 const tips = [];
                 for (const axis of RULE_AXES) {
-                    if (!caps[axis] || !reversedAxes.has(axis))
+                    if (!caps[axis] || !correctedAxes.has(axis))
                         continue;
-                    const word = reversedAxisWord(axis);
+                    const word = correctedAxisWord(axis);
                     const icon = axisImage(axis);
                     icon.set_tooltip_text(word);
                     icon.update_property([Gtk.AccessibleProperty.LABEL], [word]);
@@ -503,7 +484,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
 
             const iconBox = new Gtk.Box({spacing: 8, valign: Gtk.Align.CENTER});
-            fillAxisIcons(iconBox, reversed);
+            fillAxisIcons(iconBox, corrected);
 
             // ExpanderRow prepends suffixes to keep its arrow last, so add in
             // reverse visual order: [icons] … [delete][chevron].
@@ -512,9 +493,9 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 css_classes: ['flat', 'destructive-action'],
                 valign: Gtk.Align.CENTER,
                 margin_start: 12,
-                tooltip_text: _('Remove Rule'),
+                tooltip_text: _('Restore the automatic decision'),
             });
-            deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Remove Rule')]);
+            deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Restore the automatic decision')]);
             deleteButton.connect('clicked', () => {
                 const rules = getWindowRules(settings);
                 delete rules[ruleKey];
@@ -524,11 +505,11 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             row.add_suffix(deleteButton);
             row.add_suffix(iconBox);
 
-            const onAxisChange = (axis, isReversed) => {
+            const onAxisChange = (axis, isCorrected) => {
                 const storedRules = getWindowRules(settings);
                 const current = parseRuleState(storedRules[ruleKey]) ?? new Set();
                 const next = new Set(current);
-                if (isReversed)
+                if (isCorrected)
                     next.add(axis);
                 else
                     next.delete(axis);
@@ -543,15 +524,8 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 fillAxisIcons(iconBox, parseRuleState(canonical));
             };
 
-            // The kind sentence in the header already says what the rule applies to; this
-            // line gives the two positions below their meaning, and the body then carries
-            // only the axes.
-            row.add_row(new Adw.ActionRow({
-                title: asMarkup(_('Each axis follows the automatic decision; reverse the ones you disagree with')),
-                title_lines: 2,
-                sensitive: false,
-            }));
-
+            // The kind sentence in the header already says what the rule applies to; the
+            // group description says what the switches do, so the body is only the axes.
             for (const axis of RULE_AXES) {
                 if (!caps[axis]) {
                     // Left-right structure kept: title takes its natural width, the
@@ -580,10 +554,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     row.add_row(unavailableRow);
                     continue;
                 }
-                const axisRow = new Adw.ActionRow({title: asMarkup(axisName(axis))});
-                axisRow.update_property([Gtk.AccessibleProperty.LABEL], [axisName(axis)]);
-                axisRow.add_suffix(buildAxisSegment(axis, reversed, onAxisChange));
-                row.add_row(axisRow);
+                row.add_row(buildAxisSwitch(axis, corrected, onAxisChange));
             }
 
             return row;
@@ -613,7 +584,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
                 if (!ruleKey) {
                     window.add_toast(new Adw.Toast({
-                        title: _('No rule added: this window could not be identified'),
+                        title: _('No correction added: this window could not be identified'),
                     }));
                     return;
                 }
@@ -626,28 +597,28 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                // The inspector sends the correction to make, as the axes to reverse.
-                // An extension too old to judge sends nothing, and the runtime's own rule
-                // is applied here (`hasUnclearableShadow`): the corners, plus the shadow
-                // unless the window keeps a Mutter X11 shadow that cannot be cleared.
+                // The inspector sends the axes to correct. No answer means an extension
+                // too old to judge (a Shell that has not reloaded since an update): the
+                // pick is refused rather than guessed at.
                 const suggested = typeof props.suggestedState === 'string'
                     ? parseRuleState(props.suggestedState)
                     : null;
-                const fallback = [RuleAxis.CORNERS];
-                if (!hasUnclearableShadow({
-                    hasSsd: props.hasSsd === 'true',
-                    isX11: props.clientType === 'x11',
-                    hasRing: props.hasRing === 'true',
-                }))
-                    fallback.push(RuleAxis.SHADOW);
-                const state = buildRuleState(suggested ?? fallback);
-
-                if (props.suggestedStateWouldChange === 'false') {
+                if (!suggested) {
                     window.add_toast(new Adw.Toast({
-                        title: _('No rule added: it would have no effect on a window of this kind'),
+                        title: _('No correction added: the extension did not answer - restart the session and pick again'),
                     }));
                     return;
                 }
+
+                // The picker's own pre-flight: a reversal of nothing stores no rule.
+                if (props.suggestedStateWouldChange === 'false') {
+                    window.add_toast(new Adw.Toast({
+                        title: _('No correction added: it would have no effect on a window of this kind'),
+                    }));
+                    return;
+                }
+
+                const state = buildRuleState(suggested);
 
                 const existingRules = getWindowRules(settings);
                 const isExisting = Object.prototype.hasOwnProperty.call(existingRules, ruleKey);
@@ -658,7 +629,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 // setWindowRules may drop what withRule staged.
                 if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
                     window.add_toast(new Adw.Toast({
-                        title: _('No rule added: the rule could not be saved'),
+                        title: _('No correction added: it could not be saved'),
                     }));
                     return;
                 }
@@ -670,8 +641,8 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 const name = appInfo?.name || baseWmClass || ruleKey;
 
                 const toastTitle = isExisting
-                    ? _('Rule updated for %s: %s').format(name, ruleSummaryText(state))
-                    : _('Rule added for %s: %s').format(name, ruleSummaryText(state));
+                    ? _('Correction updated for %s: %s').format(name, ruleSummaryText(state))
+                    : _('Correction added for %s: %s').format(name, ruleSummaryText(state));
 
                 window.add_toast(new Adw.Toast({
                     title: toastTitle,
@@ -681,7 +652,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 if (props.isMaximized === 'true' || props.isFullscreen === 'true' ||
                     props.hasTileMatch === 'true') {
                     window.add_toast(new Adw.Toast({
-                        title: _('The rule takes effect once the window is restored'),
+                        title: _('The correction takes effect once the window is restored'),
                     }));
                 }
             });

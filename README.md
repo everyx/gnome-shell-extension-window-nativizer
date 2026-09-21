@@ -70,20 +70,20 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 
 ---
 
-## Window Rules
+## Corrections
 
-Window Nativizer automatically handles most applications, but you can override its judgement per window:
+Window Nativizer automatically handles most applications, but you can correct its judgement per window:
 
-Each rule names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window, and the extension does the opposite on those axes. An axis the rule does not name keeps following the decision, so a rule is always a real change rather than a restatement of what already happens.
+Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
 
-| Reversed axis | Typical Use Case |
+| Corrected axis | Typical Use Case |
 | :--- | :--- |
-| Nothing | Default. The automatic decision stands; most windows need no rule at all |
+| Nothing | Default. The automatic decision stands; most windows need no correction at all |
 | Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
 | Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
 | Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
-To fix a misbehaving window, open **Preferences** and click **Pick Window** to generate a rule with one click.
+To correct a window that looks wrong, open **Preferences** and use the pick button in **Corrections**.
 
 [Learn more about the rule model →](docs/rule-model.md)
 

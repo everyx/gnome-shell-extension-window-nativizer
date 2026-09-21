@@ -86,8 +86,8 @@ absolute pin could only ever restate it or contradict it. Restating it is a no-o
 has to be re-checked every time the heuristic moves; contradicting it is what a reversal
 already means. Only the disagreement carries information, it stays meaningful when the
 decision changes underneath, and the user can express it without first working out what
-the decision was. The preferences window offers the two positions as *Automatic* and
-*Reverse*.
+the decision was. The preferences window calls this *correcting a misjudgement*: an axis
+row reads "Correct X", and its switch inverts that axis's decision.
 
 A rule reverses only what it names. `corners` leaves the shadow to the decision, which
 still takes it over when the corners it rounds were painted over the client's ring.
@@ -141,47 +141,44 @@ could never match it at runtime.
 
 ## The pick heuristic
 
-Picking a window means "this looks wrong", so the picker proposes the state that
-corrects what the window currently shows.
+Picking a window is the user telling us our judgement is wrong for this kind, so the pick
+corrects every axis at once: it turns our automatic decisions off rather than retracting
+only what happens to be on screen. A window we left square because it looked native comes
+back rounded, because those corners were the judgement the user disagreed with.
 
 ### Never-Maintain-Status-Quo Principle
 
 A user actively invoking the window picker to add a rule is demonstrably dissatisfied
-with how the window currently looks. Therefore, the suggestion must **never maintain
-the status quo** (i.e. it must never suggest a no-op state that keeps the window as-is).
-Instead, it chooses the state that inverts or breaks the current presentation:
+with how the window currently looks. A pick therefore never produces a rule that changes
+nothing: the suggestion is the full correction below, and a kind no axis can act on is
+refused rather than stored.
 
-- **State 2 (Decorated / Taken over)**: Any axis of ours is currently effective
-  (`drawShadow || drawClip || drawResize`).
-  → **Reverse each effective axis**, leaving the rest on the decision. The user picked an
-  already-decorated window because our override caused issues (e.g. black clipping
-  artifacts, shadow collision, performance glitch); the smallest break is to retract
-  exactly what is on screen.
-- **State 1 (Untouched / Native-like)**: No axis of ours is currently effective.
-  → **Reverse the corners**, plus the shadow unless it is an unclearable Mutter X11
-  shadow (that would paint a double shadow). The resize axis is never reversed by
-  default: bare windows already get the band from the decision, so reversing it
-  would retract a band the user just gained - and a fixed-ratio popup reverses it
-  by hand instead.
-  The user picked an undecorated window because they want this extension to step in.
+**Correct every axis this kind can be corrected on**, and name nothing else. An axis the
+runtime could not act on (the resize axis of an SSD frame or a fixed-size window, any axis
+of a menu) is left out, because a rule naming it could not take effect.
+
+`ruleAxisCapabilities()` is the one answer to "can this kind be corrected on this axis",
+shared by the picker and by the preferences window's switches, so a suggestion can never
+name an axis the window would not offer.
 
 ### Normalization and safety
 
 The suggestion follows the window's **kind** — the transient state (maximized, tiled,
-fullscreen) is normalized away by `kindParams()`, because a rule outlives transient states.
+fullscreen) is normalized away, because a rule outlives transient states.
 
 The guess is safe and ergonomic because:
-1. **Never a no-op**: Under the "never maintain status quo" principle, State 1 reverses at
-   least the corners and State 2 reverses at least one axis, so every valid pick
-   produces a tangible, actionable change.
+1. **Never a no-op**: the suggestion names every axis the kind can be corrected on, and the
+   pre-flight below refuses any state that would change nothing — a kind already corrected
+   this way, or one whose remaining axes the runtime gates (fractional scale with crisp
+   text, for the corners).
 2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused
-   and expanded, and each axis offers Automatic / Reverse for instant adjustment.
+   and expanded, and each axis carries a switch that corrects it - deleting the row
+   restores the automatic decision.
 3. **Pre-flight verification**: The extension re-evaluates the proposed state via
    `suggestedRuleWouldChange()` before storing, refusing any rule that would have no physical
    effect on the target window kind. `suggestedRuleState()` and `suggestedRuleWouldChange()`
    in `detector.js` are pure and unit-tested; the inspector passes both answers over D-Bus with
    the picked window's properties (transient state rides along so prefs can toast that the rule
-   applies on restore), and an absent answer means an extension too old to judge, in which case
-   prefs reverses the corners - the shadow too, unless a bare X11 window whose Mutter shadow
-   cannot be cleared.
+   applies on restore). A pick with no answer at all - a Shell that has not reloaded since an
+   update - is refused too, rather than guessed at.
 
