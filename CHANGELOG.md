@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.1...v0.6.0) (2026-09-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **rules:** rules stored in the previous form are dropped, not migrated. A rule is now a per-axis reversal written as 'corners,shadow', the resize band is one of its axes, the old resize-band setting is gone, and the rule key gained has_ssd - re-add a rule from Preferences if one of yours disappears.
+
+### Features
+
+* **prefs:** label the pick button, and stop showing internals ([cfde3e3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cfde3e3f0dac2149a2542d7d24fc2d296f022ec0))
+* **prefs:** show the window a rule was picked from ([dfdb668](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dfdb66856d81911a8e55822fa9d631105ba16e33))
+* **resize:** band bare windows by default, opt out per kind ([4d261ed](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4d261edba80da5e397d3fec758b9fb2aa92228f3))
+* **rules:** correct every axis on a pick, and name the rows corrections ([990ff0f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/990ff0fa71801bcaa18a791d6835a66d7056eb51))
+* **rules:** distinguish windows with and without declared margin rings via has_ring ([592e00e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/592e00ed7ba49726c5b2f743b34ad5e38a918e2d))
+* **rules:** override each decoration axis by reversing the automatic decision ([7ca1e37](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7ca1e37f1f893a87deba7b42a7b4ebec04f89cb5))
+
 ## [0.5.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.0...v0.5.1) (2026-09-19)
 
 
