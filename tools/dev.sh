@@ -5,6 +5,7 @@
 #   ./tools/dev.sh log          # Streams nested shell log (Ctrl+C to exit)
 #   ./tools/dev.sh app <cmd>    # Launches test application inside nested session (same WAYLAND_DISPLAY)
 #   ./tools/dev.sh ext <subcmd> # Runs gnome-extensions command inside nested session D-Bus
+#   ./tools/dev.sh dconf <args> # Runs dconf against the nested session's own settings database
 #   ./tools/dev.sh stop         # Stops nested shell
 #
 # Safety principles (never kill the main desktop gnome-shell):
@@ -63,16 +64,37 @@ cmd_app() {
     env WAYLAND_DISPLAY="$WL_DISPLAY" "$@"
 }
 
+# The nested session's own bus address, read from the shell process. Anything that has
+# to reach the nested session rather than the developer's desktop needs this.
+nested_bus() {
+    local pid
+    pid="$(cat "$PIDFILE")"
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true
+}
+
 cmd_ext() {
     cmd_shell
     # Run gnome-extensions inside nested session D-Bus (must go through nested shell's own bus)
     echo ">> [nested-dbus] gnome-extensions $*"
-    pid="$(cat "$PIDFILE")"
-    bus="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true)"
+    local bus
+    bus="$(nested_bus)"
     if [[ -n "$bus" ]]; then
         env XDG_CONFIG_HOME="$XDG_CONFIG_HOME" DBUS_SESSION_BUS_ADDRESS="$bus" gnome-extensions "$@"
     else
-        echo "!! Cannot find nested session bus address, please verify with ./dev.sh shell"; exit 1
+        echo "!! Cannot find nested session bus address, please verify with $0 shell"; exit 1
+    fi
+}
+
+# A plain `dconf write` lands in the real desktop settings - see docs/development.md.
+cmd_dconf() {
+    cmd_shell
+    echo ">> [nested-dconf] dconf $*"
+    local bus
+    bus="$(nested_bus)"
+    if [[ -n "$bus" ]]; then
+        env XDG_CONFIG_HOME="$XDG_CONFIG_HOME" DBUS_SESSION_BUS_ADDRESS="$bus" dconf "$@"
+    else
+        echo "!! Cannot find nested session bus address, please verify with $0 shell"; exit 1
     fi
 }
 
@@ -92,6 +114,7 @@ case "${1:-}" in
     log) cmd_log ;;
     app) shift; cmd_app "$@" ;;
     ext) shift; cmd_ext "$@" ;;
+    dconf) shift; cmd_dconf "$@" ;;
     stop) cmd_stop ;;
-    *) echo "Usage: $0 {shell|log|app <cmd>|ext <subcmd>|stop}"; exit 1 ;;
+    *) echo "Usage: $0 {shell|log|app <cmd>|ext <subcmd>|dconf <args>|stop}"; exit 1 ;;
 esac
