@@ -59,7 +59,8 @@ For example:
 - `title` and `role` are deliberately *not* part of the key. They change while a window lives
   or across locales, so they cannot define a stable structural kind.
 
-The rules live in one settings key, `window-rules` (`a{ss}`), fingerprint → state. The
+The rules live in one settings key, `window-rules` (`a{sa{ss}}`), fingerprint →
+`{state, title}` - the state matching reads, and the display-only sample beside it. The
 old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
 a group plus a named axis has no equivalent in the axis form below. The `resize-band`
 master switch is gone too: the band is the resize axis, reversed per kind like the rest.
@@ -160,6 +161,17 @@ of a menu) is left out, because a rule naming it could not take effect.
 `ruleAxisCapabilities()` is the one answer to "can this kind be corrected on this axis",
 shared by the picker and by the preferences window's switches, so a suggestion can never
 name an axis the window would not offer.
+
+### What the pick remembers for the row
+
+The pick also records the title of the window it was made on, in the same entry as the rule
+(`window-rules` is a map to `{state, title}`), so a title cannot outlive its rule. It is a
+**sample of the kind**, not its name: the
+rule matches every window with the same fingerprint, and the kind can show a different title
+later. The preferences window shows it dimmed beside the app name, and says on
+hover where it came from. Nothing but that row reads it: `sanitizeRuleTitles()` folds it to
+one line, and the row ellipsizes it by width (`title_lines: 1`) - no character cap, which
+could not know the width. The entry goes when the rule goes.
 
 ### Normalization and safety
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 16:56+0800\n"
+"POT-Creation-Date: 2026-09-21 17:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,233 +18,238 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #. Translators: One of the three rule axes: rounded window corners.
-#: src/prefs.js:32
+#: src/prefs.js:34
 msgid "Corners"
 msgstr ""
 
 #. Translators: One of the three rule axes: the window shadow.
-#: src/prefs.js:34
+#: src/prefs.js:36
 msgid "Shadow"
 msgstr ""
 
 #. Translators: One of the three rule axes: the resize band around the window.
-#: src/prefs.js:36
+#: src/prefs.js:38
 msgid "Resize"
 msgstr ""
 
 #. Translators: A rule axis row: invert the automatic decision about the window's corners.
-#: src/prefs.js:48
+#: src/prefs.js:50
 msgid "Correct corners"
 msgstr ""
 
 #. Translators: A rule axis row: invert the automatic decision about the window shadow.
-#: src/prefs.js:50
+#: src/prefs.js:52
 msgid "Correct shadow"
 msgstr ""
 
 #. Translators: A rule axis row: invert the automatic decision about the resize band.
-#: src/prefs.js:52
+#: src/prefs.js:54
 msgid "Correct resize"
 msgstr ""
 
 #. Translators: %s is the axis name, e.g. "Corners".
-#: src/prefs.js:65
+#: src/prefs.js:67
 #, javascript-format
 msgid "%s: corrected"
 msgstr ""
 
-#: src/prefs.js:94
+#: src/prefs.js:96
 msgid "Windows of this type are never decorated"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:110
+#: src/prefs.js:112
 msgid "The window frame already handles resizing"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:113
+#: src/prefs.js:115
 msgid "No resize handle on fixed-size windows"
 msgstr ""
 
 #. Translators: A dialog window.
-#: src/prefs.js:136
+#: src/prefs.js:138
 msgid "dialog"
 msgstr ""
 
 #. Translators: A dialog that blocks its parent window.
-#: src/prefs.js:138
+#: src/prefs.js:140
 msgid "modal dialog"
 msgstr ""
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/prefs.js:140
+#: src/prefs.js:142
 msgid "utility window"
 msgstr ""
 
 #. Translators: A normal, top-level window.
-#: src/prefs.js:145
+#: src/prefs.js:147
 msgid "window"
 msgstr ""
 
-#: src/prefs.js:156
+#: src/prefs.js:158
 msgid "X11"
 msgstr ""
 
-#: src/prefs.js:156
+#: src/prefs.js:158
 msgid "Wayland"
 msgstr ""
 
 #. Translators: %s is the client type and the window type, e.g. "Wayland window".
-#: src/prefs.js:158
+#: src/prefs.js:160
 #, javascript-format
 msgid "%s %s"
 msgstr ""
 
 #. Translators: The window has no parent window.
-#: src/prefs.js:161
+#: src/prefs.js:163
 msgid "with no parent"
 msgstr ""
 
 #. Translators: The window is attached to its parent window.
-#: src/prefs.js:163
+#: src/prefs.js:165
 msgid "attached to its parent"
 msgstr ""
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/prefs.js:165
+#: src/prefs.js:167
 msgid "with a parent"
 msgstr ""
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/prefs.js:180
+#: src/prefs.js:182
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr ""
 
 #. Translators: A window the user cannot resize.
-#: src/prefs.js:183
+#: src/prefs.js:185
 msgid "fixed-size"
 msgstr ""
 
 #. Translators: A window the user can resize.
-#: src/prefs.js:187
+#: src/prefs.js:189
 msgid "resizable"
 msgstr ""
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/prefs.js:195
+#: src/prefs.js:197
 msgid "framed by the system"
 msgstr ""
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/prefs.js:198
+#: src/prefs.js:200
 msgid "without shadow margins"
 msgstr ""
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/prefs.js:203
+#: src/prefs.js:205
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr ""
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/prefs.js:207
+#: src/prefs.js:209
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr ""
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:295
+#: src/prefs.js:297
 msgid "Close"
 msgstr ""
 
-#: src/prefs.js:328
+#: src/prefs.js:330
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:334
+#: src/prefs.js:336
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:335
+#: src/prefs.js:337
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:340
+#: src/prefs.js:342
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:341
+#: src/prefs.js:343
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:354
+#: src/prefs.js:356
 msgid "Pick window"
 msgstr ""
 
 #. The tooltip carries what the label cannot - the scope. Restating the label
 #. ("pick a window") would be the noise the HIG warns about.
-#: src/prefs.js:359
+#: src/prefs.js:361
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:365
+#: src/prefs.js:367
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:366
+#: src/prefs.js:368
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr ""
 
-#: src/prefs.js:383
+#: src/prefs.js:386
 msgid "Use the button above to pick a window that looks wrong"
 msgstr ""
 
-#: src/prefs.js:499 src/prefs.js:501
+#: src/prefs.js:496
+#, javascript-format
+msgid "Picked from “%s”. This correction applies to every window of this kind."
+msgstr ""
+
+#: src/prefs.js:512 src/prefs.js:514
 msgid "Restore the automatic decision"
 msgstr ""
 
-#: src/prefs.js:577
+#: src/prefs.js:591
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:578
+#: src/prefs.js:592
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:590
+#: src/prefs.js:604
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:611
+#: src/prefs.js:625
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:619
+#: src/prefs.js:633
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
-#: src/prefs.js:635
+#: src/prefs.js:651
 msgid "No correction added: it could not be saved"
 msgstr ""
 
-#: src/prefs.js:647
+#: src/prefs.js:663
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr ""
 
-#: src/prefs.js:648
+#: src/prefs.js:664
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:658
+#: src/prefs.js:674
 msgid "The correction takes effect once the window is restored"
 msgstr ""

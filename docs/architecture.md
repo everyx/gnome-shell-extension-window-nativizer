@@ -274,12 +274,16 @@ clears style/outgoing and removes from container — idempotent for disable/relo
 ## Preferences (`src/prefs.js`)
 
 `prefs.js` runs in the preferences process with no window actors. It reads/writes
-`window-rules` via `lib/settings.js` and calls the extension over D-Bus (`PickWindow`).
+`window-rules` (a map to `{state, title}`) via `lib/settings.js` and calls the extension over
+D-Bus (`PickWindow`). `getWindowRules()` is the only view that hands the state out, so
+matching never reads the title the pick recorded beside it.
 Axis names, axis corrections and type nouns are thunks (`() => _('...')`) because the module
 loads before the prefs process binds the gettext domain — a plain `_()` would capture the
 untranslated string (`AXIS_NAMES`, `AXIS_CORRECTIONS`, `WINDOW_TYPE_NOUNS`).
 
-Each rule is an `Adw.ExpanderRow`: the header names the app, the subtitle the kind
+Each rule is an `Adw.ExpanderRow`: the header names the app and, for a rule that came from a
+pick, the title that window showed (dimmed, display only - see docs/rule-model.md),
+the subtitle the kind
 sentence, the suffix one bundled icon per **corrected** axis (`src/icons/`, drawn on the GNOME
 symbolic grid from one window: its rounded corner, the shadow it casts, the resize cursor's
 arrow; registered on a bare icon-theme search path as `*-symbolic` so recoloring applies

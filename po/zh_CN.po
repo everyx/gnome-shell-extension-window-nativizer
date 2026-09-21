@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 16:56+0800\n"
+"POT-Creation-Date: 2026-09-21 17:41+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -17,234 +17,239 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #. Translators: One of the three rule axes: rounded window corners.
-#: src/prefs.js:32
+#: src/prefs.js:34
 msgid "Corners"
 msgstr "圆角"
 
 #. Translators: One of the three rule axes: the window shadow.
-#: src/prefs.js:34
+#: src/prefs.js:36
 msgid "Shadow"
 msgstr "阴影"
 
 #. Translators: One of the three rule axes: the resize band around the window.
-#: src/prefs.js:36
+#: src/prefs.js:38
 msgid "Resize"
 msgstr "调整大小"
 
 #. Translators: A rule axis row: invert the automatic decision about the window's corners.
-#: src/prefs.js:48
+#: src/prefs.js:50
 msgid "Correct corners"
 msgstr "修正圆角"
 
 #. Translators: A rule axis row: invert the automatic decision about the window shadow.
-#: src/prefs.js:50
+#: src/prefs.js:52
 msgid "Correct shadow"
 msgstr "修正阴影"
 
 #. Translators: A rule axis row: invert the automatic decision about the resize band.
-#: src/prefs.js:52
+#: src/prefs.js:54
 msgid "Correct resize"
 msgstr "修正调整大小"
 
 #. Translators: %s is the axis name, e.g. "Corners".
-#: src/prefs.js:65
+#: src/prefs.js:67
 #, javascript-format
 msgid "%s: corrected"
 msgstr "%s：已修正"
 
-#: src/prefs.js:94
+#: src/prefs.js:96
 msgid "Windows of this type are never decorated"
 msgstr "此类窗口不做装饰"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:110
+#: src/prefs.js:112
 msgid "The window frame already handles resizing"
 msgstr "窗口边框已负责缩放"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:113
+#: src/prefs.js:115
 msgid "No resize handle on fixed-size windows"
 msgstr "不可调整大小的窗口没有抓手可配"
 
 #. Translators: A dialog window.
-#: src/prefs.js:136
+#: src/prefs.js:138
 msgid "dialog"
 msgstr "对话框"
 
 #. Translators: A dialog that blocks its parent window.
-#: src/prefs.js:138
+#: src/prefs.js:140
 msgid "modal dialog"
 msgstr "模态对话框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/prefs.js:140
+#: src/prefs.js:142
 msgid "utility window"
 msgstr "工具窗口"
 
 #. Translators: A normal, top-level window.
-#: src/prefs.js:145
+#: src/prefs.js:147
 msgid "window"
 msgstr "窗口"
 
-#: src/prefs.js:156
+#: src/prefs.js:158
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:156
+#: src/prefs.js:158
 msgid "Wayland"
 msgstr "Wayland"
 
 #. Translators: %s is the client type and the window type, e.g. "Wayland window".
-#: src/prefs.js:158
+#: src/prefs.js:160
 #, javascript-format
 msgid "%s %s"
 msgstr "%s %s"
 
 #. Translators: The window has no parent window.
-#: src/prefs.js:161
+#: src/prefs.js:163
 msgid "with no parent"
 msgstr "无父窗口"
 
 #. Translators: The window is attached to its parent window.
-#: src/prefs.js:163
+#: src/prefs.js:165
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/prefs.js:165
+#: src/prefs.js:167
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/prefs.js:180
+#: src/prefs.js:182
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/prefs.js:183
+#: src/prefs.js:185
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/prefs.js:187
+#: src/prefs.js:189
 msgid "resizable"
 msgstr "大小可调"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/prefs.js:195
+#: src/prefs.js:197
 msgid "framed by the system"
 msgstr "由系统绘制边框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/prefs.js:198
+#: src/prefs.js:200
 msgid "without shadow margins"
 msgstr "无阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/prefs.js:203
+#: src/prefs.js:205
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/prefs.js:207
+#: src/prefs.js:209
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:295
+#: src/prefs.js:297
 msgid "Close"
 msgstr "关闭"
 
-#: src/prefs.js:328
+#: src/prefs.js:330
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:334
+#: src/prefs.js:336
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:335
+#: src/prefs.js:337
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:340
+#: src/prefs.js:342
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:341
+#: src/prefs.js:343
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上跳过圆角（保留阴影），避免重采样带来的文字模糊与性能开销"
 
-#: src/prefs.js:354
+#: src/prefs.js:356
 msgid "Pick window"
 msgstr "选取窗口"
 
 #. The tooltip carries what the label cannot - the scope. Restating the label
 #. ("pick a window") would be the noise the HIG warns about.
-#: src/prefs.js:359
+#: src/prefs.js:361
 msgid "The correction applies to every window of its kind"
 msgstr "这条修正对此类所有窗口生效"
 
-#: src/prefs.js:365
+#: src/prefs.js:367
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs.js:366
+#: src/prefs.js:368
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr "按窗口种类——自动判断出错的地方；未列出的跟随自动判断"
 
-#: src/prefs.js:383
+#: src/prefs.js:386
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "点上面的按钮，选一个看起来不对的窗口"
 
-#: src/prefs.js:499 src/prefs.js:501
+#: src/prefs.js:496
+#, javascript-format
+msgid "Picked from “%s”. This correction applies to every window of this kind."
+msgstr "拾取自“%s”。这条修正对此类所有窗口生效。"
+
+#: src/prefs.js:512 src/prefs.js:514
 msgid "Restore the automatic decision"
 msgstr "恢复自动判断"
 
-#: src/prefs.js:577
+#: src/prefs.js:591
 msgid "Window Inspection Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:578
+#: src/prefs.js:592
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 
-#: src/prefs.js:590
+#: src/prefs.js:604
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:611
+#: src/prefs.js:625
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有回应 —— 请重启会话后重新选取"
 
-#: src/prefs.js:619
+#: src/prefs.js:633
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
-#: src/prefs.js:635
+#: src/prefs.js:651
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:647
+#: src/prefs.js:663
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:648
+#: src/prefs.js:664
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:658
+#: src/prefs.js:674
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"
