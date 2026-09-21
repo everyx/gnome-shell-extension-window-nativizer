@@ -3,6 +3,7 @@ import {WindowType} from './mutterRules.generated.js';
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
     CLIENT_TYPE_TOKEN_X11,
+    RULE_AXES,
     RuleAxis,
     buildRuleState,
     resolveRule,
@@ -104,7 +105,7 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
  * @param {boolean} [params.hasRing=false] - Whether the window declared a margin ring
  * @returns {boolean}
  */
-export function hasUnclearableShadow({hasSsd = false, isX11 = false, hasRing = false} = {}) {
+function hasUnclearableShadow({hasSsd = false, isX11 = false, hasRing = false} = {}) {
     return !hasSsd && isX11 && !hasRing;
 }
 
@@ -472,35 +473,34 @@ function kindParams(params) {
 }
 
 /**
- * Picker suggestion under the never-maintain-status-quo principle: retract exactly the axes
- * currently on screen, or step in on the ones that are not. See docs/rule-model.md § The
- * pick heuristic.
+ * Which axes a kind can be corrected on at all - the same answer the preferences window
+ * uses to decide whether to offer a switch. Capability, not choice: an axis the runtime
+ * cannot act on has no decision to reverse.
+ * @param {{windowType?: number, allowsResize?: boolean, hasSsd?: boolean}} [kind]
+ * @returns {Record<string, boolean>} Keyed by RuleAxis
+ */
+export function ruleAxisCapabilities({
+    windowType = WindowType.NORMAL, allowsResize = true, hasSsd = false,
+} = {}) {
+    const decoratable = isDecoratableWindowType(windowType);
+    return {
+        [RuleAxis.CORNERS]: decoratable,
+        [RuleAxis.SHADOW]: decoratable,
+        [RuleAxis.RESIZE]: decoratable && allowsResize !== false && !hasSsd,
+    };
+}
+
+/**
+ * Picker suggestion: correct every axis this kind can be corrected on. The user picked the
+ * window because it looks wrong, so the pick is the whole correction rather than the
+ * smallest one; an axis the kind cannot be corrected on is left out, because a rule naming
+ * it could not take effect. See docs/rule-model.md § The pick heuristic.
  * @param {WindowEvaluationParams} params
- * @returns {string} Canonical stored state, never ''
+ * @returns {string} Canonical stored state; '' when the kind can be corrected on nothing
  */
 export function suggestedRuleState(params) {
-    const kind = kindParams(params);
-    const {drawShadow, drawClip, drawResize} = evaluateWindowActions(kind);
-    if (drawShadow || drawClip || drawResize) {
-        // Retract exactly what is on screen: reverse those axes.
-        const reversed = [];
-        if (drawClip)
-            reversed.push(RuleAxis.CORNERS);
-        if (drawShadow)
-            reversed.push(RuleAxis.SHADOW);
-        if (drawResize)
-            reversed.push(RuleAxis.RESIZE);
-        return buildRuleState(reversed);
-    }
-
-    // Nothing of ours is on screen: step in, reversing the axes the heuristic kept off.
-    // The shadow stays out where Mutter's own X11 shadow cannot be cleared - reversing it
-    // would paint a second one.
-    const {sideW, sideH} = declaredSides(kind).declaringSides;
-    const reversed = [RuleAxis.CORNERS];
-    if (!hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, hasRing: sideW > 0 || sideH > 0}))
-        reversed.push(RuleAxis.SHADOW);
-    return buildRuleState(reversed);
+    const caps = ruleAxisCapabilities(params);
+    return buildRuleState(RULE_AXES.filter(axis => caps[axis]));
 }
 
 /**
