@@ -11,7 +11,7 @@ import {
     declaredSides, declaresOwnShadow,
 } from '../src/lib/detector.js';
 import {
-    RuleState, buildRuleKey,
+    buildRuleKey,
 } from '../src/lib/rules.js';
 import {
     buildRuleKeyFromProperties,
@@ -339,6 +339,26 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('too-small(1x1)');
     });
 
+    it('a window too small for corners keeps its band: the axes are independent', () => {
+        // 25px sits below MIN_DECORABLE_SIZE (30) but above MIN_BAND_WINDOW (24), so
+        // decoration is off while the band still fits - the resize axis must not inherit
+        // the decoration gate. The window declares a ring, which is where the band lives.
+        const res = evaluateWindowActions({
+            ...baseWin,
+            frameWidth: 25, frameHeight: 300,
+            insets: {left: 25, right: 25, top: 25, bottom: 25},
+        });
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
+        expect(res.drawResize).toBeTrue();
+        expect(res.reason).toBe('too-small(25x300)');
+    });
+
+    it('a kind that is never decorated gets no band either', () => {
+        const res = evaluateWindowActions({...baseWin, windowType: WindowType.DESKTOP});
+        expect(res.drawResize).toBeFalse();
+    });
+
     it('tiled window: flat corners, so no clip is drawn', () => {
         // The clip axis is on, but the tiled style is radius 0 with no outline, so
         // there is nothing to draw - the decision now lives in evaluateWindowActions().
@@ -494,86 +514,95 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('ring-cleared(has-csd(24.0x24.0))');
     });
 
-    // ---- user rules: a state names the axes that are ours ----
+    // ---- user rules: a state names the axes whose automatic decision is reversed ----
 
-    it('a both rule turns both axes on', () => {
+    it('a rule naming both decoration axes reverses both the heuristic drew', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            rules: {[buildRuleKey('custom-tool')]: 'both'},
+            rules: {[buildRuleKey('custom-tool')]: 'corners,shadow'},
         });
-        expect(res.drawShadow).toBeTrue();
-        expect(res.drawClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.clearRing).toBeFalse();
-        expect(res.reason).toBe('rule-applied(custom-tool:both)');
+        expect(res.drawResize).toBeFalse();
+        expect(res.reason).toBe('rule-applied(custom-tool:corners,shadow)');
     });
 
-    it('a none rule leaves the window exactly as the client drew it', () => {
+    it('a rule naming all three axes reverses each one', () => {
+        // A window with no ring: the two decoration axes turn off, and the band is the one
+        // axis this window's decision keeps off, so naming it is what turns one on.
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
-            rules: {[buildRuleKey('overlay-app')]: 'none'},
+            rules: {[buildRuleKey('overlay-app')]: 'corners,shadow,resize'},
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
         expect(res.clearRing).toBeFalse();
-        expect(res.reason).toBe('rule-applied(overlay-app:none)');
+        expect(res.drawResize).toBeTrue();
+        expect(res.reason).toBe('rule-applied(overlay-app:corners,shadow,resize)');
     });
 
-    it('a corners rule rounds the window and leaves its shadow alone', () => {
+    it('reversing the shadow leaves the heuristic\'s corners: a rounded window without our shadow', () => {
+        // The baseline draws both axes, so naming the shadow turns ours off while the
+        // corners follow the heuristic and stay ours.
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'corners'},
+            rules: {[buildRuleKey('wechat')]: 'shadow'},
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeTrue();
-        expect(res.reason).toBe('rule-applied(wechat:corners)');
+        expect(res.reason).toBe('rule-applied(wechat:shadow)');
     });
 
-    it('a shadow rule draws our shadow and leaves the corners alone', () => {
+    it('reversing the corners leaves the heuristic\'s shadow', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            rules: {[buildRuleKey('custom-tool')]: 'shadow'},
+            rules: {[buildRuleKey('custom-tool')]: 'corners'},
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
-        expect(res.reason).toBe('rule-applied(custom-tool:shadow)');
+        expect(res.reason).toBe('rule-applied(custom-tool:corners)');
     });
 
-    it('a rule decides both axes outright, whatever the baseline said', () => {
-        // The ringed window's baseline is corners on / shadow off; each state still
-        // lands exactly where it says.
+    it('a rule reverses the named axes against the ringed window\'s baseline', () => {
+        // The ring makes the automatic decision corners on / shadow on: drawing our corners
+        // takes the client's shadow over. A rule reverses that decision, takeover included.
         const actionsFor = state => evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
             rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
         });
 
-        const both = actionsFor('both');
-        expect([both.drawShadow, both.drawClip]).toEqual([true, true]);
-
-        const none = actionsFor('none');
-        expect([none.drawShadow, none.drawClip]).toEqual([false, false]);
-
+        // Corners reversed off: neither our corners nor the takeover shadow are ours.
         const corners = actionsFor('corners');
-        expect([corners.drawShadow, corners.drawClip]).toEqual([false, true]);
+        expect([corners.drawShadow, corners.drawClip]).toEqual([false, false]);
 
+        // Shadow reversed: the takeover made it ours, so reversing retracts ours while
+        // the corners still follow the decision.
         const shadow = actionsFor('shadow');
-        expect([shadow.drawShadow, shadow.drawClip]).toEqual([true, false]);
+        expect([shadow.drawShadow, shadow.drawClip]).toEqual([false, true]);
+
+        // Both reversed: our shadow without our corners.
+        const both = actionsFor('corners,shadow');
+        expect([both.drawShadow, both.drawClip]).toEqual([true, false]);
     });
 
-    it('a both rule re-enables both axes on an x11-mutter-native-shadow baseline', () => {
+    it('reversing the shadow re-enables it on an x11-mutter-native-shadow baseline', () => {
+        // The baseline keeps Mutter's uncleatable X11 shadow off; naming the shadow
+        // reverses that reading and draws ours, with the heuristic's corners untouched.
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
             wmClass: 'wps',
-            rules: {[buildRuleKey('wps', {clientType: 'x11'})]: 'both'},
+            rules: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow'},
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeTrue();
-        expect(res.reason).toBe('rule-applied(wps:both)');
+        expect(res.reason).toBe('rule-applied(wps:shadow)');
     });
 
     it('rules cannot override structural ineligibility: maximized', () => {
@@ -581,7 +610,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             isMaximized: true,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'both'},
+            rules: {[buildRuleKey('wechat')]: 'corners,shadow,resize'},
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -593,7 +622,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             isFullscreen: true,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'both'},
+            rules: {[buildRuleKey('wechat')]: 'corners,shadow,resize'},
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -605,28 +634,32 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             windowType: WindowType.DOCK,
             wmClass: 'dock-app',
-            rules: {[buildRuleKey('dock-app', {windowType: WindowType.DOCK})]: 'both'},
+            rules: {[buildRuleKey('dock-app', {windowType: WindowType.DOCK})]: 'corners,shadow,resize'},
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe(`window-type=${WindowType.DOCK}`);
     });
 
-    it('a rule can leave an SSD window alone', () => {
-        const res = evaluateWindowActions({
-            ...baseWin,
-            hasSsd: true,
-            wmClass: 'legacy-x11',
-            rules: {[buildRuleKey('legacy-x11')]: 'none'},
+    it('has_ssd is part of the kind: an SSD window matches only its own key', () => {
+        const ssd = {...baseWin, hasSsd: true, wmClass: 'legacy-x11'};
+        // A rule written for the bare kind does not apply to the SSD kind...
+        const bare = evaluateWindowActions({
+            ...ssd,
+            rules: {[buildRuleKey('legacy-x11')]: 'corners'},
         });
-        expect(res.drawShadow).toBeFalse();
-        expect(res.drawClip).toBeFalse();
-        expect(res.reason).toBe('rule-applied(legacy-x11:none)');
+        expect(bare.reason).not.toContain('rule-applied');
+        // ...and the SSD kind's own key does.
+        const own = evaluateWindowActions({
+            ...ssd,
+            rules: {[buildRuleKey('legacy-x11', {hasSsd: true})]: 'corners'},
+        });
+        expect(own.reason).toBe('rule-applied(legacy-x11:corners)');
     });
 
     it('rule for one window kind leaves other kinds of the same app decorated', () => {
         const rules = {
-            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: 'none',
+            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: 'corners,shadow',
         };
 
         // Main window (top-level, resizable) is a different kind -> untouched
@@ -666,7 +699,7 @@ describe('evaluateWindowActions', () => {
 
     it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
         const rules = {
-            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'none',
+            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'corners,shadow',
         };
 
         const waylandChild = evaluateWindowActions({
@@ -712,35 +745,41 @@ describe('evaluateWindowActions', () => {
             rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
         }).clearRing;
 
-        expect(clearRingFor('both')).toBeTrue();
-        expect(clearRingFor('shadow')).toBeTrue();
-        // These two leave the shadow theirs, so the ring goes with it.
+        // The takeover makes the shadow ours, so reversing the shadow retracts it and the
+        // ring stays the client's. Reversing both drops the takeover and then reverses the
+        // client's own shadow instead, which is ours again.
+        expect(clearRingFor('shadow')).toBeFalse();
+        expect(clearRingFor('corners,shadow')).toBeTrue();
+        // Reversing the corners off leaves the client's shadow (and its ring) theirs.
         expect(clearRingFor('corners')).toBeFalse();
-        expect(clearRingFor('none')).toBeFalse();
     });
 
-    it('a corners rule keeps the client\'s own shadow, by explicit choice', () => {
+    it('reversing the corners leaves the client\'s own shadow and its ring alone', () => {
+        // Corners off means the ring takeover does not fire, so the client keeps both
+        // its shadow and the ring it was drawn with.
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
             rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'corners'},
         });
-        expect(res.drawClip).toBeTrue();
+        expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
         expect(res.clearRing).toBeFalse();
         expect(res.reason).toBe('rule-applied(gtk4-app:corners)');
     });
 
-    it('a shadow rule takes the ring over without rounding the corners', () => {
+    it('reversing both axes takes the ring over without our corners', () => {
+        // Corners reversed off + shadow reversed on: the ring becomes ours without
+        // rounding the window with our corners.
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'shadow'},
+            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'corners,shadow'},
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
         expect(res.clearRing).toBeTrue();
-        expect(res.reason).toBe('ring-cleared(rule-applied(gtk4-app:shadow))');
+        expect(res.reason).toBe('ring-cleared(rule-applied(gtk4-app:corners,shadow))');
     });
 
     it('applies exact size rule for fixed-size windows to differentiate dialogs', () => {
@@ -748,8 +787,8 @@ describe('evaluateWindowActions', () => {
         const toolbarKey = buildRuleKey('multi-dlg-app', {hasRing: true, allowsResize: false, width: 240, height: 48});
 
         const rules = {
-            [qrKey]: 'both',
-            [toolbarKey]: 'none',
+            [qrKey]: 'shadow',
+            [toolbarKey]: 'corners',
         };
 
         const qrWin = evaluateWindowActions({
@@ -760,8 +799,10 @@ describe('evaluateWindowActions', () => {
             wmClass: 'multi-dlg-app',
             rules,
         });
+        // The QR dialog's rule reverses the shadow, which retracts the takeover; the
+        // toolbar's reverses the corners, which drops the clip and the takeover with it.
         expect(qrWin.drawClip).toBeTrue();
-        expect(qrWin.drawShadow).toBeTrue();
+        expect(qrWin.drawShadow).toBeFalse();
 
         const toolbarWin = evaluateWindowActions({
             ...ringedWindow,
@@ -991,63 +1032,85 @@ describe('the pick heuristic', () => {
         allowsResize: 'true',
         isAttachedDialog: 'false',
         hasRing: String(!win.hasSsd && (win.bufferWidth > win.frameWidth || win.bufferHeight > win.frameHeight)),
+        hasSsd: String(Boolean(win.hasSsd)),
     });
 
     describe('suggestedRuleState', () => {
-        it('suggests none in State 2 when any axis is already ours (never maintain status quo)', () => {
-            expect(suggestedRuleState(plainWindow)).toBe(RuleState.NONE);
-            expect(suggestedRuleState(csdWindow)).toBe(RuleState.NONE);
+        it('reverses each effective axis in State 2 (never maintain status quo)', () => {
+            // plainWindow draws shadow and clip (no ring, so no band): both are reversed.
+            expect(suggestedRuleState(plainWindow)).toBe('corners,shadow');
+            // csdWindow carries a ring, so its band is reversed too.
+            expect(suggestedRuleState(csdWindow)).toBe('corners,shadow,resize');
         });
 
-        it('suggests both in State 1 when no axis is ours (never maintain status quo)', () => {
-            expect(suggestedRuleState(nativeWindow)).toBe(RuleState.BOTH);
+        it('reverses corners and shadow in State 1, leaving resize to the heuristic', () => {
+            // Bare SSD window whose corners already look like ours: nothing of ours
+            // is effective (no Mutter shadow to clear, no band on SSD), so the
+            // suggestion reverses both decoration axes and never resize.
+            const ssdNative = {
+                ...plainWindow, hasSsd: true, nativeLikeCorners: true, wmClass: 'ssd-adw-app',
+            };
+            expect(suggestedRuleState(ssdNative)).toBe('corners,shadow');
         });
 
-        it('suggests corners in State 1 when the shadow on screen is not ours to clear', () => {
-            // A bare X11 window (no declared margin) whose corners already look like
-            // ours: no axis is ours, and Mutter's shadow cannot be cleared, so `both`
-            // would add a second shadow on top of it.
+        it('reverses only the band when the band is all we draw', () => {
+            // nativeWindow draws nothing but a heuristic band: the minimal reversal
+            // is resize, with corners and shadow following the heuristic.
+            expect(suggestedRuleState(nativeWindow)).toBe('resize');
+        });
+
+        it('steps in on the corners when a bare X11 window draws nothing', () => {
+            // No ring, and corners that already look like ours: nothing of ours is on
+            // screen, so the suggestion reverses the corners - Mutter's X11 shadow stays
+            // unclearable, and the band needs a ring to live in.
             const x11Bare = {
                 ...plainWindow,
                 isX11: true,
                 nativeLikeCorners: true,
                 wmClass: 'x11-bare-adw-app',
             };
-            expect(suggestedRuleState(x11Bare)).toBe(RuleState.CORNERS);
+            expect(suggestedRuleState(x11Bare)).toBe('corners');
         });
 
-        it('still suggests both when the X11 window declares a ring we can clear', () => {
+        it('still reverses only the band when the X11 window declares a ring we never took', () => {
+            // Native-like corners plus a client-owned ring: neither decoration axis is
+            // ours, so the band is the whole complaint.
             const x11Ring = {...nativeWindow, isX11: true, wmClass: 'x11-csd-adw-app'};
-            expect(suggestedRuleState(x11Ring)).toBe(RuleState.BOTH);
+            expect(suggestedRuleState(x11Ring)).toBe('resize');
         });
 
         it('judges the kind, not the transient state the window is in', () => {
             // A maximized or tiled window is not decorated while it is in that state,
             // but the rule outlives it, so the suggestion follows the kind.
-            expect(suggestedRuleState({...plainWindow, isMaximized: true})).toBe(RuleState.NONE);
-            expect(suggestedRuleState({...plainWindow, hasTileMatch: true, tiled: true})).toBe(RuleState.NONE);
+            expect(suggestedRuleState({...plainWindow, isMaximized: true})).toBe('corners,shadow');
+            expect(suggestedRuleState({...plainWindow, hasTileMatch: true, tiled: true})).toBe('corners,shadow');
         });
 
         it('counts the rule already stored for the kind', () => {
             const decorated = {
                 ...nativeWindow,
-                rules: {[buildRuleKey('adw-app', {hasRing: true})]: 'both'},
+                // Naming corners makes the ring takeover draw the client's shadow, so
+                // the suggestion counts corners and shadow alongside the band.
+                rules: {[buildRuleKey('adw-app', {hasRing: true})]: 'corners'},
             };
-            expect(suggestedRuleState(decorated)).toBe(RuleState.NONE);
+            expect(suggestedRuleState(decorated)).toBe('corners,shadow,resize');
         });
     });
 
     describe('suggestedRuleWouldChange', () => {
-        it('reports no effect when storing both for a decoration we already draw', () => {
-            expect(suggestedRuleWouldChange(propertiesFor(plainWindow), plainWindow, 'both')).toBeFalse();
+        it('reports no effect when the state reverses nothing', () => {
+            // '' names no axis, so the automatic decisions stand and the rule is a no-op.
+            expect(suggestedRuleWouldChange(propertiesFor(plainWindow), plainWindow, '')).toBeFalse();
         });
 
-        it('reports no effect when storing both on a window whose ring the takeover clears anyway', () => {
-            expect(suggestedRuleWouldChange(propertiesFor(csdWindow), csdWindow, 'both')).toBeFalse();
+        it('reports an effect when reversing the shadow retracts the ring takeover', () => {
+            // csdWindow's automatic shadow is ours (the corner takeover drew it), so
+            // reversing the shadow axis retracts it - a real change.
+            expect(suggestedRuleWouldChange(propertiesFor(csdWindow), csdWindow, 'shadow')).toBeTrue();
         });
 
-        it('reports an effect when storing none for a window we decorate', () => {
-            expect(suggestedRuleWouldChange(propertiesFor(plainWindow), plainWindow, 'none')).toBeTrue();
+        it('reports an effect when reversing all three axes on a window we decorate', () => {
+            expect(suggestedRuleWouldChange(propertiesFor(plainWindow), plainWindow, 'corners,shadow,resize')).toBeTrue();
         });
 
         it('reports an effect when storing corners only for a window that draws its own shadow', () => {
@@ -1055,45 +1118,54 @@ describe('the pick heuristic', () => {
             expect(suggestedRuleWouldChange(propertiesFor(csdWindow), csdWindow, 'corners')).toBeTrue();
         });
 
-        it('reports no effect when the requested state is what we already do', () => {
-            expect(suggestedRuleWouldChange(propertiesFor(nativeWindow), nativeWindow, 'none')).toBeFalse();
+        it('reports no effect when the state names an axis the structure gates', () => {
+            // An SSD window has no band whatever the rule says, so reversing resize is inert.
+            const ssdNative = {...nativeWindow, hasSsd: true, wmClass: 'ssd-native'};
+            expect(suggestedRuleWouldChange(propertiesFor(ssdNative), ssdNative, 'resize')).toBeFalse();
+        });
+
+        it('reports an effect when reversing the band retracts it', () => {
+            // Reversing resize turns the heuristic's band off.
+            expect(suggestedRuleWouldChange(propertiesFor(nativeWindow), nativeWindow, 'resize')).toBeTrue();
         });
 
         it('reports no effect for a window type we never decorate', () => {
             const menu = {...plainWindow, windowType: WindowType.MENU};
 
-            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'both')).toBeFalse();
-            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'none')).toBeFalse();
+            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'corners,shadow')).toBeFalse();
+            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'corners,shadow,resize')).toBeFalse();
         });
 
         it('judges the rule against the kind, not the state the window is in', () => {
             // A maximized window is never decorated, but the rule outlives the state.
             const maximized = {...plainWindow, isMaximized: true};
-            expect(suggestedRuleWouldChange(propertiesFor(maximized), maximized, 'none')).toBeTrue();
+            expect(suggestedRuleWouldChange(propertiesFor(maximized), maximized, 'corners,shadow,resize')).toBeTrue();
         });
 
         it('preserves the hasSsd / nativeLikeCorners kind attributes while normalizing transient state', () => {
-            // Maximized (transient) is normalized away, but hasSsd (kind) is kept:
-            // leaving an SSD window alone still changes the outcome.
+            // Maximized (transient) is normalized away, but hasSsd (kind) is kept: the
+            // proposal is judged against the SSD kind's own key.
             const ssd = {...plainWindow, hasSsd: true, isMaximized: true, wmClass: 'xclock'};
-            expect(suggestedRuleWouldChange(propertiesFor(ssd), ssd, 'none')).toBeTrue();
-            // Corners that already look like ours are left alone, so asking to leave them
-            // alone changes nothing - maximized or not.
+            expect(propertiesFor(ssd).hasSsd).toBe('true');
+            expect(suggestedRuleWouldChange(propertiesFor(ssd), ssd, 'corners,shadow,resize')).toBeTrue();
+            // Corners that already look like ours are left alone - but reversing all three
+            // also retracts the heuristic band, so it still changes the outcome.
             const nativeLike = {...csdWindow, nativeLikeCorners: true, isMaximized: true, wmClass: 'adw-app'};
-            expect(suggestedRuleWouldChange(propertiesFor(nativeLike), nativeLike, 'none')).toBeFalse();
+            expect(suggestedRuleWouldChange(propertiesFor(nativeLike), nativeLike, 'corners,shadow,resize')).toBeTrue();
+            expect(suggestedRuleWouldChange(propertiesFor(nativeLike), nativeLike, '')).toBeFalse();
         });
 
         it('a suggestion can still be a no-op, and the picker refuses it', () => {
             // A menu is structurally ineligible, so the suggestion to decorate it is inert.
             const menu = {...plainWindow, windowType: WindowType.MENU};
             const state = suggestedRuleState(menu);
-            expect(state).toBe(RuleState.BOTH);
+            expect(state).toBe('corners,shadow');
             expect(suggestedRuleWouldChange(propertiesFor(menu), menu, state)).toBeFalse();
         });
 
         it('returns null when the window declares no identity', () => {
             const anonymous = {...plainWindow, wmClass: ''};
-            expect(suggestedRuleWouldChange(propertiesFor(anonymous), anonymous, 'both')).toBeNull();
+            expect(suggestedRuleWouldChange(propertiesFor(anonymous), anonymous, 'corners,shadow')).toBeNull();
         });
 
         it('keys the rule the way the runtime looks it up', () => {

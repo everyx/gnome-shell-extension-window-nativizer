@@ -139,7 +139,7 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 |---|---|
 | [decoration-model.md](decoration-model.md) | how a window's decoration is decided, and where it diverges from Mutter on purpose |
 | [decoration-alignment.md](decoration-alignment.md) | how the decoration is measured against libadwaita, what is verified, and what is still open |
-| [rule-model.md](rule-model.md) | the rule key and value format, the four states, identity resolution |
+| [rule-model.md](rule-model.md) | the rule key and state format, the reversed axes, identity resolution |
 | [architecture.md](architecture.md) | modules, the two processes, the actors |
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
 

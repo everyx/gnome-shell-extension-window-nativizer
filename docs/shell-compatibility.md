@@ -69,7 +69,7 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   adds is `reactive: false` except the band's four strip children, which exist to start a
   resize grab, and the picker's full-stage overlay (`lib/inspector.js`), which is reactive and
   takes `button-press-event` under a `pushModal` grab for the duration of a pick.
-  `decoration-model.md` § The resize band records what that costs and how to turn it off.
+  `decoration-model.md` § The resize band records what that costs and how to reverse it per kind.
 - **`enable()` and `disable()` are idempotent.** After `disable()` nothing of ours
   remains: no connected signals, no actors, no pending sources.
 - **Signals that may not exist are connected in "safe" mode.** Window- and

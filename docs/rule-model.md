@@ -1,24 +1,24 @@
 # The rule model
 
-A rule is keyed by an application identity plus six structural attributes of the
-window, and its state names which decoration axes are ours. The picker writes rules,
-the runtime matches them, and the settings layer sanitises them; this is the shared
-description of what a key means.
+A rule is keyed by an application identity plus seven structural attributes of the
+window, and its state names the axes whose automatic decision the user reversed. The
+picker writes rules, the runtime matches them, and the settings layer sanitises them;
+this is the shared description of what a key means.
 
 ## Key grammar
 
-    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>,has_ring=<bool>[,size=<W>x<H>]
+    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>,has_ring=<bool>,has_ssd=<bool>[,size=<W>x<H>]
 
 For example:
 
     # Firefox main browser window (declares client shadow ring):
-    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true
+    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false
 
     # Firefox Picture-in-Picture (PiP) window (compact borderless video surface without shadow margin ring):
-    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false
+    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false
 
     # Fixed-size dialog with explicit dimensions:
-    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,size=360x420
+    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420
 
 - Field **order is part of the format**: `rules.js` renders it canonically, so string
   comparison is enough to match.
@@ -28,9 +28,15 @@ For example:
   (such as Firefox Picture-in-Picture), or borderless utility windows do not declare any shadow margin
   ring (`buffer_rect === frame_rect`). Incorporating `has_ring` separates these two kinds cleanly,
   preventing rules intended for browser main windows from unintentionally clipping or darkening PiP video surfaces.
-- **Backward compatibility and fallback**: `VALID_RULE_KEY_PATTERN` accepts both the standard 6-field
-  grammar and legacy 5-field keys (without `has_ring`). When resolving rules, `resolveRule()` first attempts
-  an exact match against the 6-field key; if absent, it gracefully falls back to a legacy 5-field rule.
+- **Backward compatibility**: none. The key and the state grammar are the current
+  shape only — an older key or an older state is dropped rather than migrated, which is
+  what an unreleased model may do.
+- **`has_ssd=<bool>` names a kind the compositor frames itself**: Mutter's own
+  `Meta.Window.decorated` is true when it drew the frame (`mutter-x11-frames`), and that
+  frame — not the client — runs the resize grab. The flag is part of the key so the
+  preferences window can tell the kind apart and not offer a resize axis it could never
+  act on. It is a policy flag, the best reading the GJS side has; an application that
+  switches decoration mode becomes a different kind.
 - An **attached dialog always has a parent** — Mutter only attaches a transient whose
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies
@@ -55,30 +61,40 @@ For example:
 
 The rules live in one settings key, `window-rules` (`a{ss}`), fingerprint → state. The
 old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
-a group plus a named axis has no equivalent in the four states below.
+a group plus a named axis has no equivalent in the axis form below. The `resize-band`
+master switch is gone too: the band is the resize axis, reversed per kind like the rest.
 
-## State grammar: the four states
+## State grammar: the axes a rule reverses
 
-The state names the axes that are ours, and only these four are valid:
+A rule exists because the automatic decision is wrong for one window kind. Its state
+names the axes to **reverse** — the runtime flips its own reading on each of them — in
+canonical order, e.g. `corners,shadow`. An axis that is not named follows the automatic
+decision, and a state naming nothing is the same as no rule, so it is never stored.
+`parseRuleState()` and `buildRuleState()` in `rules.js` are the only place this grammar
+is spelled out, so the settings layer, the picker and the runtime cannot disagree about
+it.
 
-| State | Corners | Shadow | What it does |
-|---|---|---|---|
-| `both` | ours | ours | we round the window and draw its shadow |
-| `none` | theirs | theirs | we draw neither; the window stays exactly as the client drew it |
-| `corners` | ours | theirs | we round it; its own shadow stays untouched |
-| `shadow` | theirs | ours | we take its shadow over; its corners stay |
+Single principle: the user's disagreement beats the decision, wherever they disagree.
+Each axis has exactly one decision and one way to overrule it, so a rule can never
+record a no-op: naming an axis always changes something. Capability is not priority:
+structural facts (window type, maximized/fullscreen, unresizable windows, SSD frames)
+decide what *can* be done, and a reversal never overrides them — an axis the runtime
+could not act on is not offered in the first place.
 
-`parseRuleState()` and `buildRuleState()` in `rules.js` are the only place this
-grammar is spelled out, so the settings layer, the picker and the runtime cannot
-disagree about it.
+Why a reversal rather than a value: the automatic decision is fixed for a kind, so an
+absolute pin could only ever restate it or contradict it. Restating it is a no-op, and it
+has to be re-checked every time the heuristic moves; contradicting it is what a reversal
+already means. Only the disagreement carries information, it stays meaningful when the
+decision changes underneath, and the user can express it without first working out what
+the decision was. The preferences window offers the two positions as *Automatic* and
+*Reverse*.
 
-A rule names *both* axes even when it leaves one to the client: there is no rule that
-touches only one axis and lets the inference answer for the other. `corners` is a
-complete statement that the shadow is theirs, not a partial one. Taking the shadow of a
-client that declared a ring (`buffer_rect - frame_rect`) is the one takeover that
-borrows the other axis: clearing that ring is the clip's job, so `shadow` still attaches
-the clip, at radius 0, and leaves the corners as the client drew them. The boundaries are
-listed in [decoration-model.md](decoration-model.md).
+A rule reverses only what it names. `corners` leaves the shadow to the decision, which
+still takes it over when the corners it rounds were painted over the client's ring.
+Taking the shadow of a client that declared a ring (`buffer_rect - frame_rect`) is the
+one takeover that borrows the other axis: clearing that ring is the clip's job, so a
+shadow-only reversal still attaches the clip, at radius 0, and leaves the corners as the
+client drew them. The boundaries are listed in [decoration-model.md](decoration-model.md).
 
 ## One rule per window kind
 
@@ -90,13 +106,14 @@ self-decorated where others are not. An app-wide rule would have to be wrong for
 of them, so the picker writes exactly the kind it was pointed at and nothing else.
 
 There is no direction any more, and so no collision to resolve: one kind has one row,
-and that row says what the window ends up with on both axes. A rule overrides the
-inferred baseline and nothing else — never the structural facts (window type,
-maximized/fullscreen), never a user preference, never a policy. The same direction
-guides the override layers themselves: we overrule the user only where honouring the
-request would be meaningless — a structural disqualifier, a window state (maximized,
-tiled, matched), or a window the user cannot see — never where the request is merely
-imperfect. See [decoration-model.md](decoration-model.md).
+and that row names the axes to reverse (or follows the decision). A reversal overrides
+the inferred baseline on its axis and nothing else — never the structural facts (window
+type, maximized/fullscreen), never transient window state (tiled, tile-matched — the
+rule outlives it and applies again on restore), never a user preference, never a policy. The same
+direction guides the override layers themselves: we overrule the user only where
+honouring the request would be meaningless — a structural disqualifier, a window state
+(maximized, tiled, matched), or a window the user cannot see — never where the request
+is merely imperfect. See [decoration-model.md](decoration-model.md).
 
 ## Identity
 
@@ -134,20 +151,18 @@ with how the window currently looks. Therefore, the suggestion must **never main
 the status quo** (i.e. it must never suggest a no-op state that keeps the window as-is).
 Instead, it chooses the state that inverts or breaks the current presentation:
 
-- **State 2 (Decorated / Taken over)**: Any axis of ours is currently on screen
-  (`drawShadow || drawClip`).
-  → **Suggest `none`**. The user picked an already-decorated window because our override
-  caused issues (e.g. black clipping artifacts, shadow collision, performance glitch);
-  the most natural corrective intent is to retract our decoration and restore the
-  untouched native/client look.
-- **State 1 (Untouched / Native-like)**: No axis of ours is currently on screen
-  (`!drawShadow && !drawClip`).
-  → **Suggest `both`**. The user picked an undecorated or pass-through window because they
-  want this extension to actively step in and bring native GNOME Adwaita ergonomics
-  (rounded corners and GPU-baked shadow) to it.
-  *(Physical constraint safeguard)*: If the window is a bare X11 window whose server-side
-  Mutter shadow cannot be cleared, the suggestion safely degrades to **`corners`** to avoid
-  painting an unsightly double shadow.
+- **State 2 (Decorated / Taken over)**: Any axis of ours is currently effective
+  (`drawShadow || drawClip || drawResize`).
+  → **Reverse each effective axis**, leaving the rest on the decision. The user picked an
+  already-decorated window because our override caused issues (e.g. black clipping
+  artifacts, shadow collision, performance glitch); the smallest break is to retract
+  exactly what is on screen.
+- **State 1 (Untouched / Native-like)**: No axis of ours is currently effective.
+  → **Reverse the corners**, plus the shadow unless it is an unclearable Mutter X11
+  shadow (that would paint a double shadow). The resize axis is never reversed by
+  default: a window with no ring has no band to retract, and putting one on the
+  desktop is a policy the user opts into by hand.
+  The user picked an undecorated window because they want this extension to step in.
 
 ### Normalization and safety
 
@@ -155,15 +170,17 @@ The suggestion follows the window's **kind** — the transient state (maximized,
 fullscreen) is normalized away by `kindParams()`, because a rule outlives transient states.
 
 The guess is safe and ergonomic because:
-1. **Never a no-op**: Under the "never maintain status quo" principle, State 1 yields `both`
-   and State 2 yields `none`, so every valid pick produces a tangible, actionable change.
-2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused,
-   and the dropdown offers all four states (`both`, `none`, `corners`, `shadow`) for instant
-   one-click adjustment.
+1. **Never a no-op**: Under the "never maintain status quo" principle, State 1 reverses at
+   least the corners and State 2 reverses at least one axis, so every valid pick
+   produces a tangible, actionable change.
+2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused
+   and expanded, and each axis offers Automatic / Reverse for instant adjustment.
 3. **Pre-flight verification**: The extension re-evaluates the proposed state via
    `suggestedRuleWouldChange()` before storing, refusing any rule that would have no physical
    effect on the target window kind. `suggestedRuleState()` and `suggestedRuleWouldChange()`
    in `detector.js` are pure and unit-tested; the inspector passes both answers over D-Bus with
-   the picked window's properties, and an absent answer means an extension too old to judge,
-   in which case prefs stores the rule.
+   the picked window's properties (transient state rides along so prefs can toast that the rule
+   applies on restore), and an absent answer means an extension too old to judge, in which case
+   prefs reverses the corners - the shadow too, unless a bare X11 window whose Mutter shadow
+   cannot be cleared.
 

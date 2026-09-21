@@ -13,7 +13,6 @@ import {
     isDecoratableWindowType,
     isWindowMaximized,
     isWindowTiled,
-    shouldShowResizeBand,
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
@@ -52,7 +51,7 @@ export class Manager {
         this._settings = ext.getSettings();
         this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];
-        this._rules = null;         // fingerprint -> RuleState, invalidated on settings change
+        this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
     }
 
@@ -94,7 +93,7 @@ export class Manager {
             this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
 
         this._settingsHandlerIds = [];
-        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text', 'resize-band']) {
+        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text']) {
             const id = this._settings.connect(`changed::${key}`, () => {
                 this._refreshSettings();
                 this._reconcile();
@@ -160,7 +159,6 @@ export class Manager {
     _refreshSettings() {
         this._rules = null;
         this._preferCrispText = this._settings.get_boolean('prefer-crisp-text');
-        this._resizeBandEnabled = this._settings.get_boolean('resize-band');
     }
 
     _dropPendingWork(state) {
@@ -444,14 +442,9 @@ export class Manager {
         // No clip → client's shadow still visible; defer ours to avoid double shadow.
         this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
-        const untiledActions = inputs.tiled || inputs.hasTileMatch
-            ? evaluateWindowActions({...inputs, tiled: false, hasTileMatch: false})
-            : actions;
-
-        this._syncResizeBand(win, shouldShowResizeBand({
-            ...inputs,
-            decorated: untiledActions.drawShadow || untiledActions.drawClip,
-        }), inputs, insets);
+        // The resize axis is independent of the decoration or tiling: a tile match
+        // only takes the shadow, never the grab band.
+        this._syncResizeBand(win, actions.drawResize, inputs, insets);
 
         if (state.clip || state.shadow)
             this._applyStyle(win, actions.style, insets, actions.drawClip);
@@ -522,7 +515,6 @@ export class Manager {
 
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,
-            resizeBand: this._resizeBandEnabled,
         };
     }
 
@@ -538,7 +530,7 @@ export class Manager {
 
     /**
      * @param {object} win - Meta.Window
-     * @returns {string|null} Suggested RuleState for pick, or null if unreadable.
+     * @returns {string|null} Suggested canonical rule state for pick, or null if unreadable.
      */
     suggestedRuleState(win) {
         if (!win)

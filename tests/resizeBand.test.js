@@ -12,7 +12,8 @@ import {
     RESIZE_BAND_REGIONS,
     RESIZE_CORNER,
 } from '../src/lib/resizeBand.js';
-import {shouldShowResizeBand, evaluateWindowActions} from '../src/lib/detector.js';
+import {decideResizeBand, evaluateWindowActions} from '../src/lib/detector.js';
+import {buildRuleKey} from '../src/lib/rules.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 
@@ -509,79 +510,75 @@ describe('computeResizeBands', () => {
     });
 });
 
-describe('shouldShowResizeBand', () => {
-    // A window that reserves no ring at all has no ring of ours to give (below), so the baseline is
-    // one that reserves a shadow margin - the ground the band lives on.
-    const plain = {frameWidth: 800, frameHeight: 600, allowsResize: true, resizeBand: true,
+describe('decideResizeBand', () => {
+    // `plain` declares a shadow margin, the ground the band normally lives on; a bare
+    // window with no ring is covered below, where the heuristic bands the desktop around it.
+    const plain = {frameWidth: 800, frameHeight: 600, allowsResize: true,
         insets: {left: 25, right: 25, top: 25, bottom: 25}};
     const ring = (left, right, top, bottom) => ({...plain, insets: {left, right, top, bottom}});
 
     it('shows the band on a resizable window that reserves a ring', () => {
-        expect(shouldShowResizeBand(plain)).toBeTrue();
+        expect(decideResizeBand(plain)).toBeTrue();
     });
 
-    it('builds nothing when the setting is off', () => {
-        expect(shouldShowResizeBand({...plain, resizeBand: false})).toBeFalse();
+    it('a rule can retract the band where the heuristic would draw it', () => {
+        expect(decideResizeBand({...plain, reversed: true})).toBeFalse();
     });
 
-    it('drops the band when we draw nothing on the window', () => {
-        // The band follows the decoration: a `none` rule (or a structurally ineligible
-        // window) means the window keeps every click it had.
-        expect(shouldShowResizeBand({...plain, decorated: false})).toBeFalse();
+    it('keeps the band inside the ring the window declared', () => {
+        // The default still asks for a ring: a window that reserves nothing - an undecorated
+        // toplevel, a video popup - gets none, and reversing the axis is what gives it the
+        // desktop around the body instead. (The GTK4 reading is the other skip, below.)
+        expect(decideResizeBand({...ring(0, 0, 0, 0)})).toBeFalse();
+        expect(decideResizeBand({...plain})).toBeTrue();
+        expect(decideResizeBand({...ring(0, 0, 0, 0), reversed: true})).toBeTrue();
     });
 
-    it('gives no band to a bare window, which reserves no ring to fill', () => {
-        // The WeChat/CEF case: no declared ring, so the shadow stays Mutter's and the corners are
-        // ours - but a ring of ours would sit outside the window, on whatever is behind it. Its own
-        // handle inside the surface stays its own, as it does on a native window with no margin.
+    it('reversing the axis bypasses the GTK4 reading but not physics', () => {
+        expect(decideResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true, reversed: true})).toBeTrue();
+        // Capability, never overridable.
+        expect(decideResizeBand({...plain, reversed: true, allowsResize: false})).toBeFalse();
+        expect(decideResizeBand({...plain, reversed: true, isMaximized: true})).toBeFalse();
+        expect(decideResizeBand({...plain, reversed: true, hasSsd: true})).toBeFalse();
+        expect(decideResizeBand({...plain, reversed: true, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
+    });
+
+    it('gives a bare window the band by rule, not by default', () => {
+        // The WPS case: no declared ring, so the default leaves it alone; reversing the
+        // resize axis is what gives it the desktop around the body.
         const actions = evaluateWindowActions({
             bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
-            isX11: true, wmClass: 'wechat',
+            isX11: true, wmClass: 'wps',
         });
         expect(actions.drawClip).toBeTrue();
-        expect(shouldShowResizeBand({
-            ...plain,
-            insets: {left: 0, right: 0, top: 0, bottom: 0},
-            decorated: actions.drawShadow || actions.drawClip,
-        })).toBeFalse();
+        expect(actions.drawResize).toBeFalse();
+        expect(decideResizeBand({...plain, insets: {left: 0, right: 0, top: 0, bottom: 0}})).toBeFalse();
+        expect(decideResizeBand({...plain, insets: {left: 0, right: 0, top: 0, bottom: 0}, reversed: true}))
+            .toBeTrue();
     });
 
     it('skips a window that cannot be resized', () => {
-        expect(shouldShowResizeBand({...plain, allowsResize: false})).toBeFalse();
+        expect(decideResizeBand({...plain, allowsResize: false})).toBeFalse();
     });
 
     it('skips maximized and fullscreen windows, but keeps tiled and tile-matched windows', () => {
-        expect(shouldShowResizeBand({...plain, isMaximized: true})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, isFullscreen: true})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, tiled: true})).toBeTrue();
-        expect(shouldShowResizeBand({...plain, hasTileMatch: true})).toBeTrue();
-    });
-
-    it('keeps the band when tiled with tile-match using untiled action fallback', () => {
-        const inputs = {
-            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+        expect(decideResizeBand({...plain, isMaximized: true})).toBeFalse();
+        expect(decideResizeBand({...plain, isFullscreen: true})).toBeFalse();
+        // The resize axis is independent of tiling now: a tile match only takes the shadow.
+        const tiled = evaluateWindowActions({
+            bufferWidth: 850, bufferHeight: 650, frameWidth: 800, frameHeight: 600,
             insets: {left: 25, right: 25, top: 25, bottom: 25},
-            isX11: true, wmClass: 'wechat', tiled: true, hasTileMatch: true,
-            allowsResize: true, resizeBand: true,
-        };
-        const actions = evaluateWindowActions(inputs);
-        expect(actions.drawShadow).toBeFalse();
-        expect(actions.drawClip).toBeFalse();
-
-        const untiledActions = evaluateWindowActions({...inputs, tiled: false, hasTileMatch: false});
-        expect(untiledActions.drawClip).toBeTrue();
-
-        expect(shouldShowResizeBand({
-            ...inputs,
-            decorated: untiledActions.drawShadow || untiledActions.drawClip,
-        })).toBeTrue();
+            tiled: true, hasTileMatch: true, wmClass: 'tiled-app',
+        });
+        expect(tiled.drawShadow).toBeFalse();
+        expect(tiled.drawResize).toBeTrue();
     });
 
     it('leaves a GTK4 client alone once its declared margins are native', () => {
         // GTK4 sizes the input region from RESIZE_HANDLE_SIZE whatever its shadow is, so
         // declared margins at least that wide mean its own handle is already native.
-        expect(shouldShowResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
-        expect(shouldShowResizeBand({...ring(25, 25, 25, 25), hasGtk4Client: true})).toBeFalse();
+        expect(decideResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
+        expect(decideResizeBand({...ring(25, 25, 25, 25), hasGtk4Client: true})).toBeFalse();
     });
 
     it('keeps the band when the margins cannot prove the client has a handle', () => {
@@ -589,47 +586,48 @@ describe('shouldShowResizeBand', () => {
         // offers is margin + border + padding alone (gtk-3-24 gtkwindow.c), so a theme's shadow
         // inflates the ring past the handle: the ring says nothing about the handle, and the band
         // is what brings a GTK3 window up to native width. The sizes here are ordinary margins.
-        expect(shouldShowResizeBand(ring(24, 24, 21, 27))).toBeTrue();
-        expect(shouldShowResizeBand(ring(25, 25, 25, 25))).toBeTrue();
+        expect(decideResizeBand(ring(24, 24, 21, 27))).toBeTrue();
+        expect(decideResizeBand(ring(25, 25, 25, 25))).toBeTrue();
         // The same ring a GTK4 client is skipped on, on a client that cannot prove it.
-        expect(shouldShowResizeBand(ring(12, 12, 12, 12))).toBeTrue();
+        expect(decideResizeBand(ring(12, 12, 12, 12))).toBeTrue();
     });
 
     it('skips an SSD window: Mutter drew the frame and runs the resize grab from it', () => {
-        expect(shouldShowResizeBand({...plain, hasSsd: true})).toBeFalse();
+        expect(decideResizeBand({...plain, hasSsd: true})).toBeFalse();
         // The flag alone is enough; a wide declared ring is not needed for the skip.
-        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasSsd: true})).toBeFalse();
+        expect(decideResizeBand({...ring(0, 0, 0, 0), hasSsd: true})).toBeFalse();
     });
 
     it('keeps the band while either axis is narrower than a native handle', () => {
         // One axis already native, the other a hair under: still awkward to grab.
-        expect(shouldShowResizeBand({...ring(12, 12, 11, 11), hasGtk4Client: true})).toBeTrue();
-        expect(shouldShowResizeBand({...ring(11, 11, 12, 12), hasGtk4Client: true})).toBeTrue();
+        expect(decideResizeBand({...ring(12, 12, 11, 11), hasGtk4Client: true})).toBeTrue();
+        expect(decideResizeBand({...ring(11, 11, 12, 12), hasGtk4Client: true})).toBeTrue();
     });
 
     it('reads the ring per side, not as the average of the two', () => {
         // TLBR 0,24,0,24 averages 12 on each axis but has no margin on the left or the
         // top, so it is not "12 on every side" and the band stays. An average would hide
         // the zero side and skip the band.
-        expect(shouldShowResizeBand(ring(0, 24, 0, 24))).toBeTrue();
-        expect(shouldShowResizeBand(ring(24, 0, 24, 0))).toBeTrue();
+        expect(decideResizeBand(ring(0, 24, 0, 24))).toBeTrue();
+        expect(decideResizeBand(ring(24, 0, 24, 0))).toBeTrue();
         // A zero on both sides of one axis, positive only on the other: the narrowest
         // per-axis margin is 0, so the ring is not a native-width handle on every side.
-        expect(shouldShowResizeBand(ring(0, 0, 24, 24))).toBeTrue();
+        expect(decideResizeBand(ring(0, 0, 24, 24))).toBeTrue();
         // The symmetric ring of the same total is a native handle on a GTK4 client, and skipped.
-        expect(shouldShowResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
+        expect(decideResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
     });
 
-    it('gives no band to a window that reserves no ring, provider process or not (the Firefox PiP shape)', () => {
-        // A video popup fills its own surface: there is no margin inside it to carry a handle, and a
-        // ring outside it would sit on whatever is behind - the press would have two owners unless we
-        // held the pointer, and a compositor-driven resize cannot track a client that keeps an aspect
-        // ratio anyway (measured: the popup ignores requested sizes). Its own handle inside the
-        // surface is the native one and tracks the pointer exactly.
-        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasGtk4Client: false})).toBeFalse();
-        expect(shouldShowResizeBand({...ring(0, 0, 0, 0), hasGtk4Client: true})).toBeFalse();
+    it('a fixed-ratio popup keeps its own handle by rule, not by default', () => {
+        // A video popup fills its own surface, and a compositor-driven resize cannot
+        // track a client that keeps an aspect ratio (measured: the popup ignores
+        // requested sizes). Where it reserves a ring the default bands it, so the
+        // popup's kind reverses the resize axis instead.
+        expect(decideResizeBand({...plain})).toBeTrue();
+        expect(decideResizeBand({...plain, reversed: true})).toBeFalse();
+        // A window that reserves nothing gets no band of ours by default either.
+        expect(decideResizeBand({...ring(0, 0, 0, 0)})).toBeFalse();
         // A window that reserves a margin on one axis only still has that ring to fill.
-        expect(shouldShowResizeBand(ring(0, 0, 25, 25))).toBeTrue();
+        expect(decideResizeBand(ring(0, 0, 25, 25))).toBeTrue();
     });
 
     it('keeps the band on a window only as thin as the ring itself', () => {
@@ -639,18 +637,34 @@ describe('shouldShowResizeBand', () => {
         // (48px) is gone.
         expect(MIN_BAND_WINDOW).toBe(2 * RESIZE_BAND);
         expect(MIN_BAND_WINDOW).toBe(24);
-        expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, frameHeight: MIN_BAND_WINDOW - 1})).toBeFalse();
-        expect(shouldShowResizeBand({...plain, frameWidth: MIN_BAND_WINDOW, frameHeight: MIN_BAND_WINDOW}))
+        expect(decideResizeBand({...plain, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
+        expect(decideResizeBand({...plain, frameHeight: MIN_BAND_WINDOW - 1})).toBeFalse();
+        expect(decideResizeBand({...plain, frameWidth: MIN_BAND_WINDOW, frameHeight: MIN_BAND_WINDOW}))
             .toBeTrue();
         // The sizes that used to be refused now pass.
-        expect(shouldShowResizeBand({...plain, frameWidth: 40, frameHeight: 600})).toBeTrue();
-        expect(shouldShowResizeBand({...plain, frameWidth: 30, frameHeight: 30})).toBeTrue();
-        expect(shouldShowResizeBand({...plain, frameWidth: 25, frameHeight: 300})).toBeTrue();
+        expect(decideResizeBand({...plain, frameWidth: 40, frameHeight: 600})).toBeTrue();
+        expect(decideResizeBand({...plain, frameWidth: 30, frameHeight: 30})).toBeTrue();
+        expect(decideResizeBand({...plain, frameWidth: 25, frameHeight: 300})).toBeTrue();
     });
 
     it('does not build a band from a missing frame size', () => {
-        expect(shouldShowResizeBand({resizeBand: true})).toBeFalse();
-        expect(shouldShowResizeBand()).toBeFalse();
+        expect(decideResizeBand({})).toBeFalse();
+        expect(decideResizeBand()).toBeFalse();
+    });
+
+    it('a bare window gets no band by default; a reversed axis gives it one', () => {
+        const base = {
+            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            isX11: true, wmClass: 'wps',
+        };
+        const bare = evaluateWindowActions(base);
+        expect([bare.drawShadow, bare.drawClip, bare.drawResize])
+            .toEqual([false, true, false]);
+
+        const key = buildRuleKey('wps', {clientType: 'x11'});
+        const reversed = evaluateWindowActions({...base, rules: {[key]: 'resize'}});
+        expect([reversed.drawShadow, reversed.drawClip, reversed.drawResize])
+            .toEqual([false, true, true]);
+        expect(reversed.reason).toBe('rule-applied(wps:resize)');
     });
 });

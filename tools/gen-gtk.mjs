@@ -38,18 +38,13 @@ function parseDefine(cCode, name) {
 }
 
 /**
- * The two sizes a user reads are written out in full in two places that cannot interpolate the
- * constants: the compiled schema description, and the prefs subtitle, which has to stay a
- * literal for xgettext. A change upstream therefore has to be mirrored by hand, and this is
- * where a missed mirror is caught rather than shipped.
+ * The two sizes are written out in full in the compiled schema description, which cannot
+ * interpolate the constants. A change upstream therefore has to be mirrored by hand, and
+ * this is where a missed mirror is caught rather than shipped.
  */
 function assertCopyCarriesSizes(handleSize, cornerSize) {
     const band = `${handleSize} pixels out on every side, and ${cornerSize} along the edge`;
     const own = `at least ${handleSize} pixels on every side`;
-
-    const prefs = readFileSync(path.join(ROOT, 'src', 'prefs.js'), 'utf8');
-    if (!prefs.includes(band))
-        throw new Error(`[gen-gtk] src/prefs.js does not carry the generated sizes: expected "${band}"`);
 
     const schemaDir = path.join(ROOT, 'src', 'schemas');
     for (const file of readdirSync(schemaDir).filter(name => name.endsWith('.gschema.xml'))) {

@@ -2,7 +2,7 @@
 """
 benchmark-perf.py - Measures GNOME Shell CPU and memory footprint with
 Window Nativizer enabled vs disabled for a single undecorated window, then measures the resize
-band on its own by flipping the `resize-band` setting on that same window.
+band on its own by reversing the resize axis for that same window's kind against the heuristic.
 
 Usage:
   python3 tools/benchmark-perf.py            # Run full performance benchmark (3 rounds)
@@ -30,8 +30,9 @@ CLIENT_SCRIPT = os.path.join(ROOT, "tools", "perf-client.py")
 DEV_SH = os.path.join(ROOT, "tools", "dev.sh")
 UUID = "window-nativizer@everyx.github.io"
 WINDOW_NATIVIZER_DISPLAY = "wayland-window-nativizer"
-# The harness' own dconf store. `resize-band` is flipped through it and never through the
-# developer's, and dev.sh inherits it for the nested session it starts.
+# The harness' own dconf store. The band is flipped through a `window-rules` axis reversal
+# for the perf client's kind, never through the developer's dconf, and dev.sh inherits
+# it for the nested session it starts.
 BENCH_CONFIG = os.path.join(STATE_DIR, "config")
 SCHEMA_DIR = os.path.join(os.path.expanduser("~"), ".local", "share", "gnome-shell",
                           "extensions", UUID, "schemas")
@@ -43,7 +44,7 @@ BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
 # Physical baseline breakdown:
 # - ~80ms for RoundedClipEffect FBO offscreen shader + ShadowActor 8-slice quads
 # - ~10ms for ResizeBand: its four bind constraints, four reactive hit-test actors and the live
-#   allocation. Measured on the same windows with the `resize-band` setting flipped (private
+#   allocation. Measured on the same windows with the resize axis reversed vs the heuristic (private
 #   XDG_CONFIG_HOME, schedstat nanoseconds): 9.7ms over one window's 150 resize steps, 34us per
 #   step per window over ten. It costs no idle CPU and holds 6.4KB resident per window.
 #   The earlier ~25ms here was an estimate, not a measurement.
@@ -75,7 +76,7 @@ def ensure_session():
     if os.path.exists(PID_FILE):
         if shell_config_home(int(open(PID_FILE).read().strip())) != BENCH_CONFIG:
             print(">> The running nested shell was started with your own config, so flipping the "
-                  "band setting would land in your dconf. Restarting the nested session only...")
+                  "band axis would land in your dconf. Restarting the nested session only...")
             subprocess.check_call([DEV_SH, "stop"],
                                   env=dict(os.environ, XDG_CONFIG_HOME=BENCH_CONFIG))
     if not os.path.exists(PID_FILE):
@@ -144,14 +145,22 @@ def band_actors(bus):
         ".filter(c => c.name === 'WindowNativizerResizeBand').length; })()", bus))
 
 
+# The perf client's window kind: undecorated GTK4 on Wayland, no shadow ring.
+PERF_RULE_KEY = ("dev.windownativizer.perf:client_type=wayland,window_type=0,"
+                 "has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false")
+
+
 def set_band(enabled, bus, verify=True):
-    """Flip `resize-band` through the nested session's own bus and dconf store. With `verify`, wait
-    for the band actors to follow - a setting that never arrived would otherwise look like a
-    saving. Without it (no window on stage to carry a band yet) only the write is done, and the
-    caller checks the band on the window it measures."""
+    """Reverse the resize axis for the perf client's kind through the nested session's own bus and
+    dconf store: the axis reversed when the band is wanted, and no rule (the reading) when it is
+    not. The perf client reserves no ring, so the reading leaves it alone. With
+    `verify`, wait for the band actors to follow - a rule that never arrived would
+    otherwise look like a saving. Without it (no window on stage to carry a band yet)
+    only the write is done, and the caller checks the band on the window it measures."""
+    rules = "{'%s': 'resize'}" % PERF_RULE_KEY if enabled else "{}"
     subprocess.check_call(
-        ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "resize-band",
-         "true" if enabled else "false"],
+        ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "window-rules",
+         rules],
         env=dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus, XDG_CONFIG_HOME=BENCH_CONFIG,
                  GSETTINGS_SCHEMA_DIR=SCHEMA_DIR))
     if not verify:
@@ -162,7 +171,7 @@ def set_band(enabled, bus, verify=True):
     wait_for(lambda: (band_actors(bus) > 0) == enabled)
     bands = band_actors(bus)
     if (bands > 0) != enabled:
-        raise RuntimeError(f"resize-band={enabled} did not take effect after 5s: {bands} band(s), "
+        raise RuntimeError(f"band reversal enabled={enabled} did not take effect after 5s: {bands} band(s), "
                            f"{window_actors(bus)} window actor(s)\n   {describe_stage(bus)}")
 
 def trigger_gc(bus):
@@ -265,7 +274,7 @@ def measure_stress_cpu(shell_pid, env, steps, bus, expect_band=None, stress_dead
             bands = band_actors(bus)
             if (bands > 0) != expect_band:
                 raise RuntimeError(f"stress window has {bands} band(s), expected "
-                                   f"resize-band={expect_band}\n   {describe_stage(bus)}")
+                                   f"band={expect_band}\n   {describe_stage(bus)}")
         time.sleep(0.1)
         ticks0, wall0 = read_cpu_ns(shell_pid), time.perf_counter()
         while True:
@@ -363,12 +372,12 @@ def with_banded_window(env, bus, enabled, work, attempts=3):
         finally:
             with_client_cleanup(proc)
         print(f"   (attempt {attempt}: {last}; retrying)")
-    raise RuntimeError(f"no window survived a block with resize-band={enabled}: {last}\n"
+    raise RuntimeError(f"no window survived a block with band={enabled}: {last}\n"
                        f"   {describe_stage(bus)}")
 
 
 def run_band_phase(shell_pid, bus, rounds, stress_steps):
-    """The band's own cost with everything else held still: only the `resize-band` setting moves.
+    """The band's own cost with everything else held still: only the resize axis moves.
     Memory is read on an idle window in A-B-A order so drift cancels; the idle hold and the resize
     runs each get their own window, so one block's client cannot end another's measurement."""
     env = dict(os.environ, WAYLAND_DISPLAY=WINDOW_NATIVIZER_DISPLAY)
@@ -403,7 +412,7 @@ def run_band_phase(shell_pid, bus, rounds, stress_steps):
                     cpu_ms, _ = measure_stress_cpu(shell_pid, env, stress_steps, bus,
                                                    expect_band=enabled)
                 except RuntimeError as exc:
-                    print(f"   (stress run with resize-band={enabled}, attempt {attempt}: {exc.splitlines()[0]})")
+                    print(f"   (stress run with band={enabled}, attempt {attempt}: {exc.splitlines()[0]})")
                     set_band(enabled, bus, verify=False)
                     continue
                 stress["on" if enabled else "off"].append(cpu_ms)
@@ -536,7 +545,7 @@ def main():
         print(f"{'Per-Window RAM (Private Dirty)':<36} | {dis_win_dirty:>11.1f} KB | {ena_win_dirty:>11.1f} KB | {delta_win_dirty:>+9.1f} KB")
         print("=" * 76)
 
-        print("\n>> Band phase: the same one window, only the `resize-band` setting flipped...")
+        print("\n>> Band phase: the same one window, only the resize axis reversed...")
         band = run_band_phase(shell_pid, bus, rounds, stress_steps)
         print(f"   idle CPU    off {band['idle_off_pct']:>6.2f}%   on {band['idle_on_pct']:>6.2f}%   "
               f"delta {band['idle_delta_pct']:>+6.2f}%")

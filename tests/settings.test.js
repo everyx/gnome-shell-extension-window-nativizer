@@ -20,7 +20,7 @@ describe('getWindowRules', () => {
                     return {
                         deep_unpack: () => ({
                             [validKey]: 'corners',
-                            'bad:foo=bar': 'both',
+                            'bad:foo=bar': 'corners',
                             [buildRuleKey('legacy-shape')]: 'shadow,corners',
                         }),
                     };
