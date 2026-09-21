@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 15:34+0800\n"
+"POT-Creation-Date: 2026-09-21 16:56+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -181,64 +181,70 @@ msgid ""
 msgstr ""
 "在分数缩放屏幕上跳过圆角（保留阴影），避免重采样带来的文字模糊与性能开销"
 
-#: src/prefs.js:349 src/prefs.js:353
-msgid "Pick a window that looks wrong"
-msgstr "选取一个看起来不对的窗口"
+#: src/prefs.js:354
+msgid "Pick window"
+msgstr "选取窗口"
 
-#: src/prefs.js:356 src/prefs.js:374 src/prefs.js:375
+#. The tooltip carries what the label cannot - the scope. Restating the label
+#. ("pick a window") would be the noise the HIG warns about.
+#: src/prefs.js:359
+msgid "The correction applies to every window of its kind"
+msgstr "这条修正对此类所有窗口生效"
+
+#: src/prefs.js:365
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs.js:357
+#: src/prefs.js:366
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr "按窗口种类——自动判断出错的地方；未列出的跟随自动判断"
 
-#: src/prefs.js:379
+#: src/prefs.js:383
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "点上面的按钮，选一个看起来不对的窗口"
 
-#: src/prefs.js:496 src/prefs.js:498
+#: src/prefs.js:499 src/prefs.js:501
 msgid "Restore the automatic decision"
 msgstr "恢复自动判断"
 
-#: src/prefs.js:574
+#: src/prefs.js:577
 msgid "Window Inspection Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:575
+#: src/prefs.js:578
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 
-#: src/prefs.js:587
+#: src/prefs.js:590
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:608
+#: src/prefs.js:611
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有回应 —— 请重启会话后重新选取"
 
-#: src/prefs.js:616
+#: src/prefs.js:619
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
-#: src/prefs.js:632
+#: src/prefs.js:635
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:644
+#: src/prefs.js:647
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:645
+#: src/prefs.js:648
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:655
+#: src/prefs.js:658
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"

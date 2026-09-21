@@ -83,7 +83,7 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 | Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
 | Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
-To correct a window that looks wrong, open **Preferences** and use the pick button in **Corrections**.
+To correct a window that looks wrong, open **Preferences** and click **Pick window** in **Corrections**.
 
 [Learn more about the rule model →](docs/rule-model.md)
 

@@ -296,8 +296,9 @@ switches do.
 `has_ssd`, which cannot both describe a window we read); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
 (Pango markup); `Adw.Toast`/`AlertDialog` and bare `Gtk.Label` take plain text.
 
-The rule list shows a count in the group title so the group need not be opened to
-know it has items. Rows are destroyed from within their own signal handlers,
+The pick button is the group's `header_suffix` - a flat button that names its action and
+wears the add icon, Adwaita's group-with-a-suffix pattern - because it is the only way a
+rule comes into being. Rows are destroyed from within their own signal handlers,
 so rebuild is deferred to `GLib.PRIORITY_DEFAULT_IDLE`; one pending idle is enough
 because it reads the rules when it runs. The prefs window may be hidden for the
 modal picker and still be closed — `windowAlive` guards the D-Bus reply. An empty

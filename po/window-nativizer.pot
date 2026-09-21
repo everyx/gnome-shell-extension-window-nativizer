@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 15:34+0800\n"
+"POT-Creation-Date: 2026-09-21 16:56+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -181,64 +181,70 @@ msgid ""
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:349 src/prefs.js:353
-msgid "Pick a window that looks wrong"
+#: src/prefs.js:354
+msgid "Pick window"
 msgstr ""
 
-#: src/prefs.js:356 src/prefs.js:374 src/prefs.js:375
+#. The tooltip carries what the label cannot - the scope. Restating the label
+#. ("pick a window") would be the noise the HIG warns about.
+#: src/prefs.js:359
+msgid "The correction applies to every window of its kind"
+msgstr ""
+
+#: src/prefs.js:365
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:357
+#: src/prefs.js:366
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr ""
 
-#: src/prefs.js:379
+#: src/prefs.js:383
 msgid "Use the button above to pick a window that looks wrong"
 msgstr ""
 
-#: src/prefs.js:496 src/prefs.js:498
+#: src/prefs.js:499 src/prefs.js:501
 msgid "Restore the automatic decision"
 msgstr ""
 
-#: src/prefs.js:574
+#: src/prefs.js:577
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:575
+#: src/prefs.js:578
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:587
+#: src/prefs.js:590
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:608
+#: src/prefs.js:611
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:616
+#: src/prefs.js:619
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
-#: src/prefs.js:632
+#: src/prefs.js:635
 msgid "No correction added: it could not be saved"
 msgstr ""
 
-#: src/prefs.js:644
+#: src/prefs.js:647
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr ""
 
-#: src/prefs.js:645
+#: src/prefs.js:648
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:655
+#: src/prefs.js:658
 msgid "The correction takes effect once the window is restored"
 msgstr ""
