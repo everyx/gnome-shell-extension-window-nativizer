@@ -97,7 +97,7 @@ bypasses injected widgets to attach directly to the compatible surface actor so 
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
 
-A resizable window that passes `shouldShowResizeBand()` also gets a `ResizeBand`
+A resizable window that `decideResizeBand()` shows a band for also gets a `ResizeBand`
 (`lib/resizeBandActor.js`), the only actor outside the window picker that takes input: a transparent container with
 four reactive `St.Widget` children, one per side of the 12px ring (the top and bottom span the
 full width, so the outward corners belong to them). The child only says where an event landed;
@@ -140,8 +140,8 @@ where the `d = -0.5` pixel centre of the innermost body pixel sits; `1+d` centre
 boundary instead and rendered that pixel at half strength (measured, with the reasoning, in
 `decoration-alignment.md`).
 `uOutline` is `rgb in [0,1], a in [0,1]`; `a == 0` disables it. Its color is normalized
-from `0..255` to `0..1` on upload. Radius 0 means square body — used by the `shadow` rule to
-clear the ring without rounding.
+from `0..255` to `0..1` on upload. Radius 0 means square body — used when a reversed shadow axis
+clears the ring without rounding.
 
 Clutter enlarges the offscreen by `FBO_OFFSET` and `FBO_EXTRA` (what those pixels are, and
 the measured split, are in `decoration-alignment.md`). The shader computes
@@ -275,13 +275,25 @@ clears style/outgoing and removes from container — idempotent for disable/relo
 
 `prefs.js` runs in the preferences process with no window actors. It reads/writes
 `window-rules` via `lib/settings.js` and calls the extension over D-Bus (`PickWindow`).
-State labels and type nouns are thunks (`() => _('...')`) because the module loads
+Axis names, axis modes and type nouns are thunks (`() => _('...')`) because the module loads
 before the prefs process binds the gettext domain — a plain `_()` would capture the
-untranslated string (`STATE_LABELS`, `WINDOW_TYPE_NOUNS`).
+untranslated string (`AXIS_NAMES`, `AXIS_MODE_NAMES`, `WINDOW_TYPE_NOUNS`).
 
-`windowKindSentence` names all six structural attributes of a rule key (and folds
-`has_parent`/`attached_dialog` into one phrase, and indicates windows without margin
-rings); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
+Each rule is an `Adw.ExpanderRow`: the header names the app, the subtitle the kind
+sentence, the suffix one bundled icon per **reversed** axis (`src/icons/`, drawn on the GNOME
+symbolic grid from one window: its rounded corner, the shadow it casts, the resize cursor's
+arrow; registered on a bare icon-theme search path as `*-symbolic` so recoloring applies
+without an `index.theme`, in the row's own foreground). The delete button is a
+header suffix left of the expander arrow - `ExpanderRow` prepends suffixes to keep its arrow
+last, so siblings are added in reverse visual order - spaced apart from the icon group. The
+expanded body opens with a line stating the two positions, then carries the three
+Automatic/Reverse toggle groups
+(`Adw.ToggleGroup` with text labels; unavailable axes show their reason across the
+full suffix width) - conditions are not repeated per line.
+
+`windowKindSentence` names all seven structural attributes of a rule key (and folds
+`has_parent`/`attached_dialog` into one phrase; the frame clause carries `has_ring` and
+`has_ssd`, which cannot both describe a window we read); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
 (Pango markup); `Adw.Toast`/`AlertDialog` and bare `Gtk.Label` take plain text.
 
 The rule list shows a count in the group title so the group need not be opened to
@@ -290,6 +302,6 @@ so rebuild is deferred to `GLib.PRIORITY_DEFAULT_IDLE`; one pending idle is enou
 because it reads the rules when it runs. The prefs window may be hidden for the
 modal picker and still be closed — `windowAlive` guards the D-Bus reply. An empty
 reply means cancelled/abandoned pick and is silent; a missing suggestion falls
-back to `both`. Writes are verified (`hasOwnProperty`) before claiming success.
+back to reversing the corners (the shadow too, unless a bare X11 window). Writes are verified (`hasOwnProperty`) before claiming success.
 Translator note in `windowKindSentence()` explains why the sentence template is the
 translatable unit and fragments are translated separately.

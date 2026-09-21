@@ -58,6 +58,8 @@ export function extractWindowProperties(win, wmClassOverride = null) {
         hasRing = hasDeclaredMarginRing({buffer: b, frame: f, hasSsd: Boolean(win.decorated)});
 
     // Values are strings for D-Bus a{ss}; prefs parses them back for buildRuleKey().
+    // Transient state rides along too: a rule outlives it, so prefs tells the user
+    // the rule takes effect once the window is restored.
     const props = {
         wmClass,
         'clientType': isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
@@ -66,6 +68,12 @@ export function extractWindowProperties(win, wmClassOverride = null) {
         'allowsResize': boolString(win.allows_resize?.()),
         'isAttachedDialog': boolString(win.is_attached_dialog?.()),
         'hasRing': boolString(hasRing),
+        // The kind's SSD flag: prefs needs it to know the resize axis cannot apply
+        // (the frame owns the handles), and the key carries it.
+        'hasSsd': boolString(Boolean(win.decorated)),
+        'isMaximized': boolString(win.is_maximized?.() ?? false),
+        'isFullscreen': boolString(win.is_fullscreen?.() ?? false),
+        'hasTileMatch': boolString(win.get_tile_match?.() ?? false),
     };
 
     if (f && Number.isFinite(f.width) && Number.isFinite(f.height) && f.width > 0 && f.height > 0) {
@@ -86,6 +94,7 @@ export function buildRuleKeyFromProperties(properties = {}) {
         allowsResize,
         isAttachedDialog: properties.isAttachedDialog === 'true',
         hasRing: properties.hasRing === 'true',
+        hasSsd: properties.hasSsd === 'true',
         width: !allowsResize && properties.width ? Number(properties.width) : null,
         height: !allowsResize && properties.height ? Number(properties.height) : null,
     });

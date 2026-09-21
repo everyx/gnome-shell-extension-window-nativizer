@@ -1,0 +1,6 @@
+<!-- Window Nativizer rule axis: corners - one rounded window corner. Fill-only
+     path on the GNOME symbolic grid, which is what GTK recolors; drawn for this
+     project (GPL-2.0-or-later). See NOTICE in this directory. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+  <path d="M1.5 14.5V5.5A4 4 0 0 1 5.5 1.5H14.5V3.8H5.5A1.7 1.7 0 0 0 3.8 5.5V14.5Z"/>
+</svg>

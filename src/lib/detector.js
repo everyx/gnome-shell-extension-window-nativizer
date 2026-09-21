@@ -4,7 +4,6 @@ import {
     CLIENT_TYPE_TOKEN_WAYLAND,
     CLIENT_TYPE_TOKEN_X11,
     RuleAxis,
-    RuleState,
     buildRuleState,
     resolveRule,
     withRule,
@@ -97,15 +96,16 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
 }
 
 /**
+ * Whether the window keeps a Mutter X11 shadow we could never clear: a bare X11 window,
+ * with no declared ring and no compositor frame. The remedy is a rule, not our shadow.
  * @param {object} params
  * @param {boolean} [params.hasSsd=false]
  * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
- * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
+ * @param {boolean} [params.hasRing=false] - Whether the window declared a margin ring
  * @returns {boolean}
  */
-export function hasUnclearableShadow({hasSsd = false, isX11 = false, sideW, sideH}) {
-    return !hasSsd && isX11 && sideW <= 0 && sideH <= 0;
+export function hasUnclearableShadow({hasSsd = false, isX11 = false, hasRing = false} = {}) {
+    return !hasSsd && isX11 && !hasRing;
 }
 
 /**
@@ -128,7 +128,7 @@ export function inferDecorationBaseline({
     let shadow = true;
     let reason = `no-csd(${insets})`;
 
-    if (hasUnclearableShadow({hasSsd, isX11, sideW, sideH})) {
+    if (hasUnclearableShadow({hasSsd, isX11, hasRing: sideW > 0 || sideH > 0})) {
         shadow = false;
         reason = 'x11-mutter-native-shadow';
     } else if (hasSsd) {
@@ -216,6 +216,8 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [hasParent=false]
  * @property {boolean} [isAttachedDialog=false]
  * @property {boolean} [allowsResize=true]
+ * @property {boolean} [hasGtk4Client=false] - Whether the client is GTK4, whose own handle
+ *        the declared margins can prove
  * @property {boolean} [hasTileMatch=false]
  * @property {boolean} [focused=false]
  * @property {boolean} [tiled=false]
@@ -234,7 +236,7 @@ export function isWindowTiled(win, options = {}) {
  *    values `max > 0` is exactly "some side on this axis is positive".
  *  - `narrowestSides` is the smallest margin on each axis. "At least `RESIZE_BAND` on every
  *    side" is that minimum, not the per-axis average a two-sided total gives: a 0,24 ring is
- *    not 12 a side, so `shouldShowResizeBand()` reads this pair.
+ *    not 12 a side, so `decideResizeBand()` reads this pair.
  * With only the two-sided totals both pairs are equal, which is right for a symmetric
  * measure. The widths are the fallback for a caller that only has totals.
  * @param {object} params
@@ -261,18 +263,13 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
 }
 
 /**
- * Whether the window gets the resize band. It follows the decoration: a window we draw
- * nothing on (a `none` rule, or a structurally ineligible one) keeps every click it had, and
- * a window whose toolkit already offers a native-width handle of its own never gets one. See
- * docs/decoration-model.md § The resize band.
- *
- * Only a GTK4 client's handle can be proven from the outside: GTK4 sizes its CSD input region
- * from `RESIZE_HANDLE_SIZE`, so its declared margins reaching that width on every side mean its
- * own handle is already native. Every other window keeps its band - a GTK3 client's margins are
- * its shadow, and its real handle is the theme's, which is not observable from here.
+ * Whether the window gets the resize band. Independent of the decoration: a
+ * `resize-only` rule is valid, and a window we draw nothing else on can still be
+ * grabbable. Capability gates (unresizable, maximized/fullscreen, SSD, too small)
+ * are never overridden; reversing the axis bypasses only the GTK4 reading below.
+ * See docs/decoration-model.md § The resize band.
  * @param {object} params
- * @param {boolean} [params.resizeBand=true]
- * @param {boolean} [params.decorated=true] - Whether we draw anything on the window at all
+ * @param {boolean} [params.reversed=false] - Whether the rule reverses this axis
  * @param {boolean} [params.allowsResize=true]
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
@@ -286,9 +283,8 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
  * @param {number} [params.frameHeight=0]
  * @returns {boolean}
  */
-export function shouldShowResizeBand({
-    resizeBand = true,
-    decorated = true,
+export function decideResizeBand({
+    reversed = false,
     allowsResize = true,
     isMaximized = false, isFullscreen = false,
     hasGtk4Client = false,
@@ -297,41 +293,52 @@ export function shouldShowResizeBand({
     bufferWidth = 0, bufferHeight = 0,
     frameWidth = 0, frameHeight = 0,
 } = {}) {
-    if (!resizeBand || !allowsResize || !decorated)
-        return false;
-    if (isMaximized || isFullscreen)
+    // Capability, never overridable: no explicit value conjures these.
+    if (!allowsResize || isMaximized || isFullscreen)
         return false;
     // Mutter's own frame carries the resize handles; a band would only take clicks the
     // frame already owns. `win.decorated` is a policy flag, but no `_MUTTER_FRAME_FOR`
     // check exists on the GJS side, and the flag is the best reading there is.
     if (hasSsd)
         return false;
+    // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
+    // axis), never a native one: GTK's input region does not depend on the window size
+    // (docs/decoration-model.md § The resize band).
+    if (!(frameWidth >= MIN_BAND_WINDOW) || !(frameHeight >= MIN_BAND_WINDOW))
+        return false;
 
+    // The automatic reading. The band is the inner part of the ring the client reserved for
+    // its own shadow, so a window that reserves nothing - an undecorated toplevel, a video
+    // popup - gets none unless a rule reverses this axis.
     const {declaringSides, narrowestSides} =
         declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
-
-    // The band is the inner part of the ring the client reserved for its own shadow, clipped to the
-    // window's surface. A window that reserves nothing - an undecorated toplevel, a video popup -
-    // has no ring of ours to give, and a native window with no margin has none either: its handle
-    // is its own, inside its surface (docs/decoration-model.md § The resize band).
-    if (!declaringSides.sideW && !declaringSides.sideH)
-        return false;
+    const hasRing = declaringSides.sideW > 0 || declaringSides.sideH > 0;
     // Its own handle is already at least as wide as a native one on every side. Only GTK4 can
     // be read this way: it sizes the handle itself, so its declared margins prove it, while a
     // GTK3 window's margins are its shadow and say nothing about the theme's handle
     // (docs/decoration-model.md § The resize band).
-    if (hasGtk4Client && narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND)
-        return false;
+    const hasNativeHandle = hasGtk4Client &&
+        narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND;
+    const heuristic = hasRing && !hasNativeHandle;
 
-    // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
-    // axis), never a native one: GTK's input region does not depend on the window size
-    // (docs/decoration-model.md § The resize band).
-    return frameWidth >= MIN_BAND_WINDOW && frameHeight >= MIN_BAND_WINDOW;
+    // A rule reverses that reading and nothing else: the gates above are physics.
+    return reversed ? !heuristic : heuristic;
+}
+
+/**
+ * Resolves one axis: a rule reverses the automatic decision on the axes it names.
+ * @param {Set<string>|null} reversedAxes
+ * @param {string} axis
+ * @param {boolean} baseline - What the heuristic decided
+ * @returns {boolean}
+ */
+function resolveAxisValue(reversedAxes, axis, baseline) {
+    return reversedAxes?.has(axis) ? !baseline : baseline;
 }
 
 /**
  * @param {WindowEvaluationParams} params
- * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, style: object, reason: string}}
+ * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, drawResize: boolean, style: object, reason: string}}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -341,6 +348,7 @@ export function evaluateWindowActions({
     hasSsd = false,
     isX11 = false,
     nativeLikeCorners = false,
+    hasGtk4Client = false,
     windowType = WindowType.NORMAL,
     hasParent = false,
     isAttachedDialog = false,
@@ -356,8 +364,6 @@ export function evaluateWindowActions({
     const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast});
 
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
-    if (!eligibility.eligible)
-        return {drawShadow: false, drawClip: false, style, reason: eligibility.reason};
 
     // The shadow axis asks whether either side of an axis declares a ring, so it reads
     // the widest margin per axis (`declaringSides`).
@@ -380,34 +386,44 @@ export function evaluateWindowActions({
         allowsResize,
         isAttachedDialog,
         hasRing: clientOwnRing,
+        hasSsd,
         frameWidth,
         frameHeight,
     });
 
-    let shadow = baseline.shadow;
-    let corners = baseline.corners;
-    if (rule) {
-        corners = rule.has(RuleAxis.CORNERS);
-        shadow = rule.has(RuleAxis.SHADOW);
-    }
+    // A rule reverses the automatic decision on the axes it names; see docs/rule-model.md.
+    const corners = resolveAxisValue(rule, RuleAxis.CORNERS, baseline.corners);
 
     // Clip needs something to draw; radius 0 + no outline would be a wasted offscreen pass.
-    const ours = corners;
-    corners = ours && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
+    const clip = corners && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
         (style.radius > 0 || Boolean(style.outline));
 
     const ssdRing = hasSsd && (sideW > 0 || sideH > 0);
     const ownRing = clientOwnRing || ssdRing;
 
-    // No rule: ring was painted for the corners we replace, so the shadow becomes ours.
-    if (!rule && corners && ownRing)
+    // The automatic shadow decision, takeover included: the ring was painted for the
+    // corners we replace, so the shadow is ours by default. A rule then reverses that
+    // decision, and only that decision - which is why the takeover comes first.
+    let shadow = baseline.shadow;
+    if (clip && ownRing)
         shadow = true;
+    shadow = resolveAxisValue(rule, RuleAxis.SHADOW, shadow);
 
+    // Transient window state, not a judgment: a tile match reports where the window
+    // sits right now, and the rule - which outlives it - applies again on restore.
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
 
     // Ring is ours to clear exactly when the shadow we draw is ours.
     const clearRing = ownRing && shadow;
+
+    const drawResize = decideResizeBand({
+        reversed: Boolean(rule?.has(RuleAxis.RESIZE)),
+        allowsResize,
+        isMaximized, isFullscreen,
+        hasGtk4Client, hasSsd,
+        insets, bufferWidth, bufferHeight, frameWidth, frameHeight,
+    });
 
     let reason = rule
         ? `rule-applied(${wmClass}:${buildRuleState(rule)})`
@@ -417,7 +433,18 @@ export function evaluateWindowActions({
     if (shadowBeforeTiling && !shadow)
         reason = `tile-match(shadow-off,${reason})`;
 
-    return {drawShadow: shadow, drawClip: corners, clearRing, style, reason};
+    // Decoration stops at a structural disqualifier, but the band keeps its own physics
+    // gates: a window too small for corners can still be grabbable. A kind that is ours on
+    // no axis (dock, desktop) gets neither.
+    if (!eligibility.eligible) {
+        return {
+            drawShadow: false, drawClip: false, clearRing: false,
+            drawResize: isDecoratableWindowType(windowType) && drawResize,
+            style, reason: eligibility.reason,
+        };
+    }
+
+    return {drawShadow: shadow, drawClip: clip, clearRing, drawResize, style, reason};
 }
 
 /**
@@ -433,7 +460,8 @@ function ruleWouldChangeActions(params, {key, state}) {
     });
 
     return before.drawShadow !== after.drawShadow ||
-        before.drawClip !== after.drawClip;
+        before.drawClip !== after.drawClip ||
+        before.drawResize !== after.drawResize;
 }
 
 /** Transient state normalized away; a rule outlives it. */
@@ -448,33 +476,35 @@ function kindParams(params) {
 }
 
 /**
- * Pick heuristic following the "never-maintain-status-quo" principle:
- * A user actively invoking the window picker to add a rule is demonstrably dissatisfied
- * with how the window currently looks. The suggestion must never maintain the status quo
- * (i.e. it must never suggest a no-op state that keeps the window as-is). Instead, it
- * chooses the state that inverts or breaks the current presentation:
- *
- *  - State 2 (Decorated / Taken over): Any axis of ours is drawn (drawShadow || drawClip)
- *    → Suggest `RuleState.NONE` to retract our override and restore the untouched app.
- *  - State 1 (Untouched / Native-like): No axis of ours is drawn (!drawShadow && !drawClip)
- *    → Suggest `RuleState.BOTH` to actively bring the Adwaita appearance to the app.
- *      (Protective fallback: if the window has an unclearable Mutter X11 shadow, suggest
- *      `RuleState.CORNERS` to avoid adding a double shadow artifact).
- *
+ * Picker suggestion under the never-maintain-status-quo principle: retract exactly the axes
+ * currently on screen, or step in on the ones that are not. See docs/rule-model.md § The
+ * pick heuristic.
  * @param {WindowEvaluationParams} params
- * @returns {string}
+ * @returns {string} Canonical stored state, never ''
  */
 export function suggestedRuleState(params) {
     const kind = kindParams(params);
-    const {drawShadow, drawClip} = evaluateWindowActions(kind);
-    if (drawShadow || drawClip)
-        return RuleState.NONE;
+    const {drawShadow, drawClip, drawResize} = evaluateWindowActions(kind);
+    if (drawShadow || drawClip || drawResize) {
+        // Retract exactly what is on screen: reverse those axes.
+        const reversed = [];
+        if (drawClip)
+            reversed.push(RuleAxis.CORNERS);
+        if (drawShadow)
+            reversed.push(RuleAxis.SHADOW);
+        if (drawResize)
+            reversed.push(RuleAxis.RESIZE);
+        return buildRuleState(reversed);
+    }
 
+    // Nothing of ours is on screen: step in, reversing the axes the heuristic kept off.
+    // The shadow stays out where Mutter's own X11 shadow cannot be cleared - reversing it
+    // would paint a second one.
     const {sideW, sideH} = declaredSides(kind).declaringSides;
-    if (hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, sideW, sideH}))
-        return RuleState.CORNERS;
-
-    return RuleState.BOTH;
+    const reversed = [RuleAxis.CORNERS];
+    if (!hasUnclearableShadow({hasSsd: kind.hasSsd, isX11: kind.isX11, hasRing: sideW > 0 || sideH > 0}))
+        reversed.push(RuleAxis.SHADOW);
+    return buildRuleState(reversed);
 }
 
 /**

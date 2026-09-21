@@ -72,14 +72,16 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 
 ## Window Rules
 
-Window Nativizer automatically handles most applications, but you can customize or override rules per window:
+Window Nativizer automatically handles most applications, but you can override its judgement per window:
 
-| Mode | Corners | Shadow | Typical Use Case |
-| :--- | :---: | :---: | :--- |
-| **Both** | Extension | Extension | Default. Third-party apps missing GNOME styling |
-| **Neither** | Client | Client | Windows that already carry matching native decorations |
-| **Corners only** | Extension | Client | Windows with existing compositor shadows (common on X11) |
-| **Shadow only** | Client | Extension | Windows that round their own body but lack drop shadows |
+Each rule names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window, and the extension does the opposite on those axes. An axis the rule does not name keeps following the decision, so a rule is always a real change rather than a restatement of what already happens.
+
+| Reversed axis | Typical Use Case |
+| :--- | :--- |
+| Nothing | Default. The automatic decision stands; most windows need no rule at all |
+| Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
+| Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
+| Resize | Add the band where the decision left the window without one (it reserves no ring, or its own handle reads as native), or retract it on a fixed-ratio popup it cannot track |
 
 To fix a misbehaving window, open **Preferences** and click **Pick Window** to generate a rule with one click.
 

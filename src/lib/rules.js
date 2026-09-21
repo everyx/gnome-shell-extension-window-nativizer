@@ -7,56 +7,51 @@ export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
 export const CLIENT_TYPE_TOKEN_X11 = 'x11';
 
 export const RuleAxis = Object.freeze({
-    SHADOW: 'shadow',
-    CORNERS: 'corners',
-});
-
-export const RuleState = Object.freeze({
-    BOTH: 'both',
-    NONE: 'none',
     CORNERS: 'corners',
     SHADOW: 'shadow',
+    RESIZE: 'resize',
 });
-
-export const RULE_STATES = Object.freeze([
-    RuleState.BOTH, RuleState.NONE, RuleState.CORNERS, RuleState.SHADOW,
+/** Canonical axis order in stored states. */
+export const RULE_AXES = Object.freeze([
+    RuleAxis.CORNERS, RuleAxis.SHADOW, RuleAxis.RESIZE,
 ]);
 
-// Guarded by hasOwnProperty in parseRuleState so stray names like 'toString' don't parse.
-const RULE_STATE_AXES = Object.freeze({
-    [RuleState.BOTH]: [RuleAxis.CORNERS, RuleAxis.SHADOW],
-    [RuleState.NONE]: [],
-    [RuleState.CORNERS]: [RuleAxis.CORNERS],
-    [RuleState.SHADOW]: [RuleAxis.SHADOW],
-});
-
 /**
+ * Parse a stored state: the axes whose automatic decision the user reversed,
+ * comma-separated in canonical order. '' (no axis) is valid and means no rule.
  * @param {string} state
- * @returns {Set<string>|null} Null when not one of the four states
+ * @returns {Set<string>|null} Null when not valid stored grammar
  */
 export function parseRuleState(state) {
-    if (typeof state !== 'string' ||
-        !Object.prototype.hasOwnProperty.call(RULE_STATE_AXES, state))
+    if (typeof state !== 'string')
         return null;
-    return new Set(RULE_STATE_AXES[state]);
+
+    const axes = new Set();
+    if (state === '')
+        return axes;
+
+    // Order is part of the format: prefs always renders canonically, so string
+    // comparison is enough to match, and a hand-edited misorder is dropped loudly.
+    let lastIndex = -1;
+    for (const part of state.split(',')) {
+        const index = RULE_AXES.indexOf(part);
+        if (index <= lastIndex)
+            return null;
+        lastIndex = index;
+        axes.add(part);
+    }
+    return axes;
 }
 
 /**
- * @param {Iterable<string>} axes
+ * Renders the canonical stored form: the reversed axes in canonical order, e.g.
+ * 'corners,shadow'. Nothing reversed renders as '' (no rule to store).
+ * @param {Iterable<string>|null} [axes]
  * @returns {string}
  */
-export function buildRuleState(axes) {
-    const named = new Set(axes);
-    const corners = named.has(RuleAxis.CORNERS);
-    const shadow = named.has(RuleAxis.SHADOW);
-
-    if (corners && shadow)
-        return RuleState.BOTH;
-    if (corners)
-        return RuleState.CORNERS;
-    if (shadow)
-        return RuleState.SHADOW;
-    return RuleState.NONE;
+export function buildRuleState(axes = null) {
+    const reversed = new Set(axes ?? []);
+    return RULE_AXES.filter(axis => reversed.has(axis)).join(',');
 }
 
 /**
@@ -132,15 +127,15 @@ const FINGERPRINT_FIELDS = [
     {name: 'allows_resize', render: o => boolString(o.allowsResize), parse: raw => raw === 'true'},
     {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), parse: raw => raw === 'true'},
     {name: 'has_ring', render: o => boolString(o.hasRing), parse: raw => raw === 'true'},
+    {name: 'has_ssd', render: o => boolString(o.hasSsd), parse: raw => raw === 'true'},
 ];
 
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
 // to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
-// has_ring is standard in 6-field keys, while optional for backward compatibility with legacy 5-field keys.
 const VALID_RULE_KEY_PATTERN = new RegExp(
     '^[^\\s:]+:(?:' +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD}(?:,has_ring=${BOOL_FIELD})?(?:,size=\\d+x\\d+)?|` +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD}(?:,has_ring=${BOOL_FIELD})?` +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
+    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}` +
     ')$'
 );
 
@@ -153,7 +148,7 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
  * @param {boolean} [props.allowsResize=true]
  * @param {boolean} [props.isAttachedDialog=false]
  * @param {boolean} [props.hasRing=false]
- * @param {boolean} [props.legacy=false] - Whether to omit has_ring for legacy 5-field key formatting
+ * @param {boolean} [props.hasSsd=false]
  * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
  * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
  * @returns {string} Canonical key or '' when wmClass is missing
@@ -165,18 +160,15 @@ export function buildRuleKey(wmClass, {
     allowsResize = true,
     isAttachedDialog = false,
     hasRing = false,
-    legacy = false,
+    hasSsd = false,
     width = null,
     height = null,
 } = {}) {
     if (!wmClass)
         return '';
 
-    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing};
-    const activeFields = legacy
-        ? FINGERPRINT_FIELDS.filter(f => f.name !== 'has_ring')
-        : FINGERPRINT_FIELDS;
-    let specifier = activeFields
+    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd};
+    let specifier = FINGERPRINT_FIELDS
         .map(field => `${field.name}=${field.render(fields)}`)
         .join(',');
 
@@ -191,7 +183,7 @@ export function buildRuleKey(wmClass, {
 
 /**
  * @param {Record<string, string>} [rawRules={}]
- * @returns {Record<string, string>} Canonical key -> RuleState
+ * @returns {Record<string, string>} Canonical key -> canonical axis state
  */
 export function sanitizeWindowRules(rawRules = {}) {
     if (!rawRules || typeof rawRules !== 'object')
@@ -212,6 +204,11 @@ export function sanitizeWindowRules(rawRules = {}) {
             continue;
         }
 
+        // Nothing reversed is no rule: drop the row rather than store ''.
+        const canonical = buildRuleState(axes);
+        if (!canonical)
+            continue;
+
         const canonicalKey = normalizeRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             const existingKey = seenKeys.get(canonicalKey);
@@ -220,22 +217,31 @@ export function sanitizeWindowRules(rawRules = {}) {
         }
 
         seenKeys.set(canonicalKey, key);
-        clean[canonicalKey] = buildRuleState(axes);
+        clean[canonicalKey] = canonical;
     }
 
     return clean;
 }
 
 /**
+ * Stores a state, canonicalising it first. A state with nothing reversed ('') stores
+ * nothing: it is the same as having no rule, so the key is removed.
  * @param {Record<string, string>} [rules={}]
  * @param {string} key
  * @param {string} state
  * @returns {Record<string, string>}
  */
 export function withRule(rules = {}, key, state) {
-    if (!RULE_STATES.includes(state))
+    const axes = parseRuleState(state);
+    if (!axes)
         throw new Error(`[window-nativizer] unknown rule state: ${state}`);
-    return {...rules, [key]: state};
+    const next = {...rules};
+    const canonical = buildRuleState(axes);
+    if (!canonical)
+        delete next[key];
+    else
+        next[key] = canonical;
+    return next;
 }
 
 /**
@@ -280,9 +286,10 @@ export function parseRuleKey(key) {
  * @param {boolean} [options.allowsResize=true]
  * @param {boolean} [options.isAttachedDialog=false]
  * @param {boolean} [options.hasRing=false]
+ * @param {boolean} [options.hasSsd=false]
  * @param {number|null} [options.frameWidth=null]
  * @param {number|null} [options.frameHeight=null]
- * @returns {Set<string>|null} Axes that are ours, or null when no rule matched
+ * @returns {Set<string>|null} The reversed axes, or null when no rule matched
  */
 export function resolveRule(wmClass, rules = {}, options = {}) {
     if (!wmClass)
@@ -295,6 +302,7 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
         allowsResize = true,
         isAttachedDialog = false,
         hasRing = false,
+        hasSsd = false,
         frameWidth = null,
         frameHeight = null,
     } = options;
@@ -306,34 +314,23 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
         ? parseRuleState(rules[key])
         : null;
 
-    // 1. For fixed-size windows with known dimensions, prefer exact-size rules (exact 6-field -> legacy 5-field).
+    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule.
     if (isFixed) {
         const exactKey = buildRuleKey(wmClass, {
-            clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing,
+            clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
             width: frameWidth, height: frameHeight,
         });
-        const legacyExactKey = buildRuleKey(wmClass, {
-            clientType, windowType, hasParent, allowsResize, isAttachedDialog,
-            width: frameWidth, height: frameHeight,
-            legacy: true,
-        });
-        const matched = lookup(exactKey) || lookup(legacyExactKey);
+        const matched = lookup(exactKey);
         if (matched)
             return matched;
     }
 
-    // 2. Generic rule key as fallback for fixed-size, or primary for resizable (generic 6-field -> legacy 5-field).
+    // 2. Generic rule key as fallback for fixed-size, or primary for resizable.
     const genericKey = buildRuleKey(wmClass, {
-        clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing,
-    });
-    const legacyGenericKey = buildRuleKey(wmClass, {
-        clientType, windowType, hasParent, allowsResize, isAttachedDialog,
-        legacy: true,
+        clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
     });
 
     if (has(genericKey))
         return parseRuleState(rules[genericKey]);
-    if (has(legacyGenericKey))
-        return parseRuleState(rules[legacyGenericKey]);
     return null;
 }

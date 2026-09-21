@@ -17,7 +17,7 @@ shadow: who paints one?    declared margin, SSD frame, Mutter's X11 shadow   ─
 corners: do they
 already look like ours?    the Adwaita look                                  ── yes ─▶ skip
 
-your rules?                per window kind: which axes are ours
+your rules?                per window kind: which axes the user reversed
 any policy?                tiled neighbour, crisp text on fractional scaling
 rounding them?             the client's own ring is cleared exactly when the shadow is ours
                            └───────────────────────────────▶ draw
@@ -52,16 +52,16 @@ rounding them?             the client's own ring is cleared exactly when the sha
      inference to go on: the shadow axis at least has the window's own declaration.
      Everything else is rounded to our radius, whether the client rounded itself or not
      (*Which rectangle the clip lands on*).
-3. **User rules** — `src/lib/rules.js`. One state per window kind (`both`, `none`,
-   `corners`, `shadow`) names which axes are ours. The only layer that may turn an
-   axis back on.
+3. **User rules** — `src/lib/rules.js`. One state per window kind names the axes
+   (corners, shadow, resize) whose decision the user reversed. The only layer that may
+   overturn an inference.
 4. **State modifiers** — inside `evaluateWindowActions()`. Applied last, on top of
    both of the above, because they are visual policies rather than inferences about
    who already paints what.
 
 A rule overrides layer 2 and nothing else: it exists to correct a wrong reading or
 inference, not to overrule a structural fact (layer 1) or a policy (layer 4). See
-[rule-model.md](rule-model.md) for the four states and what each does to the ring.
+[rule-model.md](rule-model.md) for the three axes and what reversing each one does to the ring.
 
 ## When a window's corners already look like ours
 
@@ -137,10 +137,10 @@ the shadow changes owner along with the shape, and the rule is one line:
 **the ring is cleared exactly when the shadow is ours** (`clearRing` in
 `evaluateWindowActions()`). With no rule in play, clipping a window that declared a ring
 makes the shadow ours first, so an ordinary client-decorated window ends up with one
-shadow matching the corners we drew. A rule decides the axes itself: `both` clears the
-ring and draws our shadow, `corners` and `none` leave the shadow with the client and
-leave its ring alone, and `shadow` clears the ring and draws ours while the corners stay
-the client's. The clip is attached for that last one too, with radius 0: erasing the ring
+shadow matching the corners we drew. A rule decides each axis itself, by reversing it:
+where the decision left the shadow with the client, reversing it clears the ring and draws
+ours; where the decision drew ours, reversing it retracts. The clip is attached for a
+shadow reversal too, with radius 0: erasing the ring
 is the clip's job and needs no corner cut. Our shadow is then cast for a square body,
 because a square body is the shape we have.
 
@@ -278,14 +278,17 @@ Three things about the extent:
 - **It is clipped to the monitor.** A region that falls off the screen is dropped, so a window
   flush against the edge adds nothing there.
 
-Who gets one is a different question from what is drawn (`shouldShowResizeBand()`): a window
-we decorate at all in its untiled baseline state (`untiledActions`: a `none` rule, or one that
-fails structural eligibility, draws nothing and keeps every click it had; evaluating against
-untiled actions ensures tile-matched windows—which render with radius 0 and suppressed shadow—remain
-recognized as managed windows and keep their resize band), resizable, not maximized or fullscreen,
-not already the client's own to size (only a GTK4 client can be *shown* to own a native-width
-handle, and then the band is skipped), and not an SSD window (mutter-x11-frames drew that frame
-and the client that owns it runs the grab from the invisible border).
+Who gets one is a different question from what is drawn (`decideResizeBand()`): the resize
+axis is independent of the decoration or the tiling - a `resize-only` rule is valid, and a
+tile match takes the shadow but never the grab band. A window gets one when it is a
+decoratable kind, is resizable, is not maximized or fullscreen, is not already the client's
+own to size (only a GTK4 client can be *shown* to own a native-width handle, and then the
+band is skipped), and is not an SSD window (mutter-x11-frames drew that frame and the client
+that owns it runs the grab from the invisible border). Reversing the axis is the only lever,
+and it is bidirectional: it adds a band where the reading left the window without one, and
+retracts the one the reading drew. The reading keeps the band inside a ring the client
+reserved, so a window that reserves nothing gets the desktop around it only once a rule
+reverses the axis.
 **Which edges get one is Mutter's call, read from the window's state.** Mutter derives a per-edge
 constraint (`update_edge_constraints()`, mutter `src/core/window.c`) from the window's tile mode and
 its maximize flags, and publishes it per client type: Wayland windows receive the xdg-shell `TILED_*`
@@ -323,10 +326,10 @@ uses (`insetsFromRects` over `buffer_rect - frame_rect`), not a second path; onl
 aggregation differs (`declaredSides()` gives the band the narrowest side and the shadow axis the
 widest, because the two ask different questions).
 Below the minimum, at least `2 * RESIZE_BAND = 24px` per side - the bound that keeps the ring
-itself placeable, see below - and a 1×1 helper is not a window. The `resize-band` setting
-turns the whole thing off.
+itself placeable, see below - and a 1×1 helper is not a window.
 
-**What it costs.** Measured by flipping this setting alone on the same window in a nested session
+**What it costs.** Measured by reversing the resize axis against the heuristic on the same window
+in a nested session
 (`pnpm run benchmark:perf`'s band phase; the shell's CPU read from schedstat nanoseconds): no idle
 CPU at all, because a window that does not move neither re-allocates nor gets picked; 6.4 KB
 resident per window; and about 34 us of shell CPU per resize step per window, measured over ten
@@ -360,22 +363,22 @@ build held the pointer with `clutter_stage_grab()` while it was on a strip; that
 press from reaching a window *under* the ring, which was only possible while the band could reach past
 its own window's surface.
 
-**A window is only given a ring it reserved.** The band is the inner edge of the margin a client
-declares for its own shadow - that strip is inside the window's own surface, so a press there lands
-on ground the client itself would use. A window that declares no margin (an undecorated toplevel, a
-video popup) reserves no such ground, and a ring of ours would sit outside the window, on whatever
-is behind it: the press would have two owners unless we held the pointer, and we would be taking
-clicks from a neighbour to hand the window a handle it did not ask for. Native windows are in the
-same position - GTK only builds an input region wider than the frame when the window is decorated
-and has a shadow (`gtk_window_update_realized_window_properties` returns early otherwise), so an
-undecorated window has no handle outside itself either. Such a window keeps the handle its own
-toolkit draws inside its surface, which is the precise one: measured on the Firefox video popup,
+**A window that declares no margin gets no band by default.** The band is the inner edge of the
+margin a client declares for its own shadow where one exists - that strip is inside the window's
+own surface, so a press there lands on ground the client itself would use. A window that declares
+no margin (an undecorated toplevel, a video popup) has that ground only if the user asks for it:
+reversing the resize axis puts the 12px of the desktop around the body under the pointer, and the
+window keeps every click it had until then. A strip can still
+only be pressed where its own window is topmost (above), so the neighbour's clicks are safe
+wherever the neighbour covers; the cost the user accepts is desktop pixels answering a resize.
+
+The known imprecise case is the fixed-ratio client: measured on the Firefox video popup,
 `move_resize_frame(true, ...)` at 403/443/493/553 logical px leaves it at 373x280 (4:3) every time.
-A client that keeps an aspect ratio cannot be tracked by a compositor-driven drag anyway - the
+A client that keeps an aspect ratio cannot be tracked by a compositor-driven drag - the
 compositor proposes the size the pointer implies for the dragged edge, the client re-derives the
 other dimension, and the two drift apart. Wayland offers no ratio to read (`xdg_toplevel` carries
 minimum and maximum sizes, not an aspect), so no amount of care in the drag path fixes it, while the
-client's own handle has the ratio and tracks the pointer exactly.
+client's own handle has the ratio and tracks the pointer exactly. That kind reverses the resize axis.
 
 **Why the size floor is 24, and why it says nothing native.** The floor only says the ring has
 to fit: a window thinner than `2 * RESIZE_BAND` has no middle once the 12px band is grown on
@@ -401,7 +404,8 @@ The cost is the ring the client does not cover. Inside the window's own surface 
 were the client's to begin with, so a band as wide as the toolkit's changes nothing there;
 outside it, in the pixels that were **click-through on purpose**, a press now starts a resize
 and never reaches what is under the cursor - typically a click on a desktop icon or on the
-window behind, a few pixels outside the body. That is the trade the setting exists for.
+window behind, a few pixels outside the body. That is the trade the default accepts; reversing
+the resize axis on the kind opts out of it.
 
 ### What the band cannot fix
 
@@ -421,9 +425,9 @@ the reading being one-sided; the last is simply not verified yet.
 - **A client that draws its own decoration inside its surface without declaring a
   margin** cannot be told apart from one that draws none. Nothing in the window's
   geometry or in Mutter distinguishes them, so the baseline adds our decoration next
-  to theirs. A `none` rule is the only remedy.
-- **A declared ring that is padding rather than a shadow** reads as a ring, and `both` -
-  or the automatic takeover - clears it along with the corners. If the client painted
+  to theirs. Reversing the shadow axis is the only remedy.
+- **A declared ring that is padding rather than a shadow** reads as a ring, and a
+  shadow-on reversal - or the automatic takeover - clears it along with the corners. If the client painted
   something in there, that something goes too. The client's own declaration is the only
   evidence there is, and it says the ring is decoration.
 - **Extents of all zeros read as a bare window.** Mutter sets `has_custom_frame_extents`
@@ -448,7 +452,7 @@ the reading being one-sided; the last is simply not verified yet.
   no shadow in a pass without a clip (`clearRing` without a clip defers it). Tiled windows
   reach a square-corner-with-shadow look on purpose (`style.tiled` has radius 0 and
   no outline, *Which style applies*), as does `prefer-crisp-text` on a fractional
-  monitor and a `shadow` rule.
+  monitor and a reversed shadow axis.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
   drops the shadow we would draw; it does not clear the client's ring.
 - **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
@@ -474,9 +478,9 @@ larger than it is — never smaller.
 
 On the shadow axis that cannot change an answer: `declaresOwnShadow()` only asks whether a
 side is positive, and inflating a non-negative reading keeps a declared margin declared and a
-zero zero. The resize band is not so lucky: its gate is a magnitude comparison,
-`narrowestSides >= 12` (`shouldShowResizeBand()`), so a reading inflated past 12 on a backend
-like this can skip the band for a window whose real margin is narrower than a native one. That
+zero zero. The resize band is not so lucky: it lives inside that same positive-side test, and
+its GTK4 skip compares `narrowestSides >= 12`, so a reading inflated from zero on a backend
+like this can give a window a band it declared no ring for. That
 is the one place the unreadable scale can change what we do.
 
 ## Which style applies
@@ -576,7 +580,7 @@ style for the whole session; what runs per frame is eight textured rectangles.
 `has_custom_frame_extents`, none of which GJS can see. Those are the windows where
 something else is painting and the reading layer 2 makes cannot say so: reimplementing
 the gate partially would add a second shadow rather than skip one, so they are left to
-a `none` rule - the one-sided error above, with the remedy that fits it.
+a reversed shadow axis - the one-sided error above, with the remedy that fits it.
 
 ## Overview downscaling and offscreen effects
 

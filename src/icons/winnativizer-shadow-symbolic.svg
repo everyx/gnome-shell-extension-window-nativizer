@@ -1,0 +1,13 @@
+<!-- Window Nativizer rule axis: shadow - one window corner with a ring of dots
+     along its outside, the shadow it casts. Six dots at even arc length, so the
+     ring stays one weight and the dots stay apart at 16px. Fill-only path on the
+     GNOME symbolic grid; drawn for this project (GPL-2.0-or-later). See NOTICE. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+  <path d="M4.2 14.5V7.2A3 3 0 0 1 7.2 4.2H14.5V6.4H7.2A0.8 0.8 0 0 0 6.4 7.2V14.5Z"/>
+  <circle cx="2.0" cy="12.353" r="1"/>
+  <circle cx="2.0" cy="8.658" r="1"/>
+  <circle cx="2.474" cy="5.032" r="1"/>
+  <circle cx="5.032" cy="2.474" r="1"/>
+  <circle cx="8.658" cy="2.0" r="1"/>
+  <circle cx="12.353" cy="2.0" r="1"/>
+</svg>

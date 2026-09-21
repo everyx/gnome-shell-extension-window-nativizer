@@ -10,7 +10,8 @@ import {
     chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/rules.js';
 import {
-    WindowClientType, extractWindowProperties, readDeclaredIdentity, readWindowString,
+    WindowClientType, buildRuleKeyFromProperties, extractWindowProperties,
+    readDeclaredIdentity, readWindowString,
 } from '../src/lib/pick.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
@@ -37,6 +38,10 @@ describe('extractWindowProperties', () => {
             allowsResize: 'false',
             isAttachedDialog: 'false',
             hasRing: 'false',
+            hasSsd: 'false',
+            isMaximized: 'false',
+            isFullscreen: 'false',
+            hasTileMatch: 'false',
         });
     });
 
@@ -57,6 +62,10 @@ describe('extractWindowProperties', () => {
             allowsResize: 'true',
             isAttachedDialog: 'true',
             hasRing: 'false',
+            hasSsd: 'false',
+            isMaximized: 'false',
+            isFullscreen: 'false',
+            hasTileMatch: 'false',
         });
     });
 
@@ -87,6 +96,24 @@ describe('extractWindowProperties', () => {
             is_attached_dialog: () => false,
         };
         expect(extractWindowProperties(pipWin).hasRing).toBe('false');
+    });
+
+    it('carries the SSD flag, so the key can tell an SSD kind from a bare one', () => {
+        const ssdWin = {
+            get_wm_class: () => 'wps',
+            get_window_type: () => WindowType.NORMAL,
+            get_client_type: () => WindowClientType.X11,
+            decorated: true,
+            get_transient_for: () => null,
+            allows_resize: () => true,
+            is_attached_dialog: () => false,
+        };
+        const props = extractWindowProperties(ssdWin);
+        expect(props.hasSsd).toBe('true');
+        // The same window without the frame is a different kind.
+        expect(buildRuleKeyFromProperties(props)).toContain('has_ssd=true');
+        expect(buildRuleKeyFromProperties(props)).not.toBe(
+            buildRuleKeyFromProperties({...props, hasSsd: 'false'}));
     });
 
     it('falls back to get_sandboxed_app_id when wm_class is unavailable', () => {
@@ -130,7 +157,25 @@ describe('extractWindowProperties', () => {
             allowsResize: 'true',
             isAttachedDialog: 'false',
             hasRing: 'false',
+            hasSsd: 'false',
+            isMaximized: 'false',
+            isFullscreen: 'false',
+            hasTileMatch: 'false',
         });
+    });
+
+    it('carries transient state so prefs can say the rule applies on restore', () => {
+        const win = {
+            get_wm_class: () => 'wps',
+            get_transient_for: () => null,
+            is_maximized: () => true,
+            is_fullscreen: () => false,
+            get_tile_match: () => ({}),
+        };
+        const props = extractWindowProperties(win);
+        expect(props.isMaximized).toBe('true');
+        expect(props.isFullscreen).toBe('false');
+        expect(props.hasTileMatch).toBe('true');
     });
 
     it('treats a wholly unreadable name as no identity', () => {
