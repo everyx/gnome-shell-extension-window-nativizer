@@ -102,6 +102,13 @@ Things about it that cost time to find:
   `logical x global.display.get_monitor_scale(monitor)`. On a fractional-scale display
   that is a 4/3 difference here, enough to sample the wrong place entirely and conclude
   that nothing is drawn.
+- **`dconf` writes go to the session, not to `XDG_CONFIG_HOME`.** The nested session keeps
+  its settings in `$XDG_CONFIG_HOME/dconf/user` (`/tmp/window-nativizer-dev/config`, wiped by
+  `dev.sh shell`), but a plain `dconf write` performs the write through the *current* session's
+  dconf service and lands in the developer's real desktop settings however
+  `XDG_CONFIG_HOME` is set. `./tools/dev.sh dconf <args>` points both the bus and
+  `XDG_CONFIG_HOME` at the nested session, so reads and writes hit the same isolated database
+  the nested shell reads.
 - **Per-frame cost is measurable without a profiler.** `ClutterStage` emits
   `before-paint` and `after-paint`; a `GLib.timeout_add(..., 16, ...)` that calls
   `global.stage.queue_redraw()` keeps frames coming, and enabling or disabling the
