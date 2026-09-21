@@ -22,7 +22,9 @@ import {
     buildRuleKeyFromProperties,
 } from './lib/pick.js';
 import {
+    getRuleTitles,
     getWindowRules,
+    setWindowRule,
     setWindowRules,
 } from './lib/settings.js';
 
@@ -376,6 +378,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             rows.length = 0;
 
             const rules = getWindowRules(settings);
+            const titles = getRuleTitles(settings);
             const entries = Object.entries(rules);
 
             if (entries.length === 0) {
@@ -390,7 +393,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
             let focusedRow = null;
             for (const [ruleKey, state] of entries) {
-                const row = buildRuleRow(ruleKey, state);
+                const row = buildRuleRow(ruleKey, state, titles);
                 rulesGroup.add(row);
                 rows.push(row);
                 if (highlightKey && ruleKey === highlightKey) {
@@ -434,7 +437,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             return switchRow;
         };
 
-        const buildRuleRow = (ruleKey, state) => {
+        const buildRuleRow = (ruleKey, state, titles) => {
             const {baseWmClass, properties} = parseRuleKey(ruleKey);
             const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
             const name = appInfo?.name || baseWmClass || ruleKey;
@@ -475,12 +478,22 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 box.set_tooltip_text(tips.join(' · '));
             };
 
+            // Dimmed sample of the kind, not its name - see docs/rule-model.md.
+            const sample = titles[ruleKey] ?? '';
             const row = new Adw.ExpanderRow({
-                title: asMarkup(name),
+                title: sample && sample !== name
+                    ? `${asMarkup(name)} <span alpha="55%">${asMarkup(sample)}</span>`
+                    : asMarkup(name),
                 subtitle: asMarkup(windowKindSentence(properties)),
+                // Ellipsized by Pango: no character cap can know the row's width.
+                title_lines: 1,
                 subtitle_lines: 2,
             });
             row.update_property([Gtk.AccessibleProperty.LABEL], [name]);
+            // Only when the row actually shows it: a sample equal to the app name is not shown,
+            // so it must not be explained either.
+            if (sample && sample !== name)
+                row.set_tooltip_text(_('Picked from “%s”. This correction applies to every window of this kind.').format(sample));
 
             row.add_prefix(appInfo?.icon
                 ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
@@ -502,6 +515,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             deleteButton.connect('clicked', () => {
                 const rules = getWindowRules(settings);
                 delete rules[ruleKey];
+                // One write: the entry carries its own title, so it goes with the rule.
                 setWindowRules(settings, rules);
                 scheduleRenderRules();
             });
@@ -626,10 +640,12 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
                 const existingRules = getWindowRules(settings);
                 const isExisting = Object.prototype.hasOwnProperty.call(existingRules, ruleKey);
 
-                setWindowRules(settings, withRule(existingRules, ruleKey, state));
+                // One write: the rule and the sample it came from are one entry.
+                setWindowRule(settings, ruleKey, state,
+                    typeof props.windowTitle === 'string' ? props.windowTitle : '');
 
                 // Read-back is a persistence check, not redundancy: sanitize inside
-                // setWindowRules may drop what withRule staged.
+                // setWindowRule may drop what it staged.
                 if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
                     window.add_toast(new Adw.Toast({
                         title: _('No correction added: it could not be saved'),

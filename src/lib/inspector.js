@@ -12,6 +12,7 @@ import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
+    readWindowString,
 } from './pick.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {isDecoratableWindowType} from './detector.js';
@@ -186,6 +187,11 @@ export class InspectorService {
         }
 
         const properties = extractWindowProperties(win, resolveWindowIdentity(win));
+
+        // Display only, see docs/rule-model.md § What the pick remembers for the row.
+        const title = readWindowString(() => win.get_title());
+        if (title)
+            properties.windowTitle = title;
 
         const state = this._manager?.suggestedRuleState?.(win);
         if (typeof state === 'string') {

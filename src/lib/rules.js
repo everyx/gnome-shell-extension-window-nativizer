@@ -182,6 +182,29 @@ export function buildRuleKey(wmClass, {
 }
 
 /**
+ * The title a rule was picked from, keyed like the rule itself - see docs/rule-model.md
+ * § What the pick remembers for the row.
+ * @param {Record<string, string>} [rawTitles={}]
+ * @returns {Record<string, string>} Canonical key -> one-line title
+ */
+export function sanitizeRuleTitles(rawTitles = {}) {
+    if (!rawTitles || typeof rawTitles !== 'object')
+        return {};
+
+    const clean = {};
+    for (const [key, title] of Object.entries(rawTitles)) {
+        if (!VALID_RULE_KEY_PATTERN.test(key) || typeof title !== 'string')
+            continue;
+        // One line beside an app name: a newline would break the row.
+        const oneLine = title.replace(/[\r\n]+/g, ' ').trim();
+        if (!oneLine)
+            continue;
+        clean[key] = oneLine;
+    }
+    return clean;
+}
+
+/**
  * @param {Record<string, string>} [rawRules={}]
  * @returns {Record<string, string>} Canonical key -> canonical axis state
  */
