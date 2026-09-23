@@ -516,3 +516,72 @@ export function suggestedRuleWouldChange(properties, params, state) {
 
     return ruleWouldChangeActions(kindParams(params), {key, state});
 }
+
+/**
+ * Expected visual corner radius for an inspected window.
+ * Maximized, tiled, fullscreen, and unclipped non-Adwaita/SSD windows have square (0px) corners.
+ *
+ * @param {object} [params={}]
+ * @param {boolean} [params.isFullscreen=false]
+ * @param {boolean} [params.isMaximized=false]
+ * @param {boolean} [params.isTiled=false]
+ * @param {boolean} [params.isActivelyClipped=false]
+ * @param {boolean} [params.hasNativeLikeCorners=false]
+ * @param {boolean} [params.hasSsd=false]
+ * @param {number} [params.baseRadius=ADWAITA_STYLE.window.radius]
+ * @returns {number} Visual corner radius in pixels (0 for square corners)
+ */
+export function expectedWindowRadius({
+    isFullscreen = false,
+    isMaximized = false,
+    isTiled = false,
+    isActivelyClipped = false,
+    hasNativeLikeCorners = false,
+    hasSsd = false,
+    baseRadius = ADWAITA_STYLE.window.radius,
+} = {}) {
+    if (isFullscreen || isMaximized || isTiled)
+        return 0;
+
+    if (isActivelyClipped)
+        return baseRadius;
+
+    if (!hasSsd && hasNativeLikeCorners)
+        return baseRadius;
+
+    return 0;
+}
+
+/**
+ * Default inspector highlight border width in pixels, aligned with desktop visibility.
+ */
+export const HIGHLIGHT_BORDER_WIDTH = 3;
+
+/**
+ * Outset bounding box for the inspector highlight border around the window.
+ *
+ * @param {{x: number, y: number, width: number, height: number}} frame
+ * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]
+ * @returns {{x: number, y: number, width: number, height: number}}
+ */
+export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
+    if (!frame)
+        return {x: 0, y: 0, width: 0, height: 0};
+    return {
+        x: frame.x - borderWidth,
+        y: frame.y - borderWidth,
+        width: Math.max(0, frame.width + borderWidth * 2),
+        height: Math.max(0, frame.height + borderWidth * 2),
+    };
+}
+
+/**
+ * Outer border-radius matching the concentric outer arc of an outset border.
+ *
+ * @param {number} innerRadius
+ * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]
+ * @returns {number}
+ */
+export function highlightOuterRadius(innerRadius, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
+    return innerRadius > 0 ? innerRadius + borderWidth : 0;
+}

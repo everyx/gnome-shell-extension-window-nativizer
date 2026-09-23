@@ -15,8 +15,26 @@ import {
     readWindowString,
 } from './pick.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
-import {isDecoratableWindowType} from './detector.js';
+import {
+    HIGHLIGHT_BORDER_WIDTH,
+    expectedWindowRadius,
+    highlightBoundingBox,
+    highlightOuterRadius,
+    isDecoratableWindowType,
+    isWindowMaximized,
+    isWindowTiled,
+} from './detector.js';
+import {hasNativeLikeCorners} from './nativeLikeCorners.js';
 import {resolveWindowIdentity} from './window.js';
+
+export {HIGHLIGHT_BORDER_WIDTH};
+export const HIGHLIGHT_BG_TRANSPARENTIZE = 0.8;
+
+function highlightStyle(outerRadius) {
+    return `border: ${HIGHLIGHT_BORDER_WIDTH}px solid -st-accent-color; ` +
+        `background-color: st-transparentize(-st-accent-color, ${HIGHLIGHT_BG_TRANSPARENTIZE}); ` +
+        `border-radius: ${outerRadius}px;`;
+}
 
 const INSPECTOR_DBUS_IFACE_XML = `
 <node>
@@ -102,6 +120,28 @@ export class InspectorService {
         return null;
     }
 
+    _getExpectedWindowRadius(win) {
+        if (!win)
+            return 0;
+
+        const isMaximized = isWindowMaximized(win);
+        const isTiled = isWindowTiled(win, {isMaximized});
+        const isFullscreen = Boolean(win.is_fullscreen?.());
+        const hasSsd = Boolean(win.decorated);
+        const isActivelyClipped = Boolean(this._manager?.isWindowActivelyClipped?.(win));
+        const hasNativeCorners = hasNativeLikeCorners(win);
+
+        return expectedWindowRadius({
+            isFullscreen,
+            isMaximized,
+            isTiled,
+            isActivelyClipped,
+            hasNativeLikeCorners: hasNativeCorners,
+            hasSsd,
+            baseRadius: ADWAITA_STYLE.window.radius,
+        });
+    }
+
     _startInteractivePick() {
         this._overlay = new St.Widget({
             name: 'WindowNativizerInspectorOverlay',
@@ -117,9 +157,10 @@ export class InspectorService {
         // St resolves it from St.Settings:accent-color and re-resolves every mapped
         // widget's style when that setting changes, so the highlight follows the
         // system accent without a signal of our own to connect.
+        this._currentRadius = null;
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
-            style: `border: 3px solid -st-accent-color; background-color: st-transparentize(-st-accent-color, 0.85); border-radius: ${ADWAITA_STYLE.window.radius}px;`,
+            style: highlightStyle(0),
             visible: false,
         });
         Main.uiGroup.add_child(this._highlight);
@@ -129,8 +170,17 @@ export class InspectorService {
             const targetWin = this._findTargetWindow(x, y);
             if (targetWin) {
                 const frame = targetWin.get_frame_rect();
-                this._highlight.set_position(frame.x, frame.y);
-                this._highlight.set_size(frame.width, frame.height);
+                const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
+                const innerRadius = this._getExpectedWindowRadius(targetWin);
+                const outerRadius = highlightOuterRadius(innerRadius, HIGHLIGHT_BORDER_WIDTH);
+
+                this._highlight.set_position(box.x, box.y);
+                this._highlight.set_size(box.width, box.height);
+
+                if (this._currentRadius !== outerRadius) {
+                    this._currentRadius = outerRadius;
+                    this._highlight.style = highlightStyle(outerRadius);
+                }
                 this._highlight.visible = true;
             } else {
                 this._highlight.visible = false;
@@ -235,6 +285,7 @@ export class InspectorService {
             // stage may be unmanaging
         }
 
+        this._currentRadius = null;
         this._highlight?.destroy();
         this._highlight = null;
 
