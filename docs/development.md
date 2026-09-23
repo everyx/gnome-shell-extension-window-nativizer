@@ -170,3 +170,20 @@ updating documentation and user-facing explanations, avoid hardcoding transient 
 (such as specific corner radii or margin depths) unless citing an upstream literal. Refer instead
 to domain concepts (e.g. Libadwaita continuous curvature, GTK standard input regions, GPU-baked
 meshes) to prevent documentation drift as upstream styling and rendering heuristics evolve.
+
+### Anti-drift documentation hierarchy (抗漂移文档分层)
+
+Spatial distance from code governs the probability of documentation rot: the farther documentation
+lives from the point of change, the higher the risk of drift. Furthermore, **never duplicate what can
+be introspected from code** (exports, function signatures, syntax expressions, AST structures, or caller
+rosters). Anything discoverable via types, tests, or grep belongs to the machine, not to prose.
+An introspectable fact written in markdown is merely an unverified, rotting cache.
+
+1. **Machine-verified layer (`tests/`)**: High churn, zero drift. All concrete parameters, edge cases,
+   and geometric formulas live in executable unit tests (`npm test`). If code shifts, tests fail immediately.
+2. **In-code comments layer (JSDoc & inline)**: Co-located with code, high locality. Carries local "Why",
+   counter-intuitive workarounds, and non-obvious traps. Omits restatements of code syntax or trivial types.
+   Kept in the same file and reviewed in the same git diff as the code change.
+3. **Architecture & decision layer (`docs/*.md`)**: Low churn, macro scope. Records cross-module
+   interactions, rationale for chosen designs over rejected alternatives, and alignment with GNOME/Mutter.
+   Never duplicates volatile micro-implementation details (variable names, parameter lists, or internal thresholds).

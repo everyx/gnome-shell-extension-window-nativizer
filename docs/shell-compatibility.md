@@ -10,6 +10,7 @@ stops being true is a compatibility break, not a refactor.
 | `win.decorated` | 45–50 stable | policy flag from `mwm_decorated` (default TRUE), not proof of a live frame — the real frame test is `priv->frame != NULL` (`meta_window_x11_is_ssd`); consumed here as "has frame decorations (SSD)" |
 | `win.is_client_decorated()` | **does not exist** | a GTK concept; `Meta.Window` has no counterpart |
 | `win.is_maximized()` | 45–50 stable | canonical `meta_window_is_maximized` |
+| `win.is_fullscreen()` | 45–50 stable | canonical `meta_window_is_fullscreen` |
 | `win.get_tile_match()` | 45–50 stable | the adjacent matching tile, or null |
 | `win.get_pid()` | 45–50 stable | owning process id; keys the per-process corner inference and its cache eviction |
 | `win.get_frame_rect()` | 45–50 stable | the window body, margin excluded; the rectangle `RoundedClipEffect` rounds |
@@ -72,6 +73,8 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   `decoration-model.md` § The resize band records what that costs and how to reverse it per kind.
 - **`enable()` and `disable()` are idempotent.** After `disable()` nothing of ours
   remains: no connected signals, no actors, no pending sources.
+- **Never instantiate long-lived GObjects at JS module scope.** EGO-X-004 rejects
+  module-scope GObjects (e.g. `Gio.Cancellable`); tie their lifecycle strictly to session or instance boundaries.
 - **Signals that may not exist are connected in "safe" mode.** Window- and
   actor-level signals vary across 45–50, and the object can be unmanaged while we
   connect, so a failure there is expected and swallowed. A failure on a global

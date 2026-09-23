@@ -27,6 +27,7 @@ import {
 import {hasNativeLikeCorners} from './nativeLikeCorners.js';
 import {resolveWindowIdentity} from './window.js';
 
+// Highlight visual styling aligned with GNOME Shell's screenshot window selector.
 export {HIGHLIGHT_BORDER_WIDTH};
 export const HIGHLIGHT_BG_TRANSPARENTIZE = 0.8;
 

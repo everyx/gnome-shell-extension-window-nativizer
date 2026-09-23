@@ -553,12 +553,13 @@ export function expectedWindowRadius({
 }
 
 /**
- * Default inspector highlight border width in pixels, aligned with desktop visibility.
+ * Default inspector highlight border width in pixels, aligned with GNOME Shell screenshot overlay.
  */
 export const HIGHLIGHT_BORDER_WIDTH = 3;
 
 /**
  * Outset bounding box for the inspector highlight border around the window.
+ * Outsetting prevents St CSS inward border drawing from eroding into the client window content.
  *
  * @param {{x: number, y: number, width: number, height: number}} frame
  * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]
@@ -576,7 +577,7 @@ export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH
 }
 
 /**
- * Outer border-radius matching the concentric outer arc of an outset border.
+ * Concentric outer arc for an outset border; square windows stay 0px.
  *
  * @param {number} innerRadius
  * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]

@@ -40,6 +40,14 @@ For the selection mechanics we followed KDE's KWin
 and GNOME's own equivalent: `Main.pushModal`, `global.stage.set_cursor_type` and a
 Clutter event grab.
 
+### Interactive pick & highlight geometry
+
+When hovering over windows during a pick, `InspectorService` highlights the target:
+- **Target bounding box**: Positioned around the window's frame rect outset by the border stroke width, rather than the window actor's allocation. In Wayland CSD, actor allocation includes invisible client shadow margins (which would leave the highlight floating in empty space, as Looking Glass does). The outset prevents St CSS inward border drawing from eroding into client window content.
+- **Concentric corner radius**: For rounded windows, the highlight's outer border radius maintains concentric curvature ($R_{outer} = R_{inner} + W$) for a uniform stroke width around corners. Square, tiled, maximized, fullscreen, and SSD windows strictly keep square corners.
+- **Active clip vs. ring clearing**: A window may have a clip effect attached purely to erase a client-painted frame ring at radius 0 (`clearRing`), which must not be confused with active rounded corner clipping.
+- **Styling**: Aligned with GNOME Shell's screenshot selection rectangle.
+
 ## The extension lifecycle
 
 `extension.js` is the entry point. `enable()` builds a `Manager`, calls `manager.enable()`
