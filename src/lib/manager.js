@@ -539,8 +539,12 @@ export class Manager {
     }
 
     /**
+     * Whether the window is actively managed with a rounded clip.
+     * A window with clearRing attaches a clip at radius 0 to erase client shadow margins,
+     * which does not constitute an active rounded corner clip.
+     *
      * @param {object} win - Meta.Window
-     * @returns {boolean} Whether the window is actively managed with a rounded clip.
+     * @returns {boolean}
      */
     isWindowActivelyClipped(win) {
         const state = this._windows.get(win);
