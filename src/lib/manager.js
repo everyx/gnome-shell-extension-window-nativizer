@@ -207,7 +207,7 @@ export class Manager {
         if (!win || !isDecoratableWindowType(win.get_window_type?.()) || this._windows.has(win))
             return;
         const state = {
-            clip: null, clipTarget: null, clipInsets: null, clearRing: false, shadow: null,
+            clip: null, clipTarget: null, clipInsets: null, clearRing: false, drawClip: false, shadow: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };
@@ -539,6 +539,15 @@ export class Manager {
     }
 
     /**
+     * @param {object} win - Meta.Window
+     * @returns {boolean} Whether the window is actively managed with a rounded clip.
+     */
+    isWindowActivelyClipped(win) {
+        const state = this._windows.get(win);
+        return Boolean(state?.clip && state?.drawClip);
+    }
+
+    /**
      * @param {Meta.Window} win
      * @param {boolean} want
      * @param {object} inputs - From _decorationInputs(): frame size and monitor scale
@@ -585,6 +594,9 @@ export class Manager {
     }
 
     _undecorate(win) {
+        const state = this._windows.get(win);
+        if (state)
+            state.drawClip = false;
         this._syncClip(win, false);
         this._syncShadow(win, false);
         this._syncResizeBand(win, false, null);
@@ -606,6 +618,8 @@ export class Manager {
         const actor = win.get_compositor_private();
         if (!state || !actor)
             return;
+
+        state.drawClip = Boolean(drawClip && style.radius > 0);
 
         if (state.clip && state.clipInsets) {
             // Radius 0 keeps corners square; the clip still clears the ring outside body.
