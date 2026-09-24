@@ -10,10 +10,12 @@
 
 import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
-import Graphene from 'gi://Graphene';
 import GObject from 'gi://GObject';
+import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
+
+import {beginWindowGrabOp, setActorCursor} from '../compat/index.js';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
 import {
@@ -285,7 +287,7 @@ export const ResizeBand = GObject.registerClass({
     resetCursor() {
         this._hover = null;
         for (const child of this._regions.values())
-            child.set_cursor_type(Clutter.CursorType.DEFAULT);
+            setActorCursor(child, Clutter.CursorType.DEFAULT);
     }
 
     destroy() {
@@ -343,7 +345,7 @@ export const ResizeBand = GObject.registerClass({
         if (this._hover?.region === region && this._hover.direction === direction)
             return Clutter.EVENT_PROPAGATE;
         this._hover = direction ? {region, direction} : null;
-        this._regions.get(region)?.set_cursor_type(direction
+        setActorCursor(this._regions.get(region), direction
             ? DIRECTION_CURSOR[direction]
             : Clutter.CursorType.DEFAULT);
         return Clutter.EVENT_PROPAGATE;
@@ -356,7 +358,7 @@ export const ResizeBand = GObject.registerClass({
     _clearCursor(region) {
         if (this._hover?.region === region) {
             this._hover = null;
-            this._regions.get(region)?.set_cursor_type(Clutter.CursorType.DEFAULT);
+            setActorCursor(this._regions.get(region), Clutter.CursorType.DEFAULT);
         }
         return Clutter.EVENT_PROPAGATE;
     }
@@ -385,15 +387,17 @@ export const ResizeBand = GObject.registerClass({
         if (!sprite)
             return Clutter.EVENT_PROPAGATE;
 
-        // begin_grab_op takes the pointer position, not a gravity: pos_hint is a
-        // Graphene.Point and Mutter uses it instead of querying the seat. The press
-        // coordinate is that position, so no fallback is needed.
+        // begin_grab_op takes the pointer position as a Graphene.Point.
         const [x, y] = event.get_coords();
-        win.begin_grab_op(
+        const posHint = new Graphene.Point({x, y});
+
+        // Hand off to Mutter via the compositor grab helper.
+        beginWindowGrabOp(
+            win,
             DIRECTION_GRAB_OP[direction],
             sprite,
             event.get_time(),
-            new Graphene.Point({x, y})
+            posHint
         );
 
         return Clutter.EVENT_STOP;

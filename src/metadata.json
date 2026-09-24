@@ -4,7 +4,8 @@
     "description": "Brings native GNOME ergonomics and appearance to non-native windows. Seamlessly adds Adwaita-spec rounded corners, GPU-baked shadows, and a 12px GTK-aligned resize band — only where absent. Native libadwaita, libhandy, and Gecko apps are detected by reading /proc/<pid>/maps and untouched. Nothing is sent anywhere; the only thing stored is the rule you set.",
     "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer",
     "shell-version": [
-        "50"
+        "50",
+        "51"
     ],
     "settings-schema": "org.gnome.shell.extensions.window-nativizer",
     "gettext-domain": "window-nativizer",

@@ -8,6 +8,8 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {setActorCursor} from '../compat/index.js';
+
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
@@ -217,7 +219,7 @@ export class InspectorService {
             return;
         }
         try {
-            global.stage?.set_cursor_type?.(Clutter.CursorType.CROSSHAIR);
+            setActorCursor(global.stage, Clutter.CursorType.CROSSHAIR);
         } catch {
             // stage may be unmanaging
         }
@@ -281,7 +283,7 @@ export class InspectorService {
         }
 
         try {
-            global.stage?.set_cursor_type?.(Clutter.CursorType.DEFAULT);
+            setActorCursor(global.stage, Clutter.CursorType.DEFAULT);
         } catch {
             // stage may be unmanaging
         }

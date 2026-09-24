@@ -96,7 +96,7 @@ jobs:
       - name: Install system test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gjs libglib2.0-dev-bin gettext meson ninja-build
+          sudo apt-get install -y gjs libglib2.0-dev-bin gettext meson ninja-build gir1.2-graphene-1.0
 
       - name: Install jasmine-gjs
         run: |
