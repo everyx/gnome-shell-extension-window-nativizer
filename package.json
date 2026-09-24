@@ -34,7 +34,7 @@
     "update-po": "node tools/gen-locale.mjs --extract",
     "check-style": "node tools/gen-clutter.mjs --check && node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check && node tools/gen-gtk.mjs --check && node tools/gen-locale.mjs --check",
     "ego-lint": "bash \"${EGO_LINT:-$HOME/.local/share/gnome-extension-reviewer/ego-lint}\" src/",
-    "pack": "pnpm run compile-locales && mkdir -p dist && cp LICENSE src/LICENSE && gnome-extensions pack src --force --extra-source=lib --extra-source=effects --extra-source=icons --extra-source=stylesheet.css --extra-source=locale --extra-source=LICENSE --out-dir=dist && rm -f src/LICENSE",
+    "pack": "pnpm run compile-locales && mkdir -p dist && cp LICENSE src/LICENSE && gnome-extensions pack src --force --extra-source=compat --extra-source=lib --extra-source=effects --extra-source=icons --extra-source=stylesheet.css --extra-source=locale --extra-source=LICENSE --out-dir=dist && rm -f src/LICENSE",
     "shexli": "uvx --with 'tree-sitter<0.26.0' shexli dist/window-nativizer@everyx.github.io.shell-extension.zip || (pipx install --force shexli && pipx runpip shexli install 'tree-sitter<0.26.0' && shexli dist/window-nativizer@everyx.github.io.shell-extension.zip)",
     "install-ext": "pnpm run pack && gnome-extensions install --force dist/window-nativizer@everyx.github.io.shell-extension.zip"
   },

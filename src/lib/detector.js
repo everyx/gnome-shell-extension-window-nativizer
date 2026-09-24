@@ -173,7 +173,12 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
  * @returns {boolean}
  */
 export function isWindowMaximized(win) {
-    return Boolean(win?.is_maximized?.());
+    if (win?.is_maximized)
+        return Boolean(win.is_maximized());
+    const flags = win?.get_maximized?.();
+    // GNOME 45–48 fallback: Meta.MaximizeFlags.BOTH === 3 (HORIZONTAL | VERTICAL).
+    // Partially maximized / tiled windows (flags 1 or 2) are not fully maximized.
+    return typeof flags === 'number' && (flags & 3) === 3;
 }
 
 /**

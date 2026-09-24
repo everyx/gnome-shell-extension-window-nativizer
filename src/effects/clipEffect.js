@@ -11,7 +11,7 @@
 
 import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
-import Shell from 'gi://Shell';
+import {ShaderEffect} from '../compat/index.js';
 
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
@@ -63,14 +63,24 @@ export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
 
 export const RoundedClipEffect = GObject.registerClass({
     GTypeName: ROUNDED_CLIP_G_TYPE,
-}, class RoundedClipEffect extends Shell.GLSLEffect {
+}, class RoundedClipEffect extends ShaderEffect {
+    static getShaderSource() {
+        return {
+            hook: Cogl.SnippetHook.FRAGMENT,
+            declarations: DECLARATIONS,
+            code: CODE,
+            replace: false,
+        };
+    }
+
+    static getSnippet() {
+        return Cogl.Snippet.new
+            ? Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE)
+            : new Cogl.Snippet(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE);
+    }
+
     _init() {
         super._init();
-        this._uSize = this.get_uniform_location('uSize');
-        this._uFrame = this.get_uniform_location('uFrame');
-        this._uRadius = this.get_uniform_location('uRadius');
-        this._uOutline = this.get_uniform_location('uOutline');
-        this._uClearRing = this.get_uniform_location('uClearRing');
 
         // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
@@ -92,11 +102,6 @@ export const RoundedClipEffect = GObject.registerClass({
         this._frameVec = [0, 0, 0, 0];
         this._radiusVec = [0];
         this._clearRingVec = [0];
-    }
-
-    vfunc_build_pipeline() {
-        this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT,
-            DECLARATIONS, CODE, false);
     }
 
     /**
@@ -141,17 +146,17 @@ export const RoundedClipEffect = GObject.registerClass({
 
         if (radiusChanged) {
             this._radiusVec[0] = radius;
-            this.set_uniform_float(this._uRadius, 1, this._radiusVec);
+            this.set_uniform_float('uRadius', 1, this._radiusVec);
         }
 
         if (outlineChanged) {
             this._outlineVec = nextOutlineVec;
-            this.set_uniform_float(this._uOutline, 4, this._outlineVec);
+            this.set_uniform_float('uOutline', 4, this._outlineVec);
         }
 
         if (clearRingChanged) {
             this._clearRingVec[0] = clearRing ? 1 : 0;
-            this.set_uniform_float(this._uClearRing, 1, this._clearRingVec);
+            this.set_uniform_float('uClearRing', 1, this._clearRingVec);
         }
 
         // Insets changed: invalidate cached frame geometry so vfunc_paint_target
@@ -187,7 +192,7 @@ export const RoundedClipEffect = GObject.registerClass({
         if (this._lastWidth !== width || this._lastHeight !== height) {
             this._sizeVec[0] = width;
             this._sizeVec[1] = height;
-            this.set_uniform_float(this._uSize, 2, this._sizeVec);
+            this.set_uniform_float('uSize', 2, this._sizeVec);
             this._lastWidth = width;
             this._lastHeight = height;
         }
@@ -198,7 +203,7 @@ export const RoundedClipEffect = GObject.registerClass({
             this._frameVec[1] = frame.y;
             this._frameVec[2] = frame.width;
             this._frameVec[3] = frame.height;
-            this.set_uniform_float(this._uFrame, 4, this._frameVec);
+            this.set_uniform_float('uFrame', 4, this._frameVec);
             this._lastFrameX = frame.x;
             this._lastFrameY = frame.y;
             this._lastFrameW = frame.width;

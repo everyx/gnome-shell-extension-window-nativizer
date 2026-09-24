@@ -156,7 +156,7 @@ def set_band(enabled, bus, verify=True):
     `verify`, wait for the band actors to follow - a rule that never arrived would
     otherwise look like a saving. Without it (no window on stage to carry a band yet)
     only the write is done, and the caller checks the band on the window it measures."""
-    rules = "{}" if enabled else "{'%s': 'resize'}" % PERF_RULE_KEY
+    rules = "{}" if enabled else "{'%s': {'state': 'resize'}}" % PERF_RULE_KEY
     subprocess.check_call(
         ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "window-rules",
          rules],

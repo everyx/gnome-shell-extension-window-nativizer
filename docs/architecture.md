@@ -22,6 +22,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/` | rounded clipping (`clipEffect.js`), shadow actor geometry (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
+| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, grab ops, actor cursors) across GNOME 45–51 (pure) |
 
 ## The two processes
 
@@ -37,7 +38,7 @@ process can speak it without importing shell-only code.
 
 For the selection mechanics we followed KDE's KWin
 (`InputRedirection::startInteractiveWindowSelection` with its `clientToVariantMap`)
-and GNOME's own equivalent: `Main.pushModal`, `global.stage.set_cursor_type` and a
+and GNOME's own equivalent: `Main.pushModal`, `setActorCursor(global.stage, ...)` and a
 Clutter event grab.
 
 ### Interactive pick & highlight geometry
@@ -96,7 +97,7 @@ body (`setShadowInsets()`), not by the actor, which for a client-decorated windo
 that client reserved for its own shadow. Both the shadow's cast rect and the clip's body are
 computed from the actor's live size at paint time (`lib/frame.js`), so a resize never shows a
 geometry the actor has already left. When there is something to clip, the window also gets a
-`RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
+`RoundedClipEffect` (`Clutter.ShaderEffect` / `Shell.GLSLEffect` offscreen pass via `compat/shaderEffect.js`).
 The clip effect's target actor is resolved via `resolveClipTarget` (`lib/clipTarget.js`):
 by default it attaches directly to the window actor on Wayland and to the surface child actor
 on X11 / XWayland (so coordinates align accurately and the frame ring can be cleared when taking over shadows);

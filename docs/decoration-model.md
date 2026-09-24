@@ -531,7 +531,7 @@ is Mutter's approach as well: `MetaShadow` (`src/x11/meta-shadow-factory.c`) is 
 generator takes from GTK4, so this stays the upstream shadow, computed once instead of
 every frame.
 
-Mutter never needs the clip pass, and Shell 50 ships no rounded-clip effect (the
+Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating
 windows that do not round themselves is what makes an offscreen pass inherent here.
@@ -592,7 +592,7 @@ scaling with high visual fidelity: when downscaled below 0.5x, if `create_mipmap
 it switches its minification filter to `COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST` (bilinear
 mipmapped filtering), ensuring sharp and alias-free thumbnails.
 
-However, `RoundedClipEffect` subclasses `Shell.GLSLEffect` (which inherits `Clutter.OffscreenEffect`).
+However, `RoundedClipEffect` subclasses `ShaderEffect` (which inherits `Clutter.ShaderEffect` on GNOME 51+ or `Shell.GLSLEffect` on 45–50, deriving from `Clutter.OffscreenEffect`).
 When an effect redirects an actor's subtree to an offscreen FBO texture, the actor preview in the
 overview clones this FBO texture instead of sampling directly from `MetaShapedTexture`.
 In `Clutter.OffscreenEffect` (`ensure_pipeline_filter_for_scale()` in Mutter's
