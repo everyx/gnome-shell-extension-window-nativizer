@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 17:41+0800\n"
+"POT-Creation-Date: 2026-09-26 00:49+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -158,98 +158,96 @@ msgstr "%s，%s，%s"
 msgid "Close"
 msgstr "关闭"
 
-#: src/prefs.js:330
-msgid "General"
-msgstr "常规"
-
-#: src/prefs.js:336
-msgid "Display & Rendering"
-msgstr "显示与渲染"
-
-#: src/prefs.js:337
-msgid "Control window decoration behavior across screen scales"
-msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
-
-#: src/prefs.js:342
-msgid "Prioritize Crisp Text"
-msgstr "优先保证文字清晰"
-
-#: src/prefs.js:343
-msgid ""
-"Skip rounded corners on fractional scale monitors (retaining shadow) to "
-"avoid text blur and resampling overhead"
-msgstr ""
-"在分数缩放屏幕上跳过圆角（保留阴影），避免重采样带来的文字模糊与性能开销"
-
-#: src/prefs.js:356
-msgid "Pick window"
-msgstr "选取窗口"
-
-#. The tooltip carries what the label cannot - the scope. Restating the label
-#. ("pick a window") would be the noise the HIG warns about.
-#: src/prefs.js:361
-msgid "The correction applies to every window of its kind"
-msgstr "这条修正对此类所有窗口生效"
-
-#: src/prefs.js:367
-msgid "Corrections"
-msgstr "误判修正"
-
-#: src/prefs.js:368
-msgid ""
-"Per window kind - where the automatic decision was wrong; anything not "
-"listed follows it"
-msgstr "按窗口种类——自动判断出错的地方；未列出的跟随自动判断"
-
-#: src/prefs.js:386
-msgid "Use the button above to pick a window that looks wrong"
-msgstr "点上面的按钮，选一个看起来不对的窗口"
-
-#: src/prefs.js:496
+#: src/prefs.js:394
 #, javascript-format
 msgid "Picked from “%s”. This correction applies to every window of this kind."
 msgstr "拾取自“%s”。这条修正对此类所有窗口生效。"
 
-#: src/prefs.js:512 src/prefs.js:514
+#: src/prefs.js:410 src/prefs.js:412
 msgid "Restore the automatic decision"
 msgstr "恢复自动判断"
 
-#: src/prefs.js:591
+#: src/prefs.js:491
 msgid "Window Inspection Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:592
+#: src/prefs.js:492
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 
-#: src/prefs.js:604
+#: src/prefs.js:504
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:625
+#: src/prefs.js:525
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有回应 —— 请重启会话后重新选取"
 
-#: src/prefs.js:633
+#: src/prefs.js:533
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
-#: src/prefs.js:651
+#: src/prefs.js:551
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:663
+#: src/prefs.js:563
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:664
+#: src/prefs.js:564
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:674
+#: src/prefs.js:574
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"
+
+#: src/prefs.js:592
+msgid "Pick window"
+msgstr "选取窗口"
+
+#: src/prefs.js:595
+msgid "The correction applies to every window of its kind"
+msgstr "这条修正对此类所有窗口生效"
+
+#: src/prefs.js:601
+msgid "Corrections"
+msgstr "误判修正"
+
+#: src/prefs.js:602
+msgid ""
+"Per window kind - where the automatic decision was wrong; anything not "
+"listed follows it"
+msgstr "按窗口种类——自动判断出错的地方；未列出的跟随自动判断"
+
+#: src/prefs.js:634
+msgid "Use the button above to pick a window that looks wrong"
+msgstr "点上面的按钮，选一个看起来不对的窗口"
+
+#: src/prefs.js:689
+msgid "General"
+msgstr "常规"
+
+#: src/prefs.js:695
+msgid "Display & Rendering"
+msgstr "显示与渲染"
+
+#: src/prefs.js:696
+msgid "Control window decoration behavior across screen scales"
+msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
+
+#: src/prefs.js:701
+msgid "Prioritize Crisp Text"
+msgstr "优先保证文字清晰"
+
+#: src/prefs.js:702
+msgid ""
+"Skip rounded corners on fractional scale monitors (retaining shadow) to "
+"avoid text blur and resampling overhead"
+msgstr ""
+"在分数缩放屏幕上跳过圆角（保留阴影），避免重采样带来的文字模糊与性能开销"
