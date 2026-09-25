@@ -27,7 +27,7 @@ import {
     isWindowTiled,
 } from './detector.js';
 import {hasNativeLikeCorners} from './nativeLikeCorners.js';
-import {resolveWindowIdentity} from './window.js';
+import {getWindowFromActor, resolveWindowIdentity} from './window.js';
 
 // Highlight visual styling aligned with GNOME Shell's screenshot window selector.
 export {HIGHLIGHT_BORDER_WIDTH};
@@ -102,7 +102,7 @@ export class InspectorService {
         const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
         for (let i = actors.length - 1; i >= 0; i--) {
             const winActor = actors[i];
-            const win = winActor.meta_window ?? winActor.metaWindow;
+            const win = getWindowFromActor(winActor);
             if (!win || win.minimized || (win.is_hidden && win.is_hidden()))
                 continue;
             if (winActor.is_mapped && !winActor.is_mapped())
