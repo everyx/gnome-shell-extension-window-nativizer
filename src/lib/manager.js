@@ -208,6 +208,7 @@ export class Manager {
             return;
         const state = {
             clip: null, clipTarget: null, clipInsets: null, clearRing: false, drawClip: false, shadow: null,
+            resizeBand: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };

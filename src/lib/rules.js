@@ -130,6 +130,10 @@ const FINGERPRINT_FIELDS = [
     {name: 'has_ssd', render: o => boolString(o.hasSsd), parse: raw => raw === 'true'},
 ];
 
+const FINGERPRINT_MAP = Object.freeze(
+    Object.fromEntries(FINGERPRINT_FIELDS.map(f => [f.name, f]))
+);
+
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
 // to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
 const VALID_RULE_KEY_PATTERN = new RegExp(
@@ -291,7 +295,7 @@ export function parseRuleKey(key) {
             properties.height = h;
             continue;
         }
-        const field = FINGERPRINT_FIELDS.find(f => f.name === name);
+        const field = FINGERPRINT_MAP[name];
         if (field)
             properties[name] = field.parse(val);
     }

@@ -9,6 +9,15 @@ function listWindowActors() {
     return global.get_window_actors?.() ?? [];
 }
 
+/**
+ * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name variations.
+ * @param {object|null} actor
+ * @returns {object|null} Meta.Window instance or null
+ */
+export function getWindowFromActor(actor) {
+    return actor?.meta_window ?? actor?.metaWindow ?? null;
+}
+
 // Only non-pid answers are remembered; pid fallback would freeze a session-local rule.
 // Key includes declared so a late WM_CLASS invalidates the cached answer.
 const fallbackIdentities = new WeakMap();
@@ -30,7 +39,7 @@ export function resolveWindowIdentity(win) {
     let peer = '';
     if (pid > 0) {
         for (const actor of listWindowActors()) {
-            const candidate = actor.meta_window ?? actor.metaWindow;
+            const candidate = getWindowFromActor(actor);
             if (!candidate || candidate === win || candidate.get_pid?.() !== pid)
                 continue;
             peer = readDeclaredIdentity(candidate);
