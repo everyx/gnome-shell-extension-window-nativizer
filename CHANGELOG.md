@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.6.0...v0.7.0) (2026-09-25)
+
+
+### Features
+
+* **compat:** add GNOME 51 support with zero-side-effect ponyfills ([dc44223](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dc442237fd2cda9e8c1494f5d8125cfeaf1d9f40))
+
+
+### Bug Fixes
+
+* **inspector:** align pick highlight border and adapt square window corners ([ff72000](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ff72000142c730b7dd70dbb8750967279f7ba364))
+
+
+### Documentation
+
+* establish anti-drift documentation hierarchy and align inspector architecture ([45baedd](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/45baeddf5f94be17c64fb0f7a1cd7bd9e9a605af))
+
 ## [0.6.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.5.1...v0.6.0) (2026-09-21)
 
 
