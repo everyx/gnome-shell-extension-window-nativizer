@@ -299,31 +299,390 @@ function showError(parentWindow, heading, body) {
 }
 
 
+// One bundled icon per axis, plus the stock icon that stands in when the
+// bundle is missing; see src/icons/NOTICE.
+const AXIS_ICONS = {
+    [RuleAxis.CORNERS]: {bundled: 'winnativizer-corners-symbolic', fallback: 'window-restore-symbolic'},
+    [RuleAxis.SHADOW]: {bundled: 'winnativizer-shadow-symbolic', fallback: 'edit-copy-symbolic'},
+    [RuleAxis.RESIZE]: {bundled: 'winnativizer-resize-symbolic', fallback: 'view-restore-symbolic'},
+};
+
+function _registerIconThemePath(iconTheme) {
+    try {
+        const moduleDir = import.meta.url.slice(0, import.meta.url.lastIndexOf('/') + 1);
+        iconTheme.add_search_path(`${decodeURI(moduleDir.replace(/^file:\/\//, ''))}icons`);
+    } catch {
+        // Search path stays stock; per-axis fallbacks cover it.
+    }
+}
+
+function _createAxisImage(axis, iconTheme) {
+    const {bundled, fallback} = AXIS_ICONS[axis];
+    return new Gtk.Image({
+        icon_name: iconTheme.has_icon(bundled) ? bundled : fallback,
+        pixel_size: 16,
+        valign: Gtk.Align.CENTER,
+    });
+}
+
+function _populateAxisIcons(box, correctedAxes, caps, iconTheme) {
+    let child = box.get_first_child();
+    while (child) {
+        const next = child.get_next_sibling();
+        box.remove(child);
+        child = next;
+    }
+    const tips = [];
+    for (const axis of RULE_AXES) {
+        if (!caps[axis] || !correctedAxes.has(axis))
+            continue;
+        const word = correctedAxisWord(axis);
+        const icon = _createAxisImage(axis, iconTheme);
+        icon.set_tooltip_text(word);
+        icon.update_property([Gtk.AccessibleProperty.LABEL], [word]);
+        box.append(icon);
+        tips.push(word);
+    }
+    box.set_tooltip_text(tips.join(' · '));
+}
+
+/**
+ * Immutable ambient preferences context passed across UI builders.
+ * @typedef {object} PrefsContext
+ * @property {Adw.PreferencesWindow} window - Host preferences window
+ * @property {Gio.Settings} settings - Extension GSettings instance
+ * @property {Map<string, Gio.AppInfo>} installedApps - Installed desktop apps map
+ * @property {Gtk.IconTheme} iconTheme - Active display icon theme
+ * @property {() => boolean} isWindowAlive - Guard checking if preferences window is alive
+ */
+
+// The platform's own switch: an axis is binary (follow the decision, or correct it),
+// and the row's title names the correction, so its state is unambiguous.
+function _buildAxisSwitch(axis, corrected, onChange) {
+    const switchRow = new Adw.SwitchRow({
+        title: asMarkup(axisCorrectionName(axis)),
+        active: corrected.has(axis),
+    });
+    switchRow.update_property([Gtk.AccessibleProperty.LABEL], [axisCorrectionName(axis)]);
+    switchRow.connect('notify::active', () => onChange(axis, switchRow.active));
+    return switchRow;
+}
+
+function _buildRuleRow(ruleKey, state, sample, ctx, onRefresh) {
+    const {settings, installedApps, iconTheme} = ctx;
+    const {baseWmClass, properties} = parseRuleKey(ruleKey);
+    const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+    const name = appInfo?.name || baseWmClass || ruleKey;
+    const corrected = parseRuleState(state) ?? new Set();
+    const caps = keyAxisCapabilities(properties);
+    const decoratable = isDecoratableKind(properties);
+
+    // Dimmed sample of the kind, not its name - see docs/rule-model.md.
+    const row = new Adw.ExpanderRow({
+        title: sample && sample !== name
+            ? `${asMarkup(name)} <span alpha="55%">${asMarkup(sample)}</span>`
+            : asMarkup(name),
+        subtitle: asMarkup(windowKindSentence(properties)),
+        // Ellipsized by Pango: no character cap can know the row's width.
+        title_lines: 1,
+        subtitle_lines: 2,
+    });
+    row.update_property([Gtk.AccessibleProperty.LABEL], [name]);
+    // Only when the row actually shows it: a sample equal to the app name is not shown,
+    // so it must not be explained either.
+    if (sample && sample !== name)
+        row.set_tooltip_text(_('Picked from “%s”. This correction applies to every window of this kind.').format(sample));
+
+    row.add_prefix(appInfo?.icon
+        ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
+        : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
+
+    const iconBox = new Gtk.Box({spacing: 8, valign: Gtk.Align.CENTER});
+    _populateAxisIcons(iconBox, corrected, caps, iconTheme);
+
+    // ExpanderRow prepends suffixes to keep its arrow last, so add in
+    // reverse visual order: [icons] … [delete][chevron].
+    const deleteButton = new Gtk.Button({
+        icon_name: 'user-trash-symbolic',
+        css_classes: ['flat', 'destructive-action'],
+        valign: Gtk.Align.CENTER,
+        margin_start: 12,
+        tooltip_text: _('Restore the automatic decision'),
+    });
+    deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Restore the automatic decision')]);
+    deleteButton.connect('clicked', () => {
+        const rules = getWindowRules(settings);
+        delete rules[ruleKey];
+        // One write: the entry carries its own title, so it goes with the rule.
+        setWindowRules(settings, rules);
+        onRefresh();
+    });
+    row.add_suffix(deleteButton);
+    row.add_suffix(iconBox);
+
+    const onAxisChange = (axis, isCorrected) => {
+        const storedRules = getWindowRules(settings);
+        const current = parseRuleState(storedRules[ruleKey]) ?? new Set();
+        const next = new Set(current);
+        if (isCorrected)
+            next.add(axis);
+        else
+            next.delete(axis);
+        const stored = withRule(storedRules, ruleKey, buildRuleState(next));
+        setWindowRules(settings, stored);
+        const canonical = stored[ruleKey];
+        if (!canonical) {
+            // Nothing reversed is no rule: the row is the rule, so it goes with it.
+            onRefresh();
+            return;
+        }
+        _populateAxisIcons(iconBox, parseRuleState(canonical), caps, iconTheme);
+    };
+
+    // The kind sentence in the header already says what the rule applies to; the
+    // group description says what the switches do, so the body is only the axes.
+    for (const axis of RULE_AXES) {
+        if (!caps[axis]) {
+            // Left-right structure kept: title takes its natural width, the
+            // reason label expands over every leftover pixel on the right,
+            // text right-aligned on one line. A usable axis shows no hint
+            // at all - title plus control only.
+            const unavailableRow = new Adw.ActionRow({
+                title: asMarkup(axisName(axis)),
+                sensitive: false,
+            });
+            // Single line, enforced: ellipsize truncates instead of wrapping,
+            // and the tooltip keeps the full sentence one hover away.
+            const reason = axisUnavailableReason(axis, decoratable, properties);
+            const reasonLabel = new Gtk.Label({
+                label: reason,
+                css_classes: ['dim-label'],
+                valign: Gtk.Align.CENTER,
+                halign: Gtk.Align.FILL,
+                hexpand: true,
+                xalign: 1.0,
+                wrap: false,
+                ellipsize: Pango.EllipsizeMode.END,
+                tooltip_text: reason,
+            });
+            unavailableRow.add_suffix(reasonLabel);
+            row.add_row(unavailableRow);
+            continue;
+        }
+        row.add_row(_buildAxisSwitch(axis, corrected, onAxisChange));
+    }
+
+    return row;
+}
+
+function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
+    const {window, settings, installedApps, isWindowAlive} = ctx;
+    pickButton.connect('clicked', () => {
+        window.set_visible(false);
+        inspectWindow((err, props) => {
+            if (!isWindowAlive())
+                return;
+
+            window.set_visible(true);
+            window.present();
+
+            if (err) {
+                showError(window,
+                    _('Window Inspection Failed'),
+                    _('Could not connect to the Window Nativizer extension — it is not enabled'));
+                return;
+            }
+
+            // Empty = cancelled pick or extension disabling — not an error.
+            if (!props || Object.keys(props).length === 0)
+                return;
+
+            const ruleKey = buildRuleKeyFromProperties(props);
+
+            if (!ruleKey) {
+                window.add_toast(new Adw.Toast({
+                    title: _('No correction added: this window could not be identified'),
+                }));
+                return;
+            }
+
+            // The inspector only offers decoratable windows, so this guards
+            // future callers - and names the reason instead of a generic refusal.
+            const {properties: pickedProperties} = parseRuleKey(ruleKey);
+            if (pickedProperties && !isDecoratableKind(pickedProperties)) {
+                window.add_toast(new Adw.Toast({title: neverDecorated()}));
+                return;
+            }
+
+            // The inspector sends the axes to correct. No answer means an extension
+            // too old to judge (a Shell that has not reloaded since an update): the
+            // pick is refused rather than guessed at.
+            const suggested = typeof props.suggestedState === 'string'
+                ? parseRuleState(props.suggestedState)
+                : null;
+            if (!suggested) {
+                window.add_toast(new Adw.Toast({
+                    title: _('No correction added: the extension did not answer - restart the session and pick again'),
+                }));
+                return;
+            }
+
+            // The picker's own pre-flight: a reversal of nothing stores no rule.
+            if (props.suggestedStateWouldChange === 'false') {
+                window.add_toast(new Adw.Toast({
+                    title: _('No correction added: it would have no effect on a window of this kind'),
+                }));
+                return;
+            }
+
+            const state = buildRuleState(suggested);
+
+            const existingRules = getWindowRules(settings);
+            const isExisting = Object.prototype.hasOwnProperty.call(existingRules, ruleKey);
+
+            // One write: the rule and the sample it came from are one entry.
+            setWindowRule(settings, ruleKey, state,
+                typeof props.windowTitle === 'string' ? props.windowTitle : '');
+
+            // Read-back is a persistence check, not redundancy: sanitize inside
+            // setWindowRule may drop what it staged.
+            if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
+                window.add_toast(new Adw.Toast({
+                    title: _('No correction added: it could not be saved'),
+                }));
+                return;
+            }
+
+            onRulePicked(ruleKey);
+
+            const {baseWmClass} = parseRuleKey(ruleKey);
+            const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+            const name = appInfo?.name || baseWmClass || ruleKey;
+
+            const toastTitle = isExisting
+                ? _('Correction updated for %s: %s').format(name, ruleSummaryText(state))
+                : _('Correction added for %s: %s').format(name, ruleSummaryText(state));
+
+            window.add_toast(new Adw.Toast({
+                title: toastTitle,
+            }));
+
+            // A rule outlives transient state, so a pick made mid-state says so.
+            if (props.isMaximized === 'true' || props.isFullscreen === 'true' ||
+                props.hasTileMatch === 'true') {
+                window.add_toast(new Adw.Toast({
+                    title: _('The correction takes effect once the window is restored'),
+                }));
+            }
+        });
+    });
+}
+
+function _setupCorrectionsGroup(page, ctx) {
+    const {settings, isWindowAlive} = ctx;
+
+    // Adwaita's group-with-a-header-suffix pattern: the button names its action and wears
+    // the add icon, flat, so it reads as part of the header rather than a control in the
+    // list. ButtonContent, not Button's own label/icon-name: GTK4 keeps those two in one
+    // child slot, so setting both leaves only the last one. The button's label is its
+    // accessible name, so it needs no explicit one.
+    const pickButton = new Gtk.Button({
+        child: new Adw.ButtonContent({
+            icon_name: 'list-add-symbolic',
+            label: _('Pick window'),
+        }),
+        css_classes: ['flat'],
+        tooltip_text: _('The correction applies to every window of its kind'),
+        valign: Gtk.Align.CENTER,
+        margin_start: 18,
+    });
+
+    const rulesGroup = new Adw.PreferencesGroup({
+        title: asMarkup(_('Corrections')),
+        description: asMarkup(_('Per window kind - where the automatic decision was wrong; anything not listed follows it')),
+        header_suffix: pickButton,
+    });
+    page.add(rulesGroup);
+
+    const rows = [];
+
+    // Destroyed from own signal: defer rebuild to idle. One pending is enough.
+    let renderScheduled = false;
+    const scheduleRenderRules = () => {
+        if (renderScheduled)
+            return;
+        renderScheduled = true;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            renderScheduled = false;
+            if (isWindowAlive())
+                renderRules();
+            return GLib.SOURCE_REMOVE;
+        });
+    };
+
+    const renderRules = highlightKey => {
+        for (const row of rows)
+            rulesGroup.remove(row);
+        rows.length = 0;
+
+        const rules = getWindowRules(settings);
+        const titles = getRuleTitles(settings);
+        const entries = Object.entries(rules);
+
+        if (entries.length === 0) {
+            const emptyRow = new Adw.ActionRow({
+                title: asMarkup(_('Use the button above to pick a window that looks wrong')),
+                sensitive: false,
+            });
+            rulesGroup.add(emptyRow);
+            rows.push(emptyRow);
+            return;
+        }
+
+        let focusedRow = null;
+        for (const [ruleKey, state] of entries) {
+            const row = _buildRuleRow(ruleKey, state, titles[ruleKey] ?? '', ctx, scheduleRenderRules);
+            rulesGroup.add(row);
+            rows.push(row);
+            if (highlightKey && ruleKey === highlightKey) {
+                focusedRow = row;
+                row.set_expanded(true);
+            }
+        }
+
+        if (focusedRow) {
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (isWindowAlive() && focusedRow)
+                    focusedRow.grab_focus();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    };
+
+    _setupWindowPickerAction(pickButton, ctx, ruleKey => renderRules(ruleKey));
+
+    renderRules();
+}
+
 export default class WindowNativizerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const installedApps = getInstalledApps();
-
-        // Icon theme registration runs once per prefs session, not per row: the
-        // maps are constant and add_search_path appends duplicates otherwise.
-        // One bundled icon per axis, plus the stock icon that stands in when the
-        // bundle is missing; see src/icons/NOTICE.
-        const AXIS_ICONS = {
-            [RuleAxis.CORNERS]: {bundled: 'winnativizer-corners-symbolic', fallback: 'window-restore-symbolic'},
-            [RuleAxis.SHADOW]: {bundled: 'winnativizer-shadow-symbolic', fallback: 'edit-copy-symbolic'},
-            [RuleAxis.RESIZE]: {bundled: 'winnativizer-resize-symbolic', fallback: 'view-restore-symbolic'},
-        };
         const iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
-        try {
-            const moduleDir = import.meta.url.slice(0, import.meta.url.lastIndexOf('/') + 1);
-            iconTheme.add_search_path(`${decodeURI(moduleDir.replace(/^file:\/\//, ''))}icons`);
-        } catch {
-            // Search path stays stock; per-axis fallbacks cover it.
-        }
+        _registerIconThemePath(iconTheme);
+
         // Picker hides prefs window; reply may arrive after prefs closed — guard UI touches.
         let windowAlive = true;
         window.connect('destroy', () => {
             windowAlive = false;
+        });
+
+        const ctx = Object.freeze({
+            window,
+            settings,
+            installedApps,
+            iconTheme,
+            isWindowAlive: () => windowAlive,
         });
 
         const page = new Adw.PreferencesPage({
@@ -345,338 +704,6 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // Adwaita's group-with-a-header-suffix pattern: the button names its action and wears
-        // the add icon, flat, so it reads as part of the header rather than a control in the
-        // list. ButtonContent, not Button's own label/icon-name: GTK4 keeps those two in one
-        // child slot, so setting both leaves only the last one. The button's label is its
-        // accessible name, so it needs no explicit one.
-        const pickButton = new Gtk.Button({
-            child: new Adw.ButtonContent({
-                icon_name: 'list-add-symbolic',
-                label: _('Pick window'),
-            }),
-            css_classes: ['flat'],
-            // The tooltip carries what the label cannot - the scope. Restating the label
-            // ("pick a window") would be the noise the HIG warns about.
-            tooltip_text: _('The correction applies to every window of its kind'),
-            valign: Gtk.Align.CENTER,
-            margin_start: 18,
-        });
-
-        const rulesGroup = new Adw.PreferencesGroup({
-            title: asMarkup(_('Corrections')),
-            description: asMarkup(_('Per window kind - where the automatic decision was wrong; anything not listed follows it')),
-            header_suffix: pickButton,
-        });
-        page.add(rulesGroup);
-
-        const rows = [];
-
-        const renderRules = highlightKey => {
-            for (const row of rows)
-                rulesGroup.remove(row);
-            rows.length = 0;
-
-            const rules = getWindowRules(settings);
-            const titles = getRuleTitles(settings);
-            const entries = Object.entries(rules);
-
-            if (entries.length === 0) {
-                const emptyRow = new Adw.ActionRow({
-                    title: asMarkup(_('Use the button above to pick a window that looks wrong')),
-                    sensitive: false,
-                });
-                rulesGroup.add(emptyRow);
-                rows.push(emptyRow);
-                return;
-            }
-
-            let focusedRow = null;
-            for (const [ruleKey, state] of entries) {
-                const row = buildRuleRow(ruleKey, state, titles);
-                rulesGroup.add(row);
-                rows.push(row);
-                if (highlightKey && ruleKey === highlightKey) {
-                    focusedRow = row;
-                    row.set_expanded(true);
-                }
-            }
-
-            if (focusedRow) {
-                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    if (windowAlive && focusedRow)
-                        focusedRow.grab_focus();
-                    return GLib.SOURCE_REMOVE;
-                });
-            }
-        };
-
-        // Destroyed from own signal: defer rebuild to idle. One pending is enough.
-        let renderScheduled = false;
-        const scheduleRenderRules = () => {
-            if (renderScheduled)
-                return;
-            renderScheduled = true;
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                renderScheduled = false;
-                if (windowAlive)
-                    renderRules();
-                return GLib.SOURCE_REMOVE;
-            });
-        };
-
-        // The platform's own switch: an axis is binary (follow the decision, or correct it),
-        // and the row's title names the correction, so its state is unambiguous.
-        const buildAxisSwitch = (axis, corrected, onChange) => {
-            const switchRow = new Adw.SwitchRow({
-                title: asMarkup(axisCorrectionName(axis)),
-                active: corrected.has(axis),
-            });
-            switchRow.update_property([Gtk.AccessibleProperty.LABEL], [axisCorrectionName(axis)]);
-            switchRow.connect('notify::active', () => onChange(axis, switchRow.active));
-            return switchRow;
-        };
-
-        const buildRuleRow = (ruleKey, state, titles) => {
-            const {baseWmClass, properties} = parseRuleKey(ruleKey);
-            const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-            const name = appInfo?.name || baseWmClass || ruleKey;
-            const corrected = parseRuleState(state) ?? new Set();
-            const caps = keyAxisCapabilities(properties);
-            const decoratable = isDecoratableKind(properties);
-
-            // The suffix shows one icon per corrected axis, and nothing for an axis that
-            // still follows the decision: presence is the whole state, so the icon wears
-            // no colour of its own. Tooltips state the same in words, so the channel is
-            // never colour alone.
-            const axisImage = axis => {
-                const {bundled, fallback} = AXIS_ICONS[axis];
-                return new Gtk.Image({
-                    icon_name: iconTheme.has_icon(bundled) ? bundled : fallback,
-                    pixel_size: 16,
-                    valign: Gtk.Align.CENTER,
-                });
-            };
-            const fillAxisIcons = (box, correctedAxes) => {
-                let child = box.get_first_child();
-                while (child) {
-                    const next = child.get_next_sibling();
-                    box.remove(child);
-                    child = next;
-                }
-                const tips = [];
-                for (const axis of RULE_AXES) {
-                    if (!caps[axis] || !correctedAxes.has(axis))
-                        continue;
-                    const word = correctedAxisWord(axis);
-                    const icon = axisImage(axis);
-                    icon.set_tooltip_text(word);
-                    icon.update_property([Gtk.AccessibleProperty.LABEL], [word]);
-                    box.append(icon);
-                    tips.push(word);
-                }
-                box.set_tooltip_text(tips.join(' · '));
-            };
-
-            // Dimmed sample of the kind, not its name - see docs/rule-model.md.
-            const sample = titles[ruleKey] ?? '';
-            const row = new Adw.ExpanderRow({
-                title: sample && sample !== name
-                    ? `${asMarkup(name)} <span alpha="55%">${asMarkup(sample)}</span>`
-                    : asMarkup(name),
-                subtitle: asMarkup(windowKindSentence(properties)),
-                // Ellipsized by Pango: no character cap can know the row's width.
-                title_lines: 1,
-                subtitle_lines: 2,
-            });
-            row.update_property([Gtk.AccessibleProperty.LABEL], [name]);
-            // Only when the row actually shows it: a sample equal to the app name is not shown,
-            // so it must not be explained either.
-            if (sample && sample !== name)
-                row.set_tooltip_text(_('Picked from “%s”. This correction applies to every window of this kind.').format(sample));
-
-            row.add_prefix(appInfo?.icon
-                ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
-                : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
-
-            const iconBox = new Gtk.Box({spacing: 8, valign: Gtk.Align.CENTER});
-            fillAxisIcons(iconBox, corrected);
-
-            // ExpanderRow prepends suffixes to keep its arrow last, so add in
-            // reverse visual order: [icons] … [delete][chevron].
-            const deleteButton = new Gtk.Button({
-                icon_name: 'user-trash-symbolic',
-                css_classes: ['flat', 'destructive-action'],
-                valign: Gtk.Align.CENTER,
-                margin_start: 12,
-                tooltip_text: _('Restore the automatic decision'),
-            });
-            deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Restore the automatic decision')]);
-            deleteButton.connect('clicked', () => {
-                const rules = getWindowRules(settings);
-                delete rules[ruleKey];
-                // One write: the entry carries its own title, so it goes with the rule.
-                setWindowRules(settings, rules);
-                scheduleRenderRules();
-            });
-            row.add_suffix(deleteButton);
-            row.add_suffix(iconBox);
-
-            const onAxisChange = (axis, isCorrected) => {
-                const storedRules = getWindowRules(settings);
-                const current = parseRuleState(storedRules[ruleKey]) ?? new Set();
-                const next = new Set(current);
-                if (isCorrected)
-                    next.add(axis);
-                else
-                    next.delete(axis);
-                const stored = withRule(storedRules, ruleKey, buildRuleState(next));
-                setWindowRules(settings, stored);
-                const canonical = stored[ruleKey];
-                if (!canonical) {
-                    // Nothing reversed is no rule: the row is the rule, so it goes with it.
-                    scheduleRenderRules();
-                    return;
-                }
-                fillAxisIcons(iconBox, parseRuleState(canonical));
-            };
-
-            // The kind sentence in the header already says what the rule applies to; the
-            // group description says what the switches do, so the body is only the axes.
-            for (const axis of RULE_AXES) {
-                if (!caps[axis]) {
-                    // Left-right structure kept: title takes its natural width, the
-                    // reason label expands over every leftover pixel on the right,
-                    // text right-aligned on one line. A usable axis shows no hint
-                    // at all - title plus control only.
-                    const unavailableRow = new Adw.ActionRow({
-                        title: asMarkup(axisName(axis)),
-                        sensitive: false,
-                    });
-                    // Single line, enforced: ellipsize truncates instead of wrapping,
-                    // and the tooltip keeps the full sentence one hover away.
-                    const reason = axisUnavailableReason(axis, decoratable, properties);
-                    const reasonLabel = new Gtk.Label({
-                        label: reason,
-                        css_classes: ['dim-label'],
-                        valign: Gtk.Align.CENTER,
-                        halign: Gtk.Align.FILL,
-                        hexpand: true,
-                        xalign: 1.0,
-                        wrap: false,
-                        ellipsize: Pango.EllipsizeMode.END,
-                        tooltip_text: reason,
-                    });
-                    unavailableRow.add_suffix(reasonLabel);
-                    row.add_row(unavailableRow);
-                    continue;
-                }
-                row.add_row(buildAxisSwitch(axis, corrected, onAxisChange));
-            }
-
-            return row;
-        };
-
-        pickButton.connect('clicked', () => {
-            window.set_visible(false);
-            inspectWindow((err, props) => {
-                if (!windowAlive)
-                    return;
-
-                window.set_visible(true);
-                window.present();
-
-                if (err) {
-                    showError(window,
-                        _('Window Inspection Failed'),
-                        _('Could not connect to the Window Nativizer extension — it is not enabled'));
-                    return;
-                }
-
-                // Empty = cancelled pick or extension disabling — not an error.
-                if (!props || Object.keys(props).length === 0)
-                    return;
-
-                const ruleKey = buildRuleKeyFromProperties(props);
-
-                if (!ruleKey) {
-                    window.add_toast(new Adw.Toast({
-                        title: _('No correction added: this window could not be identified'),
-                    }));
-                    return;
-                }
-
-                // The inspector only offers decoratable windows, so this guards
-                // future callers - and names the reason instead of a generic refusal.
-                const {properties: pickedProperties} = parseRuleKey(ruleKey);
-                if (pickedProperties && !isDecoratableKind(pickedProperties)) {
-                    window.add_toast(new Adw.Toast({title: neverDecorated()}));
-                    return;
-                }
-
-                // The inspector sends the axes to correct. No answer means an extension
-                // too old to judge (a Shell that has not reloaded since an update): the
-                // pick is refused rather than guessed at.
-                const suggested = typeof props.suggestedState === 'string'
-                    ? parseRuleState(props.suggestedState)
-                    : null;
-                if (!suggested) {
-                    window.add_toast(new Adw.Toast({
-                        title: _('No correction added: the extension did not answer - restart the session and pick again'),
-                    }));
-                    return;
-                }
-
-                // The picker's own pre-flight: a reversal of nothing stores no rule.
-                if (props.suggestedStateWouldChange === 'false') {
-                    window.add_toast(new Adw.Toast({
-                        title: _('No correction added: it would have no effect on a window of this kind'),
-                    }));
-                    return;
-                }
-
-                const state = buildRuleState(suggested);
-
-                const existingRules = getWindowRules(settings);
-                const isExisting = Object.prototype.hasOwnProperty.call(existingRules, ruleKey);
-
-                // One write: the rule and the sample it came from are one entry.
-                setWindowRule(settings, ruleKey, state,
-                    typeof props.windowTitle === 'string' ? props.windowTitle : '');
-
-                // Read-back is a persistence check, not redundancy: sanitize inside
-                // setWindowRule may drop what it staged.
-                if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings), ruleKey)) {
-                    window.add_toast(new Adw.Toast({
-                        title: _('No correction added: it could not be saved'),
-                    }));
-                    return;
-                }
-
-                renderRules(ruleKey);
-
-                const {baseWmClass} = parseRuleKey(ruleKey);
-                const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-                const name = appInfo?.name || baseWmClass || ruleKey;
-
-                const toastTitle = isExisting
-                    ? _('Correction updated for %s: %s').format(name, ruleSummaryText(state))
-                    : _('Correction added for %s: %s').format(name, ruleSummaryText(state));
-
-                window.add_toast(new Adw.Toast({
-                    title: toastTitle,
-                }));
-
-                // A rule outlives transient state, so a pick made mid-state says so.
-                if (props.isMaximized === 'true' || props.isFullscreen === 'true' ||
-                    props.hasTileMatch === 'true') {
-                    window.add_toast(new Adw.Toast({
-                        title: _('The correction takes effect once the window is restored'),
-                    }));
-                }
-            });
-        });
-
-        renderRules();
+        _setupCorrectionsGroup(page, ctx);
     }
 }
