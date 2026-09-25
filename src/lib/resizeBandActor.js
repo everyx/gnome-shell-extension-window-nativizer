@@ -15,7 +15,7 @@ import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {beginWindowGrabOp, setActorCursor} from '../compat/index.js';
+import {beginWindowGrabOp, getPointerSprite, setActorCursor} from '../compat/index.js';
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
 import {
@@ -25,6 +25,7 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
+import {getWindowFromActor} from './window.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
@@ -375,30 +376,24 @@ export const ResizeBand = GObject.registerClass({
         if (!direction)
             return Clutter.EVENT_PROPAGATE;
 
-        const win = this._windowActor?.meta_window ?? this._windowActor?.metaWindow;
+        const win = getWindowFromActor(this._windowActor);
         if (!win?.allows_resize?.())
             return Clutter.EVENT_PROPAGATE;
 
-        // sprite is the pointer the compositor drags with. It is documented nullable, so
-        // windowMenu.js's get_pointer_sprite() fallback is kept rather than assumed away.
-        const backend = global.stage.get_context().get_backend();
-        const sprite = backend.get_sprite(global.stage, event) ||
-            backend.get_pointer_sprite(global.stage);
-        if (!sprite)
-            return Clutter.EVENT_PROPAGATE;
-
-        // begin_grab_op takes the pointer position as a Graphene.Point.
+        const sprite = getPointerSprite(event);
         const [x, y] = event.get_coords();
         const posHint = new Graphene.Point({x, y});
 
-        // Hand off to Mutter via the compositor grab helper.
-        beginWindowGrabOp(
+        // Hand off to Mutter via the compositor grab helper (details in docs/shell-compatibility.md).
+        const grabbed = beginWindowGrabOp(
             win,
             DIRECTION_GRAB_OP[direction],
             sprite,
             event.get_time(),
             posHint
         );
+        if (!grabbed)
+            return Clutter.EVENT_PROPAGATE;
 
         return Clutter.EVENT_STOP;
     }

@@ -16,26 +16,44 @@ function getPointerDevice() {
 }
 
 /**
+ * Resolves the compositor pointer sprite for an event across GNOME 45–51.
+ * @param {object|null} event - Clutter.Event
+ * @returns {object|null} Pointer sprite or null
+ */
+export function getPointerSprite(event) {
+    const stage = globalThis.global?.stage;
+    const backend = stage?.get_context?.()?.get_backend?.() ?? globalThis.global?.backend;
+    return backend?.get_sprite?.(stage, event) ??
+        backend?.get_pointer_sprite?.(stage) ?? null;
+}
+
+/**
  * Initiates a window resize grab operation across GNOME 45–51.
  * @param {object} win - Meta.Window instance
  * @param {number} op - Meta.GrabOp
- * @param {object} sprite - Pointer sprite (nullable)
+ * @param {object|null} sprite - Pointer sprite (nullable on 45–48, required on 49+)
  * @param {number} time - Event timestamp
  * @param {object} posHint - Graphene.Point or coordinate object
+ * @returns {boolean} True if the grab operation was dispatched
  */
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (!win?.begin_grab_op)
-        return;
+        return false;
 
     // GNOME 45–48: legacy 5-argument signature (op, device, sequence, time, pos_hint).
     // Mutter typelibs on 45–48 declare 5 parameters. We polyfill device and sequence.
     if (win.begin_grab_op.length === 5) {
         const device = getPointerDevice();
         win.begin_grab_op(op, device, null, time, posHint);
-        return;
+        return true;
     }
 
     // GNOME 49–51+: modern 4-argument signature (op, sprite, time, pos_hint).
-    // Primary default path for current and future GNOME releases.
+    // Mutter requires a valid pointer sprite on 49+.
+    if (!sprite)
+        return false;
+
     win.begin_grab_op(op, sprite, time, posHint);
+    return true;
 }
+

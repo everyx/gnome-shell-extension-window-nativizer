@@ -25,7 +25,7 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `global.backend.get_monitor_manager()` | 45–51 stable | called through optional chaining |
 | `win.allows_resize()` | 45–51 stable | whether the window offers a resize; gates the resize band |
 | `win.get_monitor()` / `global.display.get_monitor_geometry(i)` | 45–51 stable | the monitor rectangle the band is clipped to |
-| `win.begin_grab_op()` | 45–51 (dual signature) | 49–51 takes 4 args `(op, sprite, time, pos_hint)`; 45–48 takes 5 args `(op, device, sequence, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 4`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch |
+| `win.begin_grab_op()` | 45–51 (dual signature) | 49–51 takes 4 args `(op, sprite, time, pos_hint)`; 45–48 takes 5 args `(op, device, sequence, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 5`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch |
 | `backend.get_sprite(stage, event)` | 49–51 | the pointer sprite `begin_grab_op` takes in 49–51; null on 45–48 where grab op takes device/sequence directly |
 | `Clutter.Actor:set_cursor_type()` | 50–51 (45–49 degraded) | per-actor cursor introduced in Clutter 50; handled transparently by `compat/actorCursor.js:setActorCursor()` which gracefully degrades on 45–49 without breaking resizing |
 | `Clutter.BindConstraint` | 45–51 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
