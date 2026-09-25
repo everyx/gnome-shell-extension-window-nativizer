@@ -4,7 +4,7 @@
  */
 
 import {setActorCursor} from '../src/compat/actorCursor.js';
-import {beginWindowGrabOp} from '../src/compat/grabOp.js';
+import {beginWindowGrabOp, getPointerSprite} from '../src/compat/grabOp.js';
 
 describe('compat', () => {
     describe('setActorCursor', () => {
@@ -42,8 +42,9 @@ describe('compat', () => {
 
             const sprite = {isSprite: true};
             const posHint = {x: 100, y: 200};
-            beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
+            const res = beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
 
+            expect(res).toBeTrue();
             expect(callArgs).not.toBeNull();
             expect(callArgs.length).toBe(4);
             expect(callArgs[0]).toBe(10);
@@ -61,9 +62,27 @@ describe('compat', () => {
             };
             const sprite = {isSprite: true};
             const posHint = {x: 100, y: 200};
-            beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
+            const res = beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
+            expect(res).toBeTrue();
             expect(callArgs.length).toBe(4);
             expect(callArgs[1]).toBe(sprite);
+        });
+
+        it('returns false on modern signature when sprite is missing', () => {
+            let called = false;
+            const mockWin = {
+                begin_grab_op() {
+                    called = true;
+                },
+            };
+            const res = beginWindowGrabOp(mockWin, 10, null, 12345, {x: 0, y: 0});
+            expect(res).toBeFalse();
+            expect(called).toBeFalse();
+        });
+
+        it('returns false when window has no begin_grab_op method', () => {
+            expect(beginWindowGrabOp(null, 10, null, 0, null)).toBeFalse();
+            expect(beginWindowGrabOp({}, 10, null, 0, null)).toBeFalse();
         });
 
         it('dispatches to 5-argument signature on GNOME 45–48', () => {
@@ -74,16 +93,77 @@ describe('compat', () => {
                 },
             };
 
-            const sprite = {isSprite: true};
+            const sprite = null;
             const posHint = {x: 100, y: 200};
-            beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
+            const res = beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint);
 
+            expect(res).toBeTrue();
             expect(fallbackArgs).not.toBeNull();
             expect(fallbackArgs.length).toBe(5);
             expect(fallbackArgs[0]).toBe(10);
             expect(fallbackArgs[2]).toBeNull();
             expect(fallbackArgs[3]).toBe(12345);
             expect(fallbackArgs[4]).toBe(posHint);
+        });
+    });
+
+    describe('getPointerSprite', () => {
+        let originalGlobal;
+
+        beforeEach(() => {
+            originalGlobal = globalThis.global;
+        });
+
+        afterEach(() => {
+            globalThis.global = originalGlobal;
+        });
+
+        it('extracts sprite from stage backend get_sprite', () => {
+            const expectedSprite = {id: 'event-sprite'};
+            const mockEvent = {};
+            globalThis.global = {
+                stage: {
+                    get_context() {
+                        return {
+                            get_backend() {
+                                return {
+                                    get_sprite(_stage, event) {
+                                        return event === mockEvent ? expectedSprite : null;
+                                    },
+                                };
+                            },
+                        };
+                    },
+                },
+            };
+
+            expect(getPointerSprite(mockEvent)).toBe(expectedSprite);
+        });
+
+        it('falls back to get_pointer_sprite when get_sprite is unavailable', () => {
+            const fallbackSprite = {id: 'pointer-sprite'};
+            globalThis.global = {
+                stage: {
+                    get_context() {
+                        return {
+                            get_backend() {
+                                return {
+                                    get_pointer_sprite() {
+                                        return fallbackSprite;
+                                    },
+                                };
+                            },
+                        };
+                    },
+                },
+            };
+
+            expect(getPointerSprite({})).toBe(fallbackSprite);
+        });
+
+        it('returns null when no sprite can be resolved', () => {
+            globalThis.global = {};
+            expect(getPointerSprite(null)).toBeNull();
         });
     });
 });

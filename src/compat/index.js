@@ -3,5 +3,5 @@
  */
 
 export {ShaderEffect} from './shaderEffect.js';
-export {beginWindowGrabOp} from './grabOp.js';
+export {beginWindowGrabOp, getPointerSprite} from './grabOp.js';
 export {setActorCursor} from './actorCursor.js';
