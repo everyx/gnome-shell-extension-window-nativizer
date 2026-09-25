@@ -1,6 +1,6 @@
 {
   "name": "window-nativizer",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "GNOME Shell extension: brings native GNOME rounded corners, GPU shadows, and resize bands to non-native windows",
