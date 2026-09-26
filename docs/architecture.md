@@ -248,8 +248,11 @@ Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the 
 `cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
 `-PAD` from the window actor, so cast is `body` shifted by zero then grown.
 `shadowSlices(shadowGeometry(radius), cast.w, cast.h)` yields dest boxes and normalized sources;
-sources never change. `_relayout` caches `slices/boxes/cast` per style and recomputes them when
-cast changes — eight small rects per frame during a drag, which is the cost the live geometry
+sources never change. On paint, dest boxes are snapped to the physical device pixel grid
+(`lib/snap.js`, aligned with GTK 4.24 `GskRectSnap` and `GSK_RECT_SNAP_ROUND` via `snapSliceBoxes`),
+guaranteeing that adjacent slice cutlines share identical physical grid lines under fractional scaling
+with zero subpixel gap or overlap. `_relayout` caches `slices/boxes/cast` per style and recomputes them
+when cast changes — eight small rects per frame during a drag, which is the cost the live geometry
 buys.
 
 Paint (`vfunc_paint_node`): obtains `Cogl.Context` from the framebuffer (only exists

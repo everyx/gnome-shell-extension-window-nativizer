@@ -18,6 +18,7 @@ import {
     styleKey,
     SHADOW_PAD,
 } from './shadowTexture.js';
+import {snapSliceBoxes} from '../lib/snap.js';
 
 // libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
 const FADE_MS = ADWAITA_STYLE.transition.durationMs;
@@ -169,11 +170,17 @@ export const ShadowActor = GObject.registerClass({
 
         const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
+
+        const scale = this.get_resource_scale ? this.get_resource_scale() : 1.0;
+        const corner = SHADOW_PAD + style.radius;
+        const snappedBoxes = snapSliceBoxes(style.cast, corner, scale);
+
         for (let i = 0; i < style.slices.length; i++) {
             const slice = style.slices[i];
             const box = style.boxes[i];
-            box.set_origin(style.cast.x + slice.x1, style.cast.y + slice.y1);
-            box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
+            const snapped = snappedBoxes[i];
+            box.set_origin(snapped.x, snapped.y);
+            box.set_size(snapped.width, snapped.height);
             pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
         }
     }
