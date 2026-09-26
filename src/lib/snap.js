@@ -71,7 +71,7 @@ export function snapDirection(value, direction = SnapDirection.ROUND) {
  * @returns {number} Snapped logical coordinate
  */
 export function snapCoordToGrid(value, scale, direction = SnapDirection.ROUND) {
-    if (scale <= 0 || direction === SnapDirection.NONE)
+    if (!(scale > 0) || !Number.isFinite(scale) || direction === SnapDirection.NONE)
         return value;
     return snapDirection(value * scale, direction) / scale;
 }
@@ -97,7 +97,7 @@ export function snapRuleGetDirection(rule, side) {
  * @returns {{x: number, y: number, width: number, height: number}}
  */
 export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
-    if (scale <= 0 || rule === SnapRule.NONE)
+    if (!(scale > 0) || !Number.isFinite(scale) || rule === SnapRule.NONE)
         return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
 
     const topDir = snapRuleGetDirection(rule, 0);
@@ -143,6 +143,67 @@ export const SLICE_GRID_INDICES = Object.freeze([
 ]);
 
 /**
+ * In-place mutates 8 pre-allocated Clutter.ActorBox instances on the physical device pixel grid.
+ * Guarantees zero heap allocation and zero GC pressure in the rendering loop.
+ * Clamps degenerate width/height to >= 0, mathematically preventing coordinate inversion.
+ *
+ * @param {Array<{set_origin: function(number, number): void, set_size: function(number, number): void}>} boxes - Pre-allocated boxes
+ * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
+ * @param {number} corner - Corner reach in px
+ * @param {number} scale - Physical device scale
+ * @returns {Array<object>} The mutated boxes
+ */
+export function snapSliceBoxesInto(boxes, cast, corner, scale) {
+    const width = Math.max(0, cast.width);
+    const height = Math.max(0, cast.height);
+    const c = Math.max(0, Math.min(corner, width / 2, height / 2));
+
+    const x0 = snapCoordToGrid(cast.x, scale, SnapDirection.ROUND);
+    const x1 = snapCoordToGrid(cast.x + c, scale, SnapDirection.ROUND);
+    const x2 = snapCoordToGrid(cast.x + width - c, scale, SnapDirection.ROUND);
+    const x3 = snapCoordToGrid(cast.x + width, scale, SnapDirection.ROUND);
+
+    const y0 = snapCoordToGrid(cast.y, scale, SnapDirection.ROUND);
+    const y1 = snapCoordToGrid(cast.y + c, scale, SnapDirection.ROUND);
+    const y2 = snapCoordToGrid(cast.y + height - c, scale, SnapDirection.ROUND);
+    const y3 = snapCoordToGrid(cast.y + height, scale, SnapDirection.ROUND);
+
+    // 0: top-left [x0, y0, x1, y1]
+    boxes[0].set_origin(x0, y0);
+    boxes[0].set_size(Math.max(0, x1 - x0), Math.max(0, y1 - y0));
+
+    // 1: top-right [x2, y0, x3, y1]
+    boxes[1].set_origin(x2, y0);
+    boxes[1].set_size(Math.max(0, x3 - x2), Math.max(0, y1 - y0));
+
+    // 2: bottom-left [x0, y2, x1, y3]
+    boxes[2].set_origin(x0, y2);
+    boxes[2].set_size(Math.max(0, x1 - x0), Math.max(0, y3 - y2));
+
+    // 3: bottom-right [x2, y2, x3, y3]
+    boxes[3].set_origin(x2, y2);
+    boxes[3].set_size(Math.max(0, x3 - x2), Math.max(0, y3 - y2));
+
+    // 4: top edge [x1, y0, x2, y1]
+    boxes[4].set_origin(x1, y0);
+    boxes[4].set_size(Math.max(0, x2 - x1), Math.max(0, y1 - y0));
+
+    // 5: bottom edge [x1, y2, x2, y3]
+    boxes[5].set_origin(x1, y2);
+    boxes[5].set_size(Math.max(0, x2 - x1), Math.max(0, y3 - y2));
+
+    // 6: left edge [x0, y1, x1, y2]
+    boxes[6].set_origin(x0, y1);
+    boxes[6].set_size(Math.max(0, x1 - x0), Math.max(0, y2 - y1));
+
+    // 7: right edge [x2, y1, x3, y2]
+    boxes[7].set_origin(x2, y1);
+    boxes[7].set_size(Math.max(0, x3 - x2), Math.max(0, y2 - y1));
+
+    return boxes;
+}
+
+/**
  * Computes snapped 8-slice bounding boxes on the physical device pixel grid.
  * Shared cutlines between adjacent tiles (e.g. corner and edge) snap to the
  * identical coordinate, guaranteeing zero gap and zero overlap.
@@ -153,31 +214,44 @@ export const SLICE_GRID_INDICES = Object.freeze([
  * @returns {Array<{x: number, y: number, width: number, height: number}>} 8 snapped slice boxes
  */
 export function snapSliceBoxes(cast, corner, scale) {
-    const c = Math.min(corner, cast.width / 2, cast.height / 2);
+    const boxes = Array.from({length: 8}, () => ({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        set_origin(x, y) {
+            this.x = x;
+            this.y = y;
+        },
+        set_size(w, h) {
+            this.width = w;
+            this.height = h;
+        },
+    }));
+    return snapSliceBoxesInto(boxes, cast, corner, scale);
+}
 
-    const x0 = snapCoordToGrid(cast.x, scale, SnapDirection.ROUND);
-    const x1 = snapCoordToGrid(cast.x + c, scale, SnapDirection.ROUND);
-    const x2 = snapCoordToGrid(cast.x + cast.width - c, scale, SnapDirection.ROUND);
-    const x3 = snapCoordToGrid(cast.x + cast.width, scale, SnapDirection.ROUND);
-
-    const y0 = snapCoordToGrid(cast.y, scale, SnapDirection.ROUND);
-    const y1 = snapCoordToGrid(cast.y + c, scale, SnapDirection.ROUND);
-    const y2 = snapCoordToGrid(cast.y + cast.height - c, scale, SnapDirection.ROUND);
-    const y3 = snapCoordToGrid(cast.y + cast.height, scale, SnapDirection.ROUND);
-
-    const X = [x0, x1, x2, x3];
-    const Y = [y0, y1, y2, y3];
-
-    return SLICE_GRID_INDICES.map(([c1, r1, c2, r2]) => {
-        const bx1 = X[c1];
-        const by1 = Y[r1];
-        const bx2 = X[c2];
-        const by2 = Y[r2];
-        return {
-            x: bx1,
-            y: by1,
-            width: Math.max(0, bx2 - bx1),
-            height: Math.max(0, by2 - by1),
-        };
-    });
+/**
+ * Resolves the true physical monitor scale for a window actor.
+ * Mutter's `clutter_actor_get_resource_scale()` is internally integer-ceil'd (ceilf),
+ * which rounds fractional scales like 1.25x/1.5x up to 2.0. Querying the Meta.Display
+ * monitor scale provides the actual hardware fractional scale factor.
+ *
+ * @param {object|null} actor - Window actor or child
+ * @param {number} [fallback=1.0]
+ * @returns {number} True physical monitor scale (e.g. 1.0, 1.25, 1.5, 2.0)
+ */
+export function getPhysicalMonitorScale(actor, fallback = 1.0) {
+    const win = actor?.meta_window ?? actor?.metaWindow ?? actor?._windowActor?.meta_window ?? actor?._windowActor?.metaWindow;
+    const monitor = win?.get_monitor?.() ?? -1;
+    const display = typeof global !== 'undefined' ? global.display : globalThis.global?.display;
+    if (monitor >= 0 && typeof display?.get_monitor_scale === 'function') {
+        const scale = display.get_monitor_scale(monitor);
+        if (scale > 0 && Number.isFinite(scale))
+            return scale;
+    }
+    const resourceScale = actor?.get_resource_scale?.();
+    if (resourceScale > 0 && Number.isFinite(resourceScale))
+        return resourceScale;
+    return fallback;
 }

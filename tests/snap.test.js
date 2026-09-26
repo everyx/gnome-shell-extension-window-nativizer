@@ -11,6 +11,8 @@ import {
     snapRuleGetDirection,
     snapRectToGrid,
     snapSliceBoxes,
+    snapSliceBoxesInto,
+    getPhysicalMonitorScale,
 } from '../src/lib/snap.js';
 
 describe('snapDirection', () => {
@@ -162,6 +164,87 @@ describe('snapSliceBoxes', () => {
 
             expect(boxes[1].y + boxes[1].height).toBe(boxes[7].y);
             expect(boxes[7].y + boxes[7].height).toBe(boxes[3].y);
+        }
+    });
+
+    it('mutates boxes in place with zero allocation via snapSliceBoxesInto', () => {
+        const existingBoxes = Array.from({length: 8}, () => ({
+            x: -1, y: -1, width: -1, height: -1,
+            set_origin(x, y) { this.x = x; this.y = y; },
+            set_size(w, h) { this.width = w; this.height = h; },
+        }));
+
+        const cast = {x: 10, y: 20, width: 400, height: 300};
+        const returned = snapSliceBoxesInto(existingBoxes, cast, 30, 1.25);
+
+        expect(returned).toBe(existingBoxes);
+        expect(existingBoxes[0].x).toBe(10.4);
+        expect(existingBoxes[0].y).toBe(20.0);
+        expect(existingBoxes[0].width).toBeCloseTo(29.6, 4);
+    });
+
+    it('safely clamps degenerate or negative window sizes without coordinate inversion', () => {
+        const boxes = snapSliceBoxes({x: 10, y: 10, width: -50, height: 0}, 45, 1.0);
+        for (const box of boxes) {
+            expect(box.width).toBe(0);
+            expect(box.height).toBe(0);
+        }
+    });
+});
+
+describe('scale edge cases and robustness', () => {
+    it('handles non-numeric, zero, and infinite scales safely', () => {
+        for (const badScale of [0, -1, -2.5, NaN, undefined, null, Infinity, -Infinity]) {
+            expect(snapCoordToGrid(15.75, badScale)).toBe(15.75);
+
+            const rect = {x: 10.5, y: 20.5, width: 100.5, height: 80.5};
+            expect(snapRectToGrid(rect, badScale)).toEqual(rect);
+        }
+    });
+});
+
+describe('getPhysicalMonitorScale', () => {
+    it('reads monitor scale from global.display when available', () => {
+        const fakeMetaWindow = {
+            get_monitor: () => 1,
+        };
+        const fakeActor = {
+            meta_window: fakeMetaWindow,
+            get_resource_scale: () => 2.0, // Ceil'd integer
+        };
+
+        const hadGlobal = 'global' in globalThis;
+        const oldGlobal = globalThis.global;
+        try {
+            globalThis.global = {
+                display: {
+                    get_monitor_scale: (mon) => (mon === 1 ? 1.25 : 1.0),
+                },
+            };
+
+            // Must return true fractional monitor scale (1.25), not ceil'd resource scale (2.0)
+            expect(getPhysicalMonitorScale(fakeActor)).toBe(1.25);
+        } finally {
+            if (hadGlobal)
+                globalThis.global = oldGlobal;
+            else
+                delete globalThis.global;
+        }
+    });
+
+    it('falls back to resource_scale when display query is unavailable', () => {
+        const fakeActor = {
+            get_resource_scale: () => 1.5,
+        };
+        const hadGlobal = 'global' in globalThis;
+        const oldGlobal = globalThis.global;
+        try {
+            delete globalThis.global;
+            expect(getPhysicalMonitorScale(fakeActor)).toBe(1.5);
+            expect(getPhysicalMonitorScale(null, 1.0)).toBe(1.0);
+        } finally {
+            if (hadGlobal)
+                globalThis.global = oldGlobal;
         }
     });
 });
