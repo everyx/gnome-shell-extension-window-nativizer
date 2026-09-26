@@ -18,6 +18,7 @@ import {
     styleKey,
     SHADOW_PAD,
 } from './shadowTexture.js';
+import {getPhysicalMonitorScale, snapSliceBoxesInto} from '../lib/snap.js';
 
 // libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
 const FADE_MS = ADWAITA_STYLE.transition.durationMs;
@@ -165,15 +166,15 @@ export const ShadowActor = GObject.registerClass({
     }
 
     _addRects(node, pipeline, style) {
-        this._relayout(style);
+        const scale = getPhysicalMonitorScale(this._windowActor, 1.0);
+        this._relayout(style, scale);
 
         const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
+
         for (let i = 0; i < style.slices.length; i++) {
             const slice = style.slices[i];
             const box = style.boxes[i];
-            box.set_origin(style.cast.x + slice.x1, style.cast.y + slice.y1);
-            box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
             pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
         }
     }
@@ -194,17 +195,24 @@ export const ShadowActor = GObject.registerClass({
         return bodyFrame({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
     }
 
-    // Cache slices/boxes per cast rect; sources are style-fixed.
-    _relayout(style) {
+    // Cache slices/boxes per cast rect and physical scale; sources are style-fixed.
+    _relayout(style, scale) {
         const cast = this._castRect();
         const previous = style.cast;
-        if (style.slices && previous && previous.x === cast.x && previous.y === cast.y &&
+        if (style.slices && previous && style.scale === scale &&
+            previous.x === cast.x && previous.y === cast.y &&
             previous.width === cast.width && previous.height === cast.height)
             return;
+
         style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
         if (!style.boxes || style.boxes.length !== style.slices.length)
             style.boxes = style.slices.map(() => new Clutter.ActorBox());
+
+        const corner = SHADOW_PAD + style.radius;
+        snapSliceBoxesInto(style.boxes, cast, corner, scale);
+
         style.cast = cast;
+        style.scale = scale;
     }
 
     _startFade() {

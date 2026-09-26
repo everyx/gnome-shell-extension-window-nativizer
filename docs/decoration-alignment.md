@@ -226,7 +226,10 @@ In `tools/gen-shader.mjs`:
   float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
   ```
 - `SNAP_BLEED = 0.8` is retained, guaranteeing zero risk of subpixel white gaps under
-  fractional scaling.
+  fractional scaling. Coupled with physical device pixel grid snapping (`lib/snap.js`,
+  aligned with GTK 4.24 `GskRectSnap` and `GSK_RECT_SNAP_ROUND`), both compositor clipping
+  (`clipEffect.js`) and shadow 9-slice tiles (`shadowActor.js`) land on deterministic
+  physical pixel boundaries without phase drift.
 
 ### Golden Baseline at 1.0x Integer Scale
 
