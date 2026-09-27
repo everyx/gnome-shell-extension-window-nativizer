@@ -95,15 +95,15 @@ describe('nativeLikeCorners', () => {
         });
 
         it('answers yes for a libadwaita process', () => {
-            expect(hasGtk4Client(828282, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))}))
-                .toBeTrue();
+            probeAdwaitaLook(828282, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
+            expect(hasGtk4Client(828282)).toBeTrue();
         });
 
         it('answers no for the GTK3 providers, whose handle is not theirs to report', () => {
-            expect(hasGtk4Client(828283, {readMaps: reader(maps('/usr/lib/firefox/libxul.so'))}))
-                .toBeFalse();
-            expect(hasGtk4Client(828284, {readMaps: reader(maps('/usr/lib/libhandy-1.so.0'))}))
-                .toBeFalse();
+            probeAdwaitaLook(828283, {readMaps: reader(maps('/usr/lib/firefox/libxul.so'))});
+            expect(hasGtk4Client(828283)).toBeFalse();
+            probeAdwaitaLook(828284, {readMaps: reader(maps('/usr/lib/libhandy-1.so.0'))});
+            expect(hasGtk4Client(828284)).toBeFalse();
         });
 
         it('reads as no while the answer is in flight, then yes once it lands', () => {
@@ -111,10 +111,11 @@ describe('nativeLikeCorners', () => {
             // opposite of `hasAdwaitaLook()`'s - that one counts an answer still coming as yes.
             let finish;
             const readMaps = (pid, done) => { finish = done; };
-            expect(hasGtk4Client(838383, {readMaps})).toBeFalse();
-            expect(hasAdwaitaLook(838383, {readMaps})).toBeTrue();
+            probeAdwaitaLook(838383, {readMaps});
+            expect(hasGtk4Client(838383)).toBeFalse();
+            expect(hasAdwaitaLook(838383)).toBeTrue();
             finish(maps('/usr/lib/libadwaita-1.so.0'));
-            expect(hasGtk4Client(838383, {readMaps})).toBeTrue();
+            expect(hasGtk4Client(838383)).toBeTrue();
         });
     });
 
@@ -133,68 +134,77 @@ describe('nativeLikeCorners', () => {
         it('decorates a process whose maps cannot be read, and reads it once', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
-            expect(hasAdwaitaLook(717171, {readMaps})).toBeFalse();
-            expect(hasAdwaitaLook(717171, {readMaps})).toBeFalse();
+            probeAdwaitaLook(717171, {readMaps});
+            expect(hasAdwaitaLook(717171)).toBeFalse();
+            probeAdwaitaLook(717171, {readMaps}); // idempotent: already cached
+            expect(hasAdwaitaLook(717171)).toBeFalse();
             expect(reads).toBe(1);
         });
 
         it('decorates a process whose reader throws instead of answering', () => {
             const readMaps = () => { throw new Error('boom'); };
-            expect(hasAdwaitaLook(717172, {readMaps})).toBeFalse();
+            probeAdwaitaLook(717172, {readMaps});
+            expect(hasAdwaitaLook(717172)).toBeFalse();
             // A throw is an answer: the pid must not stay pending, or its windows would never be decided.
             expect(isAdwaitaLookPending(717172)).toBeFalse();
-            expect(hasAdwaitaLook(717172, {readMaps})).toBeFalse();
+            expect(hasAdwaitaLook(717172)).toBeFalse();
         });
 
         it('leaves a window alone while its read is in flight, then answers', () => {
             let finish;
             const readMaps = (pid, done) => { finish = done; };
 
-            expect(hasAdwaitaLook(313131, {readMaps})).toBeTrue();
-            expect(hasAdwaitaLook(313131, {readMaps})).toBeTrue(); // one read, still in flight
+            probeAdwaitaLook(313131, {readMaps});
+            expect(hasAdwaitaLook(313131)).toBeTrue();
+            expect(hasAdwaitaLook(313131)).toBeTrue(); // still in flight, still no I/O from the query
             finish(maps('/usr/lib/libgtk-4.so.1'));
-            expect(hasAdwaitaLook(313131, {readMaps})).toBeFalse(); // now from the cache
+            expect(hasAdwaitaLook(313131)).toBeFalse(); // now from the cache
         });
 
         it('reports the pid whose answer landed', () => {
             const known = [];
             setOnProcessKnown(pid => known.push(pid));
 
-            expect(hasAdwaitaLook(414141, {readMaps: failing})).toBeFalse();
+            probeAdwaitaLook(414141, {readMaps: failing});
+            expect(hasAdwaitaLook(414141)).toBeFalse();
             expect(known).toEqual([414141]);
         });
 
         it('reads a pid once, then serves the cache', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(maps('/usr/lib/libc.so.6')); };
-            hasAdwaitaLook(515151, {readMaps});
-            hasAdwaitaLook(515151, {readMaps});
+            probeAdwaitaLook(515151, {readMaps});
+            expect(hasAdwaitaLook(515151)).toBeFalse();
+            expect(hasAdwaitaLook(515151)).toBeFalse();
             expect(reads).toBe(1);
         });
 
         it('re-reads a pid once it is forgotten', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(maps('/usr/lib/libc.so.6')); };
-            hasAdwaitaLook(616161, {readMaps});
+            probeAdwaitaLook(616161, {readMaps});
+            hasAdwaitaLook(616161);
             forgetProcess(616161);
-            hasAdwaitaLook(616161, {readMaps});
+            probeAdwaitaLook(616161, {readMaps});
+            hasAdwaitaLook(616161);
             expect(reads).toBe(2);
         });
 
         it('accepts a mapped provider', () => {
-            expect(hasAdwaitaLook(424242, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))}))
-                .toBeTrue();
+            probeAdwaitaLook(424242, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
+            expect(hasAdwaitaLook(424242)).toBeTrue();
         });
 
         it('rejects a GTK program holding no provider', () => {
-            expect(hasAdwaitaLook(424243, {
+            probeAdwaitaLook(424243, {
                 readMaps: reader(maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libgtk-3.so.0')),
-            })).toBeFalse();
+            });
+            expect(hasAdwaitaLook(424243)).toBeFalse();
         });
 
         it('rejects a non-GTK program', () => {
-            expect(hasAdwaitaLook(424245, {readMaps: reader(maps('/usr/lib/libQt6Core.so.6'))}))
-                .toBeFalse();
+            probeAdwaitaLook(424245, {readMaps: reader(maps('/usr/lib/libQt6Core.so.6'))});
+            expect(hasAdwaitaLook(424245)).toBeFalse();
         });
 
         it('ignores an answer that lands after the pid was forgotten', () => {
@@ -202,14 +212,14 @@ describe('nativeLikeCorners', () => {
             let finish;
             setOnProcessKnown(pid => known.push(pid));
 
-            hasAdwaitaLook(515100, {readMaps: (pid, done) => { finish = done; }});
+            probeAdwaitaLook(515100, {readMaps: (pid, done) => { finish = done; }});
             forgetProcess(515100);
             finish(maps('/usr/lib/libadwaita-1.so.0'));
 
             expect(known).toEqual([]);
-            // Forgotten is unknown again: the next query reads afresh instead of trusting that.
-            expect(hasAdwaitaLook(515100, {readMaps: reader(maps('/usr/lib/libc.so.6'))}))
-                .toBeFalse();
+            // Forgotten is unknown again: the next probe reads afresh instead of trusting that.
+            probeAdwaitaLook(515100, {readMaps: reader(maps('/usr/lib/libc.so.6'))});
+            expect(hasAdwaitaLook(515100)).toBeFalse();
         });
 
         it('drops the cache and the callback on destroy()', () => {
@@ -217,15 +227,15 @@ describe('nativeLikeCorners', () => {
             let finish;
             setOnProcessKnown(pid => known.push(pid));
 
-            hasAdwaitaLook(616100, {readMaps: (pid, done) => { finish = done; }});
+            probeAdwaitaLook(616100, {readMaps: (pid, done) => { finish = done; }});
             destroy();
             finish(maps('/usr/lib/libgtk-4.so.1'));
 
             expect(known).toEqual([]);
             // A stale `false` from that read must not stand as this pid's answer;
-            // query defaults to true when destroyed without firing new I/O.
-            expect(hasAdwaitaLook(616100, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))}))
-                .toBeTrue();
+            // the query defaults to true without firing new I/O (destroyed probes are no-ops).
+            probeAdwaitaLook(616100, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
+            expect(hasAdwaitaLook(616100)).toBeTrue();
         });
     });
 
@@ -272,11 +282,9 @@ describe('nativeLikeCorners', () => {
     });
 
     describe('hasNativeLikeCorners', () => {
-        it('probes maps for the pid the window reports', () => {
-            let probedPid;
-            const readMaps = pid => { probedPid = pid; };
-            hasNativeLikeCorners({get_pid: () => 9999999}, {readMaps});
-            expect(probedPid).toBe(9999999);
+        it('reads the pid the window reports from the process cache', () => {
+            probeAdwaitaLook(9999999, {readMaps: (pid, done) => done(maps('/usr/lib/libadwaita-1.so.0'))});
+            expect(hasNativeLikeCorners({get_pid: () => 9999999})).toBeTrue();
         });
 
         it('returns false for a window without a usable pid', () => {
@@ -287,6 +295,15 @@ describe('nativeLikeCorners', () => {
         it('safely handles null and undefined', () => {
             expect(hasNativeLikeCorners(null)).toBeFalse();
             expect(hasNativeLikeCorners(undefined)).toBeFalse();
+        });
+    });
+
+    describe('query purity', () => {
+        it('never starts a read from a query, however often it is called', () => {
+            expect(hasAdwaitaLook(700001)).toBeTrue();   // unknown reads as yes
+            expect(hasGtk4Client(700001)).toBeFalse();   // unknown reads as no
+            expect(hasNativeLikeCorners({get_pid: () => 700001})).toBeTrue();
+            expect(isAdwaitaLookPending(700001)).toBeFalse();
         });
     });
 });

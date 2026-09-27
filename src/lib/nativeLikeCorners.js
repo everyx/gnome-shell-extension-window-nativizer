@@ -122,32 +122,27 @@ export function setOnProcessKnown(cb) {
 }
 
 /**
+ * Pure snapshot read: answers only from `processCache` and never starts a read. Starting one is
+ * the caller's job, through the `probeAdwaitaLook()` command. A query that drives I/O makes its
+ * own result depend on evaluation order (docs/decoration-model.md § When a window's corners
+ * already look like ours).
  * @param {number} pid
- * @param {object} [deps]
- * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
  * @returns {{adwaitaLook: boolean, gtk4: boolean}|undefined}
  */
-function answerFor(pid, deps = {}) {
-    if (!isValidPid(pid))
-        return undefined;
-    if (!processCache.has(pid) && !inFlight.has(pid))
-        probeAdwaitaLook(pid, deps);
-    // A reader that answers synchronously lands above, so the cache decides first.
-    return processCache.get(pid);
+function answerFor(pid) {
+    return isValidPid(pid) ? processCache.get(pid) : undefined;
 }
 
 /**
  * Whether a process has the Adwaita look.
  * @param {number} pid
- * @param {object} [deps]
- * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
- * @returns {boolean} Whether process has Adwaita look (cached per pid; a read in flight reads as true)
+ * @returns {boolean} Whether the process has the Adwaita look (from the cache; unknown reads as true)
  */
-export function hasAdwaitaLook(pid, deps = {}) {
+export function hasAdwaitaLook(pid) {
     if (!isValidPid(pid))
         return false;
 
-    return answerFor(pid, deps)?.adwaitaLook ?? true;
+    return answerFor(pid)?.adwaitaLook ?? true;
 }
 
 /**
@@ -158,17 +153,15 @@ export function hasAdwaitaLook(pid, deps = {}) {
  * the theme instead, so nothing else can be read that way (docs/decoration-model.md § The resize
  * band).
  * @param {number} pid
- * @param {object} [deps]
- * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
- * @returns {boolean} Whether the process is a GTK4 client (cached per pid; a read in flight reads as false)
+ * @returns {boolean} Whether the process is a GTK4 client (from the cache; unknown reads as false)
  */
-export function hasGtk4Client(pid, deps = {}) {
+export function hasGtk4Client(pid) {
     if (!isValidPid(pid))
         return false;
 
-    // Unlike `hasAdwaitaLook()`, a read still in flight is not a yes: only a landed answer may
+    // Unlike `hasAdwaitaLook()`, an unknown answer is not a yes: only a landed answer may
     // take a band away from a window.
-    return answerFor(pid, deps)?.gtk4 ?? false;
+    return answerFor(pid)?.gtk4 ?? false;
 }
 
 /**
@@ -185,13 +178,12 @@ export function isAdwaitaLookPending(pid) {
 /**
  * Whether window's own process already rounds corners.
  * @param {object} win - Meta.Window
- * @param {object} [deps]
  * @returns {boolean} Whether window's own process already rounds corners.
  */
-export function hasNativeLikeCorners(win, deps = {}) {
+export function hasNativeLikeCorners(win) {
     if (!win)
         return false;
-    return hasAdwaitaLook(win.get_pid?.(), deps);
+    return hasAdwaitaLook(win.get_pid?.());
 }
 
 /**

@@ -110,7 +110,9 @@ later window of the same process reads the cache. Queries strictly inspect memor
 (`processCache`/`inFlight`), while `/proc` I/O is driven exclusively by lifecycle commands
 (`probeAdwaitaLook`). Reading I/O lazily inside queries or predicates (violating Command-Query
 Separation) is prohibited: it creates timing inversions where query evaluation order mutates state
-and triggers transient visual flicker.
+and triggers transient visual flicker. The manager drives the probe from the window lifecycle and
+the inspector from its hit-test and its pick request; a query handed an unprobed pid answers with
+its conservative default and never starts the read itself.
 
 ## Which rectangle the clip lands on
 
