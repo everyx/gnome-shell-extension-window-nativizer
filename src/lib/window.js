@@ -2,20 +2,11 @@
 
 import Shell from 'gi://Shell';
 
-import {readDeclaredIdentity} from './pick.js';
+import {readDeclaredIdentity, getWindowFromActor} from './pick.js';
 import {chooseWindowIdentity} from './rules.js';
 
 function listWindowActors() {
     return global.get_window_actors?.() ?? [];
-}
-
-/**
- * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name variations.
- * @param {object|null} actor
- * @returns {object|null} Meta.Window instance or null
- */
-export function getWindowFromActor(actor) {
-    return actor?.meta_window ?? actor?.metaWindow ?? null;
 }
 
 // Only non-pid answers are remembered; pid fallback would freeze a session-local rule.

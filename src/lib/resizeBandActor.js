@@ -25,7 +25,7 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
-import {getWindowFromActor} from './window.js';
+import {getWindowFromActor} from './pick.js';
 import {setActorBox} from './snap.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';

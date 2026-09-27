@@ -11,7 +11,7 @@ import {
 } from '../src/lib/rules.js';
 import {
     WindowClientType, buildRuleKeyFromProperties, extractWindowProperties,
-    readDeclaredIdentity, readWindowString,
+    getWindowFromActor, readDeclaredIdentity, readWindowString,
 } from '../src/lib/pick.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
@@ -270,6 +270,34 @@ describe('chooseWindowIdentity', () => {
     it('returns empty when nothing identifies the window', () => {
         expect(chooseWindowIdentity({})).toBe('');
         expect(chooseWindowIdentity({pid: -1})).toBe('');
+    });
+});
+
+describe('getWindowFromActor', () => {
+    it('reads the current meta_window property', () => {
+        const win = {id: 1};
+        expect(getWindowFromActor({meta_window: win})).toBe(win);
+    });
+
+    it('falls back to the camelCase metaWindow property', () => {
+        const win = {id: 2};
+        expect(getWindowFromActor({metaWindow: win})).toBe(win);
+    });
+
+    it('supports the modern get_meta_window() method', () => {
+        const win = {id: 3};
+        expect(getWindowFromActor({get_meta_window: () => win})).toBe(win);
+    });
+
+    it('returns null for a missing actor or a throwing accessor', () => {
+        expect(getWindowFromActor(null)).toBeNull();
+        expect(getWindowFromActor(undefined)).toBeNull();
+        const deallocated = {
+            get meta_window() {
+                throw new Error('Object MetaWindowActor has been already deallocated');
+            },
+        };
+        expect(getWindowFromActor(deallocated)).toBeNull();
     });
 });
 

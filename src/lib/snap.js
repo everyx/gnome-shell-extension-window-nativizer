@@ -16,6 +16,8 @@
  * - research/gtk/gsk/gskrectprivate.h
  */
 
+import {getWindowFromActor} from './pick.js';
+
 export const SNAP_EPSILON = 0.001;
 
 export const SnapDirection = Object.freeze({
@@ -206,12 +208,6 @@ export function snapSliceBoxesInto(boxes, cast, corner, scale) {
     return boxes;
 }
 
-function metaWindowOf(obj) {
-    return (typeof obj?.get_meta_window === 'function' ? obj.get_meta_window() : null) ??
-        obj?.meta_window ??
-        obj?.metaWindow;
-}
-
 /**
  * Recursively climbs the Clutter actor parent hierarchy to locate the enclosing MetaWindow.
  * Essential when effects are attached to child surface containers (e.g. on X11 or with Blur my Shell).
@@ -225,7 +221,7 @@ export function findMetaWindow(actor, maxDepth = 8) {
     let depth = 0;
     while (curr && depth < maxDepth) {
         try {
-            const win = metaWindowOf(curr) ?? metaWindowOf(curr._windowActor);
+            const win = getWindowFromActor(curr) ?? getWindowFromActor(curr._windowActor);
             if (win)
                 return win;
 
