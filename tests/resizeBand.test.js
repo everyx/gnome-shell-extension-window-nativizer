@@ -5,6 +5,7 @@
 
 import {
     computeResizeBands,
+    computeResizeBandsInto,
     edgeForPoint,
     MIN_BAND_WINDOW,
     normalizeConstrainedEdges,
@@ -507,6 +508,72 @@ describe('computeResizeBands', () => {
         expect(computeResizeBands({frame: null})).toEqual(emptyBands());
         expect(computeResizeBands({})).toEqual(emptyBands());
         expect(computeResizeBands()).toEqual(emptyBands());
+    });
+});
+
+describe('computeResizeBandsInto', () => {
+    const frame = rect(100, 50, 400, 300);
+
+    it('matches computeResizeBands for the same inputs', () => {
+        const into = emptyBands();
+        computeResizeBandsInto(into, {frame});
+        expect(into).toEqual(computeResizeBands({frame}));
+    });
+
+    it('reuses each region rect object while the band stays present', () => {
+        const into = emptyBands();
+        computeResizeBandsInto(into, {frame});
+        const top = into.top;
+        computeResizeBandsInto(into, {frame: rect(120, 50, 420, 300)});
+        expect(into.top).toBe(top); // same object, mutated in place
+        expect(into.top.x).toBe(120 - RESIZE_BAND);
+    });
+
+    it('reports whether anything changed', () => {
+        const into = emptyBands();
+        expect(computeResizeBandsInto(into, {frame})).toBeTrue();
+        expect(computeResizeBandsInto(into, {frame})).toBeFalse();
+        expect(computeResizeBandsInto(into, {frame: rect(100, 50, 401, 300)})).toBeTrue();
+    });
+
+    it('clears a region that becomes constrained, and re-adds it', () => {
+        const into = emptyBands();
+        computeResizeBandsInto(into, {frame});
+        expect(into.top).not.toBeNull();
+        expect(computeResizeBandsInto(into, {frame, maximizedVertically: true})).toBeTrue();
+        expect(into.top).toBeNull();
+        expect(into.bottom).toBeNull();
+        expect(into.left).not.toBeNull(); // vertically maximized constrains top/bottom only
+        expect(computeResizeBandsInto(into, {frame, maximizedVertically: true})).toBeFalse();
+    });
+
+    it('clears every region for an unusable frame', () => {
+        const into = emptyBands();
+        computeResizeBandsInto(into, {frame});
+        expect(computeResizeBandsInto(into, {frame: null})).toBeTrue();
+        expect(into).toEqual(emptyBands());
+        expect(computeResizeBandsInto(into, {frame: null})).toBeFalse();
+    });
+
+    it('matches computeResizeBands for a clipped frame and for an unusable scale', () => {
+        const bounds = rect(0, 0, 300, 200);
+        const clipped = emptyBands();
+        computeResizeBandsInto(clipped, {frame, bounds});
+        expect(clipped).toEqual(computeResizeBands({frame, bounds}));
+
+        const noScale = emptyBands();
+        computeResizeBandsInto(noScale, {frame, scale: 0});
+        expect(noScale).toEqual(computeResizeBands({frame, scale: 0}));
+    });
+
+    it('does not mutate the frame or bounds it is given', () => {
+        const given = rect(100, 50, 400, 300);
+        const givenBounds = rect(0, 0, 300, 200);
+        const frameSnap = {...given};
+        const boundsSnap = {...givenBounds};
+        computeResizeBandsInto(emptyBands(), {frame: given, bounds: givenBounds});
+        expect(given).toEqual(frameSnap);
+        expect(givenBounds).toEqual(boundsSnap);
     });
 });
 

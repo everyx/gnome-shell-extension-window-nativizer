@@ -166,30 +166,56 @@ export function edgeForPoint(frame, x, y, {
 }
 
 /**
- * @param {Rect|null} rect
- * @param {Rect|null} bounds
- * @returns {Rect|null} Intersection, or null when it is empty
+ * Clears one region in place, reporting whether it held a band.
+ * @returns {boolean}
  */
-function clipToBounds(rect, bounds) {
-    if (!rect || !(rect.width > 0) || !(rect.height > 0))
-        return null;
-    if (!bounds)
-        return rect;
+function clearBand(bands, region) {
+    if (!bands[region])
+        return false;
+    bands[region] = null;
+    return true;
+}
 
-    const x1 = Math.max(rect.x, bounds.x);
-    const y1 = Math.max(rect.y, bounds.y);
-    const x2 = Math.min(rect.x + rect.width, bounds.x + bounds.width);
-    const y2 = Math.min(rect.y + rect.height, bounds.y + bounds.height);
-    if (!(x2 > x1) || !(y2 > y1))
-        return null;
+/**
+ * Writes one region of the ring into `bands` in place, reusing the region's own rect object
+ * when it already has one, and returns whether the written value differs from what was there.
+ * A `constrained` edge is held fixed and gets no strip.
+ * @returns {boolean}
+ */
+function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
+    if (constrained || !(rw > 0) || !(rh > 0))
+        return clearBand(bands, region);
 
-    return {x: x1, y: y1, width: x2 - x1, height: y2 - y1};
+    let x = rx;
+    let y = ry;
+    let w = rw;
+    let h = rh;
+    if (bounds) {
+        const x1 = Math.max(rx, bounds.x);
+        const y1 = Math.max(ry, bounds.y);
+        const x2 = Math.min(rx + rw, bounds.x + bounds.width);
+        const y2 = Math.min(ry + rh, bounds.y + bounds.height);
+        if (!(x2 > x1) || !(y2 > y1))
+            return clearBand(bands, region);
+        x = x1;
+        y = y1;
+        w = x2 - x1;
+        h = y2 - y1;
+    }
+
+    const out = bands[region] ?? (bands[region] = {x: 0, y: 0, width: 0, height: 0});
+    const changed = out.x !== x || out.y !== y || out.width !== w || out.height !== h;
+    out.x = x;
+    out.y = y;
+    out.width = w;
+    out.height = h;
+    return changed;
 }
 
 /**
  * @returns {Record<string, Rect|null>} Every surface present, all null
  */
-function emptyBands() {
+export function emptyBands() {
     const bands = {};
     for (const region of RESIZE_BAND_REGIONS)
         bands[region] = null;
@@ -214,7 +240,21 @@ function emptyBands() {
  * @param {boolean} [params.maximizedVertically=false]
  * @returns {Record<string, Rect|null>} One rect per side, null where it is empty
  */
-export function computeResizeBands({
+/**
+ * In-place form for the resize hot path: writes the four ring rectangles into `bands` (a
+ * persistent object whose regions are rects or null) and reuses each region's own rect, so
+ * only the first time a region becomes present allocates. Returns whether anything changed.
+ *
+ * The four rectangles tile `frame`'s `RESIZE_BAND`-wide outer ring, each clipped to `bounds`.
+ * The direction a point resolves to is `edgeForPoint()`; these rectangles only decide where an
+ * event is delivered atomically - disjoint, half-open, exactly covering the ring. Units are
+ * logical px at every scale; a non-positive or non-finite `scale` gets no band, so a caller
+ * that cannot say which space it measured in is never silently misread.
+ * @param {Record<string, Rect|null>} bands - mutated in place
+ * @param {object} params - see `computeResizeBands`
+ * @returns {boolean} Whether `bands` differs from what it held
+ */
+export function computeResizeBandsInto(bands, {
     frame,
     bounds = null,
     scale = 1,
@@ -222,13 +262,14 @@ export function computeResizeBands({
     maximizedHorizontally = false,
     maximizedVertically = false,
 } = {}) {
-    const bands = emptyBands();
-
-    if (!Number.isFinite(scale) || scale <= 0)
-        return bands;
-    if (!frame || !Number.isFinite(frame.x) || !Number.isFinite(frame.y) ||
-        !(frame.width > 0) || !(frame.height > 0))
-        return bands;
+    if (!Number.isFinite(scale) || scale <= 0 ||
+        !frame || !Number.isFinite(frame.x) || !Number.isFinite(frame.y) ||
+        !(frame.width > 0) || !(frame.height > 0)) {
+        let changed = false;
+        for (const region of RESIZE_BAND_REGIONS)
+            changed = clearBand(bands, region) || changed;
+        return changed;
+    }
 
     const constrained = normalizeConstrainedEdges({
         constrainedEdges,
@@ -239,17 +280,22 @@ export function computeResizeBands({
     const b = RESIZE_BAND;
     const {x, y, width, height} = frame;
     // Half-open, so the crops meet without overlap: the top and bottom take the full width
-    // (and with it the outward corners), the left and right fill the middle height.
-    // When an edge is constrained (e.g. side-tiled against boundary), that edge has no grab strip.
-    const rects = {
-        top: constrained.top ? null : {x: x - b, y: y - b, width: width + 2 * b, height: b},
-        right: constrained.right ? null : {x: x + width, y, width: b, height},
-        bottom: constrained.bottom ? null : {x: x - b, y: y + height, width: width + 2 * b, height: b},
-        left: constrained.left ? null : {x: x - b, y, width: b, height},
-    };
+    // (and with it the outward corners), the left and right fill the middle height. A
+    // constrained edge (e.g. side-tiled against a boundary) has no grab strip.
+    let changed = false;
+    changed = clipValuesInto(bands, 'top', x - b, y - b, width + 2 * b, b, bounds, constrained.top) || changed;
+    changed = clipValuesInto(bands, 'right', x + width, y, b, height, bounds, constrained.right) || changed;
+    changed = clipValuesInto(bands, 'bottom', x - b, y + height, width + 2 * b, b, bounds, constrained.bottom) || changed;
+    changed = clipValuesInto(bands, 'left', x - b, y, b, height, bounds, constrained.left) || changed;
+    return changed;
+}
 
-    for (const region of RESIZE_BAND_REGIONS)
-        bands[region] = clipToBounds(rects[region], bounds);
-
+/**
+ * @param {object} params - see `computeResizeBandsInto`
+ * @returns {Record<string, Rect|null>} One rect per side, null where it is empty
+ */
+export function computeResizeBands(params) {
+    const bands = emptyBands();
+    computeResizeBandsInto(bands, params);
     return bands;
 }
