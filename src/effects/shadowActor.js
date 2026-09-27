@@ -10,14 +10,8 @@ import GObject from 'gi://GObject';
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {
-    setPipelineOpacity,
-    shadowGeometry,
-    shadowPipelineFor,
-    shadowSlices,
-    styleKey,
-    SHADOW_PAD,
-} from './shadowTexture.js';
+import {shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
+import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {getPhysicalMonitorScale, snapSliceBoxesInto} from '../lib/snap.js';
 
 // libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
@@ -136,7 +130,7 @@ export const ShadowActor = GObject.registerClass({
     }
 
     vfunc_paint_node(node, paintContext) {
-        if (!this._style)
+        if (this.width <= 0 || this.height <= 0 || !this._style)
             return;
 
         if (this._outgoing && this._progress >= 1)
