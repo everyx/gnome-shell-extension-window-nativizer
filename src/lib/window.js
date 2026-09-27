@@ -58,7 +58,9 @@ export function resolveWindowIdentity(win) {
     }
 
     const identity = chooseWindowIdentity({declared, peer, tracked, pid});
-    if (identity && !identity.startsWith('pid-'))
+    // A peer-derived answer is not remembered: the peer can close and this window would then
+    // keep an identity borrowed from a window that is gone. pid answers are session-local too.
+    if (identity && identity !== peer && !identity.startsWith('pid-'))
         fallbackIdentities.set(win, {declared, identity});
     return identity;
 }
