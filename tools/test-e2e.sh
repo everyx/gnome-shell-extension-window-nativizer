@@ -72,6 +72,35 @@ if wrong:
 PYEOF
 }
 
+# Poll a reader command until its JSON output satisfies `predicate` (python -c; the state is
+# argv[1], extra args follow), or give up after ~6s. Replaces a fixed settle sleep: a slow
+# machine then waits for the state instead of racing it. On timeout it prints the last state
+# and returns non-zero.
+await_state() {
+    local reader="$1" predicate="$2"
+    shift 2
+    local tries="${AWAIT_TRIES:-60}" state="" err
+    err="$(mktemp)"
+    for _ in $(seq 1 "$tries"); do
+        state="$("$reader")"
+        if python3 -c "$predicate" "$state" "$@" 2>"$err"; then
+            rm -f "$err"
+            printf '%s' "$state"
+            return 0
+        fi
+        sleep 0.1
+    done
+    # A predicate that raised (a typo, or a reader that emitted non-JSON) would otherwise look
+    # like a state that never settles; surface the traceback instead of misdiagnosing it.
+    if [ -s "$err" ]; then
+        echo "!! await_state predicate error:" >&2
+        cat "$err" >&2
+    fi
+    rm -f "$err"
+    printf '%s' "$state"
+    return 1
+}
+
 # Ensure shell has settled onto the desktop (overview dismissed by dev-shell.sh)
 OVERVIEW_INIT_STATE="$(shell_eval '
 (async () => {
@@ -370,32 +399,15 @@ shell_eval '
         actors[0].meta_window.set_maximize_flags(2); // Meta.MaximizeFlags.VERTICAL
 })()
 ' >/dev/null
-sleep 0.3
-
-VERT_STATE="$(read_band_state)"
-echo ">> Vertically maximized state: $VERT_STATE"
-python3 - "$VERT_STATE" << 'PYEOF'
+VERT_STATE="$(await_state read_band_state '
 import json, sys
-
-data = json.loads(sys.argv[1])
-if not data.get("hasBand"):
-    sys.exit("!! Expected resize band on vertically maximized window, but none found!")
-
-strips = data.get("strips", {})
-top = strips.get("top", {})
-bottom = strips.get("bottom", {})
-left = strips.get("left", {})
-right = strips.get("right", {})
-
-if top.get("width", -1) != 0 or top.get("height", -1) != 0:
-    sys.exit(f"!! Expected top strip to collapse to 0x0 on vertical maximization, got {top}")
-if bottom.get("width", -1) != 0 or bottom.get("height", -1) != 0:
-    sys.exit(f"!! Expected bottom strip to collapse to 0x0 on vertical maximization, got {bottom}")
-if left.get("width", 0) <= 0 or left.get("height", 0) <= 0:
-    sys.exit(f"!! Expected left strip to remain active, got {left}")
-if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
-    sys.exit(f"!! Expected right strip to remain active, got {right}")
-PYEOF
+d = json.loads(sys.argv[1])
+s = d.get("strips", {})
+zero = lambda e: s.get(e, {}).get("width", -1) == 0 and s.get(e, {}).get("height", -1) == 0
+live = lambda e: s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0
+sys.exit(0 if d.get("hasBand") and zero("top") and zero("bottom") and live("left") and live("right") else 1)
+')" || { echo "!! Vertically maximized band did not settle into its expected shape: $VERT_STATE"; exit 1; }
+echo ">> Vertically maximized state: $VERT_STATE"
 echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
 
 # (a2) Left half of the work area, flush against the left edge, vertically maximized as
@@ -416,32 +428,15 @@ shell_eval '
     }
 })()
 ' >/dev/null
-sleep 0.3
-
-LEFT_TILED_STATE="$(read_band_state)"
-echo ">> Left-tiled state: $LEFT_TILED_STATE"
-python3 - "$LEFT_TILED_STATE" << 'PYEOF'
+LEFT_TILED_STATE="$(await_state read_band_state '
 import json, sys
-
-data = json.loads(sys.argv[1])
-if not data.get("hasBand"):
-    sys.exit("!! Expected resize band on left-tiled window, but none found!")
-
-strips = data.get("strips", {})
-top = strips.get("top", {})
-bottom = strips.get("bottom", {})
-left = strips.get("left", {})
-right = strips.get("right", {})
-
-if top.get("width", -1) != 0 or top.get("height", -1) != 0:
-    sys.exit(f"!! Expected top strip to collapse to 0x0 on left-tiled window, got {top}")
-if bottom.get("width", -1) != 0 or bottom.get("height", -1) != 0:
-    sys.exit(f"!! Expected bottom strip to collapse to 0x0 on left-tiled window, got {bottom}")
-if left.get("width", -1) != 0 or left.get("height", -1) != 0:
-    sys.exit(f"!! Expected left strip to collapse to 0x0 on left-tiled window, got {left}")
-if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
-    sys.exit(f"!! Expected right strip to remain active on left-tiled window, got {right}")
-PYEOF
+d = json.loads(sys.argv[1])
+s = d.get("strips", {})
+zero = lambda e: s.get(e, {}).get("width", -1) == 0 and s.get(e, {}).get("height", -1) == 0
+live = lambda e: s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0
+sys.exit(0 if d.get("hasBand") and zero("top") and zero("bottom") and zero("left") and live("right") else 1)
+')" || { echo "!! Left-tiled band did not settle into its expected shape: $LEFT_TILED_STATE"; exit 1; }
+echo ">> Left-tiled state: $LEFT_TILED_STATE"
 echo ">> Left-tiled resize band verified: top, bottom, and left collapsed; right active."
 
 # (b) Fully maximize: band must be destroyed
@@ -452,17 +447,11 @@ shell_eval '
         actors[0].meta_window.maximize();
 })()
 ' >/dev/null
-sleep 0.3
-
-FULL_STATE="$(read_band_state)"
-echo ">> Fully maximized state: $FULL_STATE"
-python3 - "$FULL_STATE" << 'PYEOF'
+FULL_STATE="$(await_state read_band_state '
 import json, sys
-
-data = json.loads(sys.argv[1])
-if data.get("hasBand"):
-    sys.exit("!! Expected resize band to be destroyed on fully maximized window, but found one!")
-PYEOF
+sys.exit(0 if not json.loads(sys.argv[1]).get("hasBand") else 1)
+')" || { echo "!! Resize band survived a fully maximized window: $FULL_STATE"; exit 1; }
+echo ">> Fully maximized state: $FULL_STATE"
 echo ">> Fully maximized state verified: resize band destroyed."
 
 # (c) Unmaximize: band must be restored on all four sides
@@ -476,23 +465,15 @@ shell_eval '
     }
 })()
 ' >/dev/null
-sleep 0.3
-
-RESTORED_STATE="$(read_band_state)"
-echo ">> Restored state: $RESTORED_STATE"
-python3 - "$RESTORED_STATE" << 'PYEOF'
+RESTORED_STATE="$(await_state read_band_state '
 import json, sys
-
-data = json.loads(sys.argv[1])
-if not data.get("hasBand"):
-    sys.exit("!! Expected resize band restored after unmaximizing, but none found!")
-
-strips = data.get("strips", {})
-for edge in ["top", "bottom", "left", "right"]:
-    s = strips.get(edge, {})
-    if s.get("width", 0) <= 0 or s.get("height", 0) <= 0:
-        sys.exit(f"!! Expected strip {edge} to be non-zero after unmaximize, got {s}")
-PYEOF
+d = json.loads(sys.argv[1])
+s = d.get("strips", {})
+live = all(s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0
+           for e in ("top", "bottom", "left", "right"))
+sys.exit(0 if d.get("hasBand") and live else 1)
+')" || { echo "!! Resize band was not restored on all sides: $RESTORED_STATE"; exit 1; }
+echo ">> Restored state: $RESTORED_STATE"
 echo ">> Unmaximized state verified: resize band restored on all sides."
 
 # (d) A window the user placed flush by hand is not tiled: no maximize flag is set for it, so
@@ -512,34 +493,17 @@ shell_eval '
     }
 })()
 ' >/dev/null
-sleep 0.3
-
-FLUSH_STATE="$(read_band_state)"
-echo ">> Hand-placed flush state: $FLUSH_STATE"
-python3 - "$FLUSH_STATE" << 'PYEOF'
+FLUSH_STATE="$(await_state read_band_state '
 import json, sys
-
-data = json.loads(sys.argv[1])
-if not data.get("hasBand"):
-    sys.exit("!! Expected a resize band on a hand-placed flush window, but none found!")
-
-strips = data.get("strips", {})
-
-top = strips.get("top", {})
-if top.get("width", 0) <= 0 or top.get("height", 0) <= 0:
-    sys.exit(f"!! Expected the top strip to survive on a hand-placed flush window, got {top}")
-
-right = strips.get("right", {})
-if right.get("width", 0) <= 0 or right.get("height", 0) <= 0:
-    sys.exit(f"!! Expected the right strip to remain active, got {right}")
-
+d = json.loads(sys.argv[1])
+s = d.get("strips", {})
+live = lambda e: s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0
+zero = lambda e: s.get(e, {}).get("width", -1) == 0 and s.get(e, {}).get("height", -1) == 0
 # Left and bottom are empty because they fall outside the monitor, not because an edge was
 # suppressed - which is what an empty top strip would mean.
-for edge in ["left", "bottom"]:
-    s = strips.get(edge, {})
-    if s.get("width", -1) != 0 or s.get("height", -1) != 0:
-        sys.exit(f"!! Expected strip {edge} to be clipped away, got {s}")
-PYEOF
+sys.exit(0 if d.get("hasBand") and live("top") and live("right") and zero("left") and zero("bottom") else 1)
+')" || { echo "!! Hand-placed flush window did not settle: $FLUSH_STATE"; exit 1; }
+echo ">> Hand-placed flush state: $FLUSH_STATE"
 echo ">> Hand-placed flush window verified: top and right strips survive, left and bottom clipped."
 
 kill "$PROBE_PID" 2>/dev/null || true
@@ -565,9 +529,15 @@ for i in $(seq 1 60); do
     [ "$found" = "1" ] && break
     sleep 0.25
 done
-sleep 0.6
-
-DECLARED_STATE="$(read_declared_band_state)"
+# Poll for the band to appear on all four sides before the geometry assertion, instead of a
+# fixed settle sleep.
+# Capture the awaited snapshot itself, not a second read that could race the first.
+DECLARED_STATE="$(await_state read_declared_band_state '
+import json, sys
+d = json.loads(sys.argv[1])
+s = d.get("strips", {})
+sys.exit(0 if d.get("hasBand") and all(s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0 for e in ("top", "right", "bottom", "left")) else 1)
+')" || { echo "!! The declared-margin window never showed its band: $DECLARED_STATE"; exit 1; }
 echo ">> Declared-margin window state: $DECLARED_STATE"
 python3 - "$DECLARED_STATE" "$BAND_PX" << 'PYEOF'
 import json, sys
@@ -762,12 +732,20 @@ if [ -n "$LIBNATIVE_APP" ]; then
     echo ">> [test-e2e] Verifying a libadwaita client is left alone ($LIBNATIVE_APP)..."
     "$DEV" app "$LIBNATIVE_APP" >/dev/null 2>&1 &
     LIBNATIVE_PID=$!
+    found=0
     for i in $(seq 1 80); do
         found="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
         [ "$found" = "1" ] && break
         sleep 0.25
     done
-    sleep 1.0
+    if [ "$found" != "1" ]; then
+        echo "!! The libadwaita client ($LIBNATIVE_APP) never mapped a '$LIBNATIVE_CLASS' window"
+        exit 1
+    fi
+    # Poll for the settled decision instead of a fixed settle sleep: the extension has to have
+    # reconciled the mapping and decided to leave the client alone.
+    NATIVE_STATE=""
+    for i in $(seq 1 60); do
     NATIVE_STATE="$(shell_eval "
     (() => {
         global.window_group.show();
@@ -780,6 +758,9 @@ if [ -n "$LIBNATIVE_APP" ]; then
         return 'band=' + (band ? 1 : 0) + ';effects=' + (effects || 'none');
     })()
     ")"
+    [[ "$NATIVE_STATE" == *"band=0;effects=none"* ]] && break
+    sleep 0.1
+    done
     echo ">> Libadwaita client state: $NATIVE_STATE"
     python3 - "$NATIVE_STATE" << 'PYEOF'
 import sys
@@ -1052,7 +1033,7 @@ PICK_BG=$!
 # Prove the pick is genuinely in flight before disabling: no reply yet, and the picker overlay
 # on screen. Without this a pick that already returned would pass, exercising nothing.
 PICK_PENDING=0
-for _ in $(seq 1 40); do
+for _ in $(seq 1 120); do
     if tail -1 "$PICK_REPLY" 2>/dev/null | grep -q '^[0-9]\+$'; then
         echo "!! The pick returned before it could be interrupted; there was nothing to cancel!"
         kill "$PICK_BG" 2>/dev/null || true
