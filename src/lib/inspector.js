@@ -27,7 +27,8 @@ import {
     isWindowTiled,
 } from './detector.js';
 import {hasNativeLikeCorners} from './nativeLikeCorners.js';
-import {getWindowFromActor, resolveWindowIdentity} from './window.js';
+import {getWindowFromActor} from './pick.js';
+import {resolveWindowIdentity} from './window.js';
 
 // Highlight visual styling aligned with GNOME Shell's screenshot window selector.
 export {HIGHLIGHT_BORDER_WIDTH};

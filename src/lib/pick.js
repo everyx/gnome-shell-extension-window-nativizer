@@ -40,6 +40,24 @@ export function readDeclaredIdentity(win) {
         '';
 }
 
+/**
+ * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
+ * variations: `meta_window` (current), `metaWindow`, then the `get_meta_window()`
+ * modern method. A getter may throw on a half-destroyed actor, which must not escape.
+ *
+ * @param {object|null} actor
+ * @returns {object|null} Meta.Window instance or null
+ */
+export function getWindowFromActor(actor) {
+    if (!actor)
+        return null;
+    try {
+        return actor.meta_window ?? actor.metaWindow ?? actor.get_meta_window?.() ?? null;
+    } catch {
+        return null;
+    }
+}
+
 /** @param {object} win @param {string|null} [wmClassOverride] @returns {Record<string,string>} */
 export function extractWindowProperties(win, wmClassOverride = null) {
     if (!win)
