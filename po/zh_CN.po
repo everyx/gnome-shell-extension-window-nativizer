@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 14:42+0800\n"
+"POT-Creation-Date: 2026-09-28 07:15+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -219,37 +219,37 @@ msgstr "选取窗口"
 msgid "The correction applies to every window of its kind"
 msgstr "这条修正对此类所有窗口生效"
 
-#: src/prefs.js:606
+#: src/prefs.js:608
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs.js:607
+#: src/prefs.js:609
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr "按窗口种类——自动判断出错的地方；未列出的跟随自动判断"
 
-#: src/prefs.js:639
+#: src/prefs.js:652
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "点上面的按钮，选一个看起来不对的窗口"
 
-#: src/prefs.js:694
+#: src/prefs.js:710
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:700
+#: src/prefs.js:716
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:701
+#: src/prefs.js:717
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:706
+#: src/prefs.js:722
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:707
+#: src/prefs.js:723
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"

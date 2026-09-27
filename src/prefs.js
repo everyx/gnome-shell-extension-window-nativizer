@@ -602,28 +602,41 @@ function _setupCorrectionsGroup(page, ctx) {
         margin_start: 18,
     });
 
+    // Adw.PreferencesGroup title/description are plain text (unlike AdwPreferencesRow, whose
+    // use_markup defaults to true); escaping them would render "&" as "&amp;".
     const rulesGroup = new Adw.PreferencesGroup({
-        title: asMarkup(_('Corrections')),
-        description: asMarkup(_('Per window kind - where the automatic decision was wrong; anything not listed follows it')),
+        title: _('Corrections'),
+        description: _('Per window kind - where the automatic decision was wrong; anything not listed follows it'),
         header_suffix: pickButton,
     });
     page.add(rulesGroup);
 
     const rows = [];
 
-    // Destroyed from own signal: defer rebuild to idle. One pending is enough.
+    // Destroyed from own signal: defer rebuild to idle. One pending is enough, and the key to
+    // highlight rides along, so a rebuild merged from several triggers (our own write's
+    // `changed`, a pick) still highlights once - a concurrent rebuild would otherwise clear
+    // the highlight the pick just set.
     let renderScheduled = false;
-    const scheduleRenderRules = () => {
+    let pendingHighlight = null;
+    const scheduleRenderRules = highlightKey => {
+        if (highlightKey !== undefined)
+            pendingHighlight = highlightKey;
         if (renderScheduled)
             return;
         renderScheduled = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             renderScheduled = false;
             if (isWindowAlive())
-                renderRules();
+                renderRules(pendingHighlight);
+            pendingHighlight = null;
             return GLib.SOURCE_REMOVE;
         });
     };
+
+    // The rules can also change from outside this window (another prefs instance, dconf):
+    // without this the rows drift until the window is reopened.
+    settings.connect('changed::window-rules', () => scheduleRenderRules());
 
     const renderRules = highlightKey => {
         for (const row of rows)
@@ -657,14 +670,17 @@ function _setupCorrectionsGroup(page, ctx) {
 
         if (focusedRow) {
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                if (isWindowAlive() && focusedRow)
+                // A rebuild (an external rule change) may have replaced the rows by now; the
+                // old row is no longer in `rows`, so grabbing focus on it would touch a
+                // destroyed widget.
+                if (isWindowAlive() && rows.includes(focusedRow))
                     focusedRow.grab_focus();
                 return GLib.SOURCE_REMOVE;
             });
         }
     };
 
-    _setupWindowPickerAction(pickButton, ctx, ruleKey => renderRules(ruleKey));
+    _setupWindowPickerAction(pickButton, ctx, ruleKey => scheduleRenderRules(ruleKey));
 
     renderRules();
 }
@@ -697,8 +713,8 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         window.add(page);
 
         const renderGroup = new Adw.PreferencesGroup({
-            title: asMarkup(_('Display & Rendering')),
-            description: asMarkup(_('Control window decoration behavior across screen scales')),
+            title: _('Display & Rendering'),
+            description: _('Control window decoration behavior across screen scales'),
         });
         page.add(renderGroup);
 

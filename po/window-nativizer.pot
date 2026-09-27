@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 14:42+0800\n"
+"POT-Creation-Date: 2026-09-28 07:15+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -220,37 +220,37 @@ msgstr ""
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:606
+#: src/prefs.js:608
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:607
+#: src/prefs.js:609
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr ""
 
-#: src/prefs.js:639
+#: src/prefs.js:652
 msgid "Use the button above to pick a window that looks wrong"
 msgstr ""
 
-#: src/prefs.js:694
+#: src/prefs.js:710
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:700
+#: src/prefs.js:716
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:701
+#: src/prefs.js:717
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:706
+#: src/prefs.js:722
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:707
+#: src/prefs.js:723
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
