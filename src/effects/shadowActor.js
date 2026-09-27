@@ -18,6 +18,7 @@ import {
     styleKey,
     SHADOW_PAD,
 } from './shadowTexture.js';
+import {getPhysicalMonitorScale, snapSliceBoxesInto} from '../lib/snap.js';
 
 // libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
 const FADE_MS = ADWAITA_STYLE.transition.durationMs;
@@ -165,15 +166,15 @@ export const ShadowActor = GObject.registerClass({
     }
 
     _addRects(node, pipeline, style) {
-        this._relayout(style);
+        const scale = getPhysicalMonitorScale(this._windowActor, 1.0);
+        const boxes = this._relayout(style, scale);
 
         const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
+
         for (let i = 0; i < style.slices.length; i++) {
             const slice = style.slices[i];
-            const box = style.boxes[i];
-            box.set_origin(style.cast.x + slice.x1, style.cast.y + slice.y1);
-            box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
+            const box = boxes[i];
             pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
         }
     }
@@ -186,7 +187,7 @@ export const ShadowActor = GObject.registerClass({
 
     // Padded body: actor sits at -PAD, so cast starts at body.xy and grows by PAD each side.
     // `this.width/height` is this actor's live size (the window actor plus `2*PAD`) and the
-    // body follows from the stored insets, so the cast rect tracks a resize every frame
+    // body follows from the stored insets, so the cast tracks a resize every frame
     // instead of waiting for the manager's 50ms reconcile. No insets = the body is the
     // whole actor, which is what a bare toplevel is. Same fallback as the clip: insets that
     // outrun the actor leave no body, and the whole actor is the cast then.
@@ -194,17 +195,41 @@ export const ShadowActor = GObject.registerClass({
         return bodyFrame({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
     }
 
-    // Cache slices/boxes per cast rect; sources are style-fixed.
-    _relayout(style) {
+    // Cache slices per cast rect, and pre-allocated boxes per physical scale.
+    _relayout(style, scale) {
         const cast = this._castRect();
         const previous = style.cast;
-        if (style.slices && previous && previous.x === cast.x && previous.y === cast.y &&
-            previous.width === cast.width && previous.height === cast.height)
-            return;
-        style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
-        if (!style.boxes || style.boxes.length !== style.slices.length)
-            style.boxes = style.slices.map(() => new Clutter.ActorBox());
-        style.cast = cast;
+        const castChanged = !previous ||
+            previous.x !== cast.x || previous.y !== cast.y ||
+            previous.width !== cast.width || previous.height !== cast.height;
+
+        if (castChanged || !style.slices) {
+            style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
+            // Freeze to enforce the immutability contract so token-aliasing in entry.cast cannot be defeated
+            style.cast = Object.freeze(cast);
+        }
+
+        if (!style.boxesByScale)
+            style.boxesByScale = new Map();
+
+        let entry = style.boxesByScale.get(scale);
+        if (!entry || entry.boxes.length !== style.slices.length) {
+            entry = {
+                boxes: style.slices.map(() => new Clutter.ActorBox()),
+                cast: null,
+            };
+            style.boxesByScale.set(scale, entry);
+        }
+
+        if (entry.cast !== style.cast) {
+            const corner = SHADOW_PAD + style.radius;
+            // Actor-Local snapping: cutlines remain invariant in local space during window drag,
+            // while mutating pre-allocated boxes in-place on resize achieves zero GC allocation.
+            snapSliceBoxesInto(entry.boxes, style.cast, corner, scale);
+            entry.cast = style.cast;
+        }
+
+        return entry.boxes;
     }
 
     _startFade() {
