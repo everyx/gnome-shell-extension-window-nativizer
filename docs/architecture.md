@@ -96,15 +96,23 @@ with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is 
 body (`setShadowInsets()`), not by the actor, which for a client-decorated window also carries the ring
 that client reserved for its own shadow. Both the shadow's cast rect and the clip's body are
 computed from the actor's live size at paint time (`lib/frame.js`), so a resize never shows a
-geometry the actor has already left. When there is something to clip, the window also gets a
-`RoundedClipEffect` (`Clutter.ShaderEffect` / `Shell.GLSLEffect` offscreen pass via `compat/shaderEffect.js`).
-The clip effect's target actor is resolved via `resolveClipTarget` (`lib/clipTarget.js`):
-by default it attaches directly to the window actor on Wayland and to the surface child actor
-on X11 / XWayland (so coordinates align accurately and the frame ring can be cleared when taking over shadows);
-when foreign extensions (e.g. Blur my Shell) inject an `St.Widget` inside the window actor, it safely
-bypasses injected widgets to attach directly to the compatible surface actor so the blur effect remains functional.
-The manager keeps one state record per window and reconciles add, remove and update on every
-state change.
+geometry the actor has already left.
+
+To prevent fractional scaling subpixel seams and blurring, both shadow tiles and window clip boundaries
+align to GTK 4.24's physical device pixel grid model:
+- **Physical Scale Resolution**: Mutter's actor resource scale is integer-ceil'd at the C level,
+  incorrectly reporting integer scales on fractional displays. The compositor hierarchy is climbed up to the
+  toplevel window (even when effects are attached to child surface containers under X11 or third-party extensions)
+  to query the true fractional monitor scale.
+- **Actor-Local Snapping Contract**: Snapping is deliberately constrained to the actor-local coordinate space.
+  Actor cutlines remain geometrically invariant during window movement, leaving stage translation entirely to
+  GPU transformation matrices. This engineering trade-off accepts a subpixel phase offset on stage in exchange
+  for eliminating subpixel shimmering/crawling and hot-path allocations during drags.
+- **Multi-Monitor Cache Isolation**: Because a window actor can be rendered across displays with differing DPI,
+  snapped shadow boxes are cached per physical scale factor to prevent cache thrashing.
+- **Outward Clip Boundary**: The clip boundary snaps outward to device pixel edges so client content is never clipped.
+  When foreign extensions inject intermediate widgets into the window hierarchy, the clip target resolver bypasses
+  them to attach directly to the compatible surface.
 
 A resizable window that `decideResizeBand()` shows a band for also gets a `ResizeBand`
 (`lib/resizeBandActor.js`), the only actor outside the window picker that takes input: a transparent container with
@@ -248,9 +256,11 @@ Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the 
 `cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
 `-PAD` from the window actor, so cast is `body` shifted by zero then grown.
 `shadowSlices(shadowGeometry(radius), cast.w, cast.h)` yields dest boxes and normalized sources;
-sources never change. `_relayout` caches `slices/boxes/cast` per style and recomputes them when
-cast changes — eight small rects per frame during a drag, which is the cost the live geometry
-buys.
+sources never change. On paint, dest boxes are snapped to the physical device pixel grid
+aligned with GTK 4.24 GSK rect snapping, guaranteeing that adjacent slice cutlines share
+identical physical grid lines under fractional scaling with zero subpixel gap or overlap.
+The layout caches pre-allocated boxes per physical scale and mutates them in-place when
+geometry changes, achieving zero hot-path memory allocation.
 
 Paint (`vfunc_paint_node`): obtains `Cogl.Context` from the framebuffer (only exists
 inside paint), gets `Cogl.Pipeline` via `_pipelineFor` (lazy `shadowPipelineFor`),
