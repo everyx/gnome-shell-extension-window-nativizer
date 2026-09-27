@@ -932,10 +932,144 @@ for i in $(seq 1 30); do
 done
 echo ">> Menu survived most of the sampled window, was never tracked, and left no debounced reconcile pending (Layer 1 + Layer 2 passed)."
 
-# 8. Stop shell before analyzing logs
+# 8. Stress: repeated disable/enable must rebuild cleanly and leak no actors.
+#    Each cycle tears down and rebuilds; a connect() without its disconnect(), or an actor
+#    left in the scene graph, shows up here as a surviving WindowNativizer actor or a
+#    decoration that is not rebuilt.
+echo ">> [test-e2e] Stress: repeated disable/enable cycles with a window open..."
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+STRESS_PID=$!
+STRESS_UP=0
+for i in $(seq 1 30); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    if [[ "$count" -gt 0 ]]; then
+        STRESS_UP=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$STRESS_UP" -ne 1 ]]; then
+    echo "!! Timeout waiting for the stress window to map!"
+    kill "$STRESS_PID" 2>/dev/null || true
+    exit 1
+fi
+sleep 0.2
+
+# Shadow actors and resize bands live in window_group; the clip is an effect on the window
+# actor, so it is checked by the decoration rebuild instead.
+nativizer_actor_count() {
+    local reply
+    reply="$(shell_eval '
+    (() => {
+        const n = global.window_group.get_children()
+            .filter(c => c.toString().includes("WindowNativizer")).length;
+        return JSON.stringify({n});
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
+print(json.loads(match.group(0))["n"] if match else -1)
+PYEOF
+}
+
+# The live extension object's manager: null after disable, populated after enable.
+manager_state() {
+    local reply
+    reply="$(shell_eval '
+    (async () => {
+        const Main = await import("resource:///org/gnome/shell/ui/main.js");
+        const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
+        const m = ext?._manager;
+        return JSON.stringify({hasManager: !!m, windows: m?._windows?.size ?? -1});
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
+print(json.dumps(json.loads(match.group(0))) if match else '{}')
+PYEOF
+}
+
+STRESS_OK=1
+for cycle in 1 2 3 4 5; do
+    "$DEV" ext disable "$UUID" >/dev/null
+    for _ in $(seq 1 40); do
+        [[ "$(nativizer_actor_count)" -eq 0 ]] && break
+        sleep 0.05
+    done
+    if [[ "$(nativizer_actor_count)" -ne 0 ]]; then
+        echo "!! Cycle $cycle: WindowNativizer actors survived disable (leak)!"; STRESS_OK=0; break
+    fi
+    if ! check_fields "$(manager_state)" '{"hasManager": false}'; then
+        echo "!! Cycle $cycle: manager still present after disable!"; STRESS_OK=0; break
+    fi
+
+    "$DEV" ext enable "$UUID" >/dev/null
+    for _ in $(seq 1 40); do
+        [[ "$(nativizer_actor_count)" -gt 0 ]] && break
+        sleep 0.05
+    done
+    if [[ "$(nativizer_actor_count)" -le 0 ]]; then
+        echo "!! Cycle $cycle: decorations were not rebuilt after enable!"; STRESS_OK=0; break
+    fi
+    # Exactly the one open window must be tracked - a duplicated connect would show as more.
+    if ! check_fields "$(manager_state)" '{"hasManager": true, "windows": 1}'; then
+        echo "!! Cycle $cycle: manager did not track the open window exactly once!"; STRESS_OK=0; break
+    fi
+done
+kill "$STRESS_PID" 2>/dev/null || true
+wait "$STRESS_PID" 2>/dev/null || true
+if [[ "$STRESS_OK" -ne 1 ]]; then
+    exit 1
+fi
+# Let the window close before the next section.
+for i in $(seq 1 30); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    [[ "$count" -eq 0 ]] && break
+    sleep 0.1
+done
+echo ">> 5 disable/enable cycles: no leaked actors, window tracked once each cycle."
+
+# 9. A D-Bus pick in flight must be answered even when the extension is disabled mid-pick.
+#    The inspector owns the invocation; disable() has to cancel and answer it, or the caller
+#    (prefs, which does not otherwise wait on a timeout) blocks forever. Built with the same
+#    gdbus primitives as shell_eval, against the nested session's own bus.
+echo ">> [test-e2e] A pick in flight is answered when the extension is disabled..."
+PICK_REPLY="/tmp/window-nativizer-pick-reply.txt"
+rm -f "$PICK_REPLY"
+PICK_BUS="$(get_dbus_bus)"
+PICK_IFACE="org.gnome.Shell.Extensions.WindowNativizer"
+PICK_PATH="/org/gnome/Shell/Extensions/WindowNativizer"
+( gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" --object-path "$PICK_PATH" \
+        --method "$PICK_IFACE".PickWindow > "$PICK_REPLY" 2>&1; echo $? >> "$PICK_REPLY" ) &
+PICK_BG=$!
+sleep 0.3
+"$DEV" ext disable "$UUID" >/dev/null
+PICK_ANSWERED=0
+for _ in $(seq 1 60); do
+    if tail -1 "$PICK_REPLY" 2>/dev/null | grep -q '^[0-9]\+$'; then
+        PICK_ANSWERED=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$PICK_ANSWERED" -ne 1 ]]; then
+    echo "!! A D-Bus pick hung after the extension was disabled mid-pick!"
+    kill "$PICK_BG" 2>/dev/null || true
+    exit 1
+fi
+if [[ "$(tail -1 "$PICK_REPLY")" -ne 0 ]]; then
+    echo "!! The pick call failed instead of answering: $(cat "$PICK_REPLY")"
+    exit 1
+fi
+"$DEV" ext enable "$UUID" >/dev/null
+echo ">> A pick in flight was answered (empty result) on disable."
+
+# 10. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
-# 9. Log Inspection & Zero-Tolerance Assertion
+# 11. Log Inspection & Zero-Tolerance Assertion
 echo "================================================================"
 echo " Analyzing Shell Log for Warnings, Errors, and Criticals"
 echo "================================================================"
@@ -1021,6 +1155,8 @@ echo "   - Close Shadow Actor Sync: PASSED (shadow opacity synchronized with win
 echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
+echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
+echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "================================================================"
 exit 0
