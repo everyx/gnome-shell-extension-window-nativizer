@@ -6,6 +6,13 @@ version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs in
 the core compositor and actor pipeline retains long-term architectural stability across 45–51,
 with specific evolutionary watersheds handled via defensive polyfills and graceful degradation.
 
+**This is the API span, not the shipped-support span.** `metadata.json`'s `shell-version` is the
+list the extension is released to (currently `50` and `51`); GNOME only loads it there. The
+45–49 branches below - the `get_maximized()` fallback, the legacy 5-argument `begin_grab_op`,
+the `Shell.GLSLEffect` shader base - are compatibility scaffolding that the unit tests exercise
+directly but that no real 45–49 shell has run, so they are unverified against those releases.
+Widening `shell-version` means testing them on those shells first.
+
 Anything here that stops being true is an upstream compatibility break, not an internal refactor.
 
 | Used | Status | Notes |
