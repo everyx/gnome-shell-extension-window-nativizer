@@ -259,15 +259,39 @@ export function getPhysicalMonitorScale(actor, fallback = 1.0) {
     }
 
     const display = typeof global !== 'undefined' ? global.display : globalThis.global?.display;
-    const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
-    if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_scale === 'function') {
-        try {
+    try {
+        // Infinity when the query is absent: "cannot bound it" must not silently disable
+        // fractional-scale resolution, it only means there is no upper bound to enforce.
+        const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
+        if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_scale === 'function') {
             const scale = display.get_monitor_scale(monitor);
             if (scale > 0 && Number.isFinite(scale))
                 return scale;
-        } catch {
-            // Monitor index may be stale during rapid display topology change
         }
+    } catch {
+        // Display or index went away during a rapid topology change.
     }
     return fallback;
+}
+
+/**
+ * Resolves a window's monitor geometry, or null when the index is stale (an unplugged
+ * monitor before Mutter redirects the window) or the display cannot answer. The upper
+ * bound is mandatory here: `get_monitor_geometry()` is a Mutter macro that logs a
+ * `mutter-CRITICAL` for an out-of-range index, which is how an unplug used to reach syslog.
+ *
+ * @param {object|null} display - Meta.Display
+ * @param {object|null} win - Meta.Window
+ * @returns {object|null} monitor rect, or null
+ */
+export function resolveMonitorBounds(display, win) {
+    try {
+        const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
+        const monitor = typeof win?.get_monitor === 'function' ? win.get_monitor() : -1;
+        if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_geometry === 'function')
+            return display.get_monitor_geometry(monitor);
+    } catch {
+        // Display or index went stale mid-read.
+    }
+    return null;
 }

@@ -36,7 +36,7 @@ import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
-import {getPhysicalMonitorScale} from './snap.js';
+import {getPhysicalMonitorScale, resolveMonitorBounds} from './snap.js';
 
 // Mutter enum value; the generated copy exists so modules and tests without the gi://Meta typelib can still read Mutter's constants.
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
@@ -567,8 +567,12 @@ export class Manager {
         if (!state.resizeBand)
             state.resizeBand = new ResizeBand(actor, global.window_group);
 
-        const monitor = win.get_monitor();
-        const bounds = monitor >= 0 ? global.display.get_monitor_geometry(monitor) : null;
+        let bounds = null;
+        try {
+            bounds = resolveMonitorBounds(global.display, win);
+        } catch {
+            // Defend against window deallocation or monitor hotplug races
+        }
 
         // Which edges Mutter holds fixed is a decision, and it changes on Mutter's own
         // signals, so it is derived here and the actor only carries the result.
