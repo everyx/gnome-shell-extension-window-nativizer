@@ -17,10 +17,11 @@ import St from 'gi://St';
 
 import {beginWindowGrabOp, getPointerSprite, setActorCursor} from '../compat/index.js';
 
-import {frameFromInsets, ZERO_INSETS} from './frame.js';
+import {ZERO_INSETS} from './frame.js';
 import {
-    computeResizeBands,
+    computeResizeBandsInto,
     edgeForPoint,
+    emptyBands,
     normalizeConstrainedEdges,
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
@@ -58,26 +59,6 @@ const DIRECTION_GRAB_OP = {
     w: Meta.GrabOp.RESIZING_W,
     nw: Meta.GrabOp.RESIZING_NW,
 };
-
-/**
- * @param {Record<string, object|null>|null} a
- * @param {Record<string, object|null>} b
- * @returns {boolean} Whether the two band sets are the same rects
- */
-function sameBands(a, b) {
-    if (!a)
-        return false;
-    for (const region of RESIZE_BAND_REGIONS) {
-        const left = a[region];
-        const right = b[region];
-        if (Boolean(left) !== Boolean(right))
-            return false;
-        if (left && (left.x !== right.x || left.y !== right.y ||
-            left.width !== right.width || left.height !== right.height))
-            return false;
-    }
-    return true;
-}
 
 /**
  * @param {{x:number,y:number,width:number,height:number}|null} a
@@ -127,7 +108,8 @@ export const ResizeBand = GObject.registerClass({
         this._container = container;
         this._regions = new Map();
         this._childBox = new Clutter.ActorBox();
-        this._bands = null;
+        this._bands = emptyBands();
+        this._boundsScratch = null;
         this._frame = null;
         this._hover = null;
         this._insets = ZERO_INSETS;
@@ -222,40 +204,38 @@ export const ResizeBand = GObject.registerClass({
 
         const containerWidth = box.x2 - box.x1;
         const containerHeight = box.y2 - box.y1;
-        // The container is the actor grown by OUTER per side; undo that to place the body.
-        const actorSize = {width: containerWidth - OUTER * 2, height: containerHeight - OUTER * 2};
-        const body = frameFromInsets(actorSize, this._insets);
-        const frame = {
-            x: body.x + OUTER, y: body.y + OUTER,
-            width: body.width, height: body.height,
-        };
-        // Kept in the container's coordinates: `_directionForEvent()` resolves the pointer
-        // against it with GTK's own order, in the same space.
-        this._frame = frame;
-        const bounds = this._bounds
-            ? {
-                x: this._bounds.x - box.x1,
-                y: this._bounds.y - box.y1,
-                width: this._bounds.width,
-                height: this._bounds.height,
-            }
-            : null;
+        // The frame and the translated bounds are reused in place: this runs every resize
+        // frame, so they must not be new objects each pass. The container is the actor grown
+        // by OUTER per side; undo that to place the body, kept in the container's coordinates
+        // so `_directionForEvent()` resolves the pointer against it with GTK's own order.
+        const frame = this._frame ?? (this._frame = {x: 0, y: 0, width: 0, height: 0});
+        frame.x = this._insets.left + OUTER;
+        frame.y = this._insets.top + OUTER;
+        frame.width = containerWidth - OUTER * 2 - this._insets.left - this._insets.right;
+        frame.height = containerHeight - OUTER * 2 - this._insets.top - this._insets.bottom;
 
-        const bands = computeResizeBands({
+        let bounds = null;
+        if (this._bounds) {
+            bounds = this._boundsScratch ?? (this._boundsScratch = {x: 0, y: 0, width: 0, height: 0});
+            bounds.x = this._bounds.x - box.x1;
+            bounds.y = this._bounds.y - box.y1;
+            bounds.width = this._bounds.width;
+            bounds.height = this._bounds.height;
+        }
+
+        // Written into `this._bands` in place; the returned flag replaces the old sameBands().
+        const changed = computeResizeBandsInto(this._bands, {
             frame,
             bounds,
             // No surface clip: the band may sit outside the client's surface.
             scale: this._scale,
             constrainedEdges: this._constrainedEdges,
         });
-        const changed = !sameBands(this._bands, bands);
-        if (changed)
-            this._bands = bands;
 
         const childBox = this._childBox;
         for (const region of RESIZE_BAND_REGIONS) {
             const child = this._regions.get(region);
-            const rect = bands[region];
+            const rect = this._bands[region];
             if (rect)
                 setActorBox(childBox, rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
             else
