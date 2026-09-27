@@ -193,8 +193,11 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   client's own Wayland surface via GTK4/GSK; in Window Nativizer, the window content and shadow
   live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
   fractional blitting.
-- **Trade-off**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
-  under fractional scaling to avoid resampling blur on client window content.
+- **Trade-off & Grid Snapping**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
+  under fractional scaling to avoid resampling blur on client window content. When enabled, the clip boundary
+  snaps outward to the physical device pixel grid, mirroring GTK4's rounded clip semantics. Outward snapping
+  guarantees valid window client pixels are never clipped away, while adjacent 9-slice shadow quads snap shared
+  cutlines to identical physical coordinates to eliminate subpixel seams.
 
 ### 2. First shadow pixel darkness (185 vs native 198-200)
 
@@ -226,7 +229,9 @@ In `tools/gen-shader.mjs`:
   float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
   ```
 - `SNAP_BLEED = 0.8` is retained, guaranteeing zero risk of subpixel white gaps under
-  fractional scaling.
+  fractional scaling. Coupled with physical device pixel grid snapping aligned with GTK 4.24,
+  both compositor clipping and shadow 9-slice tiles land on deterministic physical pixel boundaries
+  without phase drift.
 
 ### Golden Baseline at 1.0x Integer Scale
 
