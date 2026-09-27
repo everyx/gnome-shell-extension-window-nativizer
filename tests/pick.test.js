@@ -240,6 +240,27 @@ describe('readDeclaredIdentity', () => {
         expect(() => readDeclaredIdentity(win)).not.toThrow();
         expect(readDeclaredIdentity(win)).toBe('');
     });
+
+    it('treats a whitespace-only wm_class as absent and falls through', () => {
+        const win = {
+            get_wm_class: () => '   ',
+            get_gtk_application_id: () => 'org.example.Wechat',
+        };
+        expect(readDeclaredIdentity(win)).toBe('org.example.Wechat');
+    });
+
+    it('returns empty when every declared identity is blank', () => {
+        const win = {
+            get_wm_class: () => '   ',
+            get_sandboxed_app_id: () => '\t',
+            get_gtk_application_id: () => '  ',
+        };
+        expect(readDeclaredIdentity(win)).toBe('');
+    });
+
+    it('trims surrounding whitespace from the identity', () => {
+        expect(readDeclaredIdentity({get_wm_class: () => '  wechat  '})).toBe('wechat');
+    });
 });
 
 describe('chooseWindowIdentity', () => {
@@ -270,6 +291,12 @@ describe('chooseWindowIdentity', () => {
     it('returns empty when nothing identifies the window', () => {
         expect(chooseWindowIdentity({})).toBe('');
         expect(chooseWindowIdentity({pid: -1})).toBe('');
+    });
+
+    it('ignores a whitespace-only declared identity and falls through', () => {
+        expect(chooseWindowIdentity({declared: '   ', pid: 42})).toBe('pid-42');
+        expect(chooseWindowIdentity({declared: '   ', tracked: 'wechat.desktop'})).toBe('wechat.desktop');
+        expect(chooseWindowIdentity({declared: '   ', peer: 'org.example.Wechat'})).toBe('org.example.Wechat');
     });
 });
 

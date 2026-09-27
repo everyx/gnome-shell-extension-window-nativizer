@@ -104,10 +104,10 @@ export function isWindowBackedAppId(appId) {
  * @returns {string} Identity or '' when nothing identifies the window
  */
 export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pid = -1} = {}) {
-    if (declared)
-        return declared;
-    if (peer)
-        return peer;
+    if (declared?.trim())
+        return declared.trim();
+    if (peer?.trim())
+        return peer.trim();
     if (tracked && !isWindowBackedAppId(tracked))
         return tracked;
     // pid changes on restart, so a rule keyed on it is session-scoped.
@@ -168,7 +168,7 @@ export function buildRuleKey(wmClass, {
     width = null,
     height = null,
 } = {}) {
-    if (!wmClass)
+    if (!wmClass?.trim())
         return '';
 
     const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd};
