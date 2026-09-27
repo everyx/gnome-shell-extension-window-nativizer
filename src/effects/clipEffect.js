@@ -42,7 +42,10 @@ const CODE = `
     vec2 frameCenter = uFrame.xy + uFrame.zw * 0.5 + FBO_OFFSET;
     vec2 frameHalf = uFrame.zw * 0.5;
     vec2 fromCenter = p - frameCenter;
-    float d = sdRoundedBox(fromCenter, frameHalf, uRadius);
+    // sdRoundedBox requires r <= half the smaller side. Unclamped, a body smaller than
+    // 2*radius (a resize or close-animation frame) over-rounds instead of drawing the
+    // intended corner arc; clamp the radius to what the body can hold.
+    float d = sdRoundedBox(fromCenter, frameHalf, min(uRadius, min(frameHalf.x, frameHalf.y)));
 
     vec2 beyond = step(vec2(0.0), abs(fromCenter) - frameHalf);
     float inSquare = 1.0 - max(beyond.x, beyond.y);
