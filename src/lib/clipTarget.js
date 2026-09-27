@@ -1,11 +1,15 @@
 /**
  * Resolves the target actor for RoundedClipEffect.
  *
- * Normal path returns MetaWindowActor (Wayland) or first child (X11).
+ * Normal path returns MetaWindowActor (Wayland) or first child (X11) - the same unwrap the
+ * established rounded-window-corners extension uses (`client_type === X11 ? first_child : actor`).
  * When foreign extensions (e.g. Blur my Shell) inject an St.Widget inside MetaWindowActor,
  * attaching RoundedClipEffect (an offscreen effect) directly to MetaWindowActor isolates
  * the blur widget inside an empty FBO with nothing to sample. This shim bypasses injected
  * St.Widgets to attach to the surface container, provided its coordinate space matches the buffer.
+ * The bypass only *upgrades* the target when a usable surface container exists; when none does,
+ * the normal target is kept - first child included, even when that first child is a foreign
+ * widget. That is deliberate (it matches rounded-window-corners), not an oversight.
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
@@ -110,5 +114,8 @@ export function resolveClipTarget(win, actor, St = null) {
     if (surfaceContainer && !isCompatibleSurfaceGeometry(surfaceContainer, win))
         return defaultTarget;
 
+    // No usable surface container: keep the normal (pre-bypass) target. On X11 that can be a
+    // foreign widget sitting first, which is exactly what rounded-window-corners attaches to;
+    // the bypass upgrades the target when it can, it does not invent one.
     return surfaceContainer ?? defaultTarget;
 }
