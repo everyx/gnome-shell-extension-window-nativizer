@@ -21,8 +21,8 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/window.js` | shell-side identity gathering (`Shell.WindowTracker`, live window list) |
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
-| `effects/` | rounded clipping (`clipEffect.js`), shadow actor geometry (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
-| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, grab ops, actor cursors) across GNOME 45–51 (pure) |
+| `effects/` | rounded clipping (`clipEffect.js`), pure shadow geometry (`shadowGeometry.js`), the shadow actor (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
+| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, uniform-location caching, grab ops, actor cursors) across GNOME 45–51 (pure) |
 
 ## The two processes
 
@@ -91,7 +91,8 @@ Lifecycles strictly govern session boundaries and per-window teardown:
 ## Actors
 
 Every decorated window gets a `ShadowActor` inserted below the window actor in
-`global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowTexture.js`)
+`global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowGeometry.js` for the
+slice rects, `effects/shadowTexture.js` for the bake)
 with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is cast by the window
 body (`setShadowInsets()`), not by the actor, which for a client-decorated window also carries the ring
 that client reserved for its own shadow. Both the shadow's cast rect and the clip's body are
@@ -178,7 +179,7 @@ During window close transitions, Clutter property bindings (opacity, scale, tran
 `ShadowActor` synchronized with `windowActor` until actor destruction, preventing jarring shadow
 popping mid-transition.
 
-## Effects — Shadow baking and slicing (`effects/shadowTexture.js`)
+## Effects — Shadow baking and slicing (`effects/shadowGeometry.js`, `effects/shadowTexture.js`)
 
 Why eight slices describe a shadow, and why the middle stays empty, is the model in
 `decoration-model.md`. One baked `buffer x buffer` texture per style
