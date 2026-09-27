@@ -5,6 +5,7 @@
 
 import {setActorCursor} from '../src/compat/actorCursor.js';
 import {beginWindowGrabOp, getPointerSprite} from '../src/compat/grabOp.js';
+import {resolveUniformLocation} from '../src/compat/uniformLocation.js';
 
 describe('compat', () => {
     describe('setActorCursor', () => {
@@ -164,6 +165,43 @@ describe('compat', () => {
         it('returns null when no sprite can be resolved', () => {
             globalThis.global = {};
             expect(getPointerSprite(null)).toBeNull();
+        });
+    });
+
+    describe('resolveUniformLocation', () => {
+        it('does not cache a miss and re-queries until the pipeline resolves it', () => {
+            const cache = new Map();
+            let ready = false;
+            const getLocation = name => {
+                expect(name).toBe('uRadius');
+                return ready ? 7 : -1;
+            };
+
+            expect(resolveUniformLocation(cache, 'uRadius', getLocation)).toBe(-1);
+            expect(cache.has('uRadius')).toBeFalse();
+
+            ready = true;
+            expect(resolveUniformLocation(cache, 'uRadius', getLocation)).toBe(7);
+            expect(cache.get('uRadius')).toBe(7);
+        });
+
+        it('reuses a cached hit without querying again', () => {
+            const cache = new Map([['uScale', 3]]);
+            let calls = 0;
+            const loc = resolveUniformLocation(cache, 'uScale', () => {
+                calls++;
+                return 9;
+            });
+
+            expect(loc).toBe(3);
+            expect(calls).toBe(0);
+        });
+
+        it('re-queries and repairs a cache that somehow holds a poisoned negative', () => {
+            const cache = new Map([['uRadius', -1]]);
+            const loc = resolveUniformLocation(cache, 'uRadius', () => 5);
+            expect(loc).toBe(5);
+            expect(cache.get('uRadius')).toBe(5);
         });
     });
 });
