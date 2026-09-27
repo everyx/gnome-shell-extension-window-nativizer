@@ -1,75 +1,20 @@
 /**
  * Shadow baking: one baked buffer per style, sliced into 8 rects (see docs/architecture.md).
+ * The pure geometry it bakes and slices lives in shadowGeometry.js.
  */
 
 import Cogl from 'gi://Cogl';
 
-import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
-import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
-
-// px; derived by tools/gen-style.mjs from the farthest Gaussian reach over every shadow
-// layer (blur 14: 3 sigma = 21, + spread 5) plus the Cogl offscreen offset below.
-export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
+import {SHADOW_PAD, shadowGeometry} from './shadowGeometry.js';
 
 const LAYER_COUNT = 3; // shader has 3 layers
-
-// Cogl/Clutter `_clutter_actor_box_enlarge_for_effects` (vendor/mutter/clutter-actor-box.c,
-// parsed by tools/gen-clutter.mjs): an offscreen is padded 2px top/left and 1px right/bottom,
-// 3px total per axis. The bake buffer carries the 3px (`BAKE_EXTRA`), and the shader's window
-// origin sits at the 2px offset (`BAKE_ORIGIN`), both from the single generated source.
-const BAKE_ORIGIN = EFFECT_PADDING_ORIGIN;
-const BAKE_EXTRA = EFFECT_PADDING_EXTRA;
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
 const CLEAR_COLOR_BUFFER = 1; // Cogl BUFFER_BIT_COLOR (GIR omits enum)
 
 const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
-
-/**
- * Canonical square 2*(pad+radius) with middle 2*pad (settled strip).
- * @param {number} radius - Corner radius in px
- * @returns {{corner:number,window:number,buffer:number}} sizes in px
- */
-export function shadowGeometry(radius) {
-    const corner = SHADOW_PAD + radius;
-    return {
-        corner,
-        window: 2 * corner,
-        buffer: 2 * corner + 2 * SHADOW_PAD + BAKE_EXTRA,
-    };
-}
-
-/**
- * 8 rects (4 corners 1:1, 4 edges stretched from 1px strip), no middle — hollow mask.
- * @param {{corner:number,window:number,buffer:number}} geometry
- * @param {number} width - Padded rect width in px
- * @param {number} height - Padded rect height in px
- * @returns {Array<{x1:number,y1:number,x2:number,y2:number,s1:number,t1:number,s2:number,t2:number}>}
- */
-export function shadowSlices({corner, window, buffer}, width, height) {
-    const c = Math.min(corner, width / 2, height / 2);
-    const o = BAKE_ORIGIN;
-    const near = o / buffer;
-    const span = corner / buffer;
-    const strip = 1 / buffer;
-    const far = (buffer - corner - 1) / buffer;
-    const edge = (o + SHADOW_PAD + window / 2) / buffer;
-    const right = width - c;
-    const bottom = height - c;
-
-    return [
-        {x1: 0, y1: 0, x2: c, y2: c, s1: near, t1: near, s2: near + span, t2: near + span},
-        {x1: right, y1: 0, x2: width, y2: c, s1: far, t1: near, s2: far + span, t2: near + span},
-        {x1: 0, y1: bottom, x2: c, y2: height, s1: near, t1: far, s2: near + span, t2: far + span},
-        {x1: right, y1: bottom, x2: width, y2: height, s1: far, t1: far, s2: far + span, t2: far + span},
-        {x1: c, y1: 0, x2: right, y2: c, s1: edge, t1: near, s2: edge + strip, t2: near + span},
-        {x1: c, y1: bottom, x2: right, y2: height, s1: edge, t1: far, s2: edge + strip, t2: far + span},
-        {x1: 0, y1: c, x2: c, y2: bottom, s1: near, t1: edge, s2: near + span, t2: edge + strip},
-        {x1: right, y1: c, x2: width, y2: bottom, s1: far, t1: edge, s2: far + span, t2: edge + strip},
-    ];
-}
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
 let destroyed = false; // sealed after destroy()

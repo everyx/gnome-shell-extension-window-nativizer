@@ -37,7 +37,10 @@ export function bodyFrame(size, insets = ZERO_INSETS) {
     const frame = frameFromInsets(size, insets);
     if (frame.width > 0 && frame.height > 0)
         return frame;
-    return frameFromInsets(size, ZERO_INSETS);
+    return frameFromInsets({
+        width: Math.max(0, size?.width ?? 0),
+        height: Math.max(0, size?.height ?? 0),
+    }, ZERO_INSETS);
 }
 
 /**
