@@ -26,7 +26,7 @@ import {
     isWindowMaximized,
     isWindowTiled,
 } from './detector.js';
-import {hasNativeLikeCorners} from './nativeLikeCorners.js';
+import {hasNativeLikeCorners, probeAdwaitaLook} from './nativeLikeCorners.js';
 import {getWindowFromActor} from './pick.js';
 import {resolveWindowIdentity} from './window.js';
 
@@ -173,6 +173,10 @@ export class InspectorService {
             const [x, y] = event.get_coords();
             const targetWin = this._findTargetWindow(x, y);
             if (targetWin) {
+                // Queries never start the /proc read (docs/decoration-model.md § When a window's
+                // corners already look like ours); the event drives it, and the answer lands a
+                // frame later for the next motion to read.
+                probeAdwaitaLook(targetWin.get_pid?.());
                 const frame = targetWin.get_frame_rect();
                 const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
                 const innerRadius = this._getExpectedWindowRadius(targetWin);
@@ -240,6 +244,9 @@ export class InspectorService {
             return;
         }
 
+        // The suggested-rule queries read the process cache; start the read at this request
+        // boundary so they stay side-effect free.
+        probeAdwaitaLook(win.get_pid?.());
         const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
         // Display only, see docs/rule-model.md § What the pick remembers for the row.

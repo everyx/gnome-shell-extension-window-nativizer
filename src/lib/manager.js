@@ -60,7 +60,7 @@ export class Manager {
         shadowTexture.reset();
         initNativeLikeCorners();
 
-        // A provider answer can land after a window has been decided (see hasAdwaitaLook()).
+        // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
         setOnProcessKnown(pid => this._onProcessKnown(pid));
 
         // Suspend clip effects during overview to preserve downscaled preview sharpness.
