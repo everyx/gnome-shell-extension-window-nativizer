@@ -9,7 +9,10 @@ function listWindowActors() {
     return global.get_window_actors?.() ?? [];
 }
 
-// Only non-pid answers are remembered; pid fallback would freeze a session-local rule.
+// Declared- and tracker-derived answers are remembered; pid fallback would freeze a
+// session-local rule, and a peer-derived answer is not remembered either: the peer scan is
+// O(actors) but only runs for a window that declares no identity at all, while caching it
+// could not be invalidated correctly for a peer the manager does not track (a popup, a dock).
 // Key includes declared so a late WM_CLASS invalidates the cached answer.
 const fallbackIdentities = new WeakMap();
 
@@ -58,8 +61,6 @@ export function resolveWindowIdentity(win) {
     }
 
     const identity = chooseWindowIdentity({declared, peer, tracked, pid});
-    // A peer-derived answer is not remembered: the peer can close and this window would then
-    // keep an identity borrowed from a window that is gone. pid answers are session-local too.
     if (identity && identity !== peer && !identity.startsWith('pid-'))
         fallbackIdentities.set(win, {declared, identity});
     return identity;

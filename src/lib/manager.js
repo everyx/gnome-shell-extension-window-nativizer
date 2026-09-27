@@ -54,6 +54,8 @@ export class Manager {
         this._signals = [];
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
+        this._lastFocusWindow = null;
+        this._highContrast = false;
     }
 
     enable() {
@@ -65,6 +67,8 @@ export class Manager {
 
         // Suspend clip effects during overview to preserve downscaled preview sharpness.
         this._inOverview = Boolean(Main.overview.visible);
+        this._lastFocusWindow = global.display.focus_window;
+        this._highContrast = St.Settings.get().high_contrast;
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
@@ -78,16 +82,24 @@ export class Manager {
         this._connect(this._signals, global.display, 'notify::focus-window', () => {
             this._resetBandCursors();
 
+            // Focus changes only `appears_focused`, which decides the shadow tone of exactly
+            // the two windows involved - not every window. Reconcile those two; each also
+            // reconciles through its own `notify::appears-focused`, so this is the belt to
+            // that suspenders. Focus landing on an unmanaged popup (issue #13) is still
+            // carried by the window that lost focus.
+            const previous = this._lastFocusWindow;
             const focusWin = global.display.focus_window;
-            // Focus landing on an unmanaged window (a transient popup menu, a tooltip) leaves
-            // `appears_focused` as the only input we decide from that changes - and the app
-            // whose menu is open should keep the focused tone it has. Writing to the scene
-            // graph from here is what issue #13 is about; the menu closing re-decides.
-            if (!focusWin || this._windows.has(focusWin))
-                this._reconcileDebounced();
+            this._lastFocusWindow = focusWin;
+            if (previous && previous !== focusWin && this._windows.has(previous))
+                this._reconcileWindowDebounced(previous);
+            if (focusWin && this._windows.has(focusWin))
+                this._reconcileWindowDebounced(focusWin);
         });
 
-        this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => this._reconcile());
+        this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => {
+            this._highContrast = St.Settings.get().high_contrast;
+            this._reconcile();
+        });
 
         const monitorManager = global.backend?.get_monitor_manager?.();
         if (monitorManager)
@@ -121,6 +133,7 @@ export class Manager {
             this._undecorate(win);
         }
         this._windows.clear();
+        this._lastFocusWindow = null;
         this._disconnectSignals(this._signals);
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
@@ -282,6 +295,9 @@ export class Manager {
         // Remove the entry before reading the pid: a deallocated window's get_pid() can throw,
         // and the entry must already be gone or it would be re-synced forever.
         this._windows.delete(win);
+        // Do not keep the focus reference to a window that is gone.
+        if (this._lastFocusWindow === win)
+            this._lastFocusWindow = null;
         let pid = -1;
         try {
             pid = win.get_pid?.() ?? -1;
@@ -461,9 +477,10 @@ export class Manager {
                 return;
             const actions = evaluateWindowActions(inputs);
 
-            // One inset set for clip and shadow so they cannot drift mid-resize.
+            // One inset set for clip and shadow so they cannot drift mid-resize - and the one
+            // `_decorationInputs` already read, not a second read of the same rects.
             const target = resolveClipTarget(win, actor, St);
-            const insets = this._frameInsets(win);
+            const insets = inputs.insets;
 
             this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
@@ -565,7 +582,7 @@ export class Manager {
 
             focused: win.appears_focused,
             tiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
-            highContrast: St.Settings.get().high_contrast,
+            highContrast: this._highContrast,
 
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,
