@@ -14,6 +14,7 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../compat/index.js';
 
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
+import {getPhysicalMonitorScale, snapRectToGrid, SnapRule} from '../lib/snap.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -22,6 +23,7 @@ uniform vec4 uFrame;      // Body rect in actor coords: x, y, w, h (px)
 uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uClearRing; // 1 erases client shadow ring, 0 keeps it
+uniform float uScale;     // Physical device scale factor
 
 // _clutter_actor_box_enlarge_for_effects (tools/gen-clutter.mjs) pads 2px top-left, 3px total
 const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
@@ -46,15 +48,14 @@ const CODE = `
     float inSquare = 1.0 - max(beyond.x, beyond.y);
 
     if (uOutline.a > 0.0) {
-        // 1.5, not 1.0: the ring's centre is half a pixel inside the body, so the
-        // innermost pixel's centre (d = -0.5) has to be fully covered. libadwaita's
-        // 7% ring measures that at offset 0 (decoration-alignment.md).
-        float m = clamp(1.5 + d, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
+        // Physical 1px outline centred half a physical pixel inside the body:
+        float m = clamp((d + 0.5) * uScale + 1.0, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    float corner = 1.0 - clamp(d + 0.5, 0.0, 1.0);
+    // Physical 1px anti-aliasing transition across all monitor DPI scales:
+    float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
     cogl_color_out *= mix(keep, corner * inSquare, uClearRing);
 `;
@@ -97,9 +98,11 @@ export const RoundedClipEffect = GObject.registerClass({
         this._lastFrameY = -1;
         this._lastFrameW = -1;
         this._lastFrameH = -1;
+        this._lastScale = -1;
 
         this._sizeVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
+        this._scaleVec = [1.0];
         this._radiusVec = [0];
         this._clearRingVec = [0];
     }
@@ -187,7 +190,15 @@ export const RoundedClipEffect = GObject.registerClass({
         // The ring can outrun the actor for the frame a resize passes through (insets are
         // debounced, the actor is not). `bodyFrame` then returns the whole actor, so the pass
         // still runs: a body with no area is not the same as a frame with nothing to draw.
-        const frame = bodyFrame({width, height}, this._insets);
+        const rawFrame = bodyFrame({width, height}, this._insets);
+        const scale = getPhysicalMonitorScale(actor, 1.0);
+        const frame = snapRectToGrid(rawFrame, scale, SnapRule.GROW);
+
+        if (this._lastScale !== scale) {
+            this._scaleVec[0] = scale;
+            this.set_uniform_float('uScale', 1, this._scaleVec);
+            this._lastScale = scale;
+        }
 
         if (this._lastWidth !== width || this._lastHeight !== height) {
             this._sizeVec[0] = width;
