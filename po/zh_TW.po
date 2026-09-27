@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 00:49+0800\n"
+"POT-Creation-Date: 2026-09-27 14:42+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -167,85 +167,89 @@ msgstr "擷取自「%s」。這條修正對此類所有視窗生效。"
 msgid "Restore the automatic decision"
 msgstr "恢復自動判斷"
 
-#: src/prefs.js:491
+#: src/prefs.js:494
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:492
+#: src/prefs.js:496
+msgid "A window pick is already in progress"
+msgstr "已有視窗選取正在進行中"
+
+#: src/prefs.js:497
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:504
+#: src/prefs.js:509
 msgid "No correction added: this window could not be identified"
 msgstr "未新增修正：無法識別這個視窗"
 
-#: src/prefs.js:525
+#: src/prefs.js:530
 msgid ""
 "No correction added: the extension did not answer - restart the session and "
 "pick again"
 msgstr "未新增修正：擴充功能沒有回應 —— 請重新啟動工作階段後再次選取"
 
-#: src/prefs.js:533
+#: src/prefs.js:538
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未新增修正：這條修正對此類視窗不會有任何效果"
 
-#: src/prefs.js:551
+#: src/prefs.js:556
 msgid "No correction added: it could not be saved"
 msgstr "未新增修正：修正未能儲存"
 
-#: src/prefs.js:563
+#: src/prefs.js:568
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:564
+#: src/prefs.js:569
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已為 %s 新增修正：%s"
 
-#: src/prefs.js:574
+#: src/prefs.js:579
 msgid "The correction takes effect once the window is restored"
 msgstr "視窗還原後修正生效"
 
-#: src/prefs.js:592
+#: src/prefs.js:597
 msgid "Pick window"
 msgstr "選取視窗"
 
-#: src/prefs.js:595
+#: src/prefs.js:600
 msgid "The correction applies to every window of its kind"
 msgstr "這條修正對此類所有視窗生效"
 
-#: src/prefs.js:601
+#: src/prefs.js:606
 msgid "Corrections"
 msgstr "誤判修正"
 
-#: src/prefs.js:602
+#: src/prefs.js:607
 msgid ""
 "Per window kind - where the automatic decision was wrong; anything not "
 "listed follows it"
 msgstr "按視窗種類——自動判斷出錯的地方；未列出的跟隨自動判斷"
 
-#: src/prefs.js:634
+#: src/prefs.js:639
 msgid "Use the button above to pick a window that looks wrong"
 msgstr "點上面的按鈕，選一個看起來不對的視窗"
 
-#: src/prefs.js:689
+#: src/prefs.js:694
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:695
+#: src/prefs.js:700
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:696
+#: src/prefs.js:701
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
 
-#: src/prefs.js:701
+#: src/prefs.js:706
 msgid "Prioritize Crisp Text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:702
+#: src/prefs.js:707
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"

@@ -277,7 +277,7 @@ function inspectWindow(callback) {
         null,
         null,
         Gio.DBusCallFlags.NONE,
-        -1,
+        60000,
         null,
         (conn, res) => {
             try {
@@ -487,9 +487,14 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             window.present();
 
             if (err) {
+                // A second pick while one is in progress comes back as G_IO_ERROR_BUSY; say so
+                // instead of blaming the extension.
+                const busy = err.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.BUSY) ?? false;
                 showError(window,
                     _('Window Inspection Failed'),
-                    _('Could not connect to the Window Nativizer extension — it is not enabled'));
+                    busy
+                        ? _('A window pick is already in progress')
+                        : _('Could not connect to the Window Nativizer extension — it is not enabled'));
                 return;
             }
 
