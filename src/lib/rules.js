@@ -196,6 +196,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
         return {};
 
     const clean = {};
+    const seenKeys = new Map();
     for (const [key, title] of Object.entries(rawTitles)) {
         if (!VALID_RULE_KEY_PATTERN.test(key) || typeof title !== 'string')
             continue;
@@ -203,7 +204,15 @@ export function sanitizeRuleTitles(rawTitles = {}) {
         const oneLine = title.replace(/[\r\n]+/g, ' ').trim();
         if (!oneLine)
             continue;
-        clean[key] = oneLine;
+        // Same canonicalisation as the states, or a mixed-case stored key would land under
+        // its lowercased state key and lose its title on the next write.
+        const canonicalKey = normalizeRuleKey(key);
+        if (seenKeys.has(canonicalKey)) {
+            console.warn(`[window-nativizer] Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
+            continue;
+        }
+        seenKeys.set(canonicalKey, key);
+        clean[canonicalKey] = oneLine;
     }
     return clean;
 }

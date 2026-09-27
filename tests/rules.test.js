@@ -9,7 +9,7 @@ import {
 import {
     RuleAxis, RULE_AXES, parseRuleState, buildRuleState,
     resolveRule, parseRuleKey, buildRuleKey,
-    sanitizeWindowRules, withRule,
+    sanitizeWindowRules, sanitizeRuleTitles, withRule,
 } from '../src/lib/rules.js';
 
 /** Comparable shape for a resolveRule() result: canonical stored form. */
@@ -445,6 +445,30 @@ describe('sanitizeWindowRules', () => {
         expect(sanitizeWindowRules(null)).toEqual({});
         expect(sanitizeWindowRules('string')).toEqual({});
         expect(sanitizeWindowRules({})).toEqual({});
+    });
+});
+
+describe('sanitizeRuleTitles', () => {
+    const key = buildRuleKey('wechat', {});
+    const specifier = key.slice(key.indexOf(':') + 1);
+
+    it('canonicalises the key the same way the states are', () => {
+        // A hand-edited or legacy mixed-case identity must land under the lowercased key, or
+        // readEntries() pairs it with the canonical state and loses the title on the next write.
+        expect(sanitizeRuleTitles({[`WeChat:${specifier}`]: 'WeChat'})).toEqual({[key]: 'WeChat'});
+    });
+
+    it('drops one of a case-colliding pair', () => {
+        const titles = sanitizeRuleTitles({
+            [`WeChat:${specifier}`]: 'A',
+            [`wechat:${specifier}`]: 'B',
+        });
+        expect(Object.keys(titles)).toEqual([key]);
+    });
+
+    it('still rejects a malformed key or a blank title', () => {
+        expect(sanitizeRuleTitles({'not a key': 'x'})).toEqual({});
+        expect(sanitizeRuleTitles({[key]: '   '})).toEqual({});
     });
 });
 
