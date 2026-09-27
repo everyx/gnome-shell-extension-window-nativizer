@@ -6,13 +6,21 @@
  * Shell.GLSLEffect (GNOME 45–50) with zero global prototype mutation.
  *
  * Subclasses provide shader code via `static getSnippet()` returning a Cogl.Snippet,
- * and upload uniforms via `this.set_uniform_float(name, n_components, total_count, value)`.
+ * and upload uniforms via `this.set_uniform_float(name, n_components, value)`.
+ *
+ * The modern branch deliberately defines no `set_uniform_float`: Mutter 51 added the
+ * introspectable `clutter_shader_effect_set_uniform_float(name, n_components, value)`
+ * (its `(array length=total_count)` argument is hidden by GJS) exactly to replace
+ * Shell.GLSLEffect's. Defining one here would shadow that native method, and a partial
+ * reimplementation (e.g. via `set_uniform_value`) would drop vector components.
  */
 
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 import GObject from 'gi://GObject';
+
+import {resolveUniformLocation} from './uniformLocation.js';
 
 // Shell.GLSLEffect was dropped in GNOME 51 (gi://Shell namespace import remains valid,
 // but Shell.GLSLEffect evaluates to undefined). When undefined, we take the modern
@@ -27,6 +35,7 @@ export const ShaderEffect = Shell?.GLSLEffect
         }
 
         vfunc_build_pipeline() {
+            this._uniformLocMap?.clear();
             const source = this.constructor.getShaderSource?.();
             if (source) {
                 this.add_glsl_snippet(
@@ -55,14 +64,13 @@ export const ShaderEffect = Shell?.GLSLEffect
          * Targets modern GNOME 51 3-argument signature: (name, n_components, value).
          * @param {string} name
          * @param {number} n_components
-         * @param {number[]} value
+         * @param {number|number[]} value
          */
         set_uniform_float(name, n_components, value) {
-            let loc = this._uniformLocMap.get(name);
-            if (loc === undefined) {
-                loc = this.get_uniform_location(name);
-                this._uniformLocMap.set(name, loc);
-            }
+            // The map is created in _init; build_pipeline() may run before that, so treat
+            // it as optional here too rather than assuming its presence.
+            const cache = this._uniformLocMap ??= new Map();
+            const loc = resolveUniformLocation(cache, name, n => this.get_uniform_location(n));
             if (loc !== -1)
                 super.set_uniform_float(loc, n_components, value);
         }
