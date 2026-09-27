@@ -211,7 +211,7 @@ export class Manager {
             clip: null, clipTarget: null, clipInsets: null, clearRing: false, drawClip: false, shadow: null,
             resizeBand: null,
             idleId: null, reconcileTimeout: null,
-            firstFrameDone: false, signals: [],
+            firstFrameDone: false, actorWired: false, signals: [],
         };
         this._windows.set(win, state);
 
@@ -226,34 +226,47 @@ export class Manager {
         this._connect(state.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
 
         const actor = win.get_compositor_private();
-        if (actor) {
-            this._connect(state.signals, actor, 'notify::allocation', () => {
-                if (!state.firstFrameDone && actor.width > 0 && actor.height > 0) {
-                    if (state.idleId)
-                        GLib.Source.remove(state.idleId);
-                    // Defer to idle: don't mutate actor tree during allocation.
-                    state.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        state.idleId = null;
-                        state.firstFrameDone = true;
-                        this._reconcileWindow(win);
-                        return GLib.SOURCE_REMOVE;
-                    });
-                } else {
-                    this._reconcileWindowDebounced(win);
-                }
-            }, true);
-            // React to late-injection or dynamic removal of foreign extension widgets (e.g. Blur my Shell).
-            // Precondition: tracks direct child mutations on MetaWindowActor; deeper nested widget injections
-            // are not monitored.
-            this._connect(state.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
-            this._connect(state.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
-        }
+        this._wireActorSignals(win, state, actor);
         if (actor && actor.width > 0 && actor.height > 0) {
             state.firstFrameDone = true;
             this._reconcileWindow(win);
         } else {
             this._reconcileWindowDebounced(win);
         }
+    }
+
+    /**
+     * Connects the actor-driven signals once the window actor exists. It is null at
+     * `window-created` (Mutter creates the MetaWindowActor at map), so this is re-checked from
+     * every reconcile until it lands; otherwise first-frame deferral and late foreign-widget
+     * injection would never be observed.
+     * @param {Meta.Window} win @param {object} state @param {object|null} actor
+     */
+    _wireActorSignals(win, state, actor) {
+        if (!actor || state.actorWired)
+            return;
+        state.actorWired = true;
+
+        this._connect(state.signals, actor, 'notify::allocation', () => {
+            if (!state.firstFrameDone && actor.width > 0 && actor.height > 0) {
+                if (state.idleId)
+                    GLib.Source.remove(state.idleId);
+                // Defer to idle: don't mutate actor tree during allocation.
+                state.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    state.idleId = null;
+                    state.firstFrameDone = true;
+                    this._reconcileWindow(win);
+                    return GLib.SOURCE_REMOVE;
+                });
+            } else {
+                this._reconcileWindowDebounced(win);
+            }
+        }, true);
+        // React to late-injection or dynamic removal of foreign extension widgets (e.g. Blur my Shell).
+        // Precondition: tracks direct child mutations on MetaWindowActor; deeper nested widget injections
+        // are not monitored.
+        this._connect(state.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
+        this._connect(state.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
     }
 
     _forgetWindow(win) {
@@ -266,8 +279,8 @@ export class Manager {
             state.resizeBand = null;
             // Keep clip/shadow to fade with windowActor on close.
         }
-        // Delete first: a deallocated window must not throw out of _forgetWindow before
-        // it is removed, or the stale entry would be re-synced forever.
+        // Remove the entry before reading the pid: a deallocated window's get_pid() can throw,
+        // and the entry must already be gone or it would be re-synced forever.
         this._windows.delete(win);
         let pid = -1;
         try {
@@ -431,6 +444,7 @@ export class Manager {
         // window and leaves the reconcile pass (signals, monitor change) alive for the rest.
         try {
             const actor = win.get_compositor_private();
+            this._wireActorSignals(win, state, actor);
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
