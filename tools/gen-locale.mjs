@@ -38,10 +38,49 @@ function getPoFiles() {
         .map(f => path.join(poDir, f));
 }
 
+/**
+ * Refuses a catalogue with a syntax error, or with fuzzy/untranslated entries: msgfmt would
+ * still write the .mo, and gettext would silently fall back to the source string for every
+ * missing entry.
+ * @param {string} poFile
+ */
+function assertCatalogComplete(poFile) {
+    const basename = path.basename(poFile);
+    try {
+        execFileSync('msgfmt', ['--check', '-o', '/dev/null', poFile]);
+    } catch {
+        throw new Error(`${basename} has a syntax error`);
+    }
+
+    // LC_ALL=C: msgfmt's --statistics wording is localized, so a substring test on it would
+    // silently stop matching under a non-English locale.
+    const result = spawnSync('msgfmt', ['--statistics', '-o', '/dev/null', poFile],
+        {env: {...process.env, LC_ALL: 'C'}});
+    const stats = result.stderr ? result.stderr.toString().trim() : '';
+    if (stats.includes('fuzzy') || stats.includes('untranslated'))
+        throw new Error(`${basename} has incomplete translations: ${stats}`);
+}
+
+/** Recursively lists .js files under `dir`, skipping the compiled locale directory. */
+function listSourceFiles(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+        if (entry.isDirectory()) {
+            if (entry.name !== 'locale')
+                out.push(...listSourceFiles(path.join(dir, entry.name)));
+        } else if (entry.name.endsWith('.js')) {
+            out.push(path.relative(rootDir, path.join(dir, entry.name)));
+        }
+    }
+    return out;
+}
+
 function compilePo(poFile) {
     const lang = path.basename(poFile, '.po');
     const outDir = path.join(srcLocaleDir, lang, 'LC_MESSAGES');
     const moFile = path.join(outDir, `${domain}.mo`);
+
+    assertCatalogComplete(poFile);
 
     fs.mkdirSync(outDir, { recursive: true });
     execFileSync('msgfmt', [poFile, '-o', moFile]);
@@ -119,21 +158,28 @@ if (isCheck) {
     }
 
     for (const poFile of poFiles) {
-        const basename = path.basename(poFile);
         try {
-            execFileSync('msgfmt', ['--check', '-o', '/dev/null', poFile]);
-        } catch {
-            console.error(`[gen-locale] --check failed: syntax error in ${basename}`);
-            process.exit(1);
-        }
-
-        const statsResult = spawnSync('msgfmt', ['--statistics', '-o', '/dev/null', poFile]);
-        const stats = statsResult.stderr ? statsResult.stderr.toString().trim() : '';
-        if (stats.includes('fuzzy') || stats.includes('untranslated')) {
-            console.error(`[gen-locale] --check failed: ${basename} has incomplete translations: ${stats}`);
+            assertCatalogComplete(poFile);
+        } catch (e) {
+            console.error(`[gen-locale] --check failed: ${e.message}`);
             console.error('[gen-locale] Please complete translations and run "pnpm run compile-locales".');
             process.exit(1);
         }
+    }
+
+    // 3. Every source file that marks a string for translation must be listed in POTFILES.in,
+    // or its strings never reach the template - and a fresh extract would still agree with the
+    // committed pot, so step 1 cannot see it.
+    const listed = new Set(fs.readFileSync(potFilesList, 'utf8')
+        .split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')));
+    const missing = listSourceFiles(path.join(rootDir, 'src'))
+        .filter(file => !listed.has(file) &&
+            /(^|[^\w$])N?_\(/.test(fs.readFileSync(path.join(rootDir, file), 'utf8')));
+    if (missing.length > 0) {
+        console.error(`[gen-locale] --check failed: translatable strings in files missing from ${path.relative(rootDir, potFilesList)}:`);
+        for (const file of missing)
+            console.error(`  ${file}`);
+        process.exit(1);
     }
 
     console.log(`[gen-locale] OK: Template ${path.basename(potFile)} is synchronized with source code, and all ${poFiles.length} PO files are complete and valid`);
