@@ -102,24 +102,30 @@ export class InspectorService {
         // Hoisted out of the loop: the active workspace cannot change while one hit test enumerates windows.
         const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
         for (let i = actors.length - 1; i >= 0; i--) {
-            const winActor = actors[i];
-            const win = getWindowFromActor(winActor);
-            if (!win || win.minimized || (win.is_hidden && win.is_hidden()))
-                continue;
-            if (winActor.is_mapped && !winActor.is_mapped())
-                continue;
+            // A window torn down mid-scan must not abort the hit test - or escape a Clutter
+            // handler and leave the D-Bus pick unanswered: skip it and keep looking.
+            try {
+                const winActor = actors[i];
+                const win = getWindowFromActor(winActor);
+                if (!win || win.minimized || (win.is_hidden && win.is_hidden()))
+                    continue;
+                if (winActor.is_mapped && !winActor.is_mapped())
+                    continue;
 
-            if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
-                continue;
+                if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
+                    continue;
 
-            const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
-            if (!isDecoratableWindowType(type))
-                continue;
+                const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
+                if (!isDecoratableWindowType(type))
+                    continue;
 
-            const frame = win.get_frame_rect();
-            if (stageX >= frame.x && stageX < frame.x + frame.width &&
-                stageY >= frame.y && stageY < frame.y + frame.height)
-                return win;
+                const frame = win.get_frame_rect();
+                if (stageX >= frame.x && stageX < frame.x + frame.width &&
+                    stageY >= frame.y && stageY < frame.y + frame.height)
+                    return win;
+            } catch {
+                // Deallocated between the actor-list snapshot and these reads.
+            }
         }
         return null;
     }
@@ -171,40 +177,48 @@ export class InspectorService {
 
         this._overlay.connect('motion-event', (_actor, event) => {
             const [x, y] = event.get_coords();
-            const targetWin = this._findTargetWindow(x, y);
-            if (targetWin) {
-                // Queries never start the /proc read (docs/decoration-model.md § When a window's
-                // corners already look like ours); the event drives it, and the answer lands a
-                // frame later for the next motion to read.
-                probeAdwaitaLook(targetWin.get_pid?.());
-                const frame = targetWin.get_frame_rect();
-                const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
-                const innerRadius = this._getExpectedWindowRadius(targetWin);
-                const outerRadius = highlightOuterRadius(innerRadius, HIGHLIGHT_BORDER_WIDTH);
+            try {
+                const targetWin = this._findTargetWindow(x, y);
+                if (targetWin) {
+                    // Queries never start the /proc read (docs/decoration-model.md § When a
+                    // window's corners already look like ours); the event drives it, and the
+                    // answer lands a frame later for the next motion to read.
+                    probeAdwaitaLook(targetWin.get_pid?.());
+                    const frame = targetWin.get_frame_rect();
+                    const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
+                    const innerRadius = this._getExpectedWindowRadius(targetWin);
+                    const outerRadius = highlightOuterRadius(innerRadius, HIGHLIGHT_BORDER_WIDTH);
 
-                this._highlight.set_position(box.x, box.y);
-                this._highlight.set_size(box.width, box.height);
+                    this._highlight.set_position(box.x, box.y);
+                    this._highlight.set_size(box.width, box.height);
 
-                if (this._currentRadius !== outerRadius) {
-                    this._currentRadius = outerRadius;
-                    this._highlight.style = highlightStyle(outerRadius);
+                    if (this._currentRadius !== outerRadius) {
+                        this._currentRadius = outerRadius;
+                        this._highlight.style = highlightStyle(outerRadius);
+                    }
+                    this._highlight.visible = true;
+                } else {
+                    this._highlight.visible = false;
                 }
-                this._highlight.visible = true;
-            } else {
+            } catch {
+                // The target went away between hit test and highlight; drop the highlight.
                 this._highlight.visible = false;
             }
             return Clutter.EVENT_STOP;
         });
 
         this._overlay.connect('button-press-event', (_actor, event) => {
-            const button = event.get_button();
-            if (button === Clutter.BUTTON_PRIMARY) {
-                const [x, y] = event.get_coords();
-                const targetWin = this._findTargetWindow(x, y);
-                this._finishInteractivePick(targetWin);
-            } else {
-                this._finishInteractivePick(null);
+            let targetWin = null;
+            try {
+                if (event.get_button() === Clutter.BUTTON_PRIMARY) {
+                    const [x, y] = event.get_coords();
+                    targetWin = this._findTargetWindow(x, y);
+                }
+            } catch {
+                // A torn-down target reads as a cancel; the invocation is still answered below.
             }
+            // Always reached, so the D-Bus caller cannot be left waiting on a thrown handler.
+            this._finishInteractivePick(targetWin);
             return Clutter.EVENT_STOP;
         });
 
@@ -244,25 +258,36 @@ export class InspectorService {
             return;
         }
 
-        // The suggested-rule queries read the process cache; start the read at this request
-        // boundary so they stay side-effect free.
-        probeAdwaitaLook(win.get_pid?.());
-        const properties = extractWindowProperties(win, resolveWindowIdentity(win));
+        try {
+            // The suggested-rule queries read the process cache; start the read at this request
+            // boundary so they stay side-effect free.
+            probeAdwaitaLook(win.get_pid?.());
+            const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
-        // Display only, see docs/rule-model.md § What the pick remembers for the row.
-        const title = readWindowString(() => win.get_title());
-        if (title)
-            properties.windowTitle = title;
+            // Display only, see docs/rule-model.md § What the pick remembers for the row.
+            const title = readWindowString(() => win.get_title());
+            if (title)
+                properties.windowTitle = title;
 
-        const state = this._manager?.suggestedRuleState?.(win);
-        if (typeof state === 'string') {
-            properties.suggestedState = state;
-            const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
-            if (typeof changes === 'boolean')
-                properties.suggestedStateWouldChange = String(changes);
+            const state = this._manager?.suggestedRuleState?.(win);
+            if (typeof state === 'string') {
+                properties.suggestedState = state;
+                const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
+                if (typeof changes === 'boolean')
+                    properties.suggestedStateWouldChange = String(changes);
+            }
+
+            invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
+        } catch {
+            // The window went away mid-pick; answer empty (a cancel) so the caller is never
+            // left waiting on a reply that will not come. The invocation itself may also be
+            // gone by now, so its throw must not escape into the Clutter handler.
+            try {
+                invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
+            } catch {
+                // Invocation already answered.
+            }
         }
-
-        invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
     }
 
     _cancelInteractivePick() {
