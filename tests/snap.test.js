@@ -11,6 +11,7 @@ import {
     snapSliceBoxesInto,
     findMetaWindow,
     getPhysicalMonitorScale,
+    resolveMonitorBounds,
 } from '../src/lib/snap.js';
 
 function createMockBox() {
@@ -467,5 +468,34 @@ describe('findMetaWindow', () => {
         for (let i = 0; i < 10; i++)
             node = {get_parent: () => node};
         expect(findMetaWindow(node, 5)).toBeNull();
+    });
+});
+
+describe('resolveMonitorBounds', () => {
+    it('returns the rect for an in-range monitor', () => {
+        const rect = {x: 0, y: 0, width: 1920, height: 1080};
+        const display = {
+            get_n_monitors: () => 2,
+            get_monitor_geometry: mon => (mon === 1 ? rect : null),
+        };
+        expect(resolveMonitorBounds(display, {get_monitor: () => 1})).toBe(rect);
+    });
+
+    it('returns null for a stale index after a monitor is unplugged', () => {
+        // The window still reports monitor 1, but the display now has only one monitor;
+        // the geometry macro must never be reached or Mutter logs a CRITICAL.
+        const display = {
+            get_n_monitors: () => 1,
+            get_monitor_geometry: () => {
+                throw new Error('mutter-CRITICAL: get_monitor_geometry with out-of-range monitor');
+            },
+        };
+        expect(resolveMonitorBounds(display, {get_monitor: () => 1})).toBeNull();
+    });
+
+    it('returns null when the window has no monitor or the display lacks the query', () => {
+        const display = {get_n_monitors: () => 1, get_monitor_geometry: () => ({})};
+        expect(resolveMonitorBounds(display, {})).toBeNull();
+        expect(resolveMonitorBounds(null, {get_monitor: () => 0})).toBeNull();
     });
 });
