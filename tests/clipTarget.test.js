@@ -208,7 +208,9 @@ describe('clipTarget', () => {
                 const winX11 = createMockWindow({clientType: WindowClientType.X11});
                 const actorX11 = createMockActor({children: [blurWidget]});
 
-                // On X11, default target is actor.get_first_child() ?? actor (blurWidget)
+                // On X11 the normal target is actor.get_first_child() ?? actor; with only a blur
+                // widget present that is the blur widget. The bypass is skipped (nothing to
+                // upgrade to), matching rounded-window-corners' unwrapActor().
                 expect(resolveClipTarget(winX11, actorX11, mockSt)).toBe(blurWidget);
             });
         });
