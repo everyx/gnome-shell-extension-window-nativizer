@@ -803,8 +803,13 @@ PYEOF
         sleep 0.25
     done
 else
-    echo ">> (skipped: none of gnome-calculator, gnome-text-editor or nautilus is installed, so the"
-    echo "   skip side of the band criterion has no end-to-end case on this machine)"
+    echo "!! No libadwaita client (gnome-calculator, gnome-text-editor or nautilus) is installed,"
+    echo "   so the skip side of the band criterion cannot be verified on this machine."
+    if [ "${ALLOW_SKIP_LIBNATIVE:-0}" != "1" ]; then
+        echo "   Set ALLOW_SKIP_LIBNATIVE=1 to run the rest of the suite without this case."
+        exit 1
+    fi
+    echo "   Continuing because ALLOW_SKIP_LIBNATIVE=1."
 fi
 
 # Ensure all background test windows have completely vanished before testing popup lifecycle
@@ -1044,7 +1049,33 @@ PICK_PATH="/org/gnome/Shell/Extensions/WindowNativizer"
 ( gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" --object-path "$PICK_PATH" \
         --method "$PICK_IFACE".PickWindow > "$PICK_REPLY" 2>&1; echo $? >> "$PICK_REPLY" ) &
 PICK_BG=$!
-sleep 0.3
+# Prove the pick is genuinely in flight before disabling: no reply yet, and the picker overlay
+# on screen. Without this a pick that already returned would pass, exercising nothing.
+PICK_PENDING=0
+for _ in $(seq 1 40); do
+    if tail -1 "$PICK_REPLY" 2>/dev/null | grep -q '^[0-9]\+$'; then
+        echo "!! The pick returned before it could be interrupted; there was nothing to cancel!"
+        kill "$PICK_BG" 2>/dev/null || true
+        exit 1
+    fi
+    OVERLAY_STATE="$(shell_eval '
+    (async () => {
+        const Main = await import("resource:///org/gnome/shell/ui/main.js");
+        const up = Main.uiGroup.get_children().some(c => c.name === "WindowNativizerInspectorOverlay");
+        return JSON.stringify({overlay: up});
+    })()
+    ')"
+    if check_fields "$OVERLAY_STATE" '{"overlay": true}'; then
+        PICK_PENDING=1
+        break
+    fi
+    sleep 0.05
+done
+if [[ "$PICK_PENDING" -ne 1 ]]; then
+    echo "!! The pick never came on screen, so there was nothing to cancel!"
+    kill "$PICK_BG" 2>/dev/null || true
+    exit 1
+fi
 "$DEV" ext disable "$UUID" >/dev/null
 PICK_ANSWERED=0
 for _ in $(seq 1 60); do
@@ -1118,6 +1149,11 @@ offending = []
 exempted = 0
 exempted_ibus = 0
 for idx, line in enumerate(lines, start=1):
+    # An extension error is checked before the noise bag: a genuine window-nativizer line whose
+    # payload happens to contain e.g. "gnome-calculator" or "secrets" must not be swallowed.
+    if csd_issue.search(line):
+        offending.append(f"Line {idx}: {line.strip()}")
+        continue
     if noise.search(line):
         continue
     if mutter_color_state.search(line):
@@ -1126,7 +1162,7 @@ for idx, line in enumerate(lines, start=1):
     if ibus_teardown.search(line):
         exempted_ibus += 1
         continue
-    if glib_issue.search(line) or csd_issue.search(line):
+    if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
 
 if offending:
