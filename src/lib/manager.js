@@ -266,14 +266,25 @@ export class Manager {
             state.resizeBand = null;
             // Keep clip/shadow to fade with windowActor on close.
         }
-        const pid = win.get_pid?.();
+        // Delete first: a deallocated window must not throw out of _forgetWindow before
+        // it is removed, or the stale entry would be re-synced forever.
         this._windows.delete(win);
-        if (pid) {
+        let pid = -1;
+        try {
+            pid = win.get_pid?.() ?? -1;
+        } catch {
+            // Window already gone; nothing to correlate.
+        }
+        if (pid > 0) {
             let hasPeer = false;
             for (const other of this._windows.keys()) {
-                if (other.get_pid?.() === pid) {
-                    hasPeer = true;
-                    break;
+                try {
+                    if (other.get_pid?.() === pid) {
+                        hasPeer = true;
+                        break;
+                    }
+                } catch {
+                    // Skip a peer that is itself going away.
                 }
             }
             // Last window for pid gone → drop process cache (also cleared in destroy()).
@@ -289,8 +300,12 @@ export class Manager {
      */
     _onProcessKnown(pid) {
         for (const win of this._windows.keys()) {
-            if (win.get_pid?.() === pid)
-                this._reconcileWindow(win);
+            try {
+                if (win.get_pid?.() === pid)
+                    this._reconcileWindow(win);
+            } catch {
+                // Window went away while the process answer landed.
+            }
         }
     }
 
@@ -410,36 +425,46 @@ export class Manager {
         const state = this._windows.get(win);
         if (!state)
             return;
-        const actor = win.get_compositor_private();
-        if (!actor || actor.width === 0 || actor.height === 0)
-            return;
 
-        // Whether the process maps an Adwaita provider decides this window, and that answer is
-        // still being read: wait for it rather than drawing a shadow we would have to take back.
-        // `_onProcessKnown()` runs this again when the answer lands.
-        const pid = win.get_pid?.();
-        probeAdwaitaLook(pid);
-        if (isAdwaitaLookPending(pid))
-            return;
+        // The window or its actor can be torn down midway through any of the reads and
+        // syncs below. Guard the whole per-window unit so a teardown race skips this one
+        // window and leaves the reconcile pass (signals, monitor change) alive for the rest.
+        try {
+            const actor = win.get_compositor_private();
+            if (!actor || actor.width === 0 || actor.height === 0)
+                return;
 
-        const inputs = this._decorationInputs(win);
-        const actions = evaluateWindowActions(inputs);
+            // Whether the process maps an Adwaita provider decides this window, and that answer is
+            // still being read: wait for it rather than drawing a shadow we would have to take back.
+            // `_onProcessKnown()` runs this again when the answer lands.
+            const pid = win.get_pid?.();
+            probeAdwaitaLook(pid);
+            if (isAdwaitaLookPending(pid))
+                return;
 
-        // One inset set for clip and shadow so they cannot drift mid-resize.
-        const target = resolveClipTarget(win, actor, St);
-        const insets = this._frameInsets(win);
+            const inputs = this._decorationInputs(win);
+            if (!inputs)
+                return;
+            const actions = evaluateWindowActions(inputs);
 
-        this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
+            // One inset set for clip and shadow so they cannot drift mid-resize.
+            const target = resolveClipTarget(win, actor, St);
+            const insets = this._frameInsets(win);
 
-        // No clip → client's shadow still visible; defer ours to avoid double shadow.
-        this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
+            this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
-        // The resize axis is independent of the decoration or tiling: a tile match
-        // only takes the shadow, never the grab band.
-        this._syncResizeBand(win, actions.drawResize, inputs, insets);
+            // No clip → client's shadow still visible; defer ours to avoid double shadow.
+            this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
 
-        if (state.clip || state.shadow)
-            this._applyStyle(win, actions.style, insets, actions.drawClip);
+            // The resize axis is independent of the decoration or tiling: a tile match
+            // only takes the shadow, never the grab band.
+            this._syncResizeBand(win, actions.drawResize, inputs, insets);
+
+            if (state.clip || state.shadow)
+                this._applyStyle(win, actions.style, insets, actions.drawClip);
+        } catch {
+            // Window went away mid-sync; the next signal re-runs it if it comes back.
+        }
     }
 
     _reconcile() {
@@ -455,12 +480,16 @@ export class Manager {
 
     _restackActors() {
         for (const [win, state] of this._windows) {
-            const actor = win.get_compositor_private();
-            if (!actor)
-                continue;
-            if (state.shadow)
-                global.window_group.set_child_below_sibling(state.shadow, actor);
-            state.resizeBand?.restack();
+            try {
+                const actor = win.get_compositor_private();
+                if (!actor)
+                    continue;
+                if (state.shadow)
+                    global.window_group.set_child_below_sibling(state.shadow, actor);
+                state.resizeBand?.restack();
+            } catch {
+                // Window went away mid-restack; the next restack drops it.
+            }
         }
     }
 
@@ -470,8 +499,27 @@ export class Manager {
             state.resizeBand?.resetCursor();
     }
 
-    /** Inputs for evaluateWindowActions; shared with suggestedRuleWouldChange(). */
+    /**
+     * Inputs for evaluateWindowActions; shared with suggestedRuleWouldChange().
+     * Any read on a window that is being torn down can throw, so the whole gather is
+     * one guarded unit: an unreadable window yields null and its caller skips it,
+     * rather than aborting every other window in the same reconcile pass.
+     *
+     * @param {Meta.Window} win
+     * @returns {object|null}
+     */
     _decorationInputs(win) {
+        if (!win)
+            return null;
+        try {
+            return this._collectDecorationInputs(win);
+        } catch {
+            return null;
+        }
+    }
+
+    /** @param {Meta.Window} win @returns {object} */
+    _collectDecorationInputs(win) {
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
         const clientType = win.get_client_type?.();
@@ -489,12 +537,12 @@ export class Manager {
             isMaximized,
             maximizedHorizontally: Boolean(win.maximized_horizontally),
             maximizedVertically: Boolean(win.maximized_vertically),
-            isFullscreen: win.is_fullscreen(),
-            hasSsd: Boolean(win.decorated),
+            isFullscreen: typeof win?.is_fullscreen === 'function' ? win.is_fullscreen() : false,
+            hasSsd: Boolean(win?.decorated),
             isX11: clientType === CLIENT_TYPE_X11,
             nativeLikeCorners: hasNativeLikeCorners(win),
-            hasGtk4Client: hasGtk4Client(win.get_pid?.()),
-            windowType: win.get_window_type(),
+            hasGtk4Client: hasGtk4Client(win?.get_pid?.()),
+            windowType: typeof win?.get_window_type === 'function' ? win.get_window_type() : 0,
             hasParent: Boolean(win.get_transient_for?.()),
             isAttachedDialog: Boolean(win.is_attached_dialog?.()),
             allowsResize: Boolean(win.allows_resize?.()),
@@ -517,6 +565,8 @@ export class Manager {
      */
     suggestedRuleWouldChange(win, ruleState) {
         const inputs = this._decorationInputs(win);
+        if (!inputs)
+            return null;
         return suggestedRuleWouldChange(extractWindowProperties(win, inputs.wmClass), inputs, ruleState);
     }
 
@@ -525,9 +575,8 @@ export class Manager {
      * @returns {string|null} Suggested canonical rule state for pick, or null if unreadable.
      */
     suggestedRuleState(win) {
-        if (!win)
-            return null;
-        return suggestedRuleState(this._decorationInputs(win));
+        const inputs = this._decorationInputs(win);
+        return inputs ? suggestedRuleState(inputs) : null;
     }
 
     /**
@@ -610,7 +659,11 @@ export class Manager {
      * so a lagging actor can never turn this into "no body".
      */
     _frameInsets(win) {
-        return insetsFromRects(win.get_buffer_rect?.(), win.get_frame_rect?.());
+        try {
+            return insetsFromRects(win?.get_buffer_rect?.(), win?.get_frame_rect?.());
+        } catch {
+            return null;
+        }
     }
 
     _applyStyle(win, style, insets, drawClip) {

@@ -26,13 +26,24 @@ export function resolveWindowIdentity(win) {
     if (remembered && remembered.declared === declared)
         return remembered.identity;
 
-    const pid = win.get_pid?.() ?? -1;
+    let pid = -1;
+    try {
+        pid = win.get_pid?.() ?? -1;
+    } catch {
+        // Window went away mid-resolve; fall through with no pid.
+    }
     let peer = '';
     if (pid > 0) {
         for (const actor of listWindowActors()) {
             const candidate = getWindowFromActor(actor);
-            if (!candidate || candidate === win || candidate.get_pid?.() !== pid)
+            if (!candidate || candidate === win)
                 continue;
+            try {
+                if (candidate.get_pid?.() !== pid)
+                    continue;
+            } catch {
+                continue; // Peer is itself being torn down.
+            }
             peer = readDeclaredIdentity(candidate);
             if (peer)
                 break;
