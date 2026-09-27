@@ -84,18 +84,21 @@ function parseWindowTypes(headerCode) {
     let currentIndex = 0;
 
     for (const rawLine of lines) {
-        const line = rawLine.replace(/\/\*.*?\*\//g, '').trim();
+        const line = rawLine.replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '').trim();
         if (!line)
             continue;
 
-        const match = /^META_WINDOW_([A-Z0-9_]+)(?:\s*=\s*(\d+))?,?$/.exec(line);
-        if (match) {
-            const name = match[1];
-            if (match[2] !== undefined)
-                currentIndex = parseInt(match[2], 10);
-            types[name] = currentIndex;
-            currentIndex++;
+        const match = /^META_WINDOW_([A-Z0-9_]+)(?:\s*=\s*(\d+|0[xX][0-9a-fA-F]+))?,?$/.exec(line);
+        if (!match) {
+            // A silently skipped line (a trailing attribute or second declarator) would shift
+            // every later auto-numbered value with no error.
+            throw new Error(`[gen-mutter] Unparseable MetaWindowType line: ${line}`);
         }
+        const name = match[1];
+        if (match[2] !== undefined)
+            currentIndex = parseInt(match[2], match[2].startsWith('0x') || match[2].startsWith('0X') ? 16 : 10);
+        types[name] = currentIndex;
+        currentIndex++;
     }
 
     if (types.NORMAL === undefined || types.DIALOG === undefined || types.MODAL_DIALOG === undefined)
@@ -113,18 +116,19 @@ function parseClientTypes(headerCode) {
     let currentIndex = 0;
 
     for (const rawLine of enumMatch[1].split('\n')) {
-        const line = rawLine.replace(/\/\*.*?\*\//g, '').trim();
+        const line = rawLine.replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '').trim();
         if (!line)
             continue;
 
-        const match = /^META_WINDOW_CLIENT_TYPE_([A-Z0-9_]+)(?:\s*=\s*(\d+))?,?$/.exec(line);
-        if (match) {
-            const name = match[1];
-            if (match[2] !== undefined)
-                currentIndex = parseInt(match[2], 10);
-            types[name] = currentIndex;
-            currentIndex++;
+        const match = /^META_WINDOW_CLIENT_TYPE_([A-Z0-9_]+)(?:\s*=\s*(\d+|0[xX][0-9a-fA-F]+))?,?$/.exec(line);
+        if (!match) {
+            throw new Error(`[gen-mutter] Unparseable MetaWindowClientType line: ${line}`);
         }
+        const name = match[1];
+        if (match[2] !== undefined)
+            currentIndex = parseInt(match[2], match[2].startsWith('0x') || match[2].startsWith('0X') ? 16 : 10);
+        types[name] = currentIndex;
+        currentIndex++;
     }
 
     if (types.WAYLAND === undefined || types.X11 === undefined)
