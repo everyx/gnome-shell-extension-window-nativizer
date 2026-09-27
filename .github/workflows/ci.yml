@@ -246,3 +246,50 @@ jobs:
                 core.warning(`Could not post/update PR comment (likely a fork without write permissions): ${error.message}`);
               }
             }
+
+  e2e:
+    name: Headless E2E
+    runs-on: ubuntu-latest
+    # The harness starts a real nested headless GNOME Shell and drives a full window
+    # lifecycle. It is the test that catches "the extension fails to load" and the lifecycle
+    # races (missing export, an unanswered D-Bus pick), so it is worth running here. Kept
+    # non-blocking until the runner is known to be stable for it.
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gnome-shell gjs dbus dbus-x11 python3 gettext ripgrep procps libgl1-mesa-dri
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Report the shell under test
+        run: gnome-shell --version
+
+      - name: Compile locales
+        run: pnpm run compile-locales
+
+      - name: Run headless E2E
+        run: pnpm run test:e2e
+
+      - name: Upload the nested shell log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-shell-log
+          path: /tmp/window-nativizer-dev/shell.log
+          if-no-files-found: ignore
