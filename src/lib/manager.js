@@ -36,6 +36,7 @@ import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
+import {getPhysicalMonitorScale} from './snap.js';
 
 // Mutter enum value; the generated copy exists so modules and tests without the gi://Meta typelib can still read Mutter's constants.
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
@@ -316,16 +317,6 @@ export class Manager {
             });
     }
 
-    /** @returns {number} Monitor scale (fractional); 1 if unknown. */
-    _getMonitorScale(win) {
-        const monitor = win.get_monitor();
-        if (monitor < 0)
-            return 1;
-        if (typeof global.display?.get_monitor_scale === 'function')
-            return global.display.get_monitor_scale(monitor);
-        return 1;
-    }
-
     /** Sync clip; clearRing erases client's shadow ring even when corners stay square (see docs/decoration-model.md § Rounding a window takes its shadow over). */
     _syncClip(win, wantEffect, clearRing = false, target = null, insets = null) {
         const state = this._windows.get(win);
@@ -493,7 +484,7 @@ export class Manager {
             // Per-side ring, so each consumer keeps the aggregation it needs: the resize
             // band asks about every side, the shadow axis whether either side declares one.
             insets: this._frameInsets(win),
-            monitorScale: this._getMonitorScale(win),
+            monitorScale: getPhysicalMonitorScale(win, 1),
 
             isMaximized,
             maximizedHorizontally: Boolean(win.maximized_horizontally),
