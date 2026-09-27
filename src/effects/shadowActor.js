@@ -227,9 +227,12 @@ export const ShadowActor = GObject.registerClass({
     }
 
     _startFade() {
+        // Reset on every start *and* restart: a style change mid-fade re-enters here with a
+        // live timer, and a stale `_elapsed` would jump the new blend straight to the old
+        // position on the next tick instead of ramping from 0.
+        this._elapsed = 0;
         if (this._fadeId)
             return;
-        this._elapsed = 0;
         this._fadeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FADE_STEP_MS, () => {
             this._elapsed += FADE_STEP_MS;
             this._progress = bezier(Math.min(1, this._elapsed / FADE_MS), EASE_OUT);
