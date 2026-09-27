@@ -113,7 +113,18 @@ export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
 }
 
 
-function setActorBox(box, x1, y1, x2, y2) {
+/**
+ * Writes a Clutter.ActorBox in place. Prefers `init()` (the real box API) and falls
+ * back to `set_origin`/`set_size` with sizes clamped to zero. A box offering neither
+ * is left untouched, so callers must pass a real actor box.
+ *
+ * @param {object} box
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ */
+export function setActorBox(box, x1, y1, x2, y2) {
     if (typeof box.init === 'function') {
         box.init(x1, y1, x2, y2);
         return;

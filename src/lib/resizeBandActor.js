@@ -26,6 +26,7 @@ import {
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
 import {getWindowFromActor} from './window.js';
+import {setActorBox} from './snap.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
@@ -255,21 +256,14 @@ export const ResizeBand = GObject.registerClass({
         for (const region of RESIZE_BAND_REGIONS) {
             const child = this._regions.get(region);
             const rect = bands[region];
-            if (rect) {
-                childBox.x1 = rect.x;
-                childBox.y1 = rect.y;
-                childBox.x2 = rect.x + rect.width;
-                childBox.y2 = rect.y + rect.height;
-            } else {
+            if (rect)
+                setActorBox(childBox, rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+            else
                 // Zero area, not hidden: hiding a child queues a relayout from inside
                 // this allocation, which leaves the band itself needing one and trips
                 // Clutter's "can't update stage views ... needs an allocation" warning.
                 // A zero-size reactive child is simply never picked.
-                childBox.x1 = 0;
-                childBox.y1 = 0;
-                childBox.x2 = 0;
-                childBox.y2 = 0;
-            }
+                setActorBox(childBox, 0, 0, 0, 0);
             child.allocate(childBox);
         }
 
