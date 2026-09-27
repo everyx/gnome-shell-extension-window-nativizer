@@ -265,9 +265,11 @@ describe('buildRuleKey', () => {
         expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).not.toBe('wechat');
     });
 
-    it('empty wmClass returns empty string', () => {
+    it('empty or whitespace-only wmClass returns empty string', () => {
         expect(buildRuleKey('')).toBe('');
         expect(buildRuleKey(null)).toBe('');
+        expect(buildRuleKey('   ')).toBe('');
+        expect(buildRuleKey('\t\n')).toBe('');
     });
 });
 

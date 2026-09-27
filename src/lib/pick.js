@@ -32,12 +32,24 @@ export function readWindowString(getter) {
     }
 }
 
-/** @param {object} win @returns {string} declared identity or '' */
+/**
+ * Declared identity, first non-blank source wins. A whitespace-only field (an X11 client may
+ * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
+ * become a rule key.
+ * @param {object} win
+ * @returns {string} declared identity or ''
+ */
 export function readDeclaredIdentity(win) {
-    return readWindowString(() => win?.get_wm_class?.()) ||
-        readWindowString(() => win?.get_sandboxed_app_id?.()) ||
-        readWindowString(() => win?.get_gtk_application_id?.()) ||
-        '';
+    for (const read of [
+        () => win?.get_wm_class?.(),
+        () => win?.get_sandboxed_app_id?.(),
+        () => win?.get_gtk_application_id?.(),
+    ]) {
+        const identity = readWindowString(read).trim();
+        if (identity)
+            return identity;
+    }
+    return '';
 }
 
 /**
