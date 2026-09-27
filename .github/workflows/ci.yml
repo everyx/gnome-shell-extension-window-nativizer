@@ -283,6 +283,22 @@ jobs:
       - name: Compile locales
         run: pnpm run compile-locales
 
+      - name: Extend the deployed metadata to the runner's shell (test-only)
+        # The shipped metadata.json lists the versions the extension is released to (50-51).
+        # The runner carries an older shell; extending the metadata in this throwaway checkout
+        # lets it load the extension, so the 45-49 compatibility branches are exercised
+        # end-to-end on a real shell instead of only by unit tests. The shipped file is untouched.
+        run: |
+          major="$(gnome-shell --version | grep -oE '[0-9]+' | head -1)"
+          python3 - src/metadata.json "$major" <<'PY'
+          import json, sys
+          path, major = sys.argv[1], sys.argv[2]
+          data = json.load(open(path))
+          data["shell-version"] = sorted(set(data["shell-version"] + [major]), key=int)
+          json.dump(data, open(path, "w"), indent=4)
+          print("shell-version ->", data["shell-version"])
+          PY
+
       - name: Run headless E2E
         run: pnpm run test:e2e
 
