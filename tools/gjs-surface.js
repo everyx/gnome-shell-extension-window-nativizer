@@ -88,6 +88,10 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
     {ns: 'Clutter', member: 'get_default_backend', namespace: true, arity: 0, optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
+    // What compat/grabOp.js dispatches on: 45 and 49-51 both declare four parameters, and this
+    // pair is what tells them apart. The code reads these two, not a version number.
+    {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', arity: 2, optional: true},
+    {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', arity: 1, optional: true},
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
@@ -109,6 +113,9 @@ const SURFACE = [
  */
 const GROUPS = [
     {name: 'a uniform upload path', members: [['Shell', 'GLSLEffect', 'set_uniform_float'], ['Clutter', 'ShaderEffect', 'set_uniform_float']]},
+    // 45-48 reach the pointer through the seat, 49-51 through a sprite. The grab dispatch needs one
+    // of the three, and a shell with none of them could not start a resize at all.
+    {name: 'a pointer source for the grab', members: [['Clutter', 'Backend', 'get_sprite'], ['Clutter', 'Backend', 'get_pointer_sprite'], ['Clutter', 'Backend', 'get_default_seat']]},
 ];
 
 let failed = 0;
