@@ -78,7 +78,7 @@ export default [
             sourceType: 'module',
             globals: {
                 console: 'readonly', global: 'readonly', imports: 'readonly',
-                print: 'readonly', ARGV: 'readonly',
+                print: 'readonly', ARGV: 'readonly', TextDecoder: 'readonly',
             },
         },
         rules: devRules,
