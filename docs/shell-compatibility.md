@@ -1,7 +1,12 @@
 # The Shell / Mutter API surface we depend on
 
-Audited and verified against GNOME Shell and upstream Mutter official release tags from
-**45.0 to 51.0** (spanning 45, 46, 47, 48, 49, 50, and 51). While GNOME 51 aligns the Mutter API
+Audited against the newest patch release of every GNOME line from 45 to 51 - Mutter 45.7, 46.9,
+47.10, 48.8, 49.8, 50.5, 51.0 and GNOME Shell 45.10, 46.10, 47.10, 48.8, 49.10, 50.5, 51.0 -
+with each declaration below extracted from a clone at that tag instead of read by hand. The
+extraction and its result are recorded in `tools/shell-api.json`; `tools/audit-shell-api.mjs`
+re-derives them, and [development.md](development.md) describes when to run it.
+
+While GNOME 51 aligns the Mutter API
 version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs instead of `18`),
 the core compositor and actor pipeline retains long-term architectural stability across 45–51,
 with specific evolutionary watersheds handled via defensive polyfills and graceful degradation.
@@ -25,13 +30,14 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `global.backend.get_monitor_manager()` | 45–51 stable | called through optional chaining |
 | `win.allows_resize()` | 45–51 stable | whether the window offers a resize; gates the resize band |
 | `win.get_monitor()` / `global.display.get_monitor_geometry(i)` | 45–51 stable | the monitor rectangle the band is clipped to |
-| `win.begin_grab_op()` | 45–51 (dual signature) | 49–51 takes 4 args `(op, sprite, time, pos_hint)`; 45–48 takes 5 args `(op, device, sequence, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 5`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch |
+| `win.begin_grab_op()` | 45–51 (three signatures) | 45 takes 4 args `(op, device, sequence, time)`; 46–48 takes 5, adding `pos_hint`; 49–51 takes 4 `(op, sprite, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 5`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch. Arity separates 46–48 from the rest but cannot separate 45 from 49–51, so 45 is not reached |
 | `backend.get_sprite(stage, event)` / `get_pointer_sprite(stage)` | 49–51 | the pointer sprite `begin_grab_op` takes in 49–51; null on 45–48 where grab op takes device/sequence directly. `compat/grabOp.js:getPointerSprite()` tries `get_sprite`, then `get_pointer_sprite` |
 | `Clutter.Actor:set_cursor_type()` | 50–51 (45–49 degraded) | per-actor cursor introduced in Clutter 50; handled transparently by `compat/actorCursor.js:setActorCursor()` which gracefully degrades on 45–49 without breaking resizing |
 | `Clutter.BindConstraint` | 45–51 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
-| `Clutter.Effect:vfunc_paint_target()` / `get_actor()` | 45–51 stable | the hook `RoundedClipEffect` reads the live actor size in; the shell's own `FadeEffect` (`messageList.js`) uses the same pair |
-| `Clutter.Effect:set_enabled()` | 45–51 stable | canonical `clutter_effect_set_enabled` in `clutter/clutter/clutter-effect.c`; toggles the offscreen pass without detaching the effect |
-| `Main.overview` (`visible`, `showing`, `hidden`) | 45–51 stable | canonical Shell overview lifecycle API (`js/ui/overview.js`); gates clip effect suspension during overview to prevent blurry downscaled previews |
+| `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | the hook `RoundedClipEffect` reads the live actor size in; it inherits the slot through `Shell.GLSLEffect` (45–50) or `Clutter.ShaderEffect` (51), both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the same hook |
+| `Clutter.ActorMeta:get_actor()` | 45–51 stable | the actor the effect is attached to; `Clutter.Effect` extends `Clutter.ActorMeta`, which is where the slot lives |
+| `Clutter.ActorMeta:set_enabled()` / `enabled` | 45–51 stable | `clutter_actor_meta_set_enabled()` is a real method and `enabled` its matching property - GJS exposes both, and the prototype confirms it. `clutter-effect.c` points the vfunc `clutter_effect_set_enabled` at the property's setter. Neither belongs to `Clutter.Effect`, which only inherits them; toggles the offscreen pass without detaching the effect |
+| `Main.overview.visible` | 45–51 stable | gates clip effect suspension during overview to prevent blurry downscaled previews |
 | `global.window_group.set_child_above_sibling()` / `set_child_below_sibling()` | 45–51 stable | re-pin the band above, and the shadow below, their window actor on `restacked` (`manager.js:_restackActors`) |
 | `Meta.Cursor` / `global.display.set_cursor()` | **does not exist** | GNOME Shell has no such API; the cursor is actor-level on 50–51 or seat-level |
 
@@ -41,9 +47,9 @@ Audit of the Mutter and Shell C source code trees from 45.0 through 51.0 identif
 
 | Feature / Subsystem | GNOME 45–48 | GNOME 49 | GNOME 50 | GNOME 51 | Extension Strategy |
 |---|---|---|---|---|---|
-| **Shader Effect** | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Clutter.ShaderEffect` (`Shell.GLSLEffect` removed) | Zero-side-effect base class in `src/compat/shaderEffect.js` exposing modern `ShaderEffect` |
+| **Shader Effect** | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Clutter.ShaderEffect` (`Shell.GLSLEffect` removed; `clutter_shader_effect_set_uniform_float` added) | Zero-side-effect base class in `src/compat/shaderEffect.js` exposing modern `ShaderEffect` |
 | **Maximized Check** | `get_maximized()` (`MetaMaximizeFlags`) | `is_maximized()` (`gboolean`) | `is_maximized()` (`gboolean`) | `is_maximized()` (`gboolean`) | Pure function fallback in `detector.isWindowMaximized()` with `(flags & 3) === 3` check |
-| **Grab Operation** | 5 args: `(op, dev, seq, time, pos)` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | Pure helper in `src/compat/grabOp.js:beginWindowGrabOp()` using function arity check |
+| **Grab Operation** | 45: 4 args `(op, dev, seq, time)`; 46–48: 5 args, adding `pos` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | Pure helper in `src/compat/grabOp.js:beginWindowGrabOp()` using function arity check |
 | **Actor Cursor** | Not available | Not available | `set_cursor_type(type)` | `set_cursor_type(type)` | Pure helper in `src/compat/actorCursor.js:setActorCursor()` |
 | **Mutter Typelib** | `Meta-13` .. `Meta-16` | `Meta-17` | `Meta-18` (50) | `Meta-51` (51) | Dynamic ESM import (`import gi://Meta`) automatically binds the host's version |
 
@@ -53,7 +59,7 @@ GNOME Shell 51 migration guide lists additional upstream breaking changes that w
 - **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. Our `extension.js:disable()` is completely synchronous.
 - **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely on GNOME 49–51 by gating legacy device lookup behind `win.begin_grab_op.length === 5`.
 - **`St.ButtonMask` enum renames**: Not used by this extension.
-- **`St.Widget:vertical` property removed**: Not used by this extension.
+- **`St.BoxLayout:vertical` property removed** (deprecated since 48): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
 - **`Gio.DBus.makeProxyWrapper()` returns class needing `new`**: Not used (our IPC uses `Gio.DBusExportedObject` / standard GDBus proxy).
 
 What GJS cannot see at all — the window geometry scale, Mutter's own shadow gates —
