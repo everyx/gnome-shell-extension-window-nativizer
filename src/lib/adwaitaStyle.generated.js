@@ -28,8 +28,13 @@ export const ADWAITA_STYLE = {
             backdropShadows: [{blur: 14, spread: 5, alpha: 0}, {blur: 10, spread: 5, alpha: 0.08}, {blur: 0, spread: 1, alpha: 0.8}],
         },
         tiled: {
+            // Upstream's tiled rule is a 1px spread box-shadow, not a shadow: a solid ring. It is
+            // generated separately because its colour is currentColor - the one theme-dependent
+            // colour in the whole decoration. A baked shadow layer cannot be recoloured, and a
+            // texture for one pixel of colour was all the bake did with it.
             radius: 0,
-            shadows: [{blur: 0, spread: 1, alpha: 0.15}],
+            shadows: [],
+            border: {width: 1, alpha: 0.15},
             animate: false,
         },
         maximized: {radius: 0, shadows: [], animate: false},
