@@ -134,6 +134,15 @@ function propIn(block, prop) {
     return m[1].trim();
 }
 
+/**
+ * A declaration that may be absent, for properties whose absence carries the meaning: which states
+ * animate is read from where `transition` is declared, not assumed.
+ */
+function optionalProp(block, prop) {
+    const m = block.match(new RegExp(`${prop}\\s*:\\s*([^;]+);`));
+    return m ? m[1].trim() : null;
+}
+
 // ---------- Main Flow ----------
 
 const common = read('_common.scss');
@@ -160,6 +169,9 @@ const tiledBlock = extractBlock(csdBlock, '&.tiled,');
 const tiledShadows = parseBoxShadow(propIn(tiledBlock, 'box-shadow'))
     // Filter libadwaita transparent control workaround layer (-- #3670, meaningless in shader)
     .filter(s => !(s.blur === 0 && s.spread >= 10 && (s.alpha === 0 || s.colorVar)));
+
+// 4b. maximized/fullscreen: no shadow, and the CSS says so in both properties
+const maximizedBlock = extractBlock(csdBlock, '&.maximized,');
 
 // 5. High contrast: full shadow set replacement (outline darkened to 80%), backdrop also has HC variant
 const hcBlock = extractBlock(csdBlock, '@media (prefers-contrast: more)');
@@ -198,6 +210,27 @@ const easingName = transitionMatch[2];
 const easing = CSS_EASING[easingName];
 if (!easing)
     throw new Error(`[gen-style] Assertion failed: unknown CSS easing keyword "${easingName}"`);
+
+// 8b. Which states animate is a property of the state, not of the shadow. CSS runs the transition
+//     named by the *after-change* style, so losing focus fades (the `:backdrop` rule declares
+//     box-shadow) while gaining focus snaps (the active rule declares nothing) and maximized
+//     states snap too (`transition: none`). The assertion keeps a future libadwaita rule from
+//     moving that somewhere this file does not model.
+function declaresTransition(block) {
+    // Only the block's own declarations: a state block contains the nested rules extractBlock
+    // descends into, and `&.csd` would otherwise inherit `&:backdrop`'s transition.
+    const decl = optionalProp(block.split('{')[0], 'transition');
+    return decl !== null && !/^none\b/.test(decl);
+}
+const animates = {
+    active: declaresTransition(csdBlock),
+    backdrop: declaresTransition(backdropBlock),
+    tiled: declaresTransition(tiledBlock),
+    maximized: declaresTransition(maximizedBlock),
+};
+const animatingStates = Object.entries(animates).filter(([, animates_]) => animates_).map(([state]) => state);
+if (animatingStates.join(',') !== 'backdrop')
+    throw new Error(`[gen-style] Assertion failed: expected only the backdrop state to declare a transition, got ${animatingStates.join(', ') || 'none'}`);
 
 // 9. Shadow bake padding: the farthest Gaussian reach over every generated layer.
 //    The shader uses `sigma = 0.5 * blur` (GTK4 GSK `_sigma = GSK_GLOBAL_SCALE * 0.5 * blur_radius`)
@@ -267,9 +300,11 @@ export const ADWAITA_STYLE = {
     window: {
         radius: ${radius},
         shadows: [${fmtShadows(shadows)}],
+        animate: ${animates.active},
         backdrop: {
             radius: ${radius},
             shadows: [${fmtShadows(backdropShadows)}],
+            animate: ${animates.backdrop},
         },
         highContrast: {
             shadows: [${fmtShadows(hcShadows)}],
@@ -278,9 +313,10 @@ export const ADWAITA_STYLE = {
         tiled: {
             radius: 0,
             shadows: [{blur: 0, spread: 1, alpha: ${borderOpacity}}],
+            animate: ${animates.tiled},
         },
-        maximized: {radius: 0, shadows: []},
-        fullscreen: {radius: 0, shadows: []},
+        maximized: {radius: 0, shadows: [], animate: ${animates.maximized}},
+        fullscreen: {radius: 0, shadows: [], animate: ${animates.maximized}},
         outline: {
             normal: ${fmtColor(outlineColor)},
             highContrast: ${fmtColor(outlineColorHc)},
