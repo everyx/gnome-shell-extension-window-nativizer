@@ -29,10 +29,17 @@ export default class WindowNativizerExtension extends Extension {
     }
 
     disable() {
-        this._inspector?.destroy();
-        this._inspector = null;
-
-        this._manager?.disable();
-        this._manager = null;
+        // Both references are dropped however teardown ends: `enable()` guards on `_manager`, so a
+        // half-finished disable that threw would turn every later enable into a silent no-op.
+        try {
+            this._inspector?.destroy();
+        } finally {
+            this._inspector = null;
+            try {
+                this._manager?.disable();
+            } finally {
+                this._manager = null;
+            }
+        }
     }
 }

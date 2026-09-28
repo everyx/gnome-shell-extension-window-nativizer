@@ -1155,6 +1155,44 @@ if [[ "$LEAK_HANDLERS" -ne 0 ]]; then
 fi
 echo ">> $LEAK_CYCLES cycles: 0 signal handlers survived disable."
 
+# A window whose actor read throws must not take the teardown with it. Before the guard in
+# Manager.disable(), the exception skipped `_windows.clear()`, the global signal disconnect and the
+# manager drop, so the shell was told the extension was disabled while its Manager stayed wired -
+# and every later enable() hit the idempotency guard and did nothing. The fault goes into the live
+# manager, so this is the real disable() path and not a copy of it.
+echo ">> [test-e2e] Teardown fault injection: a window that throws mid-teardown..."
+FAULT_STATE="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
+    const manager = ext._manager;
+    manager._windows.set(
+        {get_compositor_private() { throw new Error("injected teardown fault"); }},
+        {signals: []});
+    let threw = false;
+    try {
+        ext.disable();
+    } catch {
+        threw = true;
+    }
+    const state = {
+        threw,
+        windows: manager._windows.size,
+        globalSignals: manager._signals.length,
+        settingsHandlers: manager._settingsHandlerIds.length,
+        dropped: ext._manager === null,
+    };
+    ext.enable();
+    state.reEnabled = ext._manager !== null;
+    return JSON.stringify(state);
+})()
+')"
+if ! check_fields "$FAULT_STATE" '{"threw": false, "windows": 0, "globalSignals": 0, "settingsHandlers": 0, "dropped": true, "reEnabled": true}'; then
+    echo "!! Teardown did not survive a throwing window: $FAULT_STATE"
+    exit 1
+fi
+echo ">> Throwing window: teardown completed, nothing left behind, extension re-enabled."
+
 # Many windows over several rounds, Wayland and X11 mixed, with a resize/maximize storm between.
 # A leak that is per-window or per-reconcile only shows once the count exceeds one; the state
 # has to return to empty every round and not grow across rounds.
@@ -1350,6 +1388,14 @@ ibus_teardown = re.compile(
 mutter_x11_frames_a11y = re.compile(
     r"\(mutter-x11-frames:\d+\): Gtk-CRITICAL \*\*: .*Unable to register the application.*org\.a11y\.atspi\.Registry")
 
+# The teardown fault-injection case makes one tracked window throw from `get_compositor_private()`,
+# to prove `disable()` finishes anyway. Catching and logging it is the behaviour under test, so
+# exactly this line is expected - and exactly one of them: the pattern is narrower than the general
+# window-nativizer one, it is matched first, and the count below is asserted. Any other extension
+# error still fails the audit.
+teardown_fault = re.compile(
+    r"window-nativizer\] Failed to tear down a window decoration")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -1359,7 +1405,11 @@ offending = []
 exempted = 0
 exempted_ibus = 0
 exempted_x11frames = 0
+exempted_teardown = 0
 for idx, line in enumerate(lines, start=1):
+    if teardown_fault.search(line):
+        exempted_teardown += 1
+        continue
     # An extension error is checked before the noise bag: a genuine window-nativizer line whose
     # payload happens to contain e.g. "gnome-calculator" or "secrets" must not be swallowed.
     if csd_issue.search(line):
@@ -1387,12 +1437,19 @@ if offending:
     print("----------------------------------------------------------------")
     sys.exit(1)
 
+if exempted_teardown != 1:
+    print("!! [FAIL] Expected exactly 1 line from the injected teardown fault, found "
+          f"{exempted_teardown}: the fault-injection case did not run, or teardown logged more "
+          "than the one line it provokes.")
+    sys.exit(1)
+
 if exempted:
     print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
 if exempted_ibus:
     print(f">> {exempted_ibus} known upstream ibus teardown line(s) exempted (see docs/shell-compatibility.md).")
 if exempted_x11frames:
     print(f">> {exempted_x11frames} known upstream mutter-x11-frames a11y line(s) exempted (see the note above the pattern).")
+print(f">> {exempted_teardown} injected-teardown line exempted (the fault-injection case asserts it).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
@@ -1409,6 +1466,7 @@ echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
 echo "   - Signal-Handler Leak Probe ($LEAK_CYCLES cycles): PASSED (0 handlers survived disable)"
+echo "   - Teardown Fault Injection: PASSED (a throwing window did not abort disable())"
 echo "   - Multi-Window Stress ($STRESS_ROUNDS rounds x $STRESS_WINDOWS windows): PASSED (returned to empty every round)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
