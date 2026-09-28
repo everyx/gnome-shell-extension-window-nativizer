@@ -1107,17 +1107,108 @@ for cycle in 1 2 3 4 5; do
     fi
 done
 kill "$STRESS_PID" 2>/dev/null || true
+# `$!` is the dev.sh wrapper, not the gjs client it spawned; kill the client too, or it outlives
+# this section and the next one counts it as an extra window.
+pkill -f "probe-window[.]js" 2>/dev/null || true
 wait "$STRESS_PID" 2>/dev/null || true
 if [[ "$STRESS_OK" -ne 1 ]]; then
     exit 1
 fi
-# Let the window close before the next section.
-for i in $(seq 1 30); do
+# The window must be gone before the next section.
+count=1
+for i in $(seq 1 40); do
     count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
     [[ "$count" -eq 0 ]] && break
     sleep 0.1
 done
+if [[ "$count" -ne 0 ]]; then
+    echo "!! A probe window survived the reload-stress section ($count actor(s))"
+    exit 1
+fi
 echo ">> 5 disable/enable cycles: no leaked actors, window tracked once each cycle."
+
+# Many windows over several rounds, Wayland and X11 mixed, with a resize/maximize storm between.
+# A leak that is per-window or per-reconcile only shows once the count exceeds one; the state
+# has to return to empty every round and not grow across rounds.
+echo ">> [test-e2e] Stress: windows over rounds, Wayland and X11 mixed..."
+
+read_session_state() {
+    local reply
+    reply="$(shell_eval '
+    (async () => {
+        const Main = await import("resource:///org/gnome/shell/ui/main.js");
+        const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
+        const m = ext?._manager;
+        const kids = global.window_group.get_children();
+        return JSON.stringify({
+            actors: global.get_window_actors().length,
+            tracked: m?._windows?.size ?? -1,
+            bands: kids.filter(c => c.toString().includes("WindowNativizerResizeBand")).length,
+            shadows: kids.filter(c => c.toString().includes("WindowNativizerShadowActor")).length,
+        });
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
+print(json.dumps(json.loads(match.group(0))) if match else '{}')
+PYEOF
+}
+
+STRESS_WINDOWS=6
+STRESS_ROUNDS=3
+AWAIT_TRIES=150   # more windows map and reconcile than one; give the poll room
+for round in $(seq 1 "$STRESS_ROUNDS"); do
+    PIDS=()
+    for i in $(seq 1 "$STRESS_WINDOWS"); do
+        if (( i % 3 == 0 )); then
+            "$DEV" xapp gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+        else
+            "$DEV" app gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+        fi
+        PIDS+=($!)
+    done
+
+    OPEN_STATE="$(await_state read_session_state "
+import json, sys
+d = json.loads(sys.argv[1])
+sys.exit(0 if d.get('actors') == $STRESS_WINDOWS and d.get('tracked') == $STRESS_WINDOWS and d.get('bands') == $STRESS_WINDOWS else 1)
+")" || {
+        echo "!! Round $round: $STRESS_WINDOWS windows did not all map, track and band: $OPEN_STATE"
+        kill "${PIDS[@]}" 2>/dev/null || true
+        pkill -f "probe-window[.]js" 2>/dev/null || true
+        exit 1
+    }
+    echo ">> Round $round open: $OPEN_STATE"
+
+    shell_eval '
+    (() => {
+        for (const a of global.get_window_actors()) {
+            const w = a.meta_window;
+            if (!w.allows_resize?.()) continue;
+            const f = w.get_frame_rect();
+            w.move_resize_frame(false, f.x + 20, f.y + 20, 640, 480);
+            w.maximize();
+            w.unmaximize();
+            w.move_resize_frame(false, f.x - 10, f.y - 10, 700, 520);
+        }
+    })()
+    ' >/dev/null
+
+    for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
+    pkill -f "probe-window[.]js" 2>/dev/null || true
+
+    CLOSED_STATE="$(await_state read_session_state "
+import json, sys
+d = json.loads(sys.argv[1])
+sys.exit(0 if d.get('actors') == 0 and d.get('tracked') == 0 and d.get('bands') == 0 and d.get('shadows') == 0 else 1)
+")" || {
+        echo "!! Round $round: state did not return to empty after close (leak): $CLOSED_STATE"
+        exit 1
+    }
+    echo ">> Round $round closed: $CLOSED_STATE"
+done
+echo ">> $STRESS_ROUNDS rounds x $STRESS_WINDOWS windows: every round returned to empty."
 
 # 9. A D-Bus pick in flight must be answered even when the extension is disabled mid-pick.
 #    The inspector owns the invocation; disable() has to cancel and answer it, or the caller
@@ -1290,6 +1381,7 @@ echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully 
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
+echo "   - Multi-Window Stress ($STRESS_ROUNDS rounds x $STRESS_WINDOWS windows): PASSED (returned to empty every round)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
