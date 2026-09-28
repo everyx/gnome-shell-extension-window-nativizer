@@ -1336,6 +1336,57 @@ fi
 "$DEV" ext enable "$UUID" >/dev/null
 echo ">> A pick in flight was answered (empty result) on disable."
 
+# The picker puts a full-screen reactive overlay on the stage. If it could not be put on screen,
+# that overlay used to stay there swallowing every click, and the invocation was never answered, so
+# every later pick was refused as BUSY. Injected by making `Main.uiGroup.add_child` throw - the one
+# step of the picker's construction that can be forced from outside.
+echo ">> [test-e2e] Pick failure injection: a picker that cannot be put on screen..."
+PATCH_STATE="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    global.__wnRealAddChild = Main.uiGroup.add_child;
+    Main.uiGroup.add_child = function () { throw new Error("injected add_child fault"); };
+    return JSON.stringify({patched: true});
+})()
+')"
+if ! check_fields "$PATCH_STATE" '{"patched": true}'; then
+    echo "!! Could not inject the picker fault: $PATCH_STATE"
+    exit 1
+fi
+
+PICK_FAULT=$(mktemp)
+for attempt in 1 2; do
+    timeout 20 gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" \
+        --object-path "$PICK_PATH" --method "$PICK_IFACE".PickWindow > "$PICK_FAULT" 2>&1 || true
+    if grep -qi 'BUSY\|already in progress' "$PICK_FAULT"; then
+        echo "!! Attempt $attempt was refused as BUSY instead of being answered: $(cat "$PICK_FAULT")"
+        rm -f "$PICK_FAULT"
+        exit 1
+    fi
+done
+rm -f "$PICK_FAULT"
+
+PICK_AFTERMATH="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    Main.uiGroup.add_child = global.__wnRealAddChild;
+    delete global.__wnRealAddChild;
+    const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
+    const leftovers = Main.uiGroup.get_children()
+        .filter(c => String(c.name ?? "").startsWith("WindowNativizerInspector")).length;
+    return JSON.stringify({
+        leftovers,
+        pending: Boolean(ext._inspector?._pendingInvocation),
+        pickable: ext._manager !== null,
+    });
+})()
+')"
+if ! check_fields "$PICK_AFTERMATH" '{"leftovers": 0, "pending": false, "pickable": true}'; then
+    echo "!! A picker that failed to start left state behind: $PICK_AFTERMATH"
+    exit 1
+fi
+echo ">> Failed picker: no overlay left on the stage, invocation answered, next pick not refused."
+
 # 10. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
@@ -1396,6 +1447,11 @@ mutter_x11_frames_a11y = re.compile(
 teardown_fault = re.compile(
     r"window-nativizer\] Failed to tear down a window decoration")
 
+# The picker fault-injection case makes `Main.uiGroup.add_child` throw for two attempts, so exactly
+# two of these are expected, for the same reasons and with the same count assertion.
+picker_fault = re.compile(
+    r"window-nativizer\] Failed to start the window picker")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -1406,9 +1462,13 @@ exempted = 0
 exempted_ibus = 0
 exempted_x11frames = 0
 exempted_teardown = 0
+exempted_picker = 0
 for idx, line in enumerate(lines, start=1):
     if teardown_fault.search(line):
         exempted_teardown += 1
+        continue
+    if picker_fault.search(line):
+        exempted_picker += 1
         continue
     # An extension error is checked before the noise bag: a genuine window-nativizer line whose
     # payload happens to contain e.g. "gnome-calculator" or "secrets" must not be swallowed.
@@ -1437,11 +1497,13 @@ if offending:
     print("----------------------------------------------------------------")
     sys.exit(1)
 
-if exempted_teardown != 1:
-    print("!! [FAIL] Expected exactly 1 line from the injected teardown fault, found "
-          f"{exempted_teardown}: the fault-injection case did not run, or teardown logged more "
-          "than the one line it provokes.")
-    sys.exit(1)
+# Each injected fault is expected to produce its own exact number of lines: a case that did not run,
+# and one that logged more than it provokes, both fail.
+for name, got, want in (("teardown", exempted_teardown, 1), ("picker", exempted_picker, 2)):
+    if got != want:
+        print(f"!! [FAIL] Expected exactly {want} line(s) from the injected {name} fault, found "
+              f"{got}: the fault-injection case did not run, or it logged more than it provokes.")
+        sys.exit(1)
 
 if exempted:
     print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
@@ -1449,7 +1511,7 @@ if exempted_ibus:
     print(f">> {exempted_ibus} known upstream ibus teardown line(s) exempted (see docs/shell-compatibility.md).")
 if exempted_x11frames:
     print(f">> {exempted_x11frames} known upstream mutter-x11-frames a11y line(s) exempted (see the note above the pattern).")
-print(f">> {exempted_teardown} injected-teardown line exempted (the fault-injection case asserts it).")
+print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
@@ -1469,6 +1531,7 @@ echo "   - Signal-Handler Leak Probe ($LEAK_CYCLES cycles): PASSED (0 handlers s
 echo "   - Teardown Fault Injection: PASSED (a throwing window did not abort disable())"
 echo "   - Multi-Window Stress ($STRESS_ROUNDS rounds x $STRESS_WINDOWS windows): PASSED (returned to empty every round)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
+echo "   - Pick Failure Injection: PASSED (no overlay left, answered, not left BUSY)"
 echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "================================================================"

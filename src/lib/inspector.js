@@ -70,7 +70,13 @@ export class InspectorService {
     }
 
     destroy() {
-        this._cancelInteractivePick();
+        // The picker teardown must not be able to skip the D-Bus teardown below: `_cleanupPickUI`
+        // touches actors that may already be gone at shell shutdown.
+        try {
+            this._cancelInteractivePick();
+        } catch (e) {
+            logError(e, '[window-nativizer] Failed to tear down the window picker');
+        }
 
         if (this._ownerId) {
             Gio.DBus.session.unown_name(this._ownerId);
@@ -101,7 +107,14 @@ export class InspectorService {
         }
 
         this._pendingInvocation = invocation;
-        this._startInteractivePick();
+        try {
+            this._startInteractivePick();
+        } catch (e) {
+            // The picker could not be put on screen: tear down whatever it did build and answer,
+            // or the invocation stays pending and every later pick is refused as BUSY.
+            logError(e, '[window-nativizer] Failed to start the window picker');
+            this._cancelInteractivePick();
+        }
     }
 
     _findTargetWindow(stageX, stageY) {
@@ -160,6 +173,10 @@ export class InspectorService {
     }
 
     _startInteractivePick() {
+        // Both widgets are built before either is added, and both references are published before
+        // the first `add_child`: the overlay is full-screen and reactive, so a throw between the two
+        // would leave it swallowing every click until the shell restarted, out of reach of
+        // `_cleanupPickUI()`.
         this._overlay = new St.Widget({
             name: 'WindowNativizerInspectorOverlay',
             reactive: true,
@@ -168,7 +185,6 @@ export class InspectorService {
             width: global.stage.width,
             height: global.stage.height,
         });
-        Main.uiGroup.add_child(this._overlay);
 
         // The accent colour is the `-st-accent-color` CSS term, not a literal:
         // St resolves it from St.Settings:accent-color and re-resolves every mapped
@@ -180,6 +196,8 @@ export class InspectorService {
             style: highlightStyle(0),
             visible: false,
         });
+
+        Main.uiGroup.add_child(this._overlay);
         Main.uiGroup.add_child(this._highlight);
 
         this._overlay.connect('motion-event', (_actor, event) => {
@@ -329,10 +347,18 @@ export class InspectorService {
         }
 
         this._currentRadius = null;
-        this._highlight?.destroy();
+        try {
+            this._highlight?.destroy();
+        } catch {
+            // Already destroyed.
+        }
         this._highlight = null;
 
-        this._overlay?.destroy();
+        try {
+            this._overlay?.destroy();
+        } catch {
+            // Already destroyed.
+        }
         this._overlay = null;
     }
 }
