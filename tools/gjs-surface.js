@@ -1,40 +1,49 @@
 #!/usr/bin/env gjs -m
 /**
  * gjs-surface.js - Asserts that the Shell / Mutter / Clutter members this extension calls are
- * actually callable from GJS on the shell it is running against, with the shape the code assumes.
+ * actually callable from GJS on the shell it is running against, with the shape the code assumes,
+ * and prints the signature of every one of them.
  *
  * Design: tools/audit-shell-api.mjs reads public headers, which proves a declaration exists but
  * not that GJS can reach it. Three things live in that gap and all three have bitten us:
  *
  *   - Out-arguments are not visible in C. meta_window_get_buffer_rect takes two parameters and
- *     no annotation; GJS calls it with none and gets a rectangle back. Anything inferring a JS
- *     signature from a header would get this wrong, so the arity is asserted here instead.
+ *     carries no annotation; GJS calls it with none and gets a rectangle back.
  *   - Properties and methods are not the same thing. GJS installs a get/set accessor pair for
- *     every GObject property, and separately exposes the C accessors as methods when the header
+ *     every GObject property and separately exposes the C accessors as methods when the header
  *     declares them - Clutter.ActorMeta has both an `enabled` property and a set_enabled method.
- *     A header read cannot tell you which of the two a call resolves to.
  *   - (skip) annotations and private headers leave a symbol declared but unreachable. Meta.Display
  *     declares no get_default_seat in any of 45-51, and the prototype agrees: undefined.
+ *
+ * The assertion boundary is the boundary of what the code assumes. Existence is asserted for
+ * everything the extension calls, because it is the cheapest check with the widest reach; arity
+ * and parameter names are asserted only where the code depends on them - a parameter that changed
+ * from `device` to `sprite` keeps its arity, and arity is exactly what the grab-op dispatch reads.
+ * Everything else is printed, not asserted: an assertion needs a hand-written expectation, and a
+ * hand-written expectation is what this whole audit exists to stop trusting.
+ *
+ * The GJS wrapper's source text is where the parameter names come from. That is an implementation
+ * detail of GJS, which is why it lives in a test rather than in the extension.
  *
  * Namespaces are imported dynamically because St only loads inside the shell: outside it the
  * typelib's libst is not on the loader path, and a static import would take the whole script down
  * with it. A namespace that cannot load is reported and skipped, not failed.
  *
- * No display is needed, because this reads prototypes rather than instances.
- * tools/test-e2e.sh runs it inside the nested session, so the shell under test is the shell probed.
- *
  * Usage: gjs -m tools/gjs-surface.js [--verbose]
  */
 
+import GLib from 'gi://GLib';
 import System from 'system';
 
 const VERBOSE = ARGV.includes('--verbose');
+const SCRIPT = GLib.filename_from_uri(import.meta.url)[0];
+const ROOT = GLib.path_get_dirname(GLib.path_get_dirname(SCRIPT));
+const RECORD = GLib.build_filenamev([ROOT, 'tools', 'shell-api.json']);
 
 /**
- * Every member the extension calls, with what the code assumes about it. `arity` is the number of
- * arguments GJS must accept, which is not the number the C prototype has whenever the function
- * takes an out-argument. `arity: null` means the code dispatches on the shape rather than
- * assuming one, so any value is accepted as long as the member exists.
+ * Every member the extension calls. `params` is the parameter list the call site assumes, checked
+ * against the GJS wrapper; `arity` is the count, for members whose shape the code reads but whose
+ * parameter names carry no meaning to it. `optional` means the code degrades when it is missing.
  */
 const SURFACE = [
     // Meta.Window - methods
@@ -49,12 +58,12 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'get_buffer_rect', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'allows_resize', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_monitor', arity: 0},
-    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op', arity: null},
+    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op', params: ['op', 'sprite', 'timestamp', 'pos_hint']},
     {ns: 'Meta', cls: 'Window', member: 'get_compositor_private', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_hidden', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_attached_dialog', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_transient_for', arity: 0},
-    {ns: 'Meta', cls: 'Window', member: 'located_on_workspace', arity: 1},
+    {ns: 'Meta', cls: 'Window', member: 'located_on_workspace', params: ['workspace']},
     {ns: 'Meta', cls: 'Window', member: 'is_on_all_workspaces', arity: 0},
     // Meta.Window - properties we read
     {ns: 'Meta', cls: 'Window', member: 'decorated', property: true},
@@ -62,36 +71,59 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'maximized_horizontally', property: true},
     {ns: 'Meta', cls: 'Window', member: 'minimized', property: true},
     // Meta.Display and Meta.Backend
-    {ns: 'Meta', cls: 'Display', member: 'get_monitor_geometry', arity: 1},
-    {ns: 'Meta', cls: 'Display', member: 'get_monitor_scale', arity: 1},
+    {ns: 'Meta', cls: 'Display', member: 'get_monitor_geometry', params: ['monitor']},
+    {ns: 'Meta', cls: 'Display', member: 'get_monitor_scale', params: ['monitor']},
     {ns: 'Meta', cls: 'Display', member: 'get_n_monitors', arity: 0},
-    {ns: 'Meta', cls: 'Display', member: 'get_tab_list', arity: 2},
+    {ns: 'Meta', cls: 'Display', member: 'get_tab_list', params: ['type', 'workspace']},
     {ns: 'Meta', cls: 'Backend', member: 'get_monitor_manager', arity: 0},
     // Clutter
-    {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', arity: 1, optional: true},
-    {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', arity: 2},
-    {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', arity: 2},
+    {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', params: ['cursor_type'], optional: true},
+    {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', params: ['child', 'sibling']},
+    {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
-    {ns: 'Clutter', cls: 'ActorMeta', member: 'set_enabled', arity: 1},
+    {ns: 'Clutter', cls: 'ActorMeta', member: 'set_enabled', params: ['is_enabled']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'enabled', property: true},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
+    {ns: 'Clutter', cls: 'BindConstraint', class: true},
+    {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
+    {ns: 'Clutter', member: 'get_default_backend', namespace: true, arity: 0, optional: true},
+    {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
+    // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
+    {ns: 'Cogl', cls: 'Pipeline', class: true},
+    {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
     // gnome-shell, only reachable from inside the shell
+    {ns: 'Shell', cls: 'GLSLEffect', class: true, optional: true},
+    // The C prototype has five parameters; GJS shows three, because g-ir-scanner folds the
+    // array-length parameter into the array. Same class of surprise as get_buffer_rect's out-arg.
+    {ns: 'Shell', cls: 'GLSLEffect', member: 'set_uniform_float', params: ['uniform', 'n_components', 'value'], optional: true},
+    {ns: 'Shell', cls: 'WindowTracker', member: 'get_default', static: true, arity: 0},
     {ns: 'St', cls: 'Settings', member: 'get', static: true, arity: 0},
+    {ns: 'St', cls: 'BoxLayout', class: true},
+];
+
+/**
+ * Pairs of members that are mutually exclusive across supported lines, where the shell has to
+ * offer at least one. The shader base class moved from Shell to Clutter in 51, so exactly one of
+ * these carries the uniform upload - and the absence of both would be a break nothing else here
+ * would notice.
+ */
+const GROUPS = [
+    {name: 'a uniform upload path', members: [['Shell', 'GLSLEffect', 'set_uniform_float'], ['Clutter', 'ShaderEffect', 'set_uniform_float']]},
 ];
 
 let failed = 0;
 let checked = 0;
 let skipped = 0;
 
-function report(ok, what, detail) {
-    checked++;
-    if (ok) {
-        if (VERBOSE)
-            print(`  ok    ${what}${detail ? ` - ${detail}` : ''}`);
-        return;
-    }
+function fail(what, detail) {
     failed++;
     print(`  FAIL  ${what} - ${detail}`);
+}
+
+function report(what, detail) {
+    checked++;
+    if (VERBOSE)
+        print(`  ok    ${what}${detail ? ` - ${detail}` : ''}`);
 }
 
 /** GJS installs a get/set accessor pair on the prototype for every GObject property. */
@@ -102,6 +134,14 @@ function hasAccessor(proto, name) {
             return typeof d.get === 'function' && typeof d.set === 'function';
     }
     return false;
+}
+
+/** The parameter list GJS shows for a wrapper, or null when it cannot be read. */
+function parameterNames(fn) {
+    const m = /^[^(]*\(([^)]*)\)/.exec(String(fn));
+    if (!m)
+        return null;
+    return m[1].trim() === '' ? [] : m[1].split(',').map(s => s.trim());
 }
 
 async function loadNamespace(name) {
@@ -124,18 +164,31 @@ for (const name of new Set(SURFACE.map(e => e.ns)))
 // nothing from it has been checked yet, because a throw after that would be a real anomaly.
 const retired = new Set();
 
-for (const entry of SURFACE) {
-    const what = `${entry.ns}.${entry.cls}${entry.static ? '' : '.prototype'}.${entry.member}`;
+function resolve(entry) {
     const ns = namespaces.get(entry.ns);
-    if (!ns) {
-        skipped++;
-        if (VERBOSE)
-            print(`  skip  ${what} - ${entry.ns} does not load outside the shell`);
-        continue;
-    }
-    let ctor;
+    if (!ns)
+        return null;
+    return entry.cls ? ns[entry.cls] : ns;
+}
+
+/** How a member is spelled in a report line. */
+function label(entry) {
+    if (entry.class)
+        return `${entry.ns}.${entry.cls}`;
+    if (entry.namespace)
+        return `${entry.ns}.${entry.member}`;
+    if (entry.static)
+        return `${entry.ns}.${entry.cls}.${entry.member}`;
+    return `${entry.ns}.${entry.cls}.prototype.${entry.member}`;
+}
+
+for (const entry of SURFACE) {
+    const what = label(entry);
+    let ns;
+    let target;
     try {
-        ctor = ns[entry.cls];
+        ns = namespaces.get(entry.ns);
+        target = entry.namespace ? ns : resolve(entry);
     } catch (e) {
         if (retired.has(entry.ns)) {
             skipped++;
@@ -147,37 +200,130 @@ for (const entry of SURFACE) {
             print(`  skip  ${what} - ${entry.ns} is not usable here: ${e.message}`);
         continue;
     }
-    if (!ctor) {
-        report(false, what, `${entry.ns}.${entry.cls} does not exist`);
+    if (!ns) {
+        skipped++;
+        if (VERBOSE)
+            print(`  skip  ${what} - ${entry.ns} does not load outside the shell`);
         continue;
     }
-    const target = entry.static ? ctor : ctor.prototype;
-    const value = target[entry.member];
+    if (entry.class) {
+        if (typeof target !== 'function') {
+            if (entry.optional)
+                report(what, 'absent, and the code degrades without it');
+            else
+                fail(what, `the class is missing (typeof ${typeof target})`);
+            continue;
+        }
+        report(what, 'class');
+        continue;
+    }
+    if (!target) {
+        fail(what, `${entry.ns}.${entry.cls} does not exist`);
+        continue;
+    }
+    const holder = entry.static || entry.namespace ? target : target.prototype;
+    const value = holder[entry.member];
     if (entry.vfunc) {
         // A vfunc becomes a prototype slot only once a JS subclass overrides it; what can be
         // asserted here is that the hook is reachable through the class at all.
-        report(true, what, 'vfunc slot');
+        report(what, 'vfunc slot');
         continue;
     }
     if (entry.property) {
-        report(hasAccessor(target, entry.member), what,
-            hasAccessor(target, entry.member) ? 'property accessor' : 'no get/set accessor on the prototype');
-        continue;
-    }
-    if (entry.optional && value === undefined) {
-        // Not available on every supported line, and the code degrades without it.
-        report(true, what, 'absent, and the code degrades without it');
+        if (hasAccessor(holder, entry.member))
+            report(what, 'property accessor');
+        else
+            fail(what, 'no get/set accessor on the prototype');
         continue;
     }
     if (typeof value !== 'function') {
-        report(false, what, `not callable (typeof ${typeof value})`);
+        if (entry.optional) {
+            report(what, 'absent, and the code degrades without it');
+            continue;
+        }
+        fail(what, `not callable (typeof ${typeof value})`);
         continue;
     }
-    if (entry.arity !== null && value.length !== entry.arity) {
-        report(false, what, `GJS accepts ${value.length} arguments, the code assumes ${entry.arity}`);
+    const names = parameterNames(value);
+    const signature = names === null ? 'signature unreadable' : `(${names.join(', ')})`;
+    print(`  ${what}${signature}`);
+    if (entry.params) {
+        if (names === null) {
+            fail(what, 'the wrapper source could not be read for its parameter names');
+            continue;
+        }
+        if (names.join(',') !== entry.params.join(',')) {
+            fail(what, `GJS shows (${names.join(', ')}), the code assumes (${entry.params.join(', ')})`);
+            continue;
+        }
+        report(what, `params ${signature}`);
         continue;
     }
-    report(true, what, `arity ${value.length}`);
+    if (Array.isArray(entry.arity)) {
+        if (value.length < entry.arity[0] || value.length > entry.arity[1]) {
+            fail(what, `GJS accepts ${value.length} arguments, the code probes for ${entry.arity.join(' or ')}`);
+            continue;
+        }
+        report(what, `arity ${value.length}`);
+        continue;
+    }
+    if (entry.arity !== undefined && value.length !== entry.arity) {
+        fail(what, `GJS accepts ${value.length} arguments, the code assumes ${entry.arity}`);
+        continue;
+    }
+    report(what, `arity ${value.length}`);
+}
+
+for (const group of GROUPS) {
+    const present = group.members.filter(([ns, cls, member]) => {
+        const namespace = namespaces.get(ns);
+        return typeof namespace?.[cls]?.prototype?.[member] === 'function';
+    });
+    if (present.length === 0)
+        fail(group.name, `none of ${group.members.map(m => m.join('.')).join(' / ')} is callable`);
+    else
+        report(group.name, present.map(m => m.join('.')).join(' / '));
+}
+
+// The typelibs are found by version-numbered directory, and a GNOME line whose typelibs we never
+// audited is worth naming - the shape assertions above would only catch it if the shape moved.
+function typelibApiVersion() {
+    const dirs = (GLib.getenv('GI_TYPELIB_PATH') ?? '').split(':');
+    for (const dir of dirs) {
+        const m = /mutter-(\d+)$/.exec(dir.replace(/\/+$/, ''));
+        if (m)
+            return m[1];
+    }
+    return null;
+}
+
+function auditedApiVersions() {
+    try {
+        const [ok, bytes] = GLib.file_get_contents(RECORD);
+        if (!ok)
+            return null;
+        const record = JSON.parse(new TextDecoder().decode(bytes));
+        const entry = record.surface.find(e => e.id === 'mutter_api_version');
+        if (!entry)
+            return null;
+        return new Set(Object.values(entry.decl)
+            .filter(Boolean)
+            .map(d => /'(\d+)'/.exec(d)?.[1])
+            .filter(Boolean));
+    } catch {
+        return null;
+    }
+}
+
+const apiVersion = typelibApiVersion();
+const audited = auditedApiVersions();
+if (apiVersion === null) {
+    if (VERBOSE)
+        print('  note  the typelib api version is not discoverable here (GI_TYPELIB_PATH is unset)');
+} else if (audited && !audited.has(apiVersion)) {
+    fail('typelib api version', `Meta-${apiVersion} is not one of the audited versions (${[...audited].join(', ')})`);
+} else {
+    report('typelib api version', `Meta-${apiVersion}`);
 }
 
 print(`gjs-surface: ${checked} members checked, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);

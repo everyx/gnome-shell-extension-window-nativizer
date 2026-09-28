@@ -51,7 +51,7 @@ GJS_SURFACE_OUT="$(LD_LIBRARY_PATH="$GJS_LIB_DIRS${LD_LIBRARY_PATH:+:$LD_LIBRARY
     echo "!! A member this extension calls is not callable on this shell."
     exit 1
 }
-echo "$GJS_SURFACE_OUT" | tail -1
+echo "$GJS_SURFACE_OUT"
 
 get_dbus_bus() {
     local pid
@@ -88,6 +88,19 @@ if wrong:
     sys.exit(f"expected {expected}, got {wrong} (reply: {data})")
 PYEOF
 }
+
+# The shell's own JS modules cannot be reached from outside it, so the members the extension
+# takes from them are asserted from inside, over the nested session's D-Bus.
+echo ">> [test-e2e] Verifying the shell-module surface (Main.*)..."
+# Shell.Eval runs the string as a module, so the shell's JS modules are reached by resource URL
+# (the same way tools/leak-probe.js reaches Main), and the completion value is awaited.
+MAIN_PROBE="(async () => { const M = await import('resource:///org/gnome/shell/ui/main.js'); const Main = M.default ?? M; return JSON.stringify({overview: typeof Main.overview?.visible, uiGroup: typeof Main.uiGroup?.add_child}); })()"
+MAIN_STATE="$(shell_eval "$MAIN_PROBE")"
+if ! check_fields "$MAIN_STATE" '{"overview": "boolean", "uiGroup": "function"}'; then
+    echo "!! Main.overview.visible and Main.uiGroup are not what the extension assumes: $MAIN_STATE"
+    exit 1
+fi
+echo ">> Main.overview.visible is a boolean and Main.uiGroup.add_child is a function."
 
 # Poll a reader command until its JSON output satisfies `predicate` (python -c; the state is
 # argv[1], extra args follow), or give up after ~6s. Replaces a fixed settle sleep: a slow
@@ -1591,7 +1604,8 @@ print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
-echo "   - GJS Surface: PASSED (every member we call is callable, with the shape the code assumes)"
+echo "   - GJS Surface: PASSED (every member we call is callable, with the shape the code assumes; signatures above)"
+echo "   - Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"
 echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
