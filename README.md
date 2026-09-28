@@ -34,13 +34,13 @@ Non-native apps often feel out of place on a modern GNOME desktop. Window Nativi
 
 ### 🖱️ Effortless Drag-to-Resize Ergonomics
 Visual rounding is only half the story — non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
-- **Zero-Pixel Hunt**: Expands elusive 0~1px borders into an invisible, comfortable grab area aligned with GTK's native input region
-- **Smooth Corner Reach**: Faithfully transcribes GTK's coordinate heuristics, ensuring diagonal corner resizing doesn't slip
+- **No pixel hunting**: Expands 0~1px borders into a comfortable invisible grab area aligned with GTK's native input region
+- **Smooth Corner Reach**: Follows GTK's corner coordinate heuristics, so diagonal resizing doesn't slip
 - **Native Mutter Grab-Ops**: Triggers compositor-level resize grabs and dynamic 8-way directional cursors without lag
 - **Non-Intrusive**: Only covers the outer perimeter — never intercepts client titlebar drags, window buttons, or tab clicks
 
 ### ⚡ Smooth GPU Shaders
-- **Pre-baked GPU shadow meshes**: Zero CSS re-layout overhead at runtime
+- **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
 - **Direct pipeline hook**: Corners stay locked to the window during live resize without lag
 - **Seamless close transitions**: Shadow pipeline opacity continuously modulates with GNOME Shell's exit animation, eliminating jarring shadow popping
 - **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
@@ -53,8 +53,8 @@ Visual rounding is only half the story — non-native windows often have paper-t
 
 ### 🔍 Crisp Text Protection
 Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
-- **Prioritize crisp text**: An optional toggle that bypasses corner clipping on scaled displays to keep text razor-sharp
-- **Tracking upstream Mutter**: Preparing for zero-compromise direct rendering once upstream Mutter [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) lands
+- **Prioritize crisp text**: An optional toggle that bypasses corner clipping on scaled displays to keep text sharp
+- **Tracking upstream Mutter**: Preparing for direct rendering that keeps both the corners and the sharp text, once upstream Mutter [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) lands
 
 ---
 
@@ -65,7 +65,7 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 | **Primary Goal** | Desktop theming & custom aesthetics | GNOME / Adwaita native consistency |
 | **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates non-native windows only; leaves native apps untouched |
 | **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Authentic curvature matching official Libadwaita |
-| **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Expands outer perimeter with GTK-standard grab margins and 8-way directional cursors |
+| **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Adds GTK-standard grab margins outside the window, with 8-way directional cursors |
 | **Shadow Pipeline** | St.Bin CSS layout tree | GPU-baked texture mesh |
 
 ---
