@@ -1,16 +1,19 @@
 /**
  * Pure helper for compositor window resize grab operations.
  *
- * In GNOME 49–51+, win.begin_grab_op takes 4 arguments: (op, sprite, time, pos_hint).
- * In GNOME 45–48, it takes 5 arguments: (op, device, sequence, time, pos_hint).
- * This module transparently invokes the modern 4-arg signature with zero global prototype mutation.
+ * win.begin_grab_op has three shapes upstream, not two: 45 takes 4 arguments
+ * (op, device, sequence, time); 46–48 takes 5, adding pos_hint; 49–51 takes 4
+ * (op, sprite, time, pos_hint). Arity separates 46–48 from the rest, so 45 cannot be told
+ * apart from 49–51 and is not reached. This module dispatches on that arity with zero global
+ * prototype mutation.
  */
 
 function getPointerDevice() {
     const display = globalThis.global?.display;
-    // On GNOME 45–48, display.get_default_seat() provides the pointer device.
-    // Clutter.get_default_backend() is a secondary fallback for headless/legacy 45–48
-    // environments (dropped in GNOME 51, safely optional-chained and only reached on 45–48).
+    // Clutter.get_default_backend().get_default_seat() is what actually resolves the pointer
+    // device on 45–48: Meta.Display declares no get_default_seat in any of 45–51, so the first
+    // branch is dead today and is kept only in case a future Mutter adds it.
+    // get_default_backend is dropped in GNOME 51, and the whole path is only reached on 45–48.
     const seat = display?.get_default_seat?.() ?? globalThis?.Clutter?.get_default_backend?.()?.get_default_seat?.();
     return seat?.get_pointer?.() ?? null;
 }
