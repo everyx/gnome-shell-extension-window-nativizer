@@ -11,6 +11,16 @@ UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 
 deploy_ext() {
+    # Refuse to touch the install directory unless the uuid is known: the rm -rf below on an empty
+    # uuid would take every other extension with it.
+    if [[ -z "$UUID" ]]; then
+        echo "!! deploy: could not read the uuid from $SRC_DIR/metadata.json" >&2
+        return 1
+    fi
+    # Replace, do not merge. A renamed or deleted source file would otherwise survive here, and a
+    # stale schemas/*.xml is not inert: glib-compile-schemas compiles every xml in the directory,
+    # so the shell would register a schema the sources no longer have.
+    rm -rf "$EXT_DIR"
     mkdir -p "$EXT_DIR"
     cp "$SRC_DIR/metadata.json" "$SRC_DIR/extension.js" "$EXT_DIR/"
     [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
