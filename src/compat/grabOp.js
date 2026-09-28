@@ -1,40 +1,60 @@
 /**
  * Pure helper for compositor window resize grab operations.
  *
- * win.begin_grab_op has three shapes upstream, not two: 45 takes 4 arguments
- * (op, device, sequence, time); 46–48 takes 5, adding pos_hint; 49–51 takes 4
- * (op, sprite, time, pos_hint). Arity separates 46–48 from the rest, so 45 cannot be told
- * apart from 49–51 and is not reached. This module dispatches on that arity with zero global
- * prototype mutation.
+ * win.begin_grab_op has three shapes upstream, not two: 45 takes four arguments
+ * (op, device, sequence, time); 46-48 takes five, adding pos_hint; 49-51 takes four again
+ * (op, sprite, time, pos_hint). Arity separates 46-48 from the other two but cannot separate 45
+ * from 49-51 - both report four - so the dispatch asks a second question: whether the backend can
+ * hand out a pointer sprite at all. Clutter.Backend gained get_sprite/get_pointer_sprite in 49, the
+ * same release the grab started taking one, which is what tells 45 apart from 49-51.
+ *
+ * Everything here is a pure function over globals the shell provides, with zero global prototype
+ * mutation, which is what lets the unit tests cover all three signatures on one machine.
  */
+
+/** The compositor backend, resolved the same way for the sprite and the seat. */
+function resolveBackend() {
+    const stage = globalThis.global?.stage;
+    return stage?.get_context?.()?.get_backend?.() ?? globalThis.global?.backend;
+}
+
+/**
+ * Whether this shell's backend can produce a pointer sprite. GNOME 49 added
+ * Clutter.Backend.get_sprite and get_pointer_sprite, and the grab operation started taking a sprite
+ * in the same release.
+ */
+function backendHasSpriteApi() {
+    const backend = resolveBackend();
+    return typeof backend?.get_sprite === 'function' || typeof backend?.get_pointer_sprite === 'function';
+}
 
 function getPointerDevice() {
     const display = globalThis.global?.display;
     // Clutter.get_default_backend().get_default_seat() is what actually resolves the pointer
-    // device on 45–48: Meta.Display declares no get_default_seat in any of 45–51, so the first
+    // device on 45-48: Meta.Display declares no get_default_seat in any of 45-51, so the first
     // branch is dead today and is kept only in case a future Mutter adds it.
-    // get_default_backend is dropped in GNOME 51, and the whole path is only reached on 45–48.
+    // get_default_backend is dropped in GNOME 51, and the whole path is only reached on 45-48.
     const seat = display?.get_default_seat?.() ?? globalThis?.Clutter?.get_default_backend?.()?.get_default_seat?.();
     return seat?.get_pointer?.() ?? null;
 }
 
 /**
- * Resolves the compositor pointer sprite for an event across GNOME 45–51.
+ * Resolves the compositor pointer sprite for an event across GNOME 45-51.
  * @param {object|null} event - Clutter.Event
  * @returns {object|null} Pointer sprite or null
  */
 export function getPointerSprite(event) {
     const stage = globalThis.global?.stage;
-    const backend = stage?.get_context?.()?.get_backend?.() ?? globalThis.global?.backend;
+    const backend = resolveBackend();
     return backend?.get_sprite?.(stage, event) ??
         backend?.get_pointer_sprite?.(stage) ?? null;
 }
 
 /**
- * Initiates a window resize grab operation across GNOME 45–51.
+ * Initiates a window resize grab operation across GNOME 45-51.
  * @param {object} win - Meta.Window instance
  * @param {number} op - Meta.GrabOp
- * @param {object|null} sprite - Pointer sprite (nullable on 45–48, required on 49+)
+ * @param {object|null} sprite - Pointer sprite (null on 45-48, required on 49+)
  * @param {number} time - Event timestamp
  * @param {object} posHint - Graphene.Point or coordinate object
  * @returns {boolean} True if the grab operation was dispatched
@@ -43,20 +63,23 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (!win?.begin_grab_op)
         return false;
 
-    // GNOME 45–48: legacy 5-argument signature (op, device, sequence, time, pos_hint).
-    // Mutter typelibs on 45–48 declare 5 parameters. We polyfill device and sequence.
-    if (win.begin_grab_op.length === 5) {
-        const device = getPointerDevice();
-        win.begin_grab_op(op, device, null, time, posHint);
+    // GNOME 49-51: the grab takes a sprite, and only a backend with the sprite API can produce
+    // one. Without a sprite there is nothing to hand it, so no grab is started.
+    if (backendHasSpriteApi()) {
+        if (!sprite)
+            return false;
+        win.begin_grab_op(op, sprite, time, posHint);
         return true;
     }
 
-    // GNOME 49–51+: modern 4-argument signature (op, sprite, time, pos_hint).
-    // Mutter requires a valid pointer sprite on 49+.
-    if (!sprite)
+    // GNOME 45-48: the grab takes a device and a sequence. 46 added pos_hint, which is the only
+    // thing arity separates here - 45 reports four parameters exactly like 49-51 do.
+    const device = getPointerDevice();
+    if (!device)
         return false;
-
-    win.begin_grab_op(op, sprite, time, posHint);
+    if (win.begin_grab_op.length === 5)
+        win.begin_grab_op(op, device, null, time, posHint);
+    else
+        win.begin_grab_op(op, device, null, time);
     return true;
 }
-
