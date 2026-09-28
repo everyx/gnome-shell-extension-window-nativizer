@@ -42,21 +42,10 @@ function axisName(axis) {
     return (AXIS_NAMES.get(axis) ?? (() => axis))();
 }
 
-// An axis row is the correction itself: the switch inverts that axis's automatic
-// decision. A rule exists to say "this judgement is wrong for this kind", so the row
-// names the correction rather than the axis - "Correct corners", not "Corners".
-const AXIS_CORRECTIONS = new Map([
-    // Translators: A rule axis row: invert the automatic decision about the window's corners.
-    [RuleAxis.CORNERS, () => _('Correct corners')],
-    // Translators: A rule axis row: invert the automatic decision about the window shadow.
-    [RuleAxis.SHADOW, () => _('Correct shadow')],
-    // Translators: A rule axis row: invert the automatic decision about the resize band.
-    [RuleAxis.RESIZE, () => _('Correct resize')],
-]);
-
-function axisCorrectionName(axis) {
-    return (AXIS_CORRECTIONS.get(axis) ?? (() => axis))();
-}
+// An axis row is titled with the axis itself - the same word the unavailable row above it uses for
+// the same axis. Naming the correction as well ("Correct corners") made the two rows read as two
+// different things, and "Correct" is ambiguous in English besides. What turning the switch on means
+// is on the switch; see `_buildAxisSwitch`.
 
 /**
  * @param {string} axis
@@ -156,7 +145,7 @@ function windowKindSentence(properties) {
         return '';
 
     const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
-    // Translators: %s is the client type and the window type, e.g. "Wayland window".
+    // Translators: %s is the client type and the window type, e.g. "Wayland window". If your
     const entity = _('%s %s').format(server, windowTypeNoun(properties.window_type));
 
     // Translators: The window has no parent window.
@@ -366,11 +355,17 @@ function _populateAxisIcons(box, correctedAxes, caps, iconTheme) {
 // The platform's own switch: an axis is binary (follow the decision, or correct it),
 // and the row's title names the correction, so its state is unambiguous.
 function _buildAxisSwitch(axis, corrected, onChange) {
+    const name = axisName(axis);
+    // Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
+    const hint = _('Turn on to correct the automatic decision for this window kind');
     const switchRow = new Adw.SwitchRow({
-        title: asMarkup(axisCorrectionName(axis)),
+        title: asMarkup(name),
+        tooltip_text: hint,
         active: corrected.has(axis),
     });
-    switchRow.update_property([Gtk.AccessibleProperty.LABEL], [axisCorrectionName(axis)]);
+    switchRow.update_property([Gtk.AccessibleProperty.LABEL], [name]);
+    // The same text, for assistive technology.
+    switchRow.update_property([Gtk.AccessibleProperty.DESCRIPTION], [hint]);
     switchRow.connect('notify::active', () => onChange(axis, switchRow.active));
     return switchRow;
 }
@@ -615,7 +610,7 @@ function _setupCorrectionsGroup(page, ctx) {
     // and on the description - so they are escaped exactly like the rows are.
     const rulesGroup = new Adw.PreferencesGroup({
         title: asMarkup(_('Corrections')),
-        description: asMarkup(_('Corrections apply per window kind; anything not listed follows the automatic decision')),
+        description: asMarkup(_('Corrections apply per window kind; a switch corrects the automatic decision for one axis')),
         header_suffix: pickButton,
     });
     page.add(rulesGroup);

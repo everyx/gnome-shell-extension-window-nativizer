@@ -88,7 +88,9 @@ has to be re-checked every time the heuristic moves; contradicting it is what a 
 already means. Only the disagreement carries information, it stays meaningful when the
 decision changes underneath, and the user can express it without first working out what
 the decision was. The preferences window calls this *correcting a misjudgement*: an axis
-row reads "Correct X", and its switch inverts that axis's decision.
+row is titled with its axis - the same word the row above it uses when that axis is
+unavailable - and its switch inverts that axis's decision. The switch's tooltip is what
+says so; the title only names the axis.
 
 A rule reverses only what it names. `corners` leaves the shadow to the decision, which
 still takes it over when the corners it rounds were painted over the client's ring.
