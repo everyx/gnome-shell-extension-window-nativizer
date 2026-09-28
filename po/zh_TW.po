@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 11:12+0800\n"
-"PO-Revision-Date: 2026-09-08 22:50+0800\n"
+"POT-Creation-Date: 2026-09-28 13:15+0800\n"
+"PO-Revision-Date: 2026-09-28 13:17+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
 "Language: zh_TW\n"
@@ -53,18 +53,18 @@ msgid "%s: corrected"
 msgstr "%s：已修正"
 
 #: src/prefs.js:96
-msgid "Windows of this type are never decorated"
+msgid "Windows of this kind are never decorated"
 msgstr "此類視窗不做裝飾"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/prefs.js:112
-msgid "The window frame already handles resizing"
-msgstr "視窗邊框已負責縮放"
+msgid "The window frame can already be resized"
+msgstr "視窗邊框本身已可調整大小"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/prefs.js:115
-msgid "No resize handle on fixed-size windows"
-msgstr "無法調整大小的視窗沒有可設定的抓手"
+msgid "Fixed-size windows have no resize handle"
+msgstr "固定大小的視窗沒有可調整大小的邊緣"
 
 #. Translators: A dialog window.
 #: src/prefs.js:138
@@ -133,12 +133,12 @@ msgstr "大小可調"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
 #: src/prefs.js:197
-msgid "framed by the system"
+msgid "frame drawn by the system"
 msgstr "由系統繪製邊框"
 
 #. Translators: The window declares no shadow margin ring of its own.
 #: src/prefs.js:200
-msgid "without shadow margins"
+msgid "no shadow margins"
 msgstr "無陰影邊距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
@@ -160,20 +160,20 @@ msgstr "關閉"
 
 #: src/prefs.js:400
 #, javascript-format
-msgid "Picked from “%s”. This correction applies to every window of this kind."
-msgstr "擷取自「%s」。這條修正對此類所有視窗生效。"
+msgid "Picked from the window “%s”"
+msgstr "選取自視窗「%s」"
 
 #: src/prefs.js:416 src/prefs.js:418
-msgid "Restore the automatic decision"
-msgstr "恢復自動判斷"
+msgid "Revert to the automatic decision"
+msgstr "還原為自動判斷"
 
 #: src/prefs.js:502
-msgid "Window Inspection Failed"
+msgid "Window Pick Failed"
 msgstr "視窗選取失敗"
 
 #: src/prefs.js:504
-msgid "A window pick is already in progress"
-msgstr "已有視窗選取正在進行中"
+msgid "A window is already being picked"
+msgstr "視窗選取正在進行"
 
 #: src/prefs.js:505
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
@@ -185,9 +185,9 @@ msgstr "未新增修正：無法識別這個視窗"
 
 #: src/prefs.js:538
 msgid ""
-"No correction added: the extension did not answer - restart the session and "
+"No correction added: the extension did not answer — restart the session and "
 "pick again"
-msgstr "未新增修正：擴充功能沒有回應 —— 請重新啟動工作階段後再次選取"
+msgstr "未新增修正：擴充套件沒有回應——請重新啟動工作階段後再次選取"
 
 #: src/prefs.js:546
 msgid "No correction added: it would have no effect on a window of this kind"
@@ -212,8 +212,8 @@ msgid "The correction takes effect once the window is restored"
 msgstr "視窗還原後修正生效"
 
 #: src/prefs.js:605
-msgid "Pick window"
-msgstr "選取視窗"
+msgid "Pick window…"
+msgstr "選取視窗…"
 
 #: src/prefs.js:608
 msgid "The correction applies to every window of its kind"
@@ -225,13 +225,13 @@ msgstr "誤判修正"
 
 #: src/prefs.js:617
 msgid ""
-"Per window kind - where the automatic decision was wrong; anything not "
-"listed follows it"
-msgstr "按視窗種類——自動判斷出錯的地方；未列出的跟隨自動判斷"
+"Corrections apply per window kind; anything not listed follows the automatic "
+"decision"
+msgstr "修正按視窗種類生效；未列出的仍依自動判斷處理"
 
 #: src/prefs.js:662
-msgid "Use the button above to pick a window that looks wrong"
-msgstr "點上面的按鈕，選一個看起來不對的視窗"
+msgid "Use the button above to pick a window that is decorated incorrectly"
+msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
 
 #: src/prefs.js:726
 msgid "General"
@@ -242,16 +242,15 @@ msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
 #: src/prefs.js:733
-msgid "Control window decoration behavior across screen scales"
-msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
+msgid "Control how windows are decorated at different monitor scales"
+msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
 
 #: src/prefs.js:738
-msgid "Prioritize Crisp Text"
+msgid "Prioritize crisp text"
 msgstr "優先保證文字清晰"
 
 #: src/prefs.js:739
 msgid ""
-"Skip rounded corners on fractional scale monitors (retaining shadow) to "
-"avoid text blur and resampling overhead"
-msgstr ""
-"在分數縮放螢幕上跳過圓角（保留陰影），避免重新取樣造成的文字模糊與效能損耗"
+"Skip rounded corners on monitors with fractional scaling to keep text sharp "
+"(the shadow is unaffected)"
+msgstr "在分數縮放的顯示器上跳過圓角，以保持文字清晰（陰影不受影響）"

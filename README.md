@@ -53,7 +53,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 
 ### 🔍 Crisp Text Protection
 Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
-- **Prioritize Crisp Text**: An optional toggle that bypasses corner clipping on scaled displays to keep text razor-sharp
+- **Prioritize crisp text**: An optional toggle that bypasses corner clipping on scaled displays to keep text razor-sharp
 - **Tracking upstream Mutter**: Preparing for zero-compromise direct rendering once upstream Mutter [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) lands
 
 ---
@@ -83,7 +83,7 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 | Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
 | Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
-To correct a window that looks wrong, open **Preferences** and click **Pick window** in **Corrections**.
+To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
 
 [Learn more about the rule model →](docs/rule-model.md)
 
