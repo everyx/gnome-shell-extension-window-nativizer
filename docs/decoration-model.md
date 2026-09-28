@@ -347,7 +347,7 @@ toolkit we cannot name, which is the Firefox PiP bug this rule exists to fix.
 
 **A strip is an ordinary pick, and the window in front of it keeps the press.** The band is inserted
 immediately above its own window actor and re-pinned there whenever Mutter restacks
-(`insert_child_above()` and the `restacked` handler in `src/lib/resizeBandActor.js`), so a window in
+(`insert_child_above()` in `src/lib/resizeBandActor.js`, re-pinned by the `restacked` handler in `src/lib/manager.js`), so a window in
 front of it draws - and picks - above it: a strip can only be pressed where its own window is the
 topmost surface. Measured in a nested session with one client in front of another,
 `global.window_group` runs `WIN(lower)`, `BAND(lower)`, `WIN(upper)`, `BAND(upper)`.

@@ -26,13 +26,13 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `win.allows_resize()` | 45–51 stable | whether the window offers a resize; gates the resize band |
 | `win.get_monitor()` / `global.display.get_monitor_geometry(i)` | 45–51 stable | the monitor rectangle the band is clipped to |
 | `win.begin_grab_op()` | 45–51 (dual signature) | 49–51 takes 4 args `(op, sprite, time, pos_hint)`; 45–48 takes 5 args `(op, device, sequence, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 5`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch |
-| `backend.get_sprite(stage, event)` | 49–51 | the pointer sprite `begin_grab_op` takes in 49–51; null on 45–48 where grab op takes device/sequence directly |
+| `backend.get_sprite(stage, event)` / `get_pointer_sprite(stage)` | 49–51 | the pointer sprite `begin_grab_op` takes in 49–51; null on 45–48 where grab op takes device/sequence directly. `compat/grabOp.js:getPointerSprite()` tries `get_sprite`, then `get_pointer_sprite` |
 | `Clutter.Actor:set_cursor_type()` | 50–51 (45–49 degraded) | per-actor cursor introduced in Clutter 50; handled transparently by `compat/actorCursor.js:setActorCursor()` which gracefully degrades on 45–49 without breaking resizing |
 | `Clutter.BindConstraint` | 45–51 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
 | `Clutter.Effect:vfunc_paint_target()` / `get_actor()` | 45–51 stable | the hook `RoundedClipEffect` reads the live actor size in; the shell's own `FadeEffect` (`messageList.js`) uses the same pair |
 | `Clutter.Effect:set_enabled()` | 45–51 stable | canonical `clutter_effect_set_enabled` in `clutter/clutter/clutter-effect.c`; toggles the offscreen pass without detaching the effect |
 | `Main.overview` (`visible`, `showing`, `hidden`) | 45–51 stable | canonical Shell overview lifecycle API (`js/ui/overview.js`); gates clip effect suspension during overview to prevent blurry downscaled previews |
-| `global.window_group.set_child_above_sibling()` | 45–51 stable | re-pins the band above its window actor on `restacked` |
+| `global.window_group.set_child_above_sibling()` / `set_child_below_sibling()` | 45–51 stable | re-pin the band above, and the shadow below, their window actor on `restacked` (`manager.js:_restackActors`) |
 | `Meta.Cursor` / `global.display.set_cursor()` | **does not exist** | GNOME Shell has no such API; the cursor is actor-level on 50–51 or seat-level |
 
 ## Evolution across GNOME 45–51

@@ -19,13 +19,13 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 |---|---|
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs |
-| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, a zero-warning audit of the log |
+| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, X11 (Xwayland) and multi-window cases, and a zero-warning audit of the log |
 | `pnpm run benchmark` | visual decoration attenuation benchmark against 1.0x golden baseline |
 | `pnpm run benchmark:check` | zero visual regression guard (exits 1 if attenuation profile or symmetry drifts) |
 | `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
 | `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
-| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter and locale artifacts from their sources and fails if they drifted |
+| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle and locale artifacts from their sources and fails if they drifted |
 | `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run pack` | builds `dist/<uuid>.zip` |
 | `pnpm run shexli` | analyses that zip |
@@ -125,6 +125,10 @@ so two screenshots of one session are comparable.
 ```sh
 ./tools/dev.sh app gjs tools/probe-window.js
 ```
+
+`./tools/dev.sh xapp <cmd>` runs the same client as an X11 (Xwayland) window instead, which is
+what exercises the X11 clip target; it resolves the nested Xwayland's display and authority for
+you.
 
 With `WINDOW_NATIVIZER_BACKDROP=1` the same script becomes a uniform white surface to measure a
 shadow against, under a separate application id so it can run beside the subject, and

@@ -22,7 +22,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/` | rounded clipping (`clipEffect.js`), pure shadow geometry (`shadowGeometry.js`), the shadow actor (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
-| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, uniform-location caching, grab ops, actor cursors) across GNOME 45–51 (pure) |
+| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects incl. `uniformLocation.js`, grab ops, actor cursors) across GNOME 45–51 (pure) |
 
 ## The two processes
 
