@@ -87,13 +87,19 @@ export class Manager {
             // reconciles through its own `notify::appears-focused`, so this is the belt to
             // that suspenders. Focus landing on an unmanaged popup (issue #13) is still
             // carried by the window that lost focus.
+            //
+            // Reconciled now, not debounced. The debounce exists to coalesce geometry churn, and
+            // a focus change has none; what it selects is the one animation the user is watching.
+            // The later debounced pass still runs for the geometry signals and is a no-op when
+            // the style has not moved - ShadowActor.setShadowStyle returns early on an identical
+            // key - so nothing restarts the blend behind this.
             const previous = this._lastFocusWindow;
             const focusWin = global.display.focus_window;
             this._lastFocusWindow = focusWin;
             if (previous && previous !== focusWin && this._windows.has(previous))
-                this._reconcileWindowDebounced(previous);
+                this._reconcileWindow(previous);
             if (focusWin && this._windows.has(focusWin))
-                this._reconcileWindowDebounced(focusWin);
+                this._reconcileWindow(focusWin);
         });
 
         this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => {
@@ -241,12 +247,17 @@ export class Manager {
         this._windows.set(win, state);
 
         const windowSignals = [
-            'position-changed', 'size-changed', 'notify::appears-focused',
+            'position-changed', 'size-changed',
             'notify::maximized-horizontally', 'notify::maximized-vertically',
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
         ];
         for (const sig of windowSignals)
             this._connect(state.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
+
+        // Focus is not geometry, so it is not debounced: the shadow it selects is the animation
+        // the user is watching, and delaying its start by the debounce window is visible against
+        // the window's own backdrop change. See the focus-window handler above.
+        this._connect(state.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
 
         this._connect(state.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
 
