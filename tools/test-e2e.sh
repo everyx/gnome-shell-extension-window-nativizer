@@ -199,6 +199,77 @@ if ! check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand
 fi
 echo ">> Clip effect, shadow actor and resize band successfully verified on active window."
 
+# The blend exists for one direction only: libadwaita declares `transition: box-shadow` inside the
+# backdrop state alone, so losing focus fades while gaining it snaps - and mutter's own X11 shadow
+# switches with no easing at all. Both directions are asserted here, which needs a second window:
+# focus cannot be taken from a window any other way, Meta.Window having no unmake-focused method in
+# its public API. A blend that never gets a frame would also sit at weight 0 and paint no shadow
+# while leaving the actor attached, which every other assertion in this file would accept.
+echo ">> [test-e2e] Verifying a focus change blends one way and snaps the other..."
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-peer >/dev/null 2>&1 &
+BLEND_RESULT="$(shell_eval "
+(async () => {
+    const GLib = (await import('gi://GLib')).default;
+    const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms,
+        () => { r(); return GLib.SOURCE_REMOVE; }));
+
+    // The peer is launched just above and has to map and be decorated before focus can move to
+    // it, so wait for it rather than for a fixed number of seconds.
+    let shadows = [];
+    let tracked = [];
+    let other = null;
+    for (let i = 0; i < 40; i++) {
+        shadows = global.window_group.get_children()
+            .filter(c => c.name === 'WindowNativizerShadowActor');
+        tracked = shadows.map(s => s._windowActor?.meta_window).filter(Boolean);
+        other = global.get_window_actors().map(a => a.meta_window).find(w => !tracked.includes(w));
+        if (tracked.length >= 1 && other)
+            break;
+        await sleep(250);
+    }
+    if (tracked.length === 0 || !other)
+        return JSON.stringify({fadeStarted: false, fadeSettled: false, snapped: false,
+            decorated: tracked.length, windows: global.get_window_actors().length});
+
+    const target = tracked[0];
+    const targetShadow = shadows.find(s => s._windowActor?.meta_window === target);
+    const settledNow = () => targetShadow._outgoing === null && targetShadow._progress === 1;
+
+    // Start from the focused state, or the first activation below changes nothing.
+    target.activate(global.get_current_time());
+    await sleep(150);
+
+    other.activate(global.get_current_time());
+    await sleep(50);
+    const fadeStarted = targetShadow._outgoing !== null;
+    let fadeSettled = false;
+    for (let i = 0; i < 60 && !fadeSettled; i++) {
+        await sleep(25);
+        fadeSettled = settledNow();
+    }
+
+    target.activate(global.get_current_time());
+    await sleep(50);
+    const snapped = settledNow();
+    const focusIn = {focused: target.appears_focused, outgoing: targetShadow._outgoing !== null,
+        progress: targetShadow._progress};
+
+    return JSON.stringify({fadeStarted, fadeSettled, snapped, focusIn,
+        decorated: tracked.length, windows: global.get_window_actors().length});
+})()
+")"
+pkill -f "probe-window[.]js --blend-peer" 2>/dev/null || true
+
+echo ">> Blend check: $BLEND_RESULT"
+# Losing focus must start a blend and the blend must settle - a unit test cannot reach either,
+# because it needs a compositor to advance the frames. Gaining focus must then land in one frame,
+# because upstream declares no transition for that direction.
+if ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true}'; then
+    echo "!! A focus change did not fade on the way out, or did not snap on the way back in: $BLEND_RESULT"
+    exit 1
+fi
+echo ">> Focus out faded and settled; focus back in snapped."
+
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
 for i in 1 2 3 4 5; do
     sleep 0.06
@@ -1607,6 +1678,7 @@ echo ">> Lifecycle Summary:"
 echo "   - GJS Surface: PASSED (every member we call is callable, with the shape the code assumes; signatures above)"
 echo "   - Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"
 echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
+echo "   - Shadow Blend: PASSED (focus out fades and settles; focus back in snaps)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
