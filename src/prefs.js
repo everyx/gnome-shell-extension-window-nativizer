@@ -146,6 +146,7 @@ function windowKindSentence(properties) {
 
     const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
     // Translators: %s is the client type and the window type, e.g. "Wayland window". If your
+    // language puts the type first, use the placeholders as %2$s %1$s.
     const entity = _('%s %s').format(server, windowTypeNoun(properties.window_type));
 
     // Translators: The window has no parent window.
