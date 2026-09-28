@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.8.0...v0.8.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **prefs:** escape the ampersand in the group title ([445a1cf](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/445a1cff070901d2f47c95f675ef5a31df6ab8eb))
+* **prefs:** name a correction row after its axis ([2470d86](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2470d866041ee5ac79997852efbe2d0522603da5))
+* **prefs:** rewrite the interface copy to follow the GNOME HIG ([3e7d346](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3e7d34673a7d48bf7cd21a432c72f82673714cdb))
+
+
+### Documentation
+
+* fix what the Chinese README broke of the style guide ([97ed7ab](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/97ed7ab16f1370de6e82f29e1560c8f27dbcf48f))
+* point at the projects that cover the app itself ([c87c578](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c87c5787a8bda123e9abd129f5e6778cf3ae3711))
+* **prefs:** tell translators the entity placeholders can be swapped ([0d4067e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0d4067eb5664da3c24d34cea077816111ca5fa3f))
+* update preview image ([e291b4b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e291b4bdc492a0bdcdb6428ea38cfdbf498272c7))
+* write both READMEs in plain language ([5aef810](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5aef8105c4dcbfc297dc9b3df72af7bb20f6e66e))
+
 ## [0.8.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.7.0...v0.8.0) (2026-09-28)
 
 
