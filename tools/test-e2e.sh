@@ -11,9 +11,11 @@ UUID="$(python3 -c "import json; print(json.load(open('$ROOT/src/metadata.json')
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
+PICK_REPLY="$STATE_DIR/pick-reply.txt"
 
 cleanup() {
     echo ">> [test-e2e] Cleaning up test environment..."
+    rm -f "$PICK_REPLY"
     "$DEV" stop >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -1241,7 +1243,6 @@ echo ">> $STRESS_ROUNDS rounds x $STRESS_WINDOWS windows: every round returned t
 #    (prefs, which does not otherwise wait on a timeout) blocks forever. Built with the same
 #    gdbus primitives as shell_eval, against the nested session's own bus.
 echo ">> [test-e2e] A pick in flight is answered when the extension is disabled..."
-PICK_REPLY="/tmp/window-nativizer-pick-reply.txt"
 rm -f "$PICK_REPLY"
 PICK_BUS="$(get_dbus_bus)"
 PICK_IFACE="org.gnome.Shell.Extensions.WindowNativizer"
