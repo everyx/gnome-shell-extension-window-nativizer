@@ -11,47 +11,73 @@ version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs in
 the core compositor and actor pipeline retains long-term architectural stability across 45–51,
 with specific evolutionary watersheds handled via defensive polyfills and graceful degradation.
 
+The table is generated from `tools/shell-api.json` by `tools/gen-shell-api.mjs`, and the status column
+is computed from the declarations recorded there - see [shell-api.md](shell-api.md) for what each call is
+for. One thing the extension relies on is not in it, because it is not Mutter's surface: the Adwaita
+detection reads `/proc/<pid>/maps` through `Gio.File`, which is kernel and GIO API.
+
 Anything here that stops being true is an upstream compatibility break, not an internal refactor.
 
+<!-- shell-api-table:start -->
 | Used | Status | Notes |
 |---|---|---|
-| `win.get_client_type()` | 45–51 stable | returns `Meta.WindowClientType`; the only reliable way to tell a Wayland client from an X11 one |
-| `win.get_window_type()` | 45–51 stable | returns `Meta.WindowType`; gates non-decoratable window kinds (menus, popups, docks) in eligibility checks, rule fingerprints, and the inspector picker |
-| `win.decorated` | 45–51 stable | policy flag from `mwm_decorated` (default TRUE), not proof of a live frame — the real frame test is `priv->frame != NULL` (`meta_window_x11_is_ssd`); consumed here as "has frame decorations (SSD)" |
-| `win.is_client_decorated()` | **does not exist** | a GTK concept; `Meta.Window` has no counterpart |
-| `win.is_maximized()` / `win.get_maximized()` | 45–51 (45–48 fallback) | 49–51 canonical `meta_window_is_maximized()`; 45–48 uses `(win.get_maximized() & 3) === 3` matching `MetaMaximizeFlags.BOTH` (avoiding partial tile misdetection). Polyfilled in `detector.isWindowMaximized()` |
-| `win.is_fullscreen()` | 45–51 stable | canonical `meta_window_is_fullscreen` |
-| `win.get_tile_match()` | 45–51 stable | the adjacent matching tile, or null |
-| `win.get_pid()` | 45–51 stable | owning process id; keys the per-process corner inference and its cache eviction |
-| `win.get_frame_rect()` | 45–51 stable | the window body, margin excluded; the rectangle `RoundedClipEffect` rounds |
-| `win.get_buffer_rect()` | 45–51 stable | what the clip target is sized from; `buffer_rect - frame_rect` is the ring the client drew its own shadow into, read per side and never invented where Mutter reports none |
-| `/proc/pid/maps` via `Gio.File` | kernel + GIO stable | which Adwaita providers a process maps (`libadwaita-1.so`, `libhandy-1.so`, `libxul.so`); per-process, not per-window |
-| `global.display.get_monitor_scale(i)` | 45–51 stable | fractional scale, so it is not an integer; called through optional chaining |
-| `global.backend.get_monitor_manager()` | 45–51 stable | called through optional chaining |
-| `win.allows_resize()` | 45–51 stable | whether the window offers a resize; gates the resize band |
-| `win.get_monitor()` / `global.display.get_monitor_geometry(i)` | 45–51 stable | the monitor rectangle the band is clipped to |
-| `win.begin_grab_op()` | 45–51 (three signatures) | 45 takes 4 args `(op, device, sequence, time)`; 46–48 takes 5, adding `pos_hint`; 49–51 takes 4 `(op, sprite, time, pos_hint)`. Dispatched via function arity (`win.begin_grab_op.length === 5`) in `compat/grabOp.js:beginWindowGrabOp()`, avoiding try-catch double-dispatch. Arity separates 46–48 from the rest but cannot separate 45 from 49–51, so 45 is not reached |
-| `backend.get_sprite(stage, event)` / `get_pointer_sprite(stage)` | 49–51 | the pointer sprite `begin_grab_op` takes in 49–51; null on 45–48 where grab op takes device/sequence directly. `compat/grabOp.js:getPointerSprite()` tries `get_sprite`, then `get_pointer_sprite` |
-| `Clutter.Actor:set_cursor_type()` | 50–51 (45–49 degraded) | per-actor cursor introduced in Clutter 50; handled transparently by `compat/actorCursor.js:setActorCursor()` which gracefully degrades on 45–49 without breaking resizing |
-| `Clutter.BindConstraint` | 45–51 stable | binds the shadow actor and the band to the window actor's position/size, so their geometry follows a resize without a JS tick |
-| `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | the hook `RoundedClipEffect` reads the live actor size in; it inherits the slot through `Shell.GLSLEffect` (45–50) or `Clutter.ShaderEffect` (51), both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the same hook |
-| `Clutter.ActorMeta:get_actor()` | 45–51 stable | the actor the effect is attached to; `Clutter.Effect` extends `Clutter.ActorMeta`, which is where the slot lives |
-| `Clutter.ActorMeta:set_enabled()` / `enabled` | 45–51 stable | `clutter_actor_meta_set_enabled()` is a real method and `enabled` its matching property - GJS exposes both, and the prototype confirms it. `clutter-effect.c` points the vfunc `clutter_effect_set_enabled` at the property's setter. Neither belongs to `Clutter.Effect`, which only inherits them; toggles the offscreen pass without detaching the effect |
-| `Main.overview.visible` | 45–51 stable | gates clip effect suspension during overview to prevent blurry downscaled previews |
-| `global.window_group.set_child_above_sibling()` / `set_child_below_sibling()` | 45–51 stable | re-pin the band above, and the shadow below, their window actor on `restacked` (`manager.js:_restackActors`) |
-| `Meta.Cursor` / `global.display.set_cursor()` | **does not exist** | GNOME Shell has no such API; the cursor is actor-level on 50–51 or seat-level |
+| `win.is_client_decorated()` | 45–46 / 47–51 absent | [why](shell-api.md#is_client_decorated) |
+| `global.display.set_cursor()` | 45–49 / 50–51 absent | [why](shell-api.md#display_set_cursor) |
+| `win.get_client_type()` | 45–51 stable | [why](shell-api.md#get_client_type) |
+| `win.get_window_type()` | 45–51 stable | [why](shell-api.md#get_window_type) |
+| `win.is_maximized()` | 45–48 absent / 49–51 | [why](shell-api.md#is_maximized) |
+| `win.get_maximized()` | 45–48 / 49–51 absent | [why](shell-api.md#get_maximized) |
+| `win.is_fullscreen()` | 45–51 stable | [why](shell-api.md#is_fullscreen) |
+| `win.get_tile_match()` | 45–51 stable | [why](shell-api.md#get_tile_match) |
+| `win.get_pid()` | 45–51 stable | [why](shell-api.md#get_pid) |
+| `win.get_frame_rect()` | 45–51 stable | [why](shell-api.md#get_frame_rect) |
+| `win.get_buffer_rect()` | 45–51 stable | [why](shell-api.md#get_buffer_rect) |
+| `win.allows_resize()` | 45–51 stable | [why](shell-api.md#allows_resize) |
+| `win.get_monitor()` | 45–51 stable | [why](shell-api.md#get_monitor) |
+| `win.begin_grab_op()` | 45 / 46–48 / 49–51 | [why](shell-api.md#begin_grab_op) |
+| `win.get_compositor_private()` | 45–51 stable | [why](shell-api.md#get_compositor_private) |
+| `win.is_hidden()` | 45–51 stable | [why](shell-api.md#is_hidden) |
+| `win.is_attached_dialog()` | 45–51 stable | [why](shell-api.md#is_attached_dialog) |
+| `win.get_transient_for()` | 45–51 stable | [why](shell-api.md#get_transient_for) |
+| `win.located_on_workspace()` | 45–51 stable | [why](shell-api.md#located_on_workspace) |
+| `win.is_on_all_workspaces()` | 45–51 stable | [why](shell-api.md#is_on_all_workspaces) |
+| `win.decorated` | 45–51 stable | [why](shell-api.md#decorated) |
+| `win.maximized_vertically` | 45–51 stable | [why](shell-api.md#maximized_vertically) |
+| `win.maximized_horizontally` | 45–51 stable | [why](shell-api.md#maximized_horizontally) |
+| `win.minimized` | 45–51 stable | [why](shell-api.md#minimized) |
+| `global.display.get_monitor_geometry(i)` | 45–51 stable | [why](shell-api.md#get_monitor_geometry) |
+| `global.display.get_monitor_scale(i)` | 45–51 stable | [why](shell-api.md#get_monitor_scale) |
+| `global.display.get_n_monitors()` | 45–51 stable | [why](shell-api.md#get_n_monitors) |
+| `global.display.get_tab_list()` | 45–51 stable | [why](shell-api.md#get_tab_list) |
+| `global.backend.get_monitor_manager()` | 45–51 stable | [why](shell-api.md#get_monitor_manager) |
+| `actor.set_cursor_type()` | 45–49 absent / 50–51 | [why](shell-api.md#set_cursor_type) |
+| `global.window_group.set_child_above_sibling()` | 45–51 stable | [why](shell-api.md#set_child_above_sibling) |
+| `global.window_group.set_child_below_sibling()` | 45–51 stable | [why](shell-api.md#set_child_below_sibling) |
+| `new Clutter.BindConstraint()` | 45–51 stable | [why](shell-api.md#bind_constraint_new) |
+| `effect.set_enabled()` | 45–51 stable | [why](shell-api.md#actor_meta_set_enabled) |
+| `Clutter.ActorMeta:enabled` | 45 / 46–51 | [why](shell-api.md#actor_meta_enabled) |
+| `effect.get_actor()` | 45–51 stable | [why](shell-api.md#actor_meta_get_actor) |
+| `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
+| `effect.set_uniform_float()` | 45–50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
+| `pipeline.set_uniform_float()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
+| `effect.set_uniform_float() [Shell.GLSLEffect]` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
+| `backend.get_default_seat()` | 45–51 stable | [why](shell-api.md#backend_get_default_seat) |
+| `Clutter.get_default_backend()` | 45–50 / 51 absent | [why](shell-api.md#get_default_backend) |
+| `Meta-<api> / Shell-<api> typelibs` | 45 / 46 / 47 / 48 / 49 / 50 / 51 | [why](shell-api.md#mutter_api_version) |
+| `Shell.GLSLEffect` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
+| `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |
+| `St.BoxLayout:vertical` | 45 / 46–47 / 48–50 / 51 absent | [why](shell-api.md#st_box_layout_vertical) |
+| `St.Settings.get()` | 45–51 stable | [why](shell-api.md#st_settings_get) |
+| `Main.overview.visible` | 45–51 stable | [why](shell-api.md#overview_visible) |
+<!-- shell-api-table:end -->
 
 ## Evolution across GNOME 45–51
 
-Audit of the Mutter and Shell C source code trees from 45.0 through 51.0 identifies five key architectural watersheds. The extension bridges each without platform branching, adhering to the zero-side-effect ponyfill architecture (`src/compat/`):
-
-| Feature / Subsystem | GNOME 45–48 | GNOME 49 | GNOME 50 | GNOME 51 | Extension Strategy |
-|---|---|---|---|---|---|
-| **Shader Effect** | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Shell.GLSLEffect` | `Clutter.ShaderEffect` (`Shell.GLSLEffect` removed; `clutter_shader_effect_set_uniform_float` added) | Zero-side-effect base class in `src/compat/shaderEffect.js` exposing modern `ShaderEffect` |
-| **Maximized Check** | `get_maximized()` (`MetaMaximizeFlags`) | `is_maximized()` (`gboolean`) | `is_maximized()` (`gboolean`) | `is_maximized()` (`gboolean`) | Pure function fallback in `detector.isWindowMaximized()` with `(flags & 3) === 3` check |
-| **Grab Operation** | 45: 4 args `(op, dev, seq, time)`; 46–48: 5 args, adding `pos` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | 4 args: `(op, sprite, time, pos)` | Pure helper in `src/compat/grabOp.js:beginWindowGrabOp()` using function arity check |
-| **Actor Cursor** | Not available | Not available | `set_cursor_type(type)` | `set_cursor_type(type)` | Pure helper in `src/compat/actorCursor.js:setActorCursor()` |
-| **Mutter Typelib** | `Meta-13` .. `Meta-16` | `Meta-17` | `Meta-18` (50) | `Meta-51` (51) | Dynamic ESM import (`import gi://Meta`) automatically binds the host's version |
+Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
+operation signature, the per-actor cursor, and the Mutter typelib naming. The extension bridges each
+through `src/compat/` without platform branching. What changed and what the extension does about it
+is described where each call appears in [shell-api.md](shell-api.md); which versions share which
+shape is in the table above, computed rather than remembered.
 
 ## Additional GNOME 51 upstream changes audited
 

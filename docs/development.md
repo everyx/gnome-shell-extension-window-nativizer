@@ -25,10 +25,44 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
 | `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
-| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle and locale artifacts from their sources and fails if they drifted |
+| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, locale and Shell API-table artifacts from their sources and fails if they drifted |
 | `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run pack` | builds `dist/<uuid>.zip` |
 | `pnpm run shexli` | analyses that zip |
+
+## Upstream API audit
+
+The extension claims a range of GNOME versions, and the facts behind that claim live in
+`tools/shell-api.json`: one declaration per symbol the extension consumes, extracted from a clone at
+a pinned tag rather than typed. Extracted because the hand-written version of the same facts had
+four wrong rows, and two more were wrong in the negative entries nobody re-checks.
+
+`research/` holds uncommitted clones (see `.gitignore`) kept for exactly this reading, and
+`tools/audit-shell-api.mjs` is what reads them:
+
+| Command | What it does |
+|---|---|
+| `node tools/audit-shell-api.mjs --update` | re-extracts every declaration and rewrites `tools/shell-api.json` |
+| `node tools/audit-shell-api.mjs --check` | re-derives and fails on any difference (needs `research/`, so it is not in CI) |
+| `node tools/audit-shell-api.mjs --diff 51.0 52.0` | prints what changed for our surface between two tags |
+
+Adding a GNOME line: fetch the tag, `--diff` it against the newest line already recorded, decide
+whether what changed matters, then `--update`. That stays a human act - it needs the migration guide
+and a judgement about what a change means - so it is not a CI job. What CI enforces is that the docs
+agree with the record: `tools/gen-shell-api.mjs --check` runs inside `check-style` and fails if the
+table in `docs/shell-compatibility.md` does not match `tools/shell-api.json`, or if a row links to
+prose that does not exist.
+
+Prose is hand-written, one section per entry id, in `docs/shell-api.md`. A fact a machine can
+extract belongs in the record and not in a sentence: the version ranges used to be typed into the
+table, and that is where the four wrong rows came from. The rule of thumb - if the sentence contains
+a version number or a signature, it belongs in the record.
+
+Two things stay outside both files. `tools/gjs-surface.js` asserts at runtime that the members the
+extension calls are callable with the shape the code assumes (a header proves a declaration exists,
+not that GJS can reach it) and runs inside `test:e2e`. Behavioural changes that upstream documents
+in prose - "`disable()` cannot be async in 51" - cannot be extracted from a declaration at all, and
+are what reading the migration guide during an audit is for.
 
 ## Git hooks
 
