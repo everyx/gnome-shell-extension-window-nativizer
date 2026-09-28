@@ -38,6 +38,21 @@ if ! echo "$EXT_INFO" | grep -q "State: ACTIVE"; then
 fi
 echo ">> Extension is ACTIVE."
 
+# 3. Every member we call must be callable on the shell we are testing, with the shape the code
+# assumes. Public headers prove a declaration exists, not that GJS can reach it: out-arguments,
+# (skip) annotations and properties-versus-methods all hide in that gap. See tools/gjs-surface.js.
+echo ">> [test-e2e] Verifying the GJS surface this extension calls..."
+GJS_TYPELIB_DIRS="$( { ls -d /usr/lib/mutter-[0-9]* /usr/lib64/mutter-[0-9]* /usr/lib/*/mutter-[0-9]* \
+    /usr/lib/gnome-shell /usr/lib64/gnome-shell /usr/lib/*/gnome-shell 2>/dev/null || true; } | tr '\n' ':' | sed 's/:$//')"
+GJS_LIB_DIRS="$( { ls -d /usr/lib/gnome-shell /usr/lib64/gnome-shell /usr/lib/*/gnome-shell 2>/dev/null || true; } | tr '\n' ':' | sed 's/:$//')"
+GJS_SURFACE_OUT="$(LD_LIBRARY_PATH="$GJS_LIB_DIRS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    GI_TYPELIB_PATH="$GJS_TYPELIB_DIRS" gjs -m "$ROOT/tools/gjs-surface.js" 2>&1)" || {
+    echo "$GJS_SURFACE_OUT"
+    echo "!! A member this extension calls is not callable on this shell."
+    exit 1
+}
+echo "$GJS_SURFACE_OUT" | tail -1
+
 get_dbus_bus() {
     local pid
     pid="$(cat "$PIDFILE")"
@@ -1576,6 +1591,7 @@ print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
+echo "   - GJS Surface: PASSED (every member we call is callable, with the shape the code assumes)"
 echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"

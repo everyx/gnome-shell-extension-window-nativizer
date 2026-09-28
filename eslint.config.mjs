@@ -71,12 +71,14 @@ export default [
         rules: devRules,
     },
     {
-        // probe-window.js runs under gjs, so it has the GJS globals, not node's.
+        // probe-window.js and gjs-surface.js run under gjs, so they have the GJS globals,
+        // not node's - `imports` for the classic one, `print`/`ARGV` for the ESM one.
         files: ['tools/**/*.js'],
         languageOptions: {
             sourceType: 'module',
             globals: {
                 console: 'readonly', global: 'readonly', imports: 'readonly',
+                print: 'readonly', ARGV: 'readonly',
             },
         },
         rules: devRules,
