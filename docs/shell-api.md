@@ -254,6 +254,16 @@ either way, and the entry is recorded so the attribution stays corrected.
 `St.Settings.get()` - the shell's own settings, read for `high_contrast` (cached, and refreshed on
 `notify::high-contrast`) and for the accent colour the inspector resolves.
 
+## main_overview
+
+`Main.overview` - the shell's overview object, exported from `js/ui/main.js`. It is null until the
+shell builds it, so every read of it goes through optional chaining.
+
+## main_ui_group
+
+`Main.uiGroup` - the stage-level container every decoration we add is parented to, so that the
+shadow and the band stack with the window actor rather than with the window's own actor tree.
+
 ## overview_visible
 
 `Main.overview.visible` - gates clip effect suspension during the overview, so window previews are

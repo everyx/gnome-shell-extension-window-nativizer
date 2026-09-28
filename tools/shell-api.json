@@ -886,6 +886,40 @@
             }
         },
         {
+            "id": "main_overview",
+            "member": "Main.overview",
+            "repo": "gnome-shell",
+            "kind": "export",
+            "file": "js/ui/main.js",
+            "sym": "overview",
+            "decl": {
+                "45": "export let overview = null;",
+                "46": "export let overview = null;",
+                "47": "export let overview = null;",
+                "48": "export let overview = null;",
+                "49": "export let overview = null;",
+                "50": "export let overview = null;",
+                "51": "export let overview = null;"
+            }
+        },
+        {
+            "id": "main_ui_group",
+            "member": "Main.uiGroup",
+            "repo": "gnome-shell",
+            "kind": "export",
+            "file": "js/ui/main.js",
+            "sym": "uiGroup",
+            "decl": {
+                "45": "export let uiGroup = null;",
+                "46": "export let uiGroup = null;",
+                "47": "export let uiGroup = null;",
+                "48": "export let uiGroup = null;",
+                "49": "export let uiGroup = null;",
+                "50": "export let uiGroup = null;",
+                "51": "export let uiGroup = null;"
+            }
+        },
+        {
             "id": "overview_visible",
             "member": "Main.overview.visible",
             "repo": "gnome-shell",

@@ -68,6 +68,8 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |
 | `St.BoxLayout:vertical` | 45 / 46–47 / 48–50 / 51 absent | [why](shell-api.md#st_box_layout_vertical) |
 | `St.Settings.get()` | 45–51 stable | [why](shell-api.md#st_settings_get) |
+| `Main.overview` | 45–51 stable | [why](shell-api.md#main_overview) |
+| `Main.uiGroup` | 45–51 stable | [why](shell-api.md#main_ui_group) |
 | `Main.overview.visible` | 45–51 stable | [why](shell-api.md#overview_visible) |
 <!-- shell-api-table:end -->
 
