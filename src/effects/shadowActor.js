@@ -4,6 +4,7 @@
  */
 
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
@@ -66,6 +67,7 @@ export const ShadowActor = GObject.registerClass({
         this._outgoing = null;
         this._progress = 1;
         this._fadeStart = 0;
+        this._borderPipelines = new Map();
 
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
@@ -161,6 +163,15 @@ export const ShadowActor = GObject.registerClass({
             return;
 
         const context = paintContext.get_framebuffer().get_context();
+
+        // A tiled window has no shadow, only the 1px ring upstream draws with a zero-blur box-shadow.
+        // GTK fills such a ring rather than texturing it, and it cannot be recoloured inside a baked
+        // shadow layer, so it is drawn here as four solid rectangles outside the body.
+        if (this._style.border) {
+            this._addBorder(node, context, paintOpacity);
+            return;
+        }
+
         const pipeline = this._pipelineFor(context, this._style);
         if (!pipeline)
             return;
@@ -176,6 +187,46 @@ export const ShadowActor = GObject.registerClass({
 
         setPipelineOpacity(pipeline, pipelineOpacityFor(this._outgoing ? this._progress : 1, paintOpacity));
         this._addRects(node, pipeline, this._style);
+    }
+
+    /**
+     * The tiled ring: one rectangle per side, outside the body, in the style's border colour.
+     * @param {Clutter.PaintNode} node
+     * @param {Cogl.Context} context
+     * @param {number} paintOpacity - 0..1
+     */
+    _addBorder(node, context, paintOpacity) {
+        const {width, color, alpha} = this._style.border;
+        const key = `${color.join(',')}|${alpha}|${Math.round(paintOpacity * 255)}`;
+        let pipeline = this._borderPipelines.get(key);
+        if (!pipeline) {
+            pipeline = Cogl.Pipeline.new(context);
+            pipeline.set_color(new Cogl.Color({
+                red: color[0],
+                green: color[1],
+                blue: color[2],
+                alpha: Math.round(alpha * paintOpacity * 255),
+            }));
+            this._borderPipelines.set(key, pipeline);
+        }
+
+        const body = this._castRect();
+        const pipelineNode = new Clutter.PipelineNode(pipeline);
+        node.add_child(pipelineNode);
+
+        for (const [x, y, w, h] of [
+            [body.x - width, body.y - width, body.width + 2 * width, width],
+            [body.x - width, body.y + body.height, body.width + 2 * width, width],
+            [body.x - width, body.y, width, body.height],
+            [body.x + body.width, body.y, width, body.height],
+        ]) {
+            const box = new Clutter.ActorBox();
+            box.x1 = x;
+            box.y1 = y;
+            box.x2 = x + w;
+            box.y2 = y + h;
+            pipelineNode.add_rectangle(box);
+        }
     }
 
     _addRects(node, pipeline, style) {
@@ -281,6 +332,7 @@ export const ShadowActor = GObject.registerClass({
 
     destroy() {
         this._fadeStart = 0;
+        this._borderPipelines.clear();
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];

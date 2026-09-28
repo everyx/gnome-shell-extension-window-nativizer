@@ -35,7 +35,20 @@ describe('styleForWindow', () => {
     });
 
     it('tiled -> the tiled entry, without an outline', () => {
-        expect(styleForWindow({...base, tiled: true})).toEqual({...w.tiled, outline: null});
+        expect(styleForWindow({...base, tiled: true})).toEqual({
+            ...w.tiled,
+            outline: null,
+            border: {...w.tiled.border, color: [0, 0, 0]},
+        });
+    });
+
+    it('tiled border takes its colour from the colour scheme, and is not a shadow layer', () => {
+        // Upstream's border colour is currentColor - the client's foreground, which the compositor
+        // cannot see - so the system scheme is the closest honest signal. And it is a border, not a
+        // shadow: there is nothing to bake.
+        expect(styleForWindow({...base, tiled: true, dark: true}).border.color).toEqual([255, 255, 255]);
+        expect(styleForWindow({...base, tiled: true, dark: false}).border.color).toEqual([0, 0, 0]);
+        expect(styleForWindow({...base, tiled: true}).shadows).toEqual([]);
     });
 
     it('maximized -> the maximized entry, without an outline', () => {

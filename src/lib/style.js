@@ -3,7 +3,7 @@
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
- * @param {object} winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled
+ * @param {object} winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark
  * @returns {{radius: number, shadows: Array<object>, outline: object|null}}
  */
 export function styleForWindow(winState) {
@@ -16,8 +16,14 @@ export function styleForWindow(winState) {
         return {...window.fullscreen, outline: null};
     if (winState.maximized)
         return {...window.maximized, outline: null};
-    if (winState.tiled)
-        return {...window.tiled, outline: null};
+    if (winState.tiled) {
+        // $border_color is color-mix(currentColor ...): near-black on a light theme, near-white on a
+        // dark one. currentColor belongs to the client, which the compositor cannot see, so the
+        // system colour scheme is the closest honest signal - the same kind of approximation the
+        // black already was.
+        const color = winState.dark ? [255, 255, 255] : [0, 0, 0];
+        return {...window.tiled, outline: null, border: {...window.tiled.border, color}};
+    }
 
     // `animate` comes from the state, not from this file: only the backdrop rule in libadwaita's
     // SCSS declares a transition, which is why losing focus fades and gaining it snaps. It is
