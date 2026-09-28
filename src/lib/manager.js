@@ -305,7 +305,10 @@ export class Manager {
             // Keep clip/shadow to fade with windowActor on close.
         }
         // Remove the entry before reading the pid: a deallocated window's get_pid() can throw,
-        // and the entry must already be gone or it would be re-synced forever.
+        // and the entry must already be gone or it would be re-synced forever. That throw costs the
+        // `forgetProcess` below, the only prune site for the process cache, so a process reusing
+        // this pid would be decorated from the dead one's answer. Left as is: every caller holds
+        // the window for the duration of the call, so the throw has no demonstrated trigger.
         this._windows.delete(win);
         // Do not keep the focus reference to a window that is gone.
         if (this._lastFocusWindow === win)
