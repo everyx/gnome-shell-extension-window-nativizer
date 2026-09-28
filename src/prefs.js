@@ -93,7 +93,7 @@ function keyAxisCapabilities(properties) {
 
 // Translators: Shown where no rule axis applies at all.
 function neverDecorated() {
-    return _('Windows of this type are never decorated');
+    return _('Windows of this kind are never decorated');
 }
 
 /**
@@ -109,10 +109,10 @@ function axisUnavailableReason(axis, decoratable = true, properties = null) {
     if (decoratable && axis === RuleAxis.RESIZE) {
         if (properties?.has_ssd) {
             // Translators: Shown where a resize control would be, but cannot be used.
-            return _('The window frame already handles resizing');
+            return _('The window frame can already be resized');
         }
         // Translators: Shown where a resize control would be, but cannot be used.
-        return _('No resize handle on fixed-size windows');
+        return _('Fixed-size windows have no resize handle');
     }
     return neverDecorated();
 }
@@ -194,10 +194,10 @@ function windowKindSentence(properties) {
     let frame = null;
     if (properties.has_ssd) {
         // Translators: The compositor draws this window's frame, so it owns the resize handles.
-        frame = _('framed by the system');
+        frame = _('frame drawn by the system');
     } else if (properties.has_ring === false) {
         // Translators: The window declares no shadow margin ring of its own.
-        frame = _('without shadow margins');
+        frame = _('no shadow margins');
     }
 
     if (frame) {
@@ -397,7 +397,7 @@ function _buildRuleRow(ruleKey, state, sample, ctx, onRefresh) {
     // Only when the row actually shows it: a sample equal to the app name is not shown,
     // so it must not be explained either.
     if (sample && sample !== name)
-        row.set_tooltip_text(_('Picked from “%s”. This correction applies to every window of this kind.').format(sample));
+        row.set_tooltip_text(_('Picked from the window “%s”').format(sample));
 
     row.add_prefix(appInfo?.icon
         ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
@@ -413,9 +413,9 @@ function _buildRuleRow(ruleKey, state, sample, ctx, onRefresh) {
         css_classes: ['flat', 'destructive-action'],
         valign: Gtk.Align.CENTER,
         margin_start: 12,
-        tooltip_text: _('Restore the automatic decision'),
+        tooltip_text: _('Revert to the automatic decision'),
     });
-    deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Restore the automatic decision')]);
+    deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [_('Revert to the automatic decision')]);
     deleteButton.connect('clicked', () => {
         const rules = getWindowRules(settings);
         delete rules[ruleKey];
@@ -499,9 +499,9 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
                 // instead of blaming the extension.
                 const busy = err.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.BUSY) ?? false;
                 showError(window,
-                    _('Window Inspection Failed'),
+                    _('Window Pick Failed'),
                     busy
-                        ? _('A window pick is already in progress')
+                        ? _('A window is already being picked')
                         : _('Could not connect to the Window Nativizer extension — it is not enabled'));
                 return;
             }
@@ -535,7 +535,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
                 : null;
             if (!suggested) {
                 window.add_toast(new Adw.Toast({
-                    title: _('No correction added: the extension did not answer - restart the session and pick again'),
+                    title: _('No correction added: the extension did not answer — restart the session and pick again'),
                 }));
                 return;
             }
@@ -602,7 +602,7 @@ function _setupCorrectionsGroup(page, ctx) {
     const pickButton = new Gtk.Button({
         child: new Adw.ButtonContent({
             icon_name: 'list-add-symbolic',
-            label: _('Pick window'),
+            label: _('Pick window…'),
         }),
         css_classes: ['flat'],
         tooltip_text: _('The correction applies to every window of its kind'),
@@ -614,7 +614,7 @@ function _setupCorrectionsGroup(page, ctx) {
     // use_markup defaults to true); escaping them would render "&" as "&amp;".
     const rulesGroup = new Adw.PreferencesGroup({
         title: _('Corrections'),
-        description: _('Per window kind - where the automatic decision was wrong; anything not listed follows it'),
+        description: _('Corrections apply per window kind; anything not listed follows the automatic decision'),
         header_suffix: pickButton,
     });
     page.add(rulesGroup);
@@ -659,7 +659,7 @@ function _setupCorrectionsGroup(page, ctx) {
 
         if (entries.length === 0) {
             const emptyRow = new Adw.ActionRow({
-                title: asMarkup(_('Use the button above to pick a window that looks wrong')),
+                title: asMarkup(_('Use the button above to pick a window that is decorated incorrectly')),
                 sensitive: false,
             });
             rulesGroup.add(emptyRow);
@@ -730,13 +730,13 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
 
         const renderGroup = new Adw.PreferencesGroup({
             title: _('Display & Rendering'),
-            description: _('Control window decoration behavior across screen scales'),
+            description: _('Control how windows are decorated at different monitor scales'),
         });
         page.add(renderGroup);
 
         const crispRow = new Adw.SwitchRow({
-            title: asMarkup(_('Prioritize Crisp Text')),
-            subtitle: asMarkup(_('Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead')),
+            title: asMarkup(_('Prioritize crisp text')),
+            subtitle: asMarkup(_('Skip rounded corners on monitors with fractional scaling to keep text sharp (the shadow is unaffected)')),
         });
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);

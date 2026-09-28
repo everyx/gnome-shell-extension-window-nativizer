@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 11:12+0800\n"
+"POT-Creation-Date: 2026-09-28 13:15+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -54,17 +54,17 @@ msgid "%s: corrected"
 msgstr ""
 
 #: src/prefs.js:96
-msgid "Windows of this type are never decorated"
+msgid "Windows of this kind are never decorated"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/prefs.js:112
-msgid "The window frame already handles resizing"
+msgid "The window frame can already be resized"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/prefs.js:115
-msgid "No resize handle on fixed-size windows"
+msgid "Fixed-size windows have no resize handle"
 msgstr ""
 
 #. Translators: A dialog window.
@@ -134,12 +134,12 @@ msgstr ""
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
 #: src/prefs.js:197
-msgid "framed by the system"
+msgid "frame drawn by the system"
 msgstr ""
 
 #. Translators: The window declares no shadow margin ring of its own.
 #: src/prefs.js:200
-msgid "without shadow margins"
+msgid "no shadow margins"
 msgstr ""
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
@@ -161,19 +161,19 @@ msgstr ""
 
 #: src/prefs.js:400
 #, javascript-format
-msgid "Picked from “%s”. This correction applies to every window of this kind."
+msgid "Picked from the window “%s”"
 msgstr ""
 
 #: src/prefs.js:416 src/prefs.js:418
-msgid "Restore the automatic decision"
+msgid "Revert to the automatic decision"
 msgstr ""
 
 #: src/prefs.js:502
-msgid "Window Inspection Failed"
+msgid "Window Pick Failed"
 msgstr ""
 
 #: src/prefs.js:504
-msgid "A window pick is already in progress"
+msgid "A window is already being picked"
 msgstr ""
 
 #: src/prefs.js:505
@@ -186,7 +186,7 @@ msgstr ""
 
 #: src/prefs.js:538
 msgid ""
-"No correction added: the extension did not answer - restart the session and "
+"No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr ""
 
@@ -213,7 +213,7 @@ msgid "The correction takes effect once the window is restored"
 msgstr ""
 
 #: src/prefs.js:605
-msgid "Pick window"
+msgid "Pick window…"
 msgstr ""
 
 #: src/prefs.js:608
@@ -226,12 +226,12 @@ msgstr ""
 
 #: src/prefs.js:617
 msgid ""
-"Per window kind - where the automatic decision was wrong; anything not "
-"listed follows it"
+"Corrections apply per window kind; anything not listed follows the automatic "
+"decision"
 msgstr ""
 
 #: src/prefs.js:662
-msgid "Use the button above to pick a window that looks wrong"
+msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
 #: src/prefs.js:726
@@ -243,15 +243,15 @@ msgid "Display & Rendering"
 msgstr ""
 
 #: src/prefs.js:733
-msgid "Control window decoration behavior across screen scales"
+msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
 #: src/prefs.js:738
-msgid "Prioritize Crisp Text"
+msgid "Prioritize crisp text"
 msgstr ""
 
 #: src/prefs.js:739
 msgid ""
-"Skip rounded corners on fractional scale monitors (retaining shadow) to "
-"avoid text blur and resampling overhead"
+"Skip rounded corners on monitors with fractional scaling to keep text sharp "
+"(the shadow is unaffected)"
 msgstr ""
