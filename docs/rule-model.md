@@ -32,10 +32,10 @@ For example:
   shape only — an older key or an older state is dropped rather than migrated, which is
   what an unreleased model may do.
 - **`has_ssd=<bool>` names a kind the compositor frames itself**: Mutter's own
-  `Meta.Window.decorated` is true when it drew the frame (`mutter-x11-frames`), and that
-  frame — not the client — runs the resize grab. The flag is part of the key so the
-  preferences window can tell the kind apart and not offer a resize axis it could never
-  act on. It is a policy flag, the best reading the GJS side has; an application that
+  `Meta.Window.decorated` is a policy flag - the best reading the GJS side has, not proof of a
+  live (`mutter-x11-frames`) frame - and where the compositor frames the window, that frame, not
+  the client, runs the resize grab. The flag is part of the key so the preferences window can
+  tell the kind apart and not offer a resize axis it could never act on. An application that
   switches decoration mode becomes a different kind.
 - An **attached dialog always has a parent** — Mutter only attaches a transient whose
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and

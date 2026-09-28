@@ -76,10 +76,10 @@ is GTK3's own, and the theme supplies every number in it.
 "It looks like the whole shadow can be grabbed and only a strip of it can" is therefore
 **native behaviour**, not something the drawing introduced: we draw the same shadow (aligned to
 within 5/255), and the band we add is 12px from the body - GTK4's width, and the width a GTK4
-client's own input region already has. A GTK4 client therefore keeps its own handle and gets no
-band from us; every other window we decorate gets ours, which brings it up to that width where its
-own is the theme's (10px with the theme here), and GTK4's 24px corner reach where its toolkit reaches
-20. That band is the one place the extension participates in hit testing at all
+client's own input region already has. A GTK4 client that declares at least 12px on every side
+therefore keeps its own handle and gets no band from us; any window we decorate whose own handle is
+narrower gets ours, which brings it up to that width where its own is the theme's (10px with the
+theme here), and GTK4's 24px corner reach where its toolkit reaches 20. That band is the one place the extension participates in hit testing at all
 (`decoration-model.md` § The resize band); the shadow itself is still painted and never picked.
 
 What was rejected is turning the **whole visible shadow** into an input region. That means
