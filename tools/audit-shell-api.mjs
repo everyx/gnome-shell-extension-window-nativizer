@@ -96,6 +96,9 @@ const SURFACE = [
     {id: 'clutter_set_uniform_float', member: 'effect.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'clutter_shader_effect_set_uniform_float'},
     {id: 'cogl_pipeline_set_uniform_float', member: 'pipeline.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-state.h', sym: 'cogl_pipeline_set_uniform_float'},
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
+    {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},
+    {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
+    {id: 'seat_get_pointer', member: 'seat.get_pointer()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-seat.h', sym: 'clutter_seat_get_pointer'},
     {id: 'backend_get_default_seat', member: 'backend.get_default_seat()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_default_seat'},
     {id: 'get_default_backend', member: 'Clutter.get_default_backend()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_get_default_backend'},
     // Build-time facts the typelib naming depends on
