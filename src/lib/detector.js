@@ -359,11 +359,12 @@ export function evaluateWindowActions({
     focused = false,
     tiled = false,
     highContrast = false,
+    animationsEnabled = true,
     wmClass,
     rules = {},
     preferCrispText = false,
 }) {
-    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast});
+    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled});
 
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
 
