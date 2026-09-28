@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.8.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.7.0...v0.8.0) (2026-09-28)
+
+
+### Features
+
+* **effects:** align shadow slices with device pixel grid and cache per scale ([da3fcec](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/da3fcecfed2dd34f10f615c7d192d3a000c6bf64))
+* **effects:** snap window clip with grow rule and normalize shader AA to physical scale ([8d8398b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8d8398be097edf87bd345962765b18289fcfb232))
+* **lib:** implement GTK4 physical device pixel grid snapping primitives ([bc22a98](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bc22a9840f639620ea458d07b68ce91065e11bb5))
+
+
+### Bug Fixes
+
+* **compat:** never cache an unresolved shader uniform location ([bbca576](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bbca5763af3c7179c84cbbd11b6eb5030b9791fb))
+* **core:** keep the /proc probe out of the native-like-corner queries ([8759cea](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8759cea132438e78156756589afaa976103674a2))
+* **core:** tolerate half-torn-down windows while reading properties ([ed2ed5b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ed2ed5bec15258cad3f22c5dc33641fe23b05a06))
+* **e2e:** remove the pick-reply file in cleanup ([fd5e1e9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fd5e1e901bcd3e9753bb7acf21968f86e190acd3))
+* **effects:** clamp the clip corner radius to the body it rounds ([a0b83a8](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a0b83a8af32fa87f96d904b7224cd2729a1fd88e))
+* **effects:** keep shadow slices ordered at degenerate window sizes ([923f08f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/923f08f931d0932e5c70cb849b4c45650e4f31fd))
+* **effects:** restart the shadow cross-fade on a mid-fade style change ([72461d5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/72461d50ba09c5c9f5c2eb32c392b621491dcdcc))
+* **inspector:** answer the pick even when the target window tears down ([7cb6502](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7cb6502938f4885794d038c9bbf731292b8f9cb6))
+* **inspector:** drop the D-Bus handlers GJS never disconnects ([a8237f0](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a8237f0a104e64fa0f3d530624665e33adf836e4))
+* **inspector:** leave no picker on the stage when it cannot start ([32ff95a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/32ff95a7525a221ce3862cec84a9b731c29cfa7a))
+* **manager:** finish teardown when a window's actor is already gone ([39dca0b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/39dca0b100e1323a8d19d27ee757495494abc707))
+* **manager:** wire the window actor's signals once it exists ([57ebade](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/57ebadef5790462bc46e6286235c2afeff8e914f))
+* **monitor:** bound monitor queries before Mutter logs a CRITICAL ([5cfe508](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5cfe5085c7a4d73b5650af888152d63ffe9e1fec))
+* **pick:** treat a whitespace-only WM_CLASS as absent ([9c652c5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9c652c549849823776cc81616bcad2a7834858ab))
+* **prefs:** bound the pick call and report a busy pick ([aa3fdbc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/aa3fdbc846c4698a5bdb4d99a26a57ec36bedd9f))
+* **prefs:** cancel the pick call when the preferences window closes ([332d9d0](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/332d9d00f698cc8cd14601cf9dbca235ab3c7092))
+* **prefs:** refresh the rule list on external changes and unescape group headings ([c1562b2](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c1562b22bc8edefaa30399773c2c253b71d2f5f1))
+* **rules:** canonicalise a rule title's key like its state ([3c32619](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3c32619b7b186312557de0d7cb1aabb23a04d8f3))
+* **tools:** fail the generators instead of silently emitting wrong output ([984fcf9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/984fcf92122d3aa461faa8ee196d1e9eb4a85947))
+* **tools:** reap a dev session that never became ready ([fe51bc6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fe51bc6a7e7188a95b5e2cb60dcfaa053e3c7b36))
+* **tools:** replace the deployed extension instead of merging into it ([8723203](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/87232037fb767c3ef5b7e6f18c99c4cd7d3951d2))
+* **window:** do not remember a peer-borrowed identity ([3dce71a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3dce71aaf2494eebd2f7c124910a2df1fe201b07))
+
+
+### Performance
+
+* **manager:** reconcile the focus pair, reuse the read insets, cache high contrast ([5153756](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/51537565f652b9146b6563b9bd03be19c44735d2))
+* **resize-band:** compute the bands in place on the allocate path ([bd7ebad](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bd7ebad9294dfe5a64aac283023dd1c5e496223c))
+
+
+### Documentation
+
+* **architecture:** document GTK4 grid snap alignment and actor-local coordinate model ([03e33a4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/03e33a41b8400efc22f2670fa88b82d7006346dd))
+* **architecture:** point shadow geometry and uniform caching at their modules ([e0e9b21](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e0e9b21a529002b59a2d20bbe50f56229440b330))
+* **clipTarget:** record why the X11 fallback keeps a foreign first child ([f6991db](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f6991db036a59aef95474ac3af830f5c5a8ae350))
+* fix three claims the code contradicts, and fill four omissions ([482dfa4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/482dfa49d74ec619fefd759decb2dc4702938617))
+* **manager:** record what a throwing pid read costs ([82c6802](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/82c680247a5b339a2f1ba491c6efd7886c7f8ca7))
+
 ## [0.7.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.6.0...v0.7.0) (2026-09-25)
 
 
