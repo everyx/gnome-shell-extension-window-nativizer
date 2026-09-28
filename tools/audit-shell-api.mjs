@@ -47,6 +47,7 @@ const SOURCES = {
  *   file   - the file itself, recorded as present/absent
  *   getter - a JS accessor, cut from 'get name()' to the end of the line
  *   const  - a literal in a build file, cut as 'name = value'
+ *   export - a module-level export in a shell JS file, cut as 'export let name = ...'
  * `expectAbsent: true` records an audited negative - a symbol we looked for and did not find. It
  * fails the audit if upstream ever declares it, because the prose says it does not exist.
  */
@@ -104,6 +105,8 @@ const SURFACE = [
     {id: 'window_tracker_get_default', member: 'Shell.WindowTracker.get_default()', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-window-tracker.h', sym: 'shell_window_tracker_get_default'},
     {id: 'st_box_layout_vertical', member: 'St.BoxLayout:vertical', repo: 'gnome-shell', kind: 'prop', file: 'src/st/st-box-layout.c', sym: 'vertical'},
     {id: 'st_settings_get', member: 'St.Settings.get()', repo: 'gnome-shell', kind: 'fn', file: 'src/st/st-settings.h', sym: 'st_settings_get'},
+    {id: 'main_overview', member: 'Main.overview', repo: 'gnome-shell', kind: 'export', file: 'js/ui/main.js', sym: 'overview'},
+    {id: 'main_ui_group', member: 'Main.uiGroup', repo: 'gnome-shell', kind: 'export', file: 'js/ui/main.js', sym: 'uiGroup'},
     {id: 'overview_visible', member: 'Main.overview.visible', repo: 'gnome-shell', kind: 'getter', file: 'js/ui/overview.js', sym: 'visible'},
 ];
 
@@ -192,6 +195,10 @@ function declaration(text, kind, sym) {
         return cut(text, new RegExp(`^\\s*get ${sym}\\(\\)`, 'm'), '\n').trim();
     case 'file':
         return text === null ? null : 'present';
+    case 'export': {
+        const m = new RegExp(`^export let ${sym}\\b.*$`, 'm').exec(text ?? '');
+        return m ? m[0].trim() : null;
+    }
     case 'const': {
         const m = new RegExp(`^\\s*${sym}\\s*=\\s*(.+?)\\s*$`, 'm').exec(text ?? '');
         return m ? `${sym} = ${m[1]}` : null;
