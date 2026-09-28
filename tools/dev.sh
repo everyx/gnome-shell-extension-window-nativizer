@@ -4,6 +4,7 @@
 #   ./tools/dev.sh shell        # Starts headless nested shell in background (log: /tmp/window-nativizer-dev/shell.log)
 #   ./tools/dev.sh log          # Streams nested shell log (Ctrl+C to exit)
 #   ./tools/dev.sh app <cmd>    # Launches test application inside nested session (same WAYLAND_DISPLAY)
+#   ./tools/dev.sh xapp <cmd>   # Launches an X11 (Xwayland) application inside the nested session
 #   ./tools/dev.sh ext <subcmd> # Runs gnome-extensions command inside nested session D-Bus
 #   ./tools/dev.sh dconf <args> # Runs dconf against the nested session's own settings database
 #   ./tools/dev.sh stop         # Stops nested shell
@@ -64,6 +65,33 @@ cmd_app() {
     env WAYLAND_DISPLAY="$WL_DISPLAY" "$@"
 }
 
+# The nested Xwayland runs inside a bwrap PID namespace (Mutter sandboxes it), so `pgrep
+# Xwayland` cannot find it. Its display is in the shell's own log (cleared per run) and its
+# auth file is the newest one the shell just wrote into the runtime dir.
+nested_x11_display() {
+    grep -oE 'Using public X11 display :[0-9]+' "$LOG" 2>/dev/null | tail -1 | grep -oE ':[0-9]+' || true
+}
+
+nested_xauthority() {
+    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    ls -t "$runtime"/.mutter-Xwaylandauth.* 2>/dev/null | head -1 || true
+}
+
+# An X11 client against the nested compositor: exercises the X11 code paths a Wayland client
+# never touches (the clip target's X11 branch, the X11 surface structure).
+cmd_xapp() {
+    cmd_shell
+    local display auth
+    display="$(nested_x11_display)"
+    auth="$(nested_xauthority)"
+    if [[ -z "$display" || -z "$auth" ]]; then
+        echo "!! Could not resolve the nested XWayland display/auth (display='$display' auth='$auth')"
+        exit 1
+    fi
+    echo ">> [nested-x11] DISPLAY=$display XAUTHORITY=$auth: $*"
+    env DISPLAY="$display" XAUTHORITY="$auth" GDK_BACKEND=x11 "$@"
+}
+
 # The nested session's own bus address, read from the shell process. Anything that has
 # to reach the nested session rather than the developer's desktop needs this.
 nested_bus() {
@@ -113,8 +141,9 @@ case "${1:-}" in
     shell) cmd_shell ;;
     log) cmd_log ;;
     app) shift; cmd_app "$@" ;;
+    xapp) shift; cmd_xapp "$@" ;;
     ext) shift; cmd_ext "$@" ;;
     dconf) shift; cmd_dconf "$@" ;;
     stop) cmd_stop ;;
-    *) echo "Usage: $0 {shell|log|app <cmd>|ext <subcmd>|dconf <args>|stop}"; exit 1 ;;
+    *) echo "Usage: $0 {shell|log|app <cmd>|xapp <cmd>|ext <subcmd>|dconf <args>|stop}"; exit 1 ;;
 esac

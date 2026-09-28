@@ -918,6 +918,108 @@ for i in $(seq 1 30); do
 done
 echo ">> Menu survived most of the sampled window, was never tracked, and left no debounced reconcile pending (Layer 1 + Layer 2 passed)."
 
+# X11 (Xwayland) windows: the X11 clip target is the window actor's first child, not the actor
+# (src/lib/clipTarget.js) - a Wayland client never reaches that branch - and the resize band
+# follows the frame reading: skipped on an SSD window (Mutter's frame owns the grab in its
+# invisible border) and drawn on a bare one.
+echo ">> [test-e2e] Verifying decoration on an X11 (Xwayland) window..."
+
+# GTK's decorated=1 asks for server-side decoration on X11 (`_MOTIF_WM_HINTS`,
+# gdk/x11/gdksurface-x11.c), so this is an SSD window: Mutter draws the frame, `win.decorated`
+# is true, and the band is correctly skipped.
+"$DEV" xapp env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+X11_PROBE_PID=$!
+wait_for_x11_window() {
+    for _ in $(seq 1 60); do
+        local up
+        up="$(shell_eval 'global.get_window_actors().some(a => a.meta_window.get_client_type() === 1) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+        [[ "$up" = "1" ]] && return 0
+        sleep 0.1
+    done
+    return 1
+}
+if ! wait_for_x11_window; then
+    echo "!! The X11 client never mapped a window"
+    kill "$X11_PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+
+# The effect attaches on the manager's next reconcile, and only after the async provider probe
+# says the process is not Adwaita, so poll until it lands rather than reading once.
+read_x11_state() {
+    local reply
+    reply="$(shell_eval '
+    (() => {
+        const actor = global.get_window_actors().find(a => a.meta_window.get_client_type() === 1);
+        if (!actor) return JSON.stringify({found: false});
+        const first = actor.get_first_child() ?? actor;
+        const has = o => o.get_effects().some(e => e.toString().includes("RoundedClipEffect"));
+        const band = global.window_group.get_children().some(c =>
+            c.toString().includes("WindowNativizerResizeBand") && c._windowActor === actor);
+        return JSON.stringify({found: true, onFirstChild: has(first), onActor: has(actor), band});
+    })()
+    ')"
+    python3 - "$reply" << 'PYEOF'
+import json, re, sys
+match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
+print(json.dumps(json.loads(match.group(0))) if match else '{"found": false}')
+PYEOF
+}
+
+X11_STATE="$(await_state read_x11_state '
+import json, sys
+d = json.loads(sys.argv[1])
+sys.exit(0 if d.get("found") and d.get("onFirstChild") and not d.get("onActor") else 1)
+')" || {
+    echo "!! The X11 clip did not attach to the X11 target (the window actor's first child): $X11_STATE"
+    kill "$X11_PROBE_PID" 2>/dev/null || true
+    exit 1
+}
+echo ">> X11 SSD window state: $X11_STATE"
+if ! check_fields "$X11_STATE" '{"found": true, "onFirstChild": true, "onActor": false, "band": false}'; then
+    echo "!! X11 SSD: the clip is not on the X11 target, or a band is drawn despite Mutter's frame: $X11_STATE"
+    kill "$X11_PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+echo ">> X11 SSD verified: clip on the X11 target; band skipped (Mutter's frame owns the grab)."
+
+kill "$X11_PROBE_PID" 2>/dev/null || true
+pkill -f "probe-window[.]js" 2>/dev/null || true
+for i in $(seq 1 40); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    [[ "$count" -eq 0 ]] && break
+    sleep 0.1
+done
+
+# Bare (undecorated, no ring, no frame): the band sits on the desktop around the body.
+echo ">> [test-e2e] Verifying the band on a bare X11 window..."
+"$DEV" xapp gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+X11_PROBE_PID=$!
+if ! wait_for_x11_window; then
+    echo "!! The bare X11 client never mapped a window"
+    kill "$X11_PROBE_PID" 2>/dev/null || true
+    exit 1
+fi
+X11_BARE="$(await_state read_x11_state '
+import json, sys
+d = json.loads(sys.argv[1])
+sys.exit(0 if d.get("found") and d.get("band") else 1)
+')" || {
+    echo "!! The bare X11 window never got its band: $X11_BARE"
+    kill "$X11_PROBE_PID" 2>/dev/null || true
+    exit 1
+}
+echo ">> X11 bare window state: $X11_BARE"
+echo ">> X11 bare verified: band present on an undecorated X11 window."
+
+kill "$X11_PROBE_PID" 2>/dev/null || true
+pkill -f "probe-window[.]js" 2>/dev/null || true
+for i in $(seq 1 40); do
+    count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+    [[ "$count" -eq 0 ]] && break
+    sleep 0.1
+done
+
 # 8. Stress: repeated disable/enable must rebuild cleanly and leak no actors.
 #    Each cycle tears down and rebuilds; a connect() without its disconnect(), or an actor
 #    left in the scene graph, shows up here as a surviving WindowNativizer actor or a
@@ -1121,6 +1223,15 @@ mutter_color_state = re.compile(
 ibus_teardown = re.compile(
     r"\(ibus-portal:\d+\): GLib-GIO-WARNING \*\*: .*: Error releasing name org\.freedesktop\.portal\.IBus: The connection is closed")
 
+# An X11 window makes Mutter start its X11 frame client (mutter-x11-frames), which logs this once
+# when the nested session has no accessibility registry to register with:
+#   (mutter-x11-frames:<pid>): Gtk-CRITICAL **: ... Unable to register the application:
+#     ... Could not activate remote peer 'org.a11y.atspi.Registry': unit failed
+# Upstream and environment-only (the a11y bridge a compositor-internal helper would get), not from
+# the extension. Counted, not swallowed. Triggered by the X11 case in this suite.
+mutter_x11_frames_a11y = re.compile(
+    r"\(mutter-x11-frames:\d+\): Gtk-CRITICAL \*\*: .*Unable to register the application.*org\.a11y\.atspi\.Registry")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -1129,6 +1240,7 @@ csd_issue = re.compile(r'window-nativizer.*(warning|critical|error|exception)', 
 offending = []
 exempted = 0
 exempted_ibus = 0
+exempted_x11frames = 0
 for idx, line in enumerate(lines, start=1):
     # An extension error is checked before the noise bag: a genuine window-nativizer line whose
     # payload happens to contain e.g. "gnome-calculator" or "secrets" must not be swallowed.
@@ -1142,6 +1254,9 @@ for idx, line in enumerate(lines, start=1):
         continue
     if ibus_teardown.search(line):
         exempted_ibus += 1
+        continue
+    if mutter_x11_frames_a11y.search(line):
+        exempted_x11frames += 1
         continue
     if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -1158,6 +1273,8 @@ if exempted:
     print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
 if exempted_ibus:
     print(f">> {exempted_ibus} known upstream ibus teardown line(s) exempted (see docs/shell-compatibility.md).")
+if exempted_x11frames:
+    print(f">> {exempted_x11frames} known upstream mutter-x11-frames a11y line(s) exempted (see the note above the pattern).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
@@ -1174,6 +1291,7 @@ echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
+echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "================================================================"
 exit 0
