@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 13:15+0800\n"
+"POT-Creation-Date: 2026-09-28 14:16+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -155,102 +155,102 @@ msgid "%s, %s, %s"
 msgstr ""
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:303
+#: src/prefs.js:304
 msgid "Close"
 msgstr ""
 
-#: src/prefs.js:400
+#: src/prefs.js:401
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr ""
 
-#: src/prefs.js:416 src/prefs.js:418
+#: src/prefs.js:417 src/prefs.js:419
 msgid "Revert to the automatic decision"
 msgstr ""
 
-#: src/prefs.js:502
+#: src/prefs.js:503
 msgid "Window Pick Failed"
 msgstr ""
 
-#: src/prefs.js:504
+#: src/prefs.js:505
 msgid "A window is already being picked"
 msgstr ""
 
-#: src/prefs.js:505
+#: src/prefs.js:506
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:517
+#: src/prefs.js:518
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:538
+#: src/prefs.js:539
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:546
+#: src/prefs.js:547
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
-#: src/prefs.js:564
+#: src/prefs.js:565
 msgid "No correction added: it could not be saved"
-msgstr ""
-
-#: src/prefs.js:576
-#, javascript-format
-msgid "Correction updated for %s: %s"
 msgstr ""
 
 #: src/prefs.js:577
 #, javascript-format
+msgid "Correction updated for %s: %s"
+msgstr ""
+
+#: src/prefs.js:578
+#, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:587
+#: src/prefs.js:588
 msgid "The correction takes effect once the window is restored"
 msgstr ""
 
-#: src/prefs.js:605
+#: src/prefs.js:606
 msgid "Pick window…"
 msgstr ""
 
-#: src/prefs.js:608
+#: src/prefs.js:609
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:616
+#: src/prefs.js:617
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:617
+#: src/prefs.js:618
 msgid ""
 "Corrections apply per window kind; anything not listed follows the automatic "
 "decision"
 msgstr ""
 
-#: src/prefs.js:662
+#: src/prefs.js:663
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
-#: src/prefs.js:726
+#: src/prefs.js:727
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:732
+#: src/prefs.js:733
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:733
+#: src/prefs.js:734
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:738
+#: src/prefs.js:739
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:739
+#: src/prefs.js:740
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
