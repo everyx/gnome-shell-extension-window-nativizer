@@ -206,40 +206,49 @@ echo ">> Clip effect, shadow actor and resize band successfully verified on acti
 # its public API. A blend that never gets a frame would also sit at weight 0 and paint no shadow
 # while leaving the actor attached, which every other assertion in this file would accept.
 echo ">> [test-e2e] Verifying a focus change blends one way and snaps the other..."
-"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-peer >/dev/null 2>&1 &
+# Two clients of the guard's own. The client under test closes itself on its own schedule, and a
+# probe that outlives it activates an unmanaged window - which makes mutter warn, and the log audit
+# fails on that. Owning both windows removes the race instead of narrowing it.
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-a >/dev/null 2>&1 &
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-b >/dev/null 2>&1 &
 BLEND_RESULT="$(shell_eval "
 (async () => {
     const GLib = (await import('gi://GLib')).default;
+    const Gio = (await import('gi://Gio')).default;
+    const St = (await import('gi://St')).default;
     const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms,
         () => { r(); return GLib.SOURCE_REMOVE; }));
 
-    // The peer is launched just above and has to map and be decorated before focus can move to
-    // it, so wait for it rather than for a fixed number of seconds.
+    // Both windows are the guard's own and have to map and be decorated before focus can move
+    // between them, so wait for two rather than for a fixed number of seconds.
     let shadows = [];
     let tracked = [];
-    let other = null;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) {
         shadows = global.window_group.get_children()
             .filter(c => c.name === 'WindowNativizerShadowActor');
         tracked = shadows.map(s => s._windowActor?.meta_window).filter(Boolean);
-        other = global.get_window_actors().map(a => a.meta_window).find(w => !tracked.includes(w));
-        if (tracked.length >= 1 && other)
+        if (tracked.length >= 2)
             break;
         await sleep(250);
     }
-    if (tracked.length === 0 || !other)
+    if (tracked.length < 2)
         return JSON.stringify({fadeStarted: false, fadeSettled: false, snapped: false,
+            animationsOffStarted: true, animationsOffSettled: false,
             decorated: tracked.length, windows: global.get_window_actors().length});
 
     const target = tracked[0];
+    const other = tracked[1];
     const targetShadow = shadows.find(s => s._windowActor?.meta_window === target);
+    const alive = w => global.get_window_actors().some(a => a.meta_window === w);
     const settledNow = () => targetShadow._outgoing === null && targetShadow._progress === 1;
 
     // Start from the focused state, or the first activation below changes nothing.
-    target.activate(global.get_current_time());
+    if (alive(target))
+        target.activate(global.get_current_time());
     await sleep(150);
 
-    other.activate(global.get_current_time());
+    if (alive(other))
+        other.activate(global.get_current_time());
     await sleep(50);
     const fadeStarted = targetShadow._outgoing !== null;
     let fadeSettled = false;
@@ -248,27 +257,46 @@ BLEND_RESULT="$(shell_eval "
         fadeSettled = settledNow();
     }
 
-    target.activate(global.get_current_time());
+    if (alive(target))
+        target.activate(global.get_current_time());
     await sleep(50);
     const snapped = settledNow();
     const focusIn = {focused: target.appears_focused, outgoing: targetShadow._outgoing !== null,
         progress: targetShadow._progress};
 
+    // With animations off, GTK hands a CSS transition no frame clock, so upstream snaps in both
+    // directions - losing focus must then start no blend at all. The setting reaches the shell
+    // through dconf, so wait for the shell to see it rather than for a fixed delay.
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    const wasAnimations = iface.get_boolean('enable-animations');
+    iface.set_boolean('enable-animations', false);
+    for (let i = 0; i < 40 && St.Settings.get().enable_animations; i++)
+        await sleep(25);
+
+    if (alive(other))
+        other.activate(global.get_current_time());
+    await sleep(250);
+    const animationsOffStarted = targetShadow._outgoing !== null;
+    const animationsOffSettled = settledNow();
+
+    iface.set_boolean('enable-animations', wasAnimations);
+
     return JSON.stringify({fadeStarted, fadeSettled, snapped, focusIn,
+        animationsOffStarted, animationsOffSettled,
         decorated: tracked.length, windows: global.get_window_actors().length});
 })()
 ")"
-pkill -f "probe-window[.]js --blend-peer" 2>/dev/null || true
+pkill -f "probe-window[.]js --blend-" 2>/dev/null || true
 
 echo ">> Blend check: $BLEND_RESULT"
 # Losing focus must start a blend and the blend must settle - a unit test cannot reach either,
 # because it needs a compositor to advance the frames. Gaining focus must then land in one frame,
 # because upstream declares no transition for that direction.
-if ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true}'; then
-    echo "!! A focus change did not fade on the way out, or did not snap on the way back in: $BLEND_RESULT"
+if ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true, "animationsOffStarted": false, "animationsOffSettled": true}'; then
+    echo "!! A focus change did not fade on the way out, did not snap on the way back in, or still blended with animations off: $BLEND_RESULT"
     exit 1
 fi
-echo ">> Focus out faded and settled; focus back in snapped."
+echo ">> Focus out faded and settled; focus back in snapped; with animations off it did not blend at all."
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
 for i in 1 2 3 4 5; do
@@ -1678,7 +1706,7 @@ echo ">> Lifecycle Summary:"
 echo "   - GJS Surface: PASSED (every member we call is callable, with the shape the code assumes; signatures above)"
 echo "   - Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"
 echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
-echo "   - Shadow Blend: PASSED (focus out fades and settles; focus back in snaps)"
+echo "   - Shadow Blend: PASSED (focus out fades; focus in snaps; nothing blends with animations off)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
