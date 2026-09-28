@@ -268,7 +268,13 @@ function findAppInfoByWmClass(wmClass, appsList) {
     ) || null;
 }
 
-function inspectWindow(callback) {
+/**
+ * @param {Function} callback
+ * @param {Gio.Cancellable} [cancellable] - Cancelled when the preferences window closes. Without it
+ *   a reply that lands after that keeps this closure's window and settings alive until the call
+ *   gives up at its 60s timeout.
+ */
+function inspectWindow(callback, cancellable = null) {
     Gio.DBus.session.call(
         INSPECTOR_DBUS_NAME,
         INSPECTOR_DBUS_PATH,
@@ -278,7 +284,7 @@ function inspectWindow(callback) {
         null,
         Gio.DBusCallFlags.NONE,
         60000,
-        null,
+        cancellable,
         (conn, res) => {
             try {
                 const reply = conn.call_finish(res);
@@ -476,10 +482,12 @@ function _buildRuleRow(ruleKey, state, sample, ctx, onRefresh) {
 }
 
 function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
-    const {window, settings, installedApps, isWindowAlive} = ctx;
+    const {window, settings, installedApps, pickCancellable, isWindowAlive} = ctx;
+    // Bound here rather than threaded through the call site below.
+    const pickWindow = callback => inspectWindow(callback, pickCancellable);
     pickButton.connect('clicked', () => {
         window.set_visible(false);
-        inspectWindow((err, props) => {
+        pickWindow((err, props) => {
             if (!isWindowAlive())
                 return;
 
@@ -625,6 +633,8 @@ function _setupCorrectionsGroup(page, ctx) {
         if (renderScheduled)
             return;
         renderScheduled = true;
+        // The id is deliberately not kept: the callback removes itself, and `isWindowAlive()` is
+        // what makes a tick that lands after the window closed harmless - cancelling buys nothing.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             renderScheduled = false;
             if (isWindowAlive())
@@ -669,6 +679,8 @@ function _setupCorrectionsGroup(page, ctx) {
         }
 
         if (focusedRow) {
+            // One-shot, like the render above: nothing to cancel, and the guard covers a window
+            // that closed in the meantime.
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 // A rebuild (an external rule change) may have replaced the rows by now; the
                 // old row is no longer in `rows`, so grabbing focus on it would touch a
@@ -692,10 +704,13 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         _registerIconThemePath(iconTheme);
 
-        // Picker hides prefs window; reply may arrive after prefs closed — guard UI touches.
+        // Picker hides prefs window; reply may arrive after prefs closed — guard UI touches, and
+        // cancel the call itself so its closure stops holding this window's widgets.
         let windowAlive = true;
+        const pickCancellable = new Gio.Cancellable();
         window.connect('destroy', () => {
             windowAlive = false;
+            pickCancellable.cancel();
         });
 
         const ctx = Object.freeze({
@@ -703,6 +718,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             settings,
             installedApps,
             iconTheme,
+            pickCancellable,
             isWindowAlive: () => windowAlive,
         });
 
