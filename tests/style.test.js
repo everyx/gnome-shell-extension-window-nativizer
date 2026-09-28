@@ -78,6 +78,15 @@ describe('styleForWindow', () => {
         expect(styleForWindow({...base, fullscreen: true}).animate).toBeFalse();
     });
 
+    it('suppresses the one transition when animations are off', () => {
+        // GTK gives a CSS transition no frame clock when `gtk-enable-animations` is false, so a
+        // native window snaps in every direction. The generated flag still says backdrop animates;
+        // the setting is what takes it away.
+        expect(styleForWindow({...base, focused: false, animationsEnabled: false}).animate).toBeFalse();
+        expect(styleForWindow({...base, focused: false, animationsEnabled: true}).animate).toBeTrue();
+        expect(styleForWindow({...base, focused: true, animationsEnabled: false}).animate).toBeFalse();
+    });
+
     it('maximized wins over tiled', () => {
         // The only precedence pair whose output differs, because the tiled entry
         // keeps a border layer the maximized one does not.

@@ -56,6 +56,7 @@ export class Manager {
         this._inOverview = false;
         this._lastFocusWindow = null;
         this._highContrast = false;
+        this._animationsEnabled = true;
     }
 
     enable() {
@@ -69,6 +70,7 @@ export class Manager {
         this._inOverview = Boolean(Main.overview.visible);
         this._lastFocusWindow = global.display.focus_window;
         this._highContrast = St.Settings.get().high_contrast;
+        this._animationsEnabled = St.Settings.get().enable_animations;
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
@@ -104,6 +106,14 @@ export class Manager {
 
         this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => {
             this._highContrast = St.Settings.get().high_contrast;
+            this._reconcile();
+        });
+
+        // GTK hands its CSS transitions no frame clock when animations are off, so a native window
+        // changes its shadow in one frame. Ours has to stop blending for the same reason, or the
+        // one window still moving is ours.
+        this._connect(this._signals, St.Settings.get(), 'notify::enable-animations', () => {
+            this._animationsEnabled = St.Settings.get().enable_animations;
             this._reconcile();
         });
 
@@ -609,6 +619,7 @@ export class Manager {
             focused: win.appears_focused,
             tiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
             highContrast: this._highContrast,
+            animationsEnabled: this._animationsEnabled,
 
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,

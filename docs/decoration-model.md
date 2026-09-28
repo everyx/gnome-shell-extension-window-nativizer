@@ -420,6 +420,18 @@ breaks them. The mismatch is left where it is.
 
 ## Known boundaries
 
+**Message dialogs.** libadwaita gives `.dialog.message` and `.messagedialog` a lighter shadow than a
+normal window - `0 0 14px 2px` at 3% and `0 0 5px 2px` at 10%, against `14px 5px` at 15% for
+`window.csd`. We cannot tell a message dialog from any other dialog: it is a GTK style class, set
+inside the client, and the compositor sees only `Meta.WindowType`. The choice is therefore between
+drawing the normal window shadow for every dialog - what happens today - and guessing from the
+window type, which would be wrong for the dialogs that are not message dialogs. The guess is worse
+than the divergence, so it stays, and this is why.
+
+**Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, for the same reason and
+with the same answer: whether a window is solid CSD is a style class the client owns.
+
+
 What this model cannot do, stated rather than papered over. Most of these follow from
 the reading being one-sided; the last is simply not verified yet.
 
@@ -541,6 +553,14 @@ itself and arrives with alpha, so the compositor has nothing left to clip. Decor
 windows that do not round themselves is what makes an offscreen pass inherent here.
 
 ## How a style change is drawn
+
+Only the backdrop state animates, because that is the only state where libadwaita declares a
+transition; `animate` is generated from that declaration by `tools/gen-style.mjs`, and
+`tests/style.test.js` asserts the asymmetry. It is also gated on `org.gnome.desktop.interface
+enable-animations`: GTK hands a CSS transition no frame clock when animations are off, so a native
+window changes its shadow in one frame there, and a blend of ours would be the only thing still
+moving.
+
 
 A change is cross-faded over 200ms with CSS `ease-out`, which is what the source of these
 numbers does: libadwaita's backdrop rule declares `transition: box-shadow
