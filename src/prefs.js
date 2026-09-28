@@ -210,7 +210,8 @@ function windowKindSentence(properties) {
 }
 
 /**
- * Escape for Adw rows (Pango markup); Toast/AlertDialog and Gtk.Label are plain text.
+ * Escape for the Adw properties that parse Pango markup (rows and preference groups); Toast,
+ * AlertDialog and a bare Gtk.Label take plain text.
  * @param {string} text
  * @returns {string}
  */
@@ -610,11 +611,11 @@ function _setupCorrectionsGroup(page, ctx) {
         margin_start: 18,
     });
 
-    // Adw.PreferencesGroup title/description are plain text (unlike AdwPreferencesRow, whose
-    // use_markup defaults to true); escaping them would render "&" as "&amp;".
+    // Both of a group's labels parse markup - adw-preferences-group.ui sets use-markup on the title
+    // and on the description - so they are escaped exactly like the rows are.
     const rulesGroup = new Adw.PreferencesGroup({
-        title: _('Corrections'),
-        description: _('Corrections apply per window kind; anything not listed follows the automatic decision'),
+        title: asMarkup(_('Corrections')),
+        description: asMarkup(_('Corrections apply per window kind; anything not listed follows the automatic decision')),
         header_suffix: pickButton,
     });
     page.add(rulesGroup);
@@ -729,8 +730,8 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         window.add(page);
 
         const renderGroup = new Adw.PreferencesGroup({
-            title: _('Display & Rendering'),
-            description: _('Control how windows are decorated at different monitor scales'),
+            title: asMarkup(_('Display & Rendering')),
+            description: asMarkup(_('Control how windows are decorated at different monitor scales')),
         });
         page.add(renderGroup);
 
