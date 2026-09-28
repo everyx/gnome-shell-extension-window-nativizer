@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
@@ -78,6 +79,12 @@ export class InspectorService {
 
         if (this._dbusImpl) {
             this._dbusImpl.unexport();
+            // `wrapJSObject` connects three handlers whose closures capture this service, forming a
+            // reference cycle GJS cannot collect: `unexport()` alone leaves the implementation - and
+            // the service, and the manager - alive forever, one set per enable/disable cycle.
+            // Disconnecting them is what breaks the cycle (both `run_dispose()` and leaving them
+            // connected were measured to misbehave: the first logs Gjs-CRITICAL on the next touch).
+            GObject.signal_handlers_destroy(this._dbusImpl);
             this._dbusImpl = null;
         }
     }

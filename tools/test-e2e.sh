@@ -1127,6 +1127,32 @@ if [[ "$count" -ne 0 ]]; then
 fi
 echo ">> 5 disable/enable cycles: no leaked actors, window tracked once each cycle."
 
+# Actors are not the whole story: a disable() that drops every actor can still leave signal
+# handlers connected on objects nothing will ever destroy. `tools/leak-probe.js` instruments
+# GObject's connect for the duration of the cycles and reports the handlers that are still
+# connected on a live object afterwards - one D-Bus implementation per cycle, before the fix.
+echo ">> [test-e2e] Signal-handler leak probe: 5 disable/enable cycles..."
+LEAK_CYCLES=5
+LEAK_PROBE="$(sed -e "s/__UUID__/$UUID/" -e "s/'__CYCLES__'/'$LEAK_CYCLES'/" "$ROOT/tools/leak-probe.js")"
+LEAK_STATE="$(shell_eval "$LEAK_PROBE")"
+if ! check_fields "$LEAK_STATE" '{"ok": true}'; then
+    echo "!! The signal-handler leak probe did not run: $LEAK_STATE"
+    exit 1
+fi
+LEAK_HANDLERS="$(python3 - "$LEAK_STATE" << 'PYEOF'
+import json, re, sys
+
+reply = sys.argv[1]
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+print(len(json.loads(match.group(0)).get('handlers', [])) if match else -1)
+PYEOF
+)"
+if [[ "$LEAK_HANDLERS" -ne 0 ]]; then
+    echo "!! $LEAK_HANDLERS signal handler(s) survived $LEAK_CYCLES disable/enable cycles: $LEAK_STATE"
+    exit 1
+fi
+echo ">> $LEAK_CYCLES cycles: 0 signal handlers survived disable."
+
 # Many windows over several rounds, Wayland and X11 mixed, with a resize/maximize storm between.
 # A leak that is per-window or per-reconcile only shows once the count exceeds one; the state
 # has to return to empty every round and not grow across rounds.
@@ -1381,6 +1407,7 @@ echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully 
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
+echo "   - Signal-Handler Leak Probe ($LEAK_CYCLES cycles): PASSED (0 handlers survived disable)"
 echo "   - Multi-Window Stress ($STRESS_ROUNDS rounds x $STRESS_WINDOWS windows): PASSED (returned to empty every round)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
