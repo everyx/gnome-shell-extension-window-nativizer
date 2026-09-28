@@ -20,6 +20,7 @@ describe('styleForWindow', () => {
         expect(styleForWindow(base)).toEqual({
             radius: w.radius,
             shadows: w.shadows,
+            animate: w.animate,
             outline: w.outline.normal,
         });
     });
@@ -28,6 +29,7 @@ describe('styleForWindow', () => {
         expect(styleForWindow({...base, focused: false})).toEqual({
             radius: w.backdrop.radius,
             shadows: w.backdrop.shadows,
+            animate: w.backdrop.animate,
             outline: w.outline.normal,
         });
     });
@@ -48,6 +50,7 @@ describe('styleForWindow', () => {
         expect(styleForWindow({...base, highContrast: true})).toEqual({
             radius: w.radius,
             shadows: w.highContrast.shadows,
+            animate: w.animate,
             outline: w.outline.highContrast,
         });
     });
@@ -56,8 +59,23 @@ describe('styleForWindow', () => {
         expect(styleForWindow({...base, highContrast: true, focused: false})).toEqual({
             radius: w.backdrop.radius,
             shadows: w.highContrast.backdropShadows,
+            animate: w.backdrop.animate,
             outline: w.outline.highContrast,
         });
+    });
+
+    it('animates only when entering the backdrop state', () => {
+        // libadwaita declares `transition: box-shadow` inside `:backdrop` alone, so losing focus
+        // fades while gaining it snaps - and the maximized, fullscreen and tiled states declare
+        // none at all. The flag is generated from the SCSS, so this checks the generation rather
+        // than restating a rule here.
+        expect(styleForWindow({...base, focused: false}).animate).toBeTrue();
+        expect(styleForWindow({...base, focused: true}).animate).toBeFalse();
+        expect(styleForWindow({...base, focused: false, highContrast: true}).animate).toBeTrue();
+        expect(styleForWindow({...base, focused: true, highContrast: true}).animate).toBeFalse();
+        expect(styleForWindow({...base, tiled: true}).animate).toBeFalse();
+        expect(styleForWindow({...base, maximized: true}).animate).toBeFalse();
+        expect(styleForWindow({...base, fullscreen: true}).animate).toBeFalse();
     });
 
     it('maximized wins over tiled', () => {
