@@ -1387,6 +1387,53 @@ if ! check_fields "$PICK_AFTERMATH" '{"leftovers": 0, "pending": false, "pickabl
 fi
 echo ">> Failed picker: no overlay left on the stage, invocation answered, next pick not refused."
 
+# The preferences window is a separate GTK4 process and nothing else here opens it. Its stderr still
+# lands in $LOG - the shell spawns it - so a markup or JS error in prefs.js is visible only to a case
+# that opens it. One was: a group title containing "&" was parsed as markup, failed, and rendered
+# empty, with a Gtk-WARNING as its only trace.
+echo ">> [test-e2e] Opening the preferences window..."
+PREF_BUS="$(get_dbus_bus)"
+DBUS_SESSION_BUS_ADDRESS="$PREF_BUS" timeout 20 gnome-extensions prefs "$UUID" >/dev/null 2>&1 || true
+
+# Close it and then wait for it to be gone before the session stops. Two reasons, both measured:
+# stopping with it still mapped makes Mutter close it during teardown, and that path pings the client
+# with a serial it then rejects ("Tried to ping window ... with a bad serial"); and the roundtrip
+# timestamp is the one Mutter accepts, where get_current_time() gives it nothing to ping with.
+PREF_STATE='{}'
+PREF_OPEN=0
+PREF_CLOSED=0
+for _ in $(seq 1 20); do
+    PREF_STATE="$(shell_eval '
+(async () => {
+    const wins = global.get_window_actors().map(a => a.meta_window)
+        .filter(w => (w.get_wm_class() || "") === "org.gnome.Shell.Extensions");
+    for (const w of wins)
+        w.delete(global.display.get_current_time_roundtrip());
+    return JSON.stringify({found: wins.length});
+})()
+')"
+    if check_fields "$PREF_STATE" '{"found": 1}'; then
+        if [[ "$PREF_OPEN" == 0 ]]; then
+            PREF_OPEN=1
+        fi
+    elif check_fields "$PREF_STATE" '{"found": 0}'; then
+        if [[ "$PREF_OPEN" == 1 ]]; then
+            PREF_CLOSED=1
+            break
+        fi
+    fi
+    sleep 2
+done
+if [[ "$PREF_OPEN" != 1 ]]; then
+    echo "!! The preferences window never appeared: $PREF_STATE"
+    exit 1
+fi
+if [[ "$PREF_CLOSED" != 1 ]]; then
+    echo "!! The preferences window did not close: $PREF_STATE"
+    exit 1
+fi
+echo ">> Preferences window opened and closed; anything it logged is audited below."
+
 # 10. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
@@ -1430,14 +1477,22 @@ mutter_color_state = re.compile(
 ibus_teardown = re.compile(
     r"\(ibus-portal:\d+\): GLib-GIO-WARNING \*\*: .*: Error releasing name org\.freedesktop\.portal\.IBus: The connection is closed")
 
-# An X11 window makes Mutter start its X11 frame client (mutter-x11-frames), which logs this once
-# when the nested session has no accessibility registry to register with:
-#   (mutter-x11-frames:<pid>): Gtk-CRITICAL **: ... Unable to register the application:
+# Any GTK app in this nested session logs this when it finds no accessibility registry to register
+# with - the nested session has no at-spi bus:
+#   (<process>:<pid>): Gtk-CRITICAL **: ... Unable to register the application:
 #     ... Could not activate remote peer 'org.a11y.atspi.Registry': unit failed
-# Upstream and environment-only (the a11y bridge a compositor-internal helper would get), not from
-# the extension. Counted, not swallowed. Triggered by the X11 case in this suite.
-mutter_x11_frames_a11y = re.compile(
-    r"\(mutter-x11-frames:\d+\): Gtk-CRITICAL \*\*: .*Unable to register the application.*org\.a11y\.atspi\.Registry")
+# Environment-only, not from the extension, and process-independent: the X11 case gets it from
+# mutter-x11-frames and the preferences case from the prefs process. Counted, not swallowed.
+a11y_registry_absent = re.compile(
+    r": Gtk-CRITICAL \*\*: .*Unable to register the application.*org\.a11y\.atspi\.Registry")
+
+# Creating an Adw.PreferencesWindow logs this twice in this GJS/libadwaita pair, once for the getter
+# and once for the setter of the same property:
+#   (<process>:<pid>): Gjs-WARNING **: ...: Type GITypeInfo of property
+#     Adw.PreferencesWindow::visible-page does not match ... Falling back to slow path
+# Upstream (GJS's introspection of a libadwaita property), not from the extension. Counted.
+gjs_visible_page = re.compile(
+    r": Gjs-WARNING \*\*: .*Type GITypeInfo of property Adw\.PreferencesWindow::visible-page")
 
 # The teardown fault-injection case makes one tracked window throw from `get_compositor_private()`,
 # to prove `disable()` finishes anyway. Catching and logging it is the behaviour under test, so
@@ -1460,7 +1515,8 @@ csd_issue = re.compile(r'window-nativizer.*(warning|critical|error|exception)', 
 offending = []
 exempted = 0
 exempted_ibus = 0
-exempted_x11frames = 0
+exempted_a11y = 0
+exempted_gjs_visible_page = 0
 exempted_teardown = 0
 exempted_picker = 0
 for idx, line in enumerate(lines, start=1):
@@ -1483,8 +1539,11 @@ for idx, line in enumerate(lines, start=1):
     if ibus_teardown.search(line):
         exempted_ibus += 1
         continue
-    if mutter_x11_frames_a11y.search(line):
-        exempted_x11frames += 1
+    if a11y_registry_absent.search(line):
+        exempted_a11y += 1
+        continue
+    if gjs_visible_page.search(line):
+        exempted_gjs_visible_page += 1
         continue
     if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -1509,8 +1568,10 @@ if exempted:
     print(f">> {exempted} known upstream Mutter line(s) exempted (see the note above the pattern).")
 if exempted_ibus:
     print(f">> {exempted_ibus} known upstream ibus teardown line(s) exempted (see docs/shell-compatibility.md).")
-if exempted_x11frames:
-    print(f">> {exempted_x11frames} known upstream mutter-x11-frames a11y line(s) exempted (see the note above the pattern).")
+if exempted_a11y:
+    print(f">> {exempted_a11y} environment-only a11y-registry line(s) exempted (see the note above the pattern).")
+if exempted_gjs_visible_page:
+    print(f">> {exempted_gjs_visible_page} known upstream GJS introspection line(s) exempted (see the note above the pattern).")
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
@@ -1532,6 +1593,7 @@ echo "   - Teardown Fault Injection: PASSED (a throwing window did not abort dis
 echo "   - Multi-Window Stress ($STRESS_ROUNDS rounds x $STRESS_WINDOWS windows): PASSED (returned to empty every round)"
 echo "   - Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 echo "   - Pick Failure Injection: PASSED (no overlay left, answered, not left BUSY)"
+echo "   - Preferences Window: PASSED (opened and closed; nothing it logged failed the audit)"
 echo "   - X11 Window Decoration: PASSED (clip on the X11 target; SSD band skipped, bare band drawn)"
 echo "   - Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "================================================================"
