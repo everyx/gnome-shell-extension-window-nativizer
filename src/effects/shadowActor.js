@@ -15,9 +15,16 @@ import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.j
 import {getPhysicalMonitorScale, snapSliceBoxesInto} from '../lib/snap.js';
 
 // libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
+// The blend advances from the paint pass rather than from a timer: progress is computed from the
+// wall clock when a frame is actually drawn, so steps land on displayed frames at any refresh
+// rate, the duration is real time instead of a count of 16ms callbacks, and a blend still running
+// asks for the next frame by queueing a redraw. The curve stays the generated cubic-bezier -
+// Clutter's own EASE_OUT_* modes are different curves, and this one is upstream's.
+//
+// A ClutterTimeline would be the other way to do this and does not work here: a standalone
+// timeline is not driven by the stage's clock in this shell, and measured zero frames in 600ms.
 const FADE_MS = ADWAITA_STYLE.transition.durationMs;
 const EASE_OUT = ADWAITA_STYLE.transition.easing;
-const FADE_STEP_MS = 16; // ~60 fps
 
 /**
  * @param {number} t - 0..1
@@ -58,8 +65,7 @@ export const ShadowActor = GObject.registerClass({
         this._insets = null;
         this._outgoing = null;
         this._progress = 1;
-        this._elapsed = FADE_MS;
-        this._fadeId = 0;
+        this._fadeStart = 0;
 
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
@@ -133,8 +139,9 @@ export const ShadowActor = GObject.registerClass({
         if (this.width <= 0 || this.height <= 0 || !this._style)
             return;
 
-        if (this._outgoing && this._progress >= 1)
-            this._finishFade();
+        // Bring the blend up to the frame being drawn, then keep frames coming while it runs.
+        if (this._advanceFade())
+            this.queue_redraw();
 
         // Scale by paint opacity; see docs/architecture.md § ShadowActor.
         const paintOpacity = this.get_paint_opacity() / 255;
@@ -226,40 +233,42 @@ export const ShadowActor = GObject.registerClass({
         return entry.boxes;
     }
 
+    /**
+     * Advances the blend to the frame being drawn, and reports whether it is still running - that
+     * answer is what asks for the next frame, since a redraw queued from inside a paint schedules
+     * one. Progress comes from the wall clock, so a frame the compositor skipped costs nothing and
+     * a late frame does not stretch the blend.
+     * @returns {boolean}
+     */
+    _advanceFade() {
+        if (this._fadeStart === 0)
+            return false;
+        const elapsedMs = (GLib.get_monotonic_time() - this._fadeStart) / 1000;
+        this._progress = bezier(Math.min(1, elapsedMs / FADE_MS), EASE_OUT);
+        if (elapsedMs >= FADE_MS) {
+            this._finishFade();
+            return false;
+        }
+        return true;
+    }
+
     _startFade() {
-        // Reset on every start *and* restart: a style change mid-fade re-enters here with a
-        // live timer, and a stale `_elapsed` would jump the new blend straight to the old
-        // position on the next tick instead of ramping from 0.
-        this._elapsed = 0;
-        if (this._fadeId)
-            return;
-        this._fadeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FADE_STEP_MS, () => {
-            this._elapsed += FADE_STEP_MS;
-            this._progress = bezier(Math.min(1, this._elapsed / FADE_MS), EASE_OUT);
-            if (this._elapsed >= FADE_MS)
-                this._finishFade();
-            else
-                this.queue_redraw();
-            return this._fadeId ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
-        });
+        // Starting from 0 on every entry, including a re-entry mid-blend, is what keeps a style
+        // change ramping from the start instead of resuming the previous blend's position.
+        this._fadeStart = GLib.get_monotonic_time();
+        this._progress = 0;
         this.queue_redraw();
     }
 
     _finishFade() {
-        if (this._fadeId) {
-            GLib.Source.remove(this._fadeId);
-            this._fadeId = 0;
-        }
+        this._fadeStart = 0;
         this._outgoing = null;
         this._progress = 1;
         this.queue_redraw();
     }
 
     destroy() {
-        if (this._fadeId) {
-            GLib.Source.remove(this._fadeId);
-            this._fadeId = 0;
-        }
+        this._fadeStart = 0;
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
