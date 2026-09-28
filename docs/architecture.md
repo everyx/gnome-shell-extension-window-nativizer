@@ -310,10 +310,10 @@ arrow; registered on a bare icon-theme search path as `*-symbolic` so recoloring
 without an `index.theme`, in the row's own foreground). The delete button is a
 header suffix left of the expander arrow - `ExpanderRow` prepends suffixes to keep its arrow
 last, so siblings are added in reverse visual order - spaced apart from the icon group. The
-expanded body carries one `Adw.SwitchRow` per axis, titled with the correction it makes
-("Correct corners"; an unavailable axis shows its reason across the full suffix width
-instead) - conditions are not repeated per line, and the group description says what the
-switches do.
+expanded body carries one `Adw.SwitchRow` per axis, titled with the axis itself - the same
+word an unavailable axis uses for its reason row, so the two never read as different things
+- and the switch's tooltip says what turning it on does; conditions are not repeated per
+line.
 
 `windowKindSentence` names all seven structural attributes of a rule key (and folds
 `has_parent`/`attached_dialog` into one phrase; the frame clause carries `has_ring` and

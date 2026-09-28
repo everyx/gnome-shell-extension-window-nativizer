@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 14:16+0800\n"
-"PO-Revision-Date: 2026-09-28 13:17+0800\n"
+"POT-Creation-Date: 2026-09-28 14:18+0800\n"
+"PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
 "Language: zh_TW\n"
@@ -31,225 +31,215 @@ msgstr "陰影"
 msgid "Resize"
 msgstr "調整大小"
 
-#. Translators: A rule axis row: invert the automatic decision about the window's corners.
-#: src/prefs.js:50
-msgid "Correct corners"
-msgstr "修正圓角"
-
-#. Translators: A rule axis row: invert the automatic decision about the window shadow.
-#: src/prefs.js:52
-msgid "Correct shadow"
-msgstr "修正陰影"
-
-#. Translators: A rule axis row: invert the automatic decision about the resize band.
-#: src/prefs.js:54
-msgid "Correct resize"
-msgstr "修正調整大小"
-
 #. Translators: %s is the axis name, e.g. "Corners".
-#: src/prefs.js:67
+#: src/prefs.js:56
 #, javascript-format
 msgid "%s: corrected"
 msgstr "%s：已修正"
 
-#: src/prefs.js:96
+#: src/prefs.js:85
 msgid "Windows of this kind are never decorated"
 msgstr "此類視窗不做裝飾"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:112
+#: src/prefs.js:101
 msgid "The window frame can already be resized"
 msgstr "視窗邊框本身已可調整大小"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/prefs.js:115
+#: src/prefs.js:104
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的視窗沒有可調整大小的邊緣"
 
 #. Translators: A dialog window.
-#: src/prefs.js:138
+#: src/prefs.js:127
 msgid "dialog"
 msgstr "對話框"
 
 #. Translators: A dialog that blocks its parent window.
-#: src/prefs.js:140
+#: src/prefs.js:129
 msgid "modal dialog"
 msgstr "模態對話框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/prefs.js:142
+#: src/prefs.js:131
 msgid "utility window"
 msgstr "工具視窗"
 
 #. Translators: A normal, top-level window.
-#: src/prefs.js:147
+#: src/prefs.js:136
 msgid "window"
 msgstr "視窗"
 
-#: src/prefs.js:158
+#: src/prefs.js:147
 msgid "X11"
 msgstr "X11"
 
-#: src/prefs.js:158
+#: src/prefs.js:147
 msgid "Wayland"
 msgstr "Wayland"
 
-#. Translators: %s is the client type and the window type, e.g. "Wayland window".
-#: src/prefs.js:160
+#. Translators: %s is the client type and the window type, e.g. "Wayland window". If your
+#: src/prefs.js:149
 #, javascript-format
 msgid "%s %s"
 msgstr "%s %s"
 
 #. Translators: The window has no parent window.
-#: src/prefs.js:163
+#: src/prefs.js:152
 msgid "with no parent"
 msgstr "無父視窗"
 
 #. Translators: The window is attached to its parent window.
-#: src/prefs.js:165
+#: src/prefs.js:154
 msgid "attached to its parent"
 msgstr "附加到父視窗"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/prefs.js:167
+#: src/prefs.js:156
 msgid "with a parent"
 msgstr "有父視窗"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/prefs.js:182
+#: src/prefs.js:171
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/prefs.js:185
+#: src/prefs.js:174
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/prefs.js:189
+#: src/prefs.js:178
 msgid "resizable"
 msgstr "可調整大小"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/prefs.js:197
+#: src/prefs.js:186
 msgid "frame drawn by the system"
 msgstr "由系統繪製邊框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/prefs.js:200
+#: src/prefs.js:189
 msgid "no shadow margins"
 msgstr "無陰影邊距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/prefs.js:205
+#: src/prefs.js:194
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/prefs.js:209
+#: src/prefs.js:198
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:304
+#: src/prefs.js:293
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs.js:401
+#. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
+#: src/prefs.js:360
+msgid "Turn on to correct the automatic decision for this window kind"
+msgstr "開啟後修正此類視窗的自動判斷"
+
+#: src/prefs.js:396
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "選取自視窗「%s」"
 
-#: src/prefs.js:417 src/prefs.js:419
+#: src/prefs.js:412 src/prefs.js:414
 msgid "Revert to the automatic decision"
 msgstr "還原為自動判斷"
 
-#: src/prefs.js:503
+#: src/prefs.js:498
 msgid "Window Pick Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:505
+#: src/prefs.js:500
 msgid "A window is already being picked"
 msgstr "視窗選取正在進行"
 
-#: src/prefs.js:506
+#: src/prefs.js:501
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:518
+#: src/prefs.js:513
 msgid "No correction added: this window could not be identified"
 msgstr "未新增修正：無法識別這個視窗"
 
-#: src/prefs.js:539
+#: src/prefs.js:534
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "未新增修正：擴充套件沒有回應——請重新啟動工作階段後再次選取"
 
-#: src/prefs.js:547
+#: src/prefs.js:542
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未新增修正：這條修正對此類視窗不會有任何效果"
 
-#: src/prefs.js:565
+#: src/prefs.js:560
 msgid "No correction added: it could not be saved"
 msgstr "未新增修正：修正未能儲存"
 
-#: src/prefs.js:577
+#: src/prefs.js:572
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:578
+#: src/prefs.js:573
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已為 %s 新增修正：%s"
 
-#: src/prefs.js:588
+#: src/prefs.js:583
 msgid "The correction takes effect once the window is restored"
 msgstr "視窗還原後修正生效"
 
-#: src/prefs.js:606
+#: src/prefs.js:601
 msgid "Pick window…"
 msgstr "選取視窗…"
 
-#: src/prefs.js:609
+#: src/prefs.js:604
 msgid "The correction applies to every window of its kind"
 msgstr "這條修正對此類所有視窗生效"
 
-#: src/prefs.js:617
+#: src/prefs.js:612
 msgid "Corrections"
 msgstr "誤判修正"
 
-#: src/prefs.js:618
+#: src/prefs.js:613
 msgid ""
-"Corrections apply per window kind; anything not listed follows the automatic "
-"decision"
-msgstr "修正按視窗種類生效；未列出的仍依自動判斷處理"
+"Corrections apply per window kind; a switch corrects the automatic decision "
+"for one axis"
+msgstr "修正按視窗種類生效；開關修正其中一個軸的自動判斷"
 
-#: src/prefs.js:663
+#: src/prefs.js:658
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
 
-#: src/prefs.js:727
+#: src/prefs.js:722
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:733
+#: src/prefs.js:728
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:734
+#: src/prefs.js:729
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
 
-#: src/prefs.js:739
+#: src/prefs.js:734
 msgid "Prioritize crisp text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:740
+#: src/prefs.js:735
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
