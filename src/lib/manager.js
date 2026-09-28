@@ -127,10 +127,18 @@ export class Manager {
             GLib.Source.remove(this._reconcileTimeout);
             this._reconcileTimeout = null;
         }
+        // One window must not take the whole teardown with it. `_undecorate` reads the window's
+        // actor, and an exception escaping here skips everything below - leaving the global
+        // handlers connected and `extension._manager` set, which makes every later enable() a
+        // silent no-op. `_tearDownStrays()` in the tail sweeps whatever a skipped iteration left.
         for (const [win, state] of this._windows) {
-            this._dropPendingWork(state);
-            this._disconnectSignals(state.signals);
-            this._undecorate(win);
+            try {
+                this._dropPendingWork(state);
+                this._disconnectSignals(state.signals);
+                this._undecorate(win);
+            } catch (e) {
+                logError(e, '[window-nativizer] Failed to tear down a window decoration');
+            }
         }
         this._windows.clear();
         this._lastFocusWindow = null;
@@ -147,25 +155,29 @@ export class Manager {
     /** Remove orphaned effects/actors from windows closed mid-session (clip/shadow must not outlive disable()). */
     _tearDownStrays() {
         for (const actor of global.window_group?.get_children?.() ?? []) {
-            if (gtypeName(actor) === SHADOW_ACTOR_G_TYPE || gtypeName(actor) === RESIZE_BAND_G_TYPE)
+            if (gtypeName(actor) !== SHADOW_ACTOR_G_TYPE && gtypeName(actor) !== RESIZE_BAND_G_TYPE)
+                continue;
+            try {
                 actor.destroy();
+            } catch {
+                // Already destroyed.
+            }
         }
         for (const winActor of global.get_window_actors?.() ?? []) {
             // Clip may be on window actor or X11 surface child → walk subtree.
             const pending = [winActor];
             while (pending.length > 0) {
                 const target = pending.pop();
-                for (const effect of target.get_effects?.() ?? []) {
-                    if (gtypeName(effect) !== ROUNDED_CLIP_G_TYPE)
-                        continue;
-                    try {
-                        target.remove_effect(effect);
-                    } catch {
-                        // Actor already going away.
+                try {
+                    for (const effect of target.get_effects?.() ?? []) {
+                        if (gtypeName(effect) === ROUNDED_CLIP_G_TYPE)
+                            target.remove_effect(effect);
                     }
+                    const children = target.get_children?.() ?? [];
+                    pending.push(...children);
+                } catch {
+                    // This actor is going away; its clip went with it.
                 }
-                const children = target.get_children?.() ?? [];
-                pending.push(...children);
             }
         }
     }
