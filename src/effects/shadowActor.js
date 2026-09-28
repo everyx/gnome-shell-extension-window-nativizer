@@ -105,7 +105,7 @@ export const ShadowActor = GObject.registerClass({
     /**
      * @param {{radius:number,shadows:Array<object>}} style - resolved for current window state
      */
-    setShadowStyle({radius, shadows}) {
+    setShadowStyle({radius, shadows, animate = false}) {
         const key = styleKey(radius, shadows);
         if (this._style && this._style.key === key)
             return;
@@ -113,6 +113,18 @@ export const ShadowActor = GObject.registerClass({
         if (!this._style) {
             this._style = {key, radius, shadows, pipeline: null};
             this._progress = 1;
+            this.queue_redraw();
+            return;
+        }
+
+        // Upstream declares the transition on the backdrop state alone, so entering backdrop
+        // fades and every other change - gaining focus, maximizing, tiling - snaps. The flag is
+        // generated from the SCSS, so this file does not decide which states animate. It defaults
+        // to false: most states snap, and a caller that forgets the flag should land on the side
+        // that is merely abrupt rather than the one that fades when upstream does not.
+        if (!animate) {
+            this._finishFade();
+            this._style = {key, radius, shadows, pipeline: null};
             this.queue_redraw();
             return;
         }

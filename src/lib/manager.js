@@ -746,9 +746,11 @@ export class Manager {
             // Shadow cast by body, not actor (actor includes client's ring).
             state.shadow.setShadowInsets(insets);
 
+            // Spread rather than rebuild: rebuilding dropped `animate` once, and the default then
+            // faded a state that upstream snaps. Only `radius` is overridden here.
             state.shadow.setShadowStyle({
+                ...style,
                 radius: state.clip && drawClip ? style.radius : 0,
-                shadows: style.shadows,
             });
         }
     }

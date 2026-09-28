@@ -17,9 +17,11 @@ export const ADWAITA_STYLE = {
     window: {
         radius: 15,
         shadows: [{blur: 14, spread: 5, alpha: 0.15}, {blur: 5, spread: 2, alpha: 0.1}, {blur: 0, spread: 1, alpha: 0.05}],
+        animate: false,
         backdrop: {
             radius: 15,
             shadows: [{blur: 14, spread: 5, alpha: 0}, {blur: 10, spread: 5, alpha: 0.08}, {blur: 0, spread: 1, alpha: 0.05}],
+            animate: true,
         },
         highContrast: {
             shadows: [{blur: 14, spread: 5, alpha: 0.15}, {blur: 5, spread: 2, alpha: 0.1}, {blur: 0, spread: 1, alpha: 0.8}],
@@ -28,9 +30,10 @@ export const ADWAITA_STYLE = {
         tiled: {
             radius: 0,
             shadows: [{blur: 0, spread: 1, alpha: 0.15}],
+            animate: false,
         },
-        maximized: {radius: 0, shadows: []},
-        fullscreen: {radius: 0, shadows: []},
+        maximized: {radius: 0, shadows: [], animate: false},
+        fullscreen: {radius: 0, shadows: [], animate: false},
         outline: {
             normal: {color: [255, 255, 255], alpha: 0.07},
             highContrast: {color: [255, 255, 255], alpha: 0.3},
