@@ -767,6 +767,57 @@
             }
         },
         {
+            "id": "backend_get_sprite",
+            "member": "backend.get_sprite()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-backend.h",
+            "sym": "clutter_backend_get_sprite",
+            "decl": {
+                "45": null,
+                "46": null,
+                "47": null,
+                "48": null,
+                "49": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);",
+                "50": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);",
+                "51": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);"
+            }
+        },
+        {
+            "id": "backend_get_pointer_sprite",
+            "member": "backend.get_pointer_sprite()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-backend.h",
+            "sym": "clutter_backend_get_pointer_sprite",
+            "decl": {
+                "45": null,
+                "46": null,
+                "47": null,
+                "48": null,
+                "49": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);",
+                "50": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);",
+                "51": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);"
+            }
+        },
+        {
+            "id": "seat_get_pointer",
+            "member": "seat.get_pointer()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-seat.h",
+            "sym": "clutter_seat_get_pointer",
+            "decl": {
+                "45": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
+                "46": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
+                "47": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
+                "48": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
+                "49": null,
+                "50": null,
+                "51": null
+            }
+        },
+        {
             "id": "backend_get_default_seat",
             "member": "backend.get_default_seat()",
             "repo": "mutter",

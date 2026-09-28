@@ -216,6 +216,22 @@ signatures for it, probed once in `effects/shadowTexture.js`.
 `effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The whole file goes
 away in 51, which is why the compat class exists at all.
 
+## backend_get_sprite
+
+`backend.get_sprite()` - added in 49, in the same release the grab operation started taking a sprite
+instead of a device and a sequence. `compat/grabOp.js` dispatches on this pair: 45 and 49-51 both
+declare four parameters, so arity alone cannot tell them apart.
+
+## backend_get_pointer_sprite
+
+`backend.get_pointer_sprite()` - the fallback spelling of the same call, tried when `get_sprite` is
+unavailable. Either one being callable is what marks a shell as 49 or later.
+
+## seat_get_pointer
+
+`seat.get_pointer()` - the core pointer, resolved on 45-48 through
+`Clutter.get_default_backend().get_default_seat()`. It is the device the legacy grab signature takes.
+
 ## backend_get_default_seat
 
 `backend.get_default_seat()` - resolves the pointer device on 45-48, reached through
