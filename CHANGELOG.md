@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.9.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.8.1...v0.9.0) (2026-09-29)
+
+
+### Features
+
+* **style:** derive which states animate from the SCSS ([246b826](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/246b8260ae442bc694a04313ef4e5ef93cdaf23d))
+* **style:** draw the tiled ring as a shadow layer that carries a colour ([e6a627d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e6a627de8fd05cf5c68dff749ba6fbdf8e89b6f2))
+* **style:** stop blending when the user has turned animations off ([85589e6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/85589e612c50c9f7fd1737ab2f9108e653de3310))
+
+
+### Bug Fixes
+
+* **compat:** tell GNOME 45 apart from 49–51 by what the backend can do ([8e2c7f6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8e2c7f69fb485b2a1f87c300d4e7704832f3ea04))
+* **detector:** clear a client's ring only when the tiled style draws one ([ea3287e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ea3287eb7a2df7216c416b320de91ffd7c66efed))
+* **manager:** decide the tiled decoration actor from the axes, not from the shadow ([7581a76](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7581a7687fa4fa1061acccbdcf519dcf4ba3b6e4))
+* **manager:** reconcile a focus change immediately, not after the debounce ([5e24d83](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5e24d83362d1295601b1f4f1017066ddfc86f44d))
+* **prefs:** generate the picker highlight from the Shell's own pickers ([4af7402](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4af7402268506f894da681f41d46e18b11366f5c))
+
+
+### Performance
+
+* **shadow:** advance the blend from the paint pass, not a 60Hz timer ([1170675](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1170675a98138e20db8fc7bb0f62e2b2f388b526))
+
+
+### Documentation
+
+* correct the API surface against the audited declarations ([2050ab2](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2050ab255b3ba2805eb53fee83f5da3eaa2cef76))
+* **decoration-model:** record why the two libadwaita variants are left alone ([5ed8222](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5ed8222b09a66922705b633b66be5222110e3b0c)), closes [#69](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/69)
+* derive the API table from the audit record instead of typing it ([a18e036](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a18e036fbb681e79a63d220adbb486c9afbf5a79))
+* **development:** say what a stub may stand for, and what only pixels settle ([7ba9068](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7ba90687504a514020953a5e3e4b1ec5e1ec598e))
+* **readme:** fold the related-projects list into the adw-gtk3 entry ([ec0b825](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ec0b825458deb9f8579d211bc714e021c108e1b9))
+* **readme:** keep the license section to the license ([e1698b0](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e1698b0b683e49ad0089cd17771a40690f284757))
+* **readme:** make the Chinese README correspond to the English one ([a5b51a5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a5b51a580aad3995ba8e1120842a921f2a161028))
+* **readme:** show the tiled ring and the states the decoration follows ([c9d9889](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c9d988978baec069c1565c7661ac8aac8dbf38c7))
+* say the project is LLM-assisted, and what an EGO review rejects ([052d8cd](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/052d8cdc5c08298694ebffc2d67c14847b16c1f6))
+
 ## [0.8.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.8.0...v0.8.1) (2026-09-28)
 
 
