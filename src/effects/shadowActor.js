@@ -107,13 +107,16 @@ export const ShadowActor = GObject.registerClass({
     /**
      * @param {{radius:number,shadows:Array<object>}} style - resolved for current window state
      */
-    setShadowStyle({radius, shadows, animate = false}) {
-        const key = styleKey(radius, shadows);
+    setShadowStyle(style) {
+        const {radius, shadows, animate = false} = style;
+        const key = styleKey(radius, shadows, style.border ?? null);
         if (this._style && this._style.key === key)
             return;
 
+        // Spread the given style rather than rebuilding it: rebuilding dropped `animate` once and
+        // `border` once, and each time the field was correct everywhere the unit tests looked.
         if (!this._style) {
-            this._style = {key, radius, shadows, pipeline: null};
+            this._style = {...style, key, pipeline: null};
             this._progress = 1;
             this.queue_redraw();
             return;
@@ -126,7 +129,7 @@ export const ShadowActor = GObject.registerClass({
         // that is merely abrupt rather than the one that fades when upstream does not.
         if (!animate) {
             this._finishFade();
-            this._style = {key, radius, shadows, pipeline: null};
+            this._style = {...style, key, pipeline: null};
             this.queue_redraw();
             return;
         }
@@ -140,7 +143,7 @@ export const ShadowActor = GObject.registerClass({
             keptWeight = (1 - this._progress) * this._outgoing.weight;
 
         this._outgoing = kept ? {style: kept, weight: keptWeight} : null;
-        this._style = {key, radius, shadows, pipeline: null};
+        this._style = {...style, key, pipeline: null};
         this._progress = 0;
 
         if (this._outgoing)

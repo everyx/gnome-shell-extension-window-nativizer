@@ -34,10 +34,14 @@ export function reset() {
 /**
  * @param {number} radius
  * @param {Array<object>} shadows
+ * @param {object|null} [border]
  * @returns {string}
  */
-export function styleKey(radius, shadows) {
-    return `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
+export function styleKey(radius, shadows, border = null) {
+    const base = `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
+    // The tiled style has no shadows and the maximized one has none either, so without the border
+    // the two share a key and a window moving between them would keep whatever it had.
+    return border ? `${base}|border:${border.width},${border.alpha},${border.color?.join(',')}` : base;
 }
 
 /**
