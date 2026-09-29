@@ -920,6 +920,57 @@
             }
         },
         {
+            "id": "st_system_color_scheme",
+            "member": "St.SystemColorScheme",
+            "repo": "gnome-shell",
+            "kind": "enum",
+            "file": "src/st/st-settings.h",
+            "sym": "ST_SYSTEM_COLOR_SCHEME",
+            "decl": {
+                "45": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "46": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "47": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "48": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "49": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "50": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
+                "51": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,"
+            }
+        },
+        {
+            "id": "st_settings_enable_animations",
+            "member": "St.Settings:enable-animations",
+            "repo": "gnome-shell",
+            "kind": "prop",
+            "file": "src/st/st-settings.c",
+            "sym": "enable-animations",
+            "decl": {
+                "45": "g_param_spec_boolean (\"enable-animations\", \"Enable animations\", \"Enable animations\", TRUE, ST_PARAM_READABLE);",
+                "46": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
+                "47": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
+                "48": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
+                "49": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
+                "50": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
+                "51": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);"
+            }
+        },
+        {
+            "id": "st_settings_color_scheme",
+            "member": "St.Settings:color-scheme",
+            "repo": "gnome-shell",
+            "kind": "prop",
+            "file": "src/st/st-settings.c",
+            "sym": "color-scheme",
+            "decl": {
+                "45": "g_param_spec_enum (\"color-scheme\", \"Color scheme\", \"Color scheme\", ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "46": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "47": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "48": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "49": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "50": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
+                "51": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);"
+            }
+        },
+        {
             "id": "st_settings_get",
             "member": "St.Settings.get()",
             "repo": "gnome-shell",

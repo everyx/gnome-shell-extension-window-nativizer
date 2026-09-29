@@ -102,6 +102,9 @@ const SURFACE = [
     {ns: 'Shell', cls: 'GLSLEffect', member: 'set_uniform_float', params: ['uniform', 'n_components', 'value'], optional: true},
     {ns: 'Shell', cls: 'WindowTracker', member: 'get_default', static: true, arity: 0},
     {ns: 'St', cls: 'Settings', member: 'get', static: true, arity: 0},
+    {ns: 'St', cls: 'Settings', member: 'enable_animations', property: true},
+    {ns: 'St', cls: 'Settings', member: 'color_scheme', property: true},
+    {ns: 'St', cls: 'SystemColorScheme', enum: true},
     {ns: 'St', cls: 'BoxLayout', class: true},
 ];
 
@@ -180,7 +183,7 @@ function resolve(entry) {
 
 /** How a member is spelled in a report line. */
 function label(entry) {
-    if (entry.class)
+    if (entry.class || entry.enum)
         return `${entry.ns}.${entry.cls}`;
     if (entry.namespace)
         return `${entry.ns}.${entry.member}`;
@@ -211,6 +214,15 @@ for (const entry of SURFACE) {
         skipped++;
         if (VERBOSE)
             print(`  skip  ${what} - ${entry.ns} does not load outside the shell`);
+        continue;
+    }
+    if (entry.enum) {
+        // GJS exposes an enum as a plain object of its values, not as a class.
+        const ok = target !== null && typeof target === 'object';
+        if (ok)
+            report(what, 'enum');
+        else
+            fail(what, `not an enum object (typeof ${typeof target})`);
         continue;
     }
     if (entry.class) {

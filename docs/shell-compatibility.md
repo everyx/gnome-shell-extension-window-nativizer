@@ -1,10 +1,10 @@
 # The Shell / Mutter API surface we depend on
 
-Audited against the newest patch release of every GNOME line from 45 to 51 - Mutter 45.7, 46.9,
-47.10, 48.8, 49.8, 50.5, 51.0 and GNOME Shell 45.10, 46.10, 47.10, 48.8, 49.10, 50.5, 51.0 -
-with each declaration below extracted from a clone at that tag instead of read by hand. The
-extraction and its result are recorded in `tools/shell-api.json`; `tools/audit-shell-api.mjs`
-re-derives them, and [development.md](development.md) describes when to run it.
+Audited against the newest patch release of every GNOME line from 45 to 51, with each declaration
+below extracted from a clone at that tag instead of read by hand. The extraction and its result are
+recorded in `tools/shell-api.json`, together with the tag and commit each one came from;
+`tools/audit-shell-api.mjs` re-derives them, and [development.md](development.md) describes when to
+run it.
 
 While GNOME 51 aligns the Mutter API
 version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs instead of `18`),
@@ -70,6 +70,9 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Shell.GLSLEffect` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
 | `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |
 | `St.BoxLayout:vertical` | 45 / 46–47 / 48–50 / 51 absent | [why](shell-api.md#st_box_layout_vertical) |
+| `St.SystemColorScheme` | 45–51 stable | [why](shell-api.md#st_system_color_scheme) |
+| `St.Settings:enable-animations` | 45 / 46–51 | [why](shell-api.md#st_settings_enable_animations) |
+| `St.Settings:color-scheme` | 45 / 46–51 | [why](shell-api.md#st_settings_color_scheme) |
 | `St.Settings.get()` | 45–51 stable | [why](shell-api.md#st_settings_get) |
 | `Main.overview` | 45–51 stable | [why](shell-api.md#main_overview) |
 | `Main.uiGroup` | 45–51 stable | [why](shell-api.md#main_ui_group) |
@@ -88,7 +91,7 @@ shape is in the table above, computed rather than remembered.
 
 GNOME Shell 51 migration guide lists additional upstream breaking changes that were audited for applicability:
 - **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. Our `extension.js:disable()` is completely synchronous.
-- **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely on GNOME 49–51 by gating legacy device lookup behind `win.begin_grab_op.length === 5`.
+- **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely on GNOME 49–51: the dispatch asks whether the backend can produce a pointer sprite at all, and only the 45–48 path reaches for a device.
 - **`St.ButtonMask` enum renames**: Not used by this extension.
 - **`St.BoxLayout:vertical` property removed** (deprecated since 48): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
 - **`Gio.DBus.makeProxyWrapper()` returns class needing `new`**: Not used (our IPC uses `Gio.DBusExportedObject` / standard GDBus proxy).

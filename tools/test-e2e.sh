@@ -206,11 +206,14 @@ echo ">> Clip effect, shadow actor and resize band successfully verified on acti
 # its public API. A blend that never gets a frame would also sit at weight 0 and paint no shadow
 # while leaving the actor attached, which every other assertion in this file would accept.
 echo ">> [test-e2e] Verifying a focus change blends one way and snaps the other..."
-# Two clients of the guard's own. The client under test closes itself on its own schedule, and a
-# probe that outlives it activates an unmanaged window - which makes mutter warn, and the log audit
-# fails on that. Owning both windows removes the race instead of narrowing it.
-"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-a >/dev/null 2>&1 &
-"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" --blend-b >/dev/null 2>&1 &
+# Two clients of the guard's own, with distinct application ids so both exist. The client under test
+# closes itself on its own schedule, and a probe that outlives it activates an unmanaged window -
+# which makes mutter warn, and the log audit fails on that. The probe still picks the first two
+# decorated windows rather than its own, so the liveness checks below are what make that safe.
+# Distinct application ids, because GApplication is single-instance per id: two launches under one
+# id produce one window, which is how this guard ended up borrowing the client under test.
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 WINDOW_NATIVIZER_APP_ID=dev.windownativizer.blenda gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+"$DEV" app env WINDOW_NATIVIZER_DECORATED=1 WINDOW_NATIVIZER_APP_ID=dev.windownativizer.blendb gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
 BLEND_RESULT="$(shell_eval "
 (async () => {
     const GLib = (await import('gi://GLib')).default;
@@ -286,7 +289,7 @@ BLEND_RESULT="$(shell_eval "
         decorated: tracked.length, windows: global.get_window_actors().length});
 })()
 ")"
-pkill -f "probe-window[.]js --blend-" 2>/dev/null || true
+pkill -f "probe-window[.]js" 2>/dev/null || true
 
 echo ">> Blend check: $BLEND_RESULT"
 # Losing focus must start a blend and the blend must settle - a unit test cannot reach either,
@@ -539,6 +542,52 @@ sys.exit(0 if d.get("hasBand") and zero("top") and zero("bottom") and live("left
 echo ">> Vertically maximized state: $VERT_STATE"
 echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
 
+# The ring is 15% of the theme colour over whatever is behind it, and that is the whole of the tiled
+# style - a style-field assertion cannot see whether it renders at all. The wallpaper is unknowable,
+# so the check is relative: it holds for any backdrop, and accepts either theme colour.
+RING_BUS="$(get_dbus_bus)"
+RING_PIXEL="$(shell_eval '
+(() => {
+    const w = global.get_window_actors()[0].meta_window;
+    const f = w.get_frame_rect();
+    // The screenshot is in physical pixels and frame rects are in logical ones, so scale.
+    const s = global.display.get_monitor_scale(w.get_monitor());
+    return JSON.stringify({left: Math.round(f.x * s), y: Math.round((f.y + Math.floor(f.height / 2)) * s)});
+})()
+')"
+rm -f /tmp/window-nativizer-ring.png
+gdbus call --address "$RING_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+    --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-ring.png >/dev/null 2>&1
+if ! python3 - "$RING_PIXEL" <<'PYEOF'
+import json, re, sys
+from PIL import Image
+
+reply = sys.argv[1]
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+if not match:
+    sys.exit(f"no geometry in reply: {reply!r}")
+g = json.loads(match.group(0))
+im = Image.open('/tmp/window-nativizer-ring.png').convert('RGB')
+x, y = g['left'], g['y']
+backdrop = im.getpixel((x - 8, y))
+ring = im.getpixel((x - 1, y))
+expected = [[round(a * 0.15 + b * 0.85) for a, b in ((theme, backdrop[i]) for i in range(3))]
+            for theme in (0, 255)]
+close = any(all(abs(ring[i] - e[i]) <= 4 for i in range(3)) for e in expected)
+print(f"backdrop={backdrop} ring={ring} expected={expected}")
+sys.exit(0 if close else 1)
+PYEOF
+then
+    echo "!! The tiled ring did not render at the layer's own alpha over the backdrop (see the line above)"
+    exit 1
+fi
+echo ">> Tiled ring pixel verified at the layer alpha."
+
+
+# These read ShadowActor's private fields on purpose: the blend's outgoing style, progress and
+# resolved layer are what the assertions are about, and nothing public exposes them. They are stable
+# within this repo - if they are renamed the probe fails loudly rather than silently passing.
+#
 # The tiled style's ring is drawn by the shadow actor, and that actor was gated on "has shadow" -
 # which a tiled window does not have, so the ring was never drawn at all. The band assertion above
 # cannot see that: the resize axis is independent of the decoration, which is why it stayed green.
@@ -565,7 +614,7 @@ if ! check_fields "$TILED_STYLE" '{"verticalOnly": true, "actor": true, "border"
     echo "!! A vertically maximized window did not get the tiled style, or the actor that draws its ring is missing: $TILED_STYLE"
     exit 1
 fi
-echo ">> Tiled ring verified: the tiled style carries a border, has no shadow layers, and its actor exists."
+echo ">> Tiled ring verified: the tiled style carries a border, exactly one layer holding the colour, and the actor that draws it."
 
 # (a2) Left half of the work area, flush against the left edge, vertically maximized as
 # Mutter's own left tile does it (`meta_window_tile_internal()`). The divider keeps its band;

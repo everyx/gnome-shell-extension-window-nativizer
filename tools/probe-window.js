@@ -36,9 +36,12 @@ const sizeMatch = GLib.getenv('WINDOW_NATIVIZER_SIZE')?.match(/^(\d+)x(\d+)$/);
 const sizeW = sizeMatch ? parseInt(sizeMatch[1], 10) : 900;
 const sizeH = sizeMatch ? parseInt(sizeMatch[2], 10) : 600;
 
-const applicationId = native
-    ? 'dev.windownativizer.native'
-    : (backdrop ? 'dev.windownativizer.backdrop' : 'dev.windownativizer.probe');
+// Overridable so one test can run two clients at once: GApplication is single-instance per id, so a
+// second launch with the same id only activates the first window.
+const applicationId = GLib.getenv('WINDOW_NATIVIZER_APP_ID') ??
+    (native
+        ? 'dev.windownativizer.native'
+        : (backdrop ? 'dev.windownativizer.backdrop' : 'dev.windownativizer.probe'));
 
 let Adw = null;
 if (native)
