@@ -29,13 +29,12 @@ function backendHasSpriteApi() {
 }
 
 function getPointerDevice() {
-    const display = globalThis.global?.display;
-    // Clutter.get_default_backend().get_default_seat() is what actually resolves the pointer
-    // device on 45-48: Meta.Display declares no get_default_seat in any of 45-51, so the first
-    // branch is dead today and is kept only in case a future Mutter adds it.
-    // get_default_backend is dropped in GNOME 51, and the whole path is only reached on 45-48.
-    const seat = display?.get_default_seat?.() ?? globalThis?.Clutter?.get_default_backend?.()?.get_default_seat?.();
-    return seat?.get_pointer?.() ?? null;
+    // The seat hangs off the same backend the sprite API does, and this path is only reached on
+    // 45-48, where that backend declares get_default_seat and its seat declares get_pointer. Asking
+    // the display is not an option: Meta.Display declares no get_default_seat in any of 45-51. Nor
+    // is Clutter.get_default_backend: it is a Clutter global the shell never defines - environment.js
+    // adds only global/_/C_/ngettext/N_ to the global namespace - so reading it resolves nothing.
+    return resolveBackend()?.get_default_seat?.()?.get_pointer?.() ?? null;
 }
 
 /**

@@ -36,15 +36,18 @@ describe('compat', () => {
         let originalGlobal;
 
         // The dispatch reads two things only the shell can answer: whether the backend can produce
-        // a pointer sprite (49+), and, when it cannot, the pointer device (45-48). Both are stubbed
-        // per case, which is what lets one machine cover all three signatures.
+        // a pointer sprite (49+), and, when it cannot, the pointer device (45-48). Both live on the
+        // same backend, and both are stubbed per case, which is what lets one machine cover all
+        // three signatures. Nothing is put on globalThis.Clutter: the shell never defines such a
+        // global, so a test that stubs one passes even when the code reads a name that is not there.
         function useShell({spriteApi}) {
             const device = {id: 'pointer-device'};
-            const backend = spriteApi
-                ? {get_sprite: () => null, get_pointer_sprite: () => null}
-                : {};
+            const backend = {
+                get_default_seat: () => ({get_pointer: () => device}),
+                ...(spriteApi ? {get_sprite: () => null, get_pointer_sprite: () => null} : {}),
+            };
             globalThis.global = {
-                display: {get_default_seat: () => ({get_pointer: () => device})},
+                display: {},
                 stage: {get_context: () => ({get_backend: () => backend})},
                 backend,
             };
@@ -118,6 +121,8 @@ describe('compat', () => {
         });
 
         it('returns false on 45–48 when no pointer device can be resolved', () => {
+            // A backend with no seat to hand one out, and no backend at all: on 45-48 the backend
+            // is the only place a pointer device can come from.
             globalThis.global = {display: {}, stage: {get_context: () => ({get_backend: () => ({})})}};
             let called = false;
             const mockWin = {
