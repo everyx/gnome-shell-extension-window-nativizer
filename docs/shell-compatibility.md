@@ -65,7 +65,6 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `backend.get_pointer_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_pointer_sprite) |
 | `seat.get_pointer()` | 45–48 / 49–51 absent | [why](shell-api.md#seat_get_pointer) |
 | `backend.get_default_seat()` | 45–51 stable | [why](shell-api.md#backend_get_default_seat) |
-| `Clutter.get_default_backend()` | 45–50 / 51 absent | [why](shell-api.md#get_default_backend) |
 | `Meta-<api> / Shell-<api> typelibs` | 45 / 46 / 47 / 48 / 49 / 50 / 51 | [why](shell-api.md#mutter_api_version) |
 | `Shell.GLSLEffect` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
 | `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |

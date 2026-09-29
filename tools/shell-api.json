@@ -835,23 +835,6 @@
             }
         },
         {
-            "id": "get_default_backend",
-            "member": "Clutter.get_default_backend()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "clutter/clutter/clutter-backend.h",
-            "sym": "clutter_get_default_backend",
-            "decl": {
-                "45": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "46": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "47": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "48": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "49": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "50": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
-                "51": null
-            }
-        },
-        {
             "id": "mutter_api_version",
             "member": "Meta-<api> / Shell-<api> typelibs",
             "repo": "mutter",
