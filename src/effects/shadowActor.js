@@ -213,7 +213,12 @@ export const ShadowActor = GObject.registerClass({
             this._borderPipelines.set(key, pipeline);
         }
 
-        const body = this._castRect();
+        // `_castRect()` is in the shadow texture's coordinates, where the visible window sits at
+        // `SHADOW_PAD` inside it - the slices are placed by that offset in `_relayout`, which is why
+        // the shadow hugs the window. The ring has to shift by the same amount, or it lands a
+        // SHADOW_PAD outside the window with nothing in between.
+        const cast = this._castRect();
+        const body = {x: cast.x + SHADOW_PAD, y: cast.y + SHADOW_PAD, width: cast.width, height: cast.height};
         const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
 
