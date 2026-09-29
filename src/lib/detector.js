@@ -360,11 +360,12 @@ export function evaluateWindowActions({
     tiled = false,
     highContrast = false,
     animationsEnabled = true,
+    dark = false,
     wmClass,
     rules = {},
     preferCrispText = false,
 }) {
-    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled});
+    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled, dark});
 
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
 
@@ -417,8 +418,11 @@ export function evaluateWindowActions({
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
 
-    // Ring is ours to clear exactly when the shadow we draw is ours.
-    const clearRing = ownRing && shadow;
+    // Ring is ours to clear exactly when the ring we draw is ours. A tiled window is the case that
+    // is not a shadow: upstream gives it a 1px ring instead, so the client's own ring has to be
+    // erased for ours to replace it rather than stack on top - the shadow axis is false there, and
+    // the style's border marker is what says we are drawing one.
+    const clearRing = ownRing && (shadow || Boolean(style.border));
 
     const drawResize = decideResizeBand({
         reversed: Boolean(rule?.has(RuleAxis.RESIZE)),
