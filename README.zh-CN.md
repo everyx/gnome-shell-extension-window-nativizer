@@ -124,11 +124,9 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 本扩展只管窗口本身。窗口里面的标题栏、按钮、菜单来自应用自己的主题，窗口装饰改不了。想让那些也对上：
 
-- **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** — GTK3 应用用，libadwaita 的非官方 GTK3 移植。
+- **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** — GTK3 应用用，libadwaita 的非官方 GTK3 移植；它还有一份[清单](https://github.com/lassekongo83/adw-gtk3#related-projects)，涵盖 Electron、Wine、Java 以及非 libadwaita 的 GTK4 应用。
 - **[Legacy Theme Scheme Auto Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/)** — 让 GTK3 应用跟着深色模式走。
 - **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** — Qt 应用用，换成 Adwaita 风格的标题栏。
-
-Electron、Wine、Java 和非 libadwaita 的 GTK4 应用各有对应项目，adw-gtk3 的 README 有一份[清单](https://github.com/lassekongo83/adw-gtk3#related-projects)。
 
 ---
 

@@ -126,14 +126,12 @@ This extension only fixes the window frame. What's inside — title bar, buttons
 the app's own theme, and no window decoration can change it. For that:
 
 - **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** for GTK3 apps — an unofficial GTK3 port of
-  libadwaita.
+  libadwaita, whose README keeps a [list](https://github.com/lassekongo83/adw-gtk3#related-projects)
+  of the projects covering Electron, Wine, Java and GTK4 apps that aren't libadwaita.
 - **[Legacy Theme Scheme Auto Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/)**
   so GTK3 apps follow dark mode.
 - **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** for Qt apps — Adwaita-style
   title bars.
-
-Electron, Wine, Java and GTK4 apps that aren't libadwaita have their own projects; adw-gtk3's README
-keeps a [list](https://github.com/lassekongo83/adw-gtk3#related-projects).
 
 ---
 
