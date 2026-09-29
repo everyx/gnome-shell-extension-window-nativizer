@@ -34,10 +34,19 @@ export function reset() {
 /**
  * @param {number} radius
  * @param {Array<object>} shadows
+ * @param {object|null} [border]
  * @returns {string}
  */
+/** The colour a style's layers are drawn in: the first one that names a colour, else black. */
+export function styleColor(shadows) {
+    return shadows.find(s => s.color)?.color ?? [0, 0, 0];
+}
+
 export function styleKey(radius, shadows) {
-    return `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
+    // The colour is part of the key: the tiled ring is a layer like any other and its colour is the
+    // one that changes with the theme, so without it a light and a dark bake would collide.
+    const layers = shadows.map(s => `${s.blur},${s.spread},${s.alpha},${(s.color ?? [0, 0, 0]).join(',')}`);
+    return `${radius}|${layers.join(';')}`;
 }
 
 /**
@@ -104,6 +113,8 @@ function bake(context, radius, shadows) {
     uniform(pipeline, 'uWinSize', 2, [window, window]);
     uniform(pipeline, 'uRadius', 1, [radius]);
     uniform(pipeline, 'uPad', 2, [SHADOW_PAD, SHADOW_PAD]);
+    const color = styleColor(shadows);
+    uniform(pipeline, 'uColor', 4, [color[0] / 255, color[1] / 255, color[2] / 255, 1]);
     for (let i = 0; i < LAYER_COUNT; i++) {
         const layer = shadows[i] ?? NO_SHADOW;
         uniform(pipeline, `uShadow${i + 1}`, 4, [layer.blur, layer.spread, layer.alpha, 0]);
