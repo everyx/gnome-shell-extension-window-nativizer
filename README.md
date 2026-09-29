@@ -22,6 +22,10 @@ Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard re
 
 </div>
 
+> [!IMPORTANT]
+> This is an LLM-assisted (vibe coding) project, personally tested and verified in real-world daily
+> use, and strictly backed by automated upstream parity tests.
+
 ---
 
 ## Key Features

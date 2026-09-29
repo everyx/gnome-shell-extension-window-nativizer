@@ -30,6 +30,15 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run pack` | builds `dist/<uuid>.zip` |
 | `pnpm run shexli` | analyses that zip |
 
+## What an extensions.gnome.org review rejects
+
+The [guidelines](https://gjs.guide/extensions/review-guidelines/review-guidelines.html) allow AI as a
+development tool, and reject submissions that look unreviewed: unnecessary code, inconsistent style,
+imaginary API usage, and comments that read as prompts. Three of those are mechanical, and the check
+chain above is what answers them - `tools/shell-api.json` and `tools/gjs-surface.js` are what catch a
+call the shell does not have before a reviewer does. The fourth is a judgement the code has to earn:
+a comment here explains the line it sits on, and the reasoning goes in `docs/`.
+
 **What a stub may stand for, and what only pixels settle.** A stub may only stand for something the
 type declares. `tests/compat.test.js` used to stub `display.get_default_seat`, a method
 `Meta.Display` has not declared in any of 45-51, so the test passed while the code path resolved
