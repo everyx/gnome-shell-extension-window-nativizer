@@ -85,6 +85,8 @@ uniform vec4 uShadow1;      // (blur, spread, alpha, 0)
 uniform vec4 uShadow2;
 uniform vec4 uShadow3;      // Outline layer (blur=0)
 uniform vec2 uPad;          // Shadow actor padding per side (px)
+uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes this as a flat
+                            // varying; one quad per bake makes a uniform equivalent).
 
 const float PI = 3.141592653589793;
 const float SQRT1_2 = 0.7071067811865475;
@@ -192,7 +194,11 @@ const code = `
     float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
 
     // Multiply shadow alpha by vertex alpha (cogl_color_in.a) to smoothly follow fade animations
-    cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);
+    // Premultiplied, the way upstream's output_color_alpha (_color, alpha) is: a black shadow is
+    // unchanged by this, and it is what lets a layer carry a colour - the tiled border does, since
+    // its colour is currentColor rather than a shadow's black.
+    float outAlpha = min(a, 1.0) * cogl_color_in.a;
+    cogl_color_out = vec4(uColor.rgb * outAlpha, outAlpha);
 `;
 
 function toTemplateLiteral(str) {

@@ -311,8 +311,13 @@ export const ADWAITA_STYLE = {
             backdropShadows: [${fmtShadows(hcBackdropShadows)}],
         },
         tiled: {
+            // Upstream's tiled rule is a 1px spread box-shadow whose colour is currentColor - the
+            // one theme-dependent colour in the whole decoration. The layer carries it, since the
+            // shader now takes a colour per style. The border field is only a marker that this ring
+            // is drawn on purpose, for the manager's decision about whether to decorate at all.
             radius: 0,
             shadows: [{blur: 0, spread: 1, alpha: ${borderOpacity}}],
+            border: {width: 1},
             animate: ${animates.tiled},
         },
         maximized: {radius: 0, shadows: [], animate: ${animates.maximized}},
