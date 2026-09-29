@@ -538,8 +538,13 @@ export class Manager {
 
             this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
-            // No clip → client's shadow still visible; defer ours to avoid double shadow.
-            this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
+            // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
+            // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring -
+            // and the ring is drawn by this actor. It exists whenever the resolved style has
+            // anything to draw, while the shadow keeps its own gate (no clip yet means the client's
+            // shadow is still visible and ours would double it).
+            const wantsBorder = Boolean(actions.style?.border);
+            this._syncShadow(win, wantsBorder || (actions.clearRing && !state.clip ? false : actions.drawShadow));
 
             // The resize axis is independent of the decoration or tiling: a tile match
             // only takes the shadow, never the grab band.
