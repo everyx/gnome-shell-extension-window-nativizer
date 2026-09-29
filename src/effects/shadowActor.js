@@ -203,12 +203,17 @@ export const ShadowActor = GObject.registerClass({
         const key = `${color.join(',')}|${alpha}|${Math.round(paintOpacity * 255)}`;
         let pipeline = this._borderPipelines.get(key);
         if (!pipeline) {
+            // Cogl colors are premultiplied, and this pipeline has no texture to modulate, so the
+            // color it is given is what the GPU blends. Passing white at alpha 38 un-premultiplied
+            // made the ring read as `255 + 0.85 * backdrop` - a near-opaque line on a dark theme -
+            // where upstream's 15% white is `0.15 * 255 + 0.85 * backdrop`.
+            const a = Math.round(alpha * paintOpacity * 255);
             pipeline = Cogl.Pipeline.new(context);
             pipeline.set_color(new Cogl.Color({
-                red: color[0],
-                green: color[1],
-                blue: color[2],
-                alpha: Math.round(alpha * paintOpacity * 255),
+                red: Math.round(color[0] * a / 255),
+                green: Math.round(color[1] * a / 255),
+                blue: Math.round(color[2] * a / 255),
+                alpha: a,
             }));
             this._borderPipelines.set(key, pipeline);
         }
