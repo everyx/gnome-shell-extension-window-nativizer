@@ -1,6 +1,6 @@
 {
   "name": "window-nativizer",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "GNOME Shell extension: brings native GNOME rounded corners, GPU shadows, and resize bands to non-native windows",
@@ -27,7 +27,7 @@
     "stop": "tools/dev.sh stop",
     "devkit": "tools/devkit.sh",
     "gen-gtk": "node tools/gen-gtk.mjs",
-        "gen-inspector": "node tools/gen-inspector.mjs",
+    "gen-inspector": "node tools/gen-inspector.mjs",
     "gen-mutter": "node tools/gen-mutter.mjs",
     "gen-clutter": "node tools/gen-clutter.mjs",
     "gen-style": "node tools/gen-clutter.mjs && node tools/gen-style.mjs && node tools/gen-shader.mjs && node tools/gen-mutter.mjs && node tools/gen-gtk.mjs && node tools/gen-shell-api.mjs",
