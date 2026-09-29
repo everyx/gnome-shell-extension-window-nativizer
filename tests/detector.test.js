@@ -815,9 +815,10 @@ describe('evaluateWindowActions', () => {
         expect(toolbarWin.drawShadow).toBeFalse();
     });
 
-    it('a tile match is about our shadow, so it no longer clears a client\'s own ring', () => {
-        // Tiled means flat corners, so there is no clip; the client's ring is not
-        // ours to erase just because a policy dropped the shadow we would draw.
+    it('a tile match draws the tiled ring, so the client\'s own ring is ours to clear', () => {
+        // Tiled means flat corners, so the clip draws nothing - but the tiled style draws the 1px
+        // ring itself, and the client's ring has to go for ours to replace it rather than stack on
+        // top of it. Measured before this: the client's ~12% and our 15% composited to 25%.
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
@@ -826,7 +827,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
-        expect(res.clearRing).toBeFalse();
+        expect(res.clearRing).toBeTrue();
     });
 
     it('crisp text on a has-csd window leaves it entirely alone', () => {
