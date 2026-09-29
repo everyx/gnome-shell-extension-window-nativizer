@@ -12,6 +12,7 @@ import {
 import {buildRuleKeyFromProperties} from './pick.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
+import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 
 // Four-layer model in docs/decoration-model.md; pure logic, unit-testable.
@@ -569,10 +570,10 @@ export function expectedWindowRadius({
     return 0;
 }
 
-/**
- * Default inspector highlight border width in pixels, aligned with GNOME Shell screenshot overlay.
- */
-export const HIGHLIGHT_BORDER_WIDTH = 3;
+// The picker's highlight metrics are generated from the Shell's own pickers: the border from the
+// Looking Glass picker, the fill from the screenshot window selector. vendor/gnome-shell/README.md
+// records which is which, and why the border does not follow the selector's 6px.
+export {HIGHLIGHT_BORDER_WIDTH};
 
 /**
  * Outset bounding box for the inspector highlight border around the window.

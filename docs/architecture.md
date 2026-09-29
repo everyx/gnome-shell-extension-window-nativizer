@@ -47,7 +47,10 @@ When hovering over windows during a pick, `InspectorService` highlights the targ
 - **Target bounding box**: Positioned around the window's frame rect outset by the border stroke width, rather than the window actor's allocation. In Wayland CSD, actor allocation includes invisible client shadow margins (which would leave the highlight floating in empty space, as Looking Glass does). The outset prevents St CSS inward border drawing from eroding into client window content.
 - **Concentric corner radius**: For rounded windows, the highlight's outer border radius maintains concentric curvature ($R_{outer} = R_{inner} + W$) for a uniform stroke width around corners. Square, tiled, maximized, fullscreen, and SSD windows strictly keep square corners.
 - **Active clip vs. ring clearing**: A window may have a clip effect attached purely to erase a client-painted frame ring at radius 0 (`clearRing`), which must not be confused with active rounded corner clipping.
-- **Styling**: Aligned with GNOME Shell's screenshot selection rectangle.
+- **Styling**: the highlight is generated from the Shell's own pickers - the 2px border from
+  the Looking Glass picker, the fill from the screenshot window selector - and
+  `vendor/gnome-shell/README.md` records which is which and why the border does not follow the
+  selector's 6px.
 
 ## The extension lifecycle
 

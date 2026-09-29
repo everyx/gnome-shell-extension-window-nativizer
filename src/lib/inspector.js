@@ -18,6 +18,7 @@ import {
     readWindowString,
 } from './pick.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
+import {HIGHLIGHT_BG_TRANSPARENTIZE} from './inspectorStyle.generated.js';
 import {
     HIGHLIGHT_BORDER_WIDTH,
     expectedWindowRadius,
@@ -31,9 +32,8 @@ import {hasNativeLikeCorners, probeAdwaitaLook} from './nativeLikeCorners.js';
 import {getWindowFromActor} from './pick.js';
 import {resolveWindowIdentity} from './window.js';
 
-// Highlight visual styling aligned with GNOME Shell's screenshot window selector.
-export {HIGHLIGHT_BORDER_WIDTH};
-export const HIGHLIGHT_BG_TRANSPARENTIZE = 0.8;
+// Highlight visual styling, generated from the Shell's own pickers: see
+// src/lib/inspectorStyle.generated.js and vendor/gnome-shell/README.md.
 
 function highlightStyle(outerRadius) {
     return `border: ${HIGHLIGHT_BORDER_WIDTH}px solid -st-accent-color; ` +
