@@ -57,6 +57,7 @@ export class Manager {
         this._lastFocusWindow = null;
         this._highContrast = false;
         this._animationsEnabled = true;
+        this._dark = false;
     }
 
     enable() {
@@ -71,6 +72,7 @@ export class Manager {
         this._lastFocusWindow = global.display.focus_window;
         this._highContrast = St.Settings.get().high_contrast;
         this._animationsEnabled = St.Settings.get().enable_animations;
+        this._dark = this._isDark();
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
@@ -114,6 +116,12 @@ export class Manager {
         // one window still moving is ours.
         this._connect(this._signals, St.Settings.get(), 'notify::enable-animations', () => {
             this._animationsEnabled = St.Settings.get().enable_animations;
+            this._reconcile();
+        });
+
+        // The tiled border is the one colour upstream takes from the theme rather than baking in.
+        this._connect(this._signals, St.Settings.get(), 'notify::color-scheme', () => {
+            this._dark = this._isDark();
             this._reconcile();
         });
 
@@ -201,6 +209,16 @@ export class Manager {
     _refreshSettings() {
         this._rules = null;
         this._preferCrispText = this._settings.get_boolean('prefer-crisp-text');
+    }
+
+    /**
+     * Whether libadwaita would be using its dark palette. `prefer-dark` is the preference, and the
+     * palette follows it; the GTK3 theme name is the user's separate choice for the clients this
+     * extension decorates, so it is not the signal.
+     * @returns {boolean}
+     */
+    _isDark() {
+        return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
     }
 
     _dropPendingWork(state) {
@@ -520,8 +538,17 @@ export class Manager {
 
             this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
-            // No clip → client's shadow still visible; defer ours to avoid double shadow.
-            this._syncShadow(win, actions.clearRing && !state.clip ? false : actions.drawShadow);
+            // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
+            // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring.
+            // But the ring is only ours on a window we decorate at all. The resolved style is
+            // computed whether or not the window is ours, so a native window that is tiled resolves
+            // to a style with a border while drawing none of the three axes; the axes are the
+            // decision, and the style only says what to draw once there is one. The shadow keeps its
+            // own gate too (no clip yet means the client's shadow is still visible, ours would
+            // double it).
+            const decorating = actions.drawClip || actions.drawShadow || actions.drawResize;
+            const wantsBorder = decorating && Boolean(actions.style?.border);
+            this._syncShadow(win, wantsBorder || (actions.clearRing && !state.clip ? false : actions.drawShadow));
 
             // The resize axis is independent of the decoration or tiling: a tile match
             // only takes the shadow, never the grab band.
@@ -620,6 +647,7 @@ export class Manager {
             tiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
             highContrast: this._highContrast,
             animationsEnabled: this._animationsEnabled,
+            dark: this._dark,
 
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,
