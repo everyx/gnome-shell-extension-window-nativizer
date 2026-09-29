@@ -30,6 +30,15 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run pack` | builds `dist/<uuid>.zip` |
 | `pnpm run shexli` | analyses that zip |
 
+**What a stub may stand for, and what only pixels settle.** A stub may only stand for something the
+type declares. `tests/compat.test.js` used to stub `display.get_default_seat`, a method
+`Meta.Display` has not declared in any of 45-51, so the test passed while the code path resolved
+nothing and the resize band stayed silently inert on 45-48. The names the code may rely on are in
+`tools/shell-api.json`, `tools/gjs-surface.js` proves them against a real shell, and a stub for a
+name neither has is a test for a shell that does not exist. The same honesty applies one level up: a
+resolved style is what was asked for, not what was drawn, so whether anything renders is settled by
+pixels and nothing else - which is what the ring check in `tools/test-e2e.sh` samples.
+
 ## Upstream API audit
 
 The extension claims a range of GNOME versions, and the facts behind that claim live in
