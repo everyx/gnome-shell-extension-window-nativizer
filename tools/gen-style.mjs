@@ -228,7 +228,7 @@ const animates = {
     tiled: declaresTransition(tiledBlock),
     maximized: declaresTransition(maximizedBlock),
 };
-const animatingStates = Object.entries(animates).filter(([, animates_]) => animates_).map(([state]) => state);
+const animatingStates = Object.entries(animates).filter(([, animates]) => animates).map(([state]) => state);
 if (animatingStates.join(',') !== 'backdrop')
     throw new Error(`[gen-style] Assertion failed: expected only the backdrop state to declare a transition, got ${animatingStates.join(', ') || 'none'}`);
 
@@ -317,7 +317,7 @@ export const ADWAITA_STYLE = {
             // is drawn on purpose, for the manager's decision about whether to decorate at all.
             radius: 0,
             shadows: [{blur: 0, spread: 1, alpha: ${borderOpacity}}],
-            border: {width: 1},
+            border: true,
             animate: ${animates.tiled},
         },
         maximized: {radius: 0, shadows: [], animate: ${animates.maximized}},

@@ -4,7 +4,7 @@ import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
  * @param {object} winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark
- * @returns {{radius: number, shadows: Array<object>, outline: object|null}}
+ * @returns {{radius: number, shadows: Array<object>, animate: boolean, outline: object|null, border?: boolean}}
  */
 export function styleForWindow(winState) {
     const {window} = ADWAITA_STYLE;

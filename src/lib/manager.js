@@ -543,12 +543,11 @@ export class Manager {
             // But the ring is only ours on a window we decorate at all. The resolved style is
             // computed whether or not the window is ours, so a native window that is tiled resolves
             // to a style with a border while drawing none of the three axes; the axes are the
-            // decision, and the style only says what to draw once there is one. The shadow keeps its
-            // own gate too (no clip yet means the client's shadow is still visible, ours would
-            // double it).
-            const decorating = actions.drawClip || actions.drawShadow || actions.drawResize;
-            const wantsBorder = decorating && Boolean(actions.style?.border);
-            this._syncShadow(win, wantsBorder || (actions.clearRing && !state.clip ? false : actions.drawShadow));
+            // decision, and the style only says what to draw once there is one.
+            // A clip-ring that has no clip yet means the client's shadow is still visible and ours
+            // would double it; the ring is drawn regardless, because it replaces rather than adds.
+            const deferToClientShadow = actions.clearRing && !state.clip;
+            this._syncShadow(win, actions.drawRing || (!deferToClientShadow && actions.drawShadow));
 
             // The resize axis is independent of the decoration or tiling: a tile match
             // only takes the shadow, never the grab band.
