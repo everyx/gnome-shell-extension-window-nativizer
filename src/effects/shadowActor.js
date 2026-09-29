@@ -223,7 +223,12 @@ export const ShadowActor = GObject.registerClass({
         // the shadow hugs the window. The ring has to shift by the same amount, or it lands a
         // SHADOW_PAD outside the window with nothing in between.
         const cast = this._castRect();
-        const body = {x: cast.x + SHADOW_PAD, y: cast.y + SHADOW_PAD, width: cast.width, height: cast.height};
+        const body = {
+            x: cast.x + SHADOW_PAD,
+            y: cast.y + SHADOW_PAD,
+            width: cast.width - 2 * SHADOW_PAD,
+            height: cast.height - 2 * SHADOW_PAD,
+        };
         const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
 
