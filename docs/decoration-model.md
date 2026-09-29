@@ -422,14 +422,27 @@ breaks them. The mismatch is left where it is.
 
 **Message dialogs.** libadwaita gives `.dialog.message` and `.messagedialog` a lighter shadow than a
 normal window - `0 0 14px 2px` at 3% and `0 0 5px 2px` at 10%, against `14px 5px` at 15% for
-`window.csd`. We cannot tell a message dialog from any other dialog: it is a GTK style class, set
-inside the client, and the compositor sees only `Meta.WindowType`. The choice is therefore between
-drawing the normal window shadow for every dialog - what happens today - and guessing from the
-window type, which would be wrong for the dialogs that are not message dialogs. The guess is worse
-than the divergence, so it stays, and this is why.
+`window.csd` - and a larger corner: `$alert_radius` is 18px, where a window uses `--window-radius`,
+which is 15px here. We cannot tell a message dialog from any other dialog: it is a GTK style class,
+set inside the client, and the compositor sees only `Meta.WindowType`. The choice is therefore
+between drawing the normal window shadow and radius for every dialog - what happens today - and
+guessing from the window type, which would be wrong for the dialogs that are not message dialogs.
+The guess is worse than the divergence, and the radius is what makes it so: a shadow at 3% instead
+of 15% reads as a slightly softer edge, while 18px instead of 15px cuts three pixels off every
+corner of a window that was not drawn for it. The dialogs such a rule would reach are not libadwaita
+windows to begin with - they come from Qt, Electron or GTK3, which never used these values - so the
+guess would trade a visible risk for an invisible gain. A dialog of a real libadwaita application is
+not affected either way: `nativeLikeCorners` exempts the process.
 
-**Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, for the same reason and
-with the same answer: whether a window is solid CSD is a style class the client owns.
+**Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, and the reason is
+stronger than "the class belongs to the client": the class is not reachable in this session at all.
+GTK4 adds it in `gtk_window_enable_csd()` (`vendor/gtk/gtkwindow.c`), in the branch opposite `.csd`,
+gated on `gtk_window_is_composited()` - which is `gdk_display_is_rgba() &&
+gdk_display_is_composited()`. A display fails that gate by having no alpha, or by having no
+compositing manager owning `_NET_WM_CM_S0` on the root window, and neither can happen under Mutter:
+Wayland is always alpha and always composited, and on X11 Mutter itself owns that selection, while
+alpha is a property of the display rather than of a window. The solid branch is dead code for every
+window this extension manages, so there is nothing to detect and nothing to approximate.
 
 
 What this model cannot do, stated rather than papered over. Most of these follow from
