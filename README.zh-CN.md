@@ -63,7 +63,7 @@
 
 ## 架构定位对比：Window Nativizer vs. Rounded Window Corners
 
-| 维度 | Rounded Window Corners (Reborn) | Window Nativizer（本项目） |
+| 维度 | [Rounded Window Corners (Reborn)](https://github.com/flexagoon/rounded-window-corners) | Window Nativizer（本项目） |
 | :--- | :--- | :--- |
 | **核心目标** | 桌面主题美化与个性化风格定制 | 专注 GNOME / Adwaita 原生一致性补齐 |
 | **覆盖范围** | 默认覆盖所有窗口（黑名单除外） | 仅修饰非原生应用；原生程序不会介入 |
@@ -143,5 +143,5 @@ gnome-extensions enable window-nativizer@everyx.github.io
 ## 开源协议与致谢
 
 遵循 **GPL-2.0-or-later** 许可证。
-- 视觉参数生成自 [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)，阴影着色器取自 [GTK4](https://gitlab.gnome.org/GNOME/gtk)，窗口行为遵循 [Mutter](https://gitlab.gnome.org/GNOME/mutter)。
-- 同类项目参考：[Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners)。
+
+视觉参数生成自 [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)，阴影着色器取自 [GTK4](https://gitlab.gnome.org/GNOME/gtk)，窗口行为遵循 [Mutter](https://gitlab.gnome.org/GNOME/mutter)。

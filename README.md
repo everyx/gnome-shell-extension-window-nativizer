@@ -63,7 +63,7 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 
 ## Comparison: Window Nativizer vs. Rounded Window Corners
 
-| Feature | Rounded Window Corners (Reborn) | Window Nativizer |
+| Feature | [Rounded Window Corners (Reborn)](https://github.com/flexagoon/rounded-window-corners) | Window Nativizer |
 | :--- | :--- | :--- |
 | **Primary Goal** | Desktop theming & custom aesthetics | GNOME / Adwaita native consistency |
 | **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates non-native windows only; leaves native apps untouched |
@@ -145,8 +145,8 @@ For low-level implementation details, design decisions, and benchmarks:
 
 ---
 
-## License
+## License & Credits
 
 Licensed under **GPL-2.0-or-later**.
-- Metrics and styling generated from [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita), shadows derived from [GTK4](https://gitlab.gnome.org/GNOME/gtk), window behaviors aligned with [Mutter](https://gitlab.gnome.org/GNOME/mutter).
-- Related project reference: [Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners).
+
+Metrics and styling generated from [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita), shadows derived from [GTK4](https://gitlab.gnome.org/GNOME/gtk), window behaviors aligned with [Mutter](https://gitlab.gnome.org/GNOME/mutter).
