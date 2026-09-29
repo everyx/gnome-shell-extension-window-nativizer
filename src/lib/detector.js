@@ -212,6 +212,8 @@ export function isWindowTiled(win, options = {}) {
  * @property {number} frameWidth
  * @property {number} frameHeight
  * @property {import('./frame.js').Insets|null} [insets=null] - Declared ring per side; the widths above are the totals fallback
+ * @property {boolean} [animationsEnabled=true] - The user's animation setting; false suppresses the blend
+ * @property {boolean} [dark=false] - System colour scheme, for the tiled ring's currentColor
  * @property {number} [monitorScale=1]
  * @property {boolean} [isMaximized=false]
  * @property {boolean} [isFullscreen=false]
@@ -340,7 +342,7 @@ function resolveAxisValue(reversedAxes, axis, baseline) {
 
 /**
  * @param {WindowEvaluationParams} params
- * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, drawResize: boolean, style: object, reason: string}}
+ * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, drawRing: boolean, drawResize: boolean, style: object, reason: string}}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -360,11 +362,12 @@ export function evaluateWindowActions({
     tiled = false,
     highContrast = false,
     animationsEnabled = true,
+    dark = false,
     wmClass,
     rules = {},
     preferCrispText = false,
 }) {
-    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled});
+    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled, dark});
 
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
 
@@ -417,9 +420,6 @@ export function evaluateWindowActions({
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
 
-    // Ring is ours to clear exactly when the shadow we draw is ours.
-    const clearRing = ownRing && shadow;
-
     const drawResize = decideResizeBand({
         reversed: Boolean(rule?.has(RuleAxis.RESIZE)),
         allowsResize,
@@ -427,6 +427,17 @@ export function evaluateWindowActions({
         hasGtk4Client, hasSsd,
         insets, bufferWidth, bufferHeight, frameWidth, frameHeight,
     });
+
+    // The tiled ring is the case that is not a shadow: upstream gives a tiled window a 1px ring
+    // instead, and the style's border marker is what says so. It is drawn on the same terms as a
+    // shadow - only on a window we decorate at all - and that one predicate decides both whether the
+    // actor is created and whether the client's own ring is erased: erasing a ring we do not replace
+    // leaves a window with no edge at all, which is what a tiled SSD or non-resizable window got
+    // when the two decisions were made separately.
+    const drawRing = Boolean(style.border) && (clip || shadow || drawResize);
+
+    // Ring is ours to clear exactly when the ring we draw is ours.
+    const clearRing = ownRing && (shadow || drawRing);
 
     let reason = rule
         ? `rule-applied(${wmClass}:${buildRuleState(rule)})`
@@ -441,13 +452,13 @@ export function evaluateWindowActions({
     // no axis (dock, desktop) gets neither.
     if (!eligibility.eligible) {
         return {
-            drawShadow: false, drawClip: false, clearRing: false,
+            drawShadow: false, drawClip: false, clearRing: false, drawRing: false,
             drawResize: isDecoratableWindowType(windowType) && drawResize,
             style, reason: eligibility.reason,
         };
     }
 
-    return {drawShadow: shadow, drawClip: clip, clearRing, drawResize, style, reason};
+    return {drawShadow: shadow, drawClip: clip, clearRing, drawRing, drawResize, style, reason};
 }
 
 /**
