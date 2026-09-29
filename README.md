@@ -29,7 +29,9 @@ Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard re
 ### 🎯 Authentic Libadwaita Styling
 Non-native apps often feel out of place on a modern GNOME desktop. Window Nativizer brings them in line with official styling:
 - **Standard Adwaita corners** with subtle inner outline highlights
-- **Multi-layer Gaussian shadows** tailored for light and dark themes
+- **Multi-layer Gaussian shadows** matching libadwaita layer for layer
+- **Every native window state**: Rounded and shadowed when focused, the lighter backdrop shadow when unfocused, a hairline ring in the theme's colour when tiled, nothing when maximized or fullscreen
+- **High contrast aware**: Follows the system contrast setting and deepens the outline
 - Curves and metrics compiled directly from upstream GNOME sources
 
 ### 🖱️ Effortless Drag-to-Resize Ergonomics
@@ -42,14 +44,15 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### ⚡ Smooth GPU Shaders
 - **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
 - **Direct pipeline hook**: Corners stay locked to the window during live resize without lag
-- **Seamless close transitions**: Shadow pipeline opacity continuously modulates with GNOME Shell's exit animation, eliminating jarring shadow popping
+- **Transitions that follow focus**: The shadow fades to the backdrop set when focus leaves and snaps back when it returns, the way upstream declares it; the same opacity tracks GNOME Shell's close animation
+- **Follows the animation setting**: With animations off the fade snaps as well
 - **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
 
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips Libadwaita, Libhandy, and Firefox
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
 - **Overview-aware**: Suspends corner clipping during GNOME Shell overview mode to keep downscaled window previews sharp
-- **State-aware**: Automatically removes decorations when windows are maximized, fullscreen, or snap-tiled
+- **Clean tile seams**: The edge shared with another tile gets no ring, so no doubled line appears where two tiles meet
 
 ### 🔍 Crisp Text Protection
 Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
