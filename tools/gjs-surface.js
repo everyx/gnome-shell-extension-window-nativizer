@@ -86,8 +86,8 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
-    {ns: 'Clutter', member: 'get_default_backend', namespace: true, arity: 0, optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
+    {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', arity: 0, optional: true},
     // What compat/grabOp.js dispatches on: 45 and 49-51 both declare four parameters, and this
     // pair is what tells them apart. The code reads these two, not a version number.
     {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', arity: 2, optional: true},
@@ -104,7 +104,9 @@ const SURFACE = [
     {ns: 'St', cls: 'Settings', member: 'get', static: true, arity: 0},
     {ns: 'St', cls: 'Settings', member: 'enable_animations', property: true},
     {ns: 'St', cls: 'Settings', member: 'color_scheme', property: true},
-    {ns: 'St', cls: 'SystemColorScheme', enum: true},
+    // The ring's colour is currentColor, so the code reads this one member by name; an enum that
+    // still exists but lost the member would otherwise pass unnoticed.
+    {ns: 'St', cls: 'SystemColorScheme', enum: true, members: ['PREFER_DARK']},
     {ns: 'St', cls: 'BoxLayout', class: true},
 ];
 
@@ -217,12 +219,15 @@ for (const entry of SURFACE) {
         continue;
     }
     if (entry.enum) {
-        // GJS exposes an enum as a plain object of its values, not as a class.
-        const ok = target !== null && typeof target === 'object';
-        if (ok)
-            report(what, 'enum');
-        else
+        // GJS exposes an enum as a plain object of its values, not as a class, so being an object
+        // is not enough: the members the code reads by name have to be there.
+        const missing = (entry.members ?? []).filter(m => target?.[m] === undefined);
+        if (target === null || typeof target !== 'object')
             fail(what, `not an enum object (typeof ${typeof target})`);
+        else if (missing.length)
+            fail(what, `missing ${missing.join(', ')}`);
+        else
+            report(what, 'enum');
         continue;
     }
     if (entry.class) {

@@ -235,17 +235,13 @@ unavailable. Either one being callable is what marks a shell as 49 or later.
 
 ## seat_get_pointer
 
-`seat.get_pointer()` - the core pointer, resolved on 45-48 through
-`Clutter.get_default_backend().get_default_seat()`. It is the device the legacy grab signature takes.
+`seat.get_pointer()` - the core pointer, resolved on 45-48 through the backend's default seat. It is
+the device the legacy grab signature takes.
 
 ## backend_get_default_seat
 
-`backend.get_default_seat()` - resolves the pointer device on 45-48, reached through
-`Clutter.get_default_backend()`.
-
-## get_default_backend
-
-`Clutter.get_default_backend()` - dropped in 51. Only reached on 45-48, behind an optional chain.
+`backend.get_default_seat()` - resolves the pointer device on 45-48. The backend is reached the same
+way the sprite API's is, through the stage's context.
 
 ## shell_glsl_effect_h
 

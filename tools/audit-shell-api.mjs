@@ -101,7 +101,6 @@ const SURFACE = [
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
     {id: 'seat_get_pointer', member: 'seat.get_pointer()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-seat.h', sym: 'clutter_seat_get_pointer'},
     {id: 'backend_get_default_seat', member: 'backend.get_default_seat()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_default_seat'},
-    {id: 'get_default_backend', member: 'Clutter.get_default_backend()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_get_default_backend'},
     // Build-time facts the typelib naming depends on
     {id: 'mutter_api_version', member: 'Meta-<api> / Shell-<api> typelibs', repo: 'mutter', kind: 'const', file: 'meson.build', sym: 'libmutter_api_version'},
     // gnome-shell
