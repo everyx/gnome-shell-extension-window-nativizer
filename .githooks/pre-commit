@@ -1,28 +1,16 @@
 #!/bin/sh
 #
-# Runs what CI runs, on the commit rather than after the push.
+# The checks that belong to a commit: the code lints, the generated files and catalogues match
+# their sources, and the unit tests pass. Each guards something the commit itself can break, so
+# catching it here is what keeps the commit that broke it the commit that fixes it.
 #
-# Each check here guards something a commit is meant to leave intact: the code
-# lints, the generated files and catalogues match their sources, the unit tests
-# pass, and the review tool has nothing to say. Catching them here means the commit
-# that broke one is the commit that fixes it, instead of a follow-up that has to
-# explain itself.
+# The whole-tree checks - ego-lint, and packing the extension the way a user receives it - belong to
+# the push instead: see pre-push. Each check has one hook, and this one does not repeat that one's.
 #
 # Bypass with `git commit --no-verify` when that is what you mean.
 
 set -e
 
-log=$(mktemp)
-trap 'rm -f "$log"' EXIT INT TERM
+. "$(dirname "$0")/run-checks"
 
-for check in lint check-style test ego-lint; do
-    printf '%-12s' "$check"
-    if pnpm run --silent "$check" >"$log" 2>&1; then
-        printf 'ok\n'
-    else
-        printf 'FAILED\n\n'
-        cat "$log"
-        printf '\npre-commit: %s failed. Fix it, or commit with --no-verify.\n' "$check"
-        exit 1
-    fi
-done
+run_checks pre-commit lint check-style test

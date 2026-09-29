@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Shared by both hooks: run the named checks, one line each, and on failure print the output of the
+# one that failed. Sourced rather than executed, so each hook keeps its own preconditions.
+
+run_checks() {
+    hook=$1
+    shift
+    log=$(mktemp)
+    trap 'rm -f "$log"' EXIT INT TERM
+    for check in "$@"; do
+        printf '%-12s' "$check"
+        if pnpm run --silent "$check" >"$log" 2>&1; then
+            printf 'ok\n'
+        else
+            printf 'FAILED\n\n'
+            cat "$log"
+            printf '\n%s: %s failed. Fix it, or %s with --no-verify.\n' \
+                "$hook" "$check" "${hook#pre-}"
+            exit 1
+        fi
+    done
+}

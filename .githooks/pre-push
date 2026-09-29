@@ -1,30 +1,23 @@
 #!/bin/sh
 #
-# A push is the last moment a failure is still cheap, so run the commit checks too
-# - a commit made with --no-verify, or one made before these hooks were installed,
-# would otherwise go straight to CI - and then pack the extension, which is the one
-# check CI runs that a commit hook cannot.
+# The checks that belong to what leaves the machine rather than to the commits that make it up:
+# ego-lint reviews the extension as a whole, and pack builds the zip a user installs. Neither guards
+# a single commit, so neither runs at commit time.
+#
+# A commit made with --no-verify therefore reaches CI with its style and behaviour unchecked; CI is
+# the backstop for that, which is cheaper than running the commit checks twice on every push.
 #
 # Bypass with `git push --no-verify` when that is what you mean.
 
 set -e
 
-"$(dirname "$0")/pre-commit"
+. "$(dirname "$0")/run-checks"
 
-if ! command -v gnome-extensions >/dev/null 2>&1; then
-    echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
-    exit 0
-fi
-
-log=$(mktemp)
-trap 'rm -f "$log"' EXIT INT TERM
-
-printf '%-12s' pack
-if pnpm run --silent pack >"$log" 2>&1; then
-    printf 'ok\n'
+set -- ego-lint
+if command -v gnome-extensions >/dev/null 2>&1; then
+    set -- "$@" pack
 else
-    printf 'FAILED\n\n'
-    cat "$log"
-    printf '\npre-push: packing the extension failed. Fix it, or push with --no-verify.\n'
-    exit 1
+    echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
 fi
+
+run_checks pre-push "$@"

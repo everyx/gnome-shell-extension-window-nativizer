@@ -84,14 +84,19 @@ are what reading the migration guide during an audit is for.
 
 ## Git hooks
 
-`pnpm install` points git at `.githooks/`, so:
+`pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
+both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs lint, `check-style`, the unit tests and ego-lint. The commit that
-  breaks one is the commit that fixes it, so each commit stays valid on its own;
-- **every push** additionally packs the extension, which is the one CI job a commit hook
-  cannot cover.
+- **every commit** runs lint, `check-style` and the unit tests. Each guards something the commit
+  itself can break, so the commit that breaks one is the commit that fixes it, and every commit
+  stays valid on its own;
+- **every push** runs ego-lint, which reviews the extension as a whole, and packs it the way a user
+  installs it - the two checks that describe what leaves the machine rather than a commit. Neither
+  is repeated from the commit hook.
 
-Either can be skipped with `--no-verify` when that is what you mean.
+A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
+the same checks twice on every push. Either hook can be skipped the same way when that is what you
+mean.
 
 ## Commit messages
 
