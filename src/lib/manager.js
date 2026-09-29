@@ -539,11 +539,15 @@ export class Manager {
             this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
 
             // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
-            // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring -
-            // and the ring is drawn by this actor. It exists whenever the resolved style has
-            // anything to draw, while the shadow keeps its own gate (no clip yet means the client's
-            // shadow is still visible and ours would double it).
-            const wantsBorder = Boolean(actions.style?.border);
+            // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring.
+            // But the ring is only ours on a window we decorate at all. The resolved style is
+            // computed whether or not the window is ours, so a native window that is tiled resolves
+            // to a style with a border while drawing none of the three axes; the axes are the
+            // decision, and the style only says what to draw once there is one. The shadow keeps its
+            // own gate too (no clip yet means the client's shadow is still visible, ours would
+            // double it).
+            const decorating = actions.drawClip || actions.drawShadow || actions.drawResize;
+            const wantsBorder = decorating && Boolean(actions.style?.border);
             this._syncShadow(win, wantsBorder || (actions.clearRing && !state.clip ? false : actions.drawShadow));
 
             // The resize axis is independent of the decoration or tiling: a tile match
