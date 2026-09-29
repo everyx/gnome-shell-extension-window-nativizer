@@ -32,7 +32,7 @@ Non-native apps often feel out of place on a modern GNOME desktop. Window Nativi
 - **Multi-layer Gaussian shadows** matching libadwaita layer for layer
 - **Every native window state**: Rounded and shadowed when focused, the lighter backdrop shadow when unfocused, a hairline ring in the theme's colour when tiled, nothing when maximized or fullscreen
 - **High contrast aware**: Follows the system contrast setting and deepens the outline
-- Curves and metrics compiled directly from upstream GNOME sources
+- **Compiled from upstream**: Curves and metrics come straight from GNOME's own sources
 
 ### 🖱️ Effortless Drag-to-Resize Ergonomics
 Visual rounding is only half the story — non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:

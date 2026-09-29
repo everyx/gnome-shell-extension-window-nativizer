@@ -27,11 +27,12 @@
 ## 核心特性
 
 ### 🎯 与 Libadwaita 一致的规范
-不用肉眼对齐，视觉指标直接从 GNOME / Libadwaita 官方源码编译生成：
+非原生应用在现代 GNOME 桌面上常显得格格不入。Window Nativizer 让它们与官方样式对齐：
 - **原生标准圆角**与内侧细腻微光轮廓
 - **多层高斯阴影**，与 libadwaita 逐层一致
 - **装饰覆盖全部状态**：有焦点时是圆角加阴影，失去焦点时换成更浅的非活动态阴影，分屏贴边时改画跟随主题的细描边环，最大化与全屏时完全不做装饰
 - **高对比度适配**：跟随系统的对比度设置，加深轮廓
+- **取自上游源码**：曲线与数值直接从 GNOME 源码生成，不用肉眼对齐
 
 ### 🖱️ 流畅的原生拖拽调整大小手感
 圆角只是视觉的一半，非原生窗口最大的问题是“边框太窄，很难拉伸”。Window Nativizer 把窗口的抓取手感整个重做了：
@@ -143,6 +144,6 @@ Electron、Wine、Java 和非 libadwaita 的 GTK4 应用各有对应项目，adw
 
 ## 开源协议与致谢
 
-- 遵循 **GPL-2.0-or-later** 许可证。
+遵循 **GPL-2.0-or-later** 许可证。
 - 视觉参数生成自 [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)，阴影着色器取自 [GTK4](https://gitlab.gnome.org/GNOME/gtk)，窗口行为遵循 [Mutter](https://gitlab.gnome.org/GNOME/mutter)。
 - 同类项目参考：[Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners)。
