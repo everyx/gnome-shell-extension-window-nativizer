@@ -539,6 +539,34 @@ sys.exit(0 if d.get("hasBand") and zero("top") and zero("bottom") and live("left
 echo ">> Vertically maximized state: $VERT_STATE"
 echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
 
+# The tiled style's ring is drawn by the shadow actor, and that actor was gated on "has shadow" -
+# which a tiled window does not have, so the ring was never drawn at all. The band assertion above
+# cannot see that: the resize axis is independent of the decoration, which is why it stayed green.
+TILED_STYLE="$(shell_eval '
+(() => {
+    const w = global.get_window_actors()[0].meta_window;
+    const shadows = global.window_group.get_children()
+        .filter(c => c.name === "WindowNativizerShadowActor");
+    const s = shadows.find(c => c._windowActor && c._windowActor.meta_window === w);
+    return JSON.stringify({
+        verticalOnly: w.maximized_vertically && !w.maximized_horizontally,
+        actor: Boolean(s),
+        border: s && s._style && s._style.border ? true : false,
+        // The ring is the only layer the tiled style has, and it carries the colour - which is
+        // what the upstream tiled rule is: a 1px box-shadow whose colour is currentColor.
+        shadowLayers: s && s._style && s._style.shadows ? s._style.shadows.length : -1,
+        layerColored: s && s._style && s._style.shadows && s._style.shadows[0]
+            ? Boolean(s._style.shadows[0].color) : false,
+    });
+})()
+')"
+echo ">> Tiled style: $TILED_STYLE"
+if ! check_fields "$TILED_STYLE" '{"verticalOnly": true, "actor": true, "border": true, "shadowLayers": 1, "layerColored": true}'; then
+    echo "!! A vertically maximized window did not get the tiled style, or the actor that draws its ring is missing: $TILED_STYLE"
+    exit 1
+fi
+echo ">> Tiled ring verified: the tiled style carries a border, has no shadow layers, and its actor exists."
+
 # (a2) Left half of the work area, flush against the left edge, vertically maximized as
 # Mutter's own left tile does it (`meta_window_tile_internal()`). The divider keeps its band;
 # the constrained top and bottom do not, and neither does the left, whose strip falls outside
@@ -1714,7 +1742,7 @@ echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize b
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 echo "   - Overview Clip Suspension: PASSED (disabled during overview, restored on desktop)"
 echo "   - Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
-echo "   - Partial & Full Maximize: PASSED (constrained strips collapsed, fully maximized dropped, unmaximized restored)"
+echo "   - Partial & Full Maximize: PASSED (tiled ring drawn, constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"
 echo "   - Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 echo "   - Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
