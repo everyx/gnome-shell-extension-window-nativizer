@@ -434,6 +434,15 @@ windows to begin with - they come from Qt, Electron or GTK3, which never used th
 guess would trade a visible risk for an invisible gain. A dialog of a real libadwaita application is
 not affected either way: `nativeLikeCorners` exempts the process.
 
+**Mutter's X11 shadow.** A bare X11 window - undecorated, no declared margin - keeps the shadow
+Mutter paints for it, which is what happens to a client that draws its own frame without declaring
+`_GTK_FRAME_EXTENTS` (Electron under X11). That shadow is out of our reach: the compositor draws it
+outside the window square, GJS cannot clear it, and adding ours would put two where there is one.
+Its visible cost is the focus transition: Mutter holds a focused and an unfocused shadow and swaps
+the two objects without easing, so such a window drops its halo in a single step where every window
+we decorate fades. A rule cannot fix it either - the shadow axis retracts ours, and forcing it here
+would add rather than replace.
+
 **Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, and the reason is
 stronger than "the class belongs to the client": the class is not reachable in this session at all.
 GTK4 adds it in `gtk_window_enable_csd()` (`vendor/gtk/gtkwindow.c`), in the branch opposite `.csd`,
