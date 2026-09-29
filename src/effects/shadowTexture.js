@@ -32,16 +32,19 @@ export function reset() {
 }
 
 /**
- * @param {number} radius
+ * The colour a style's layers are drawn in: the first one that names a colour, else black.
  * @param {Array<object>} shadows
- * @param {object|null} [border]
- * @returns {string}
+ * @returns {Array<number>}
  */
-/** The colour a style's layers are drawn in: the first one that names a colour, else black. */
-export function styleColor(shadows) {
+function styleColor(shadows) {
     return shadows.find(s => s.color)?.color ?? [0, 0, 0];
 }
 
+/**
+ * @param {number} radius
+ * @param {Array<object>} shadows
+ * @returns {string}
+ */
 export function styleKey(radius, shadows) {
     // The colour is part of the key: the tiled ring is a layer like any other and its colour is the
     // one that changes with the theme, so without it a light and a dark bake would collide.

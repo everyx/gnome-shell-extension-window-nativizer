@@ -146,8 +146,8 @@ debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width
 leave square. A degenerate *body*, though - insets that outrun the actor for the frame a
 resize passes through - does not: `bodyFrame` falls back to the whole actor, so the pass
 still runs and the window content is never dropped. `inSquare = 1 - max(step(bodyEdge))` keeps
-the client-painted ring intact; `uClearRing` blends that mask away when the shadow is ours
-(see `decoration-model.md`: ring cleared exactly when shadow is ours).
+the client-painted ring intact; `uClearRing` blends that mask away when the ring we draw is ours
+(see `decoration-model.md`: ring cleared exactly when the ring we draw is ours).
 
 Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)` — `d < 0` inside body,
 `d > 0` in removed corners, `d == 0` on boundary. Anti-alias: `corner = 1 - clamp(d+0.5)`,
@@ -219,8 +219,9 @@ integer-aligned box. The 2/1 split therefore only holds when the box is integer-
 the per-axis total stays 3. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
 measured role in hiding subpixel seams is in `decoration-alignment.md`.
 
-Caching (`pipelines`): a map from `styleKey(radius, shadows)` — which joins
-`blur,spread,alpha` per layer — to a baked pipeline. A window gets its own
+Caching (`pipelines`): a map from the style key — which joins every layer's
+parameters, so that a layer drawn in a different colour is a different texture — to a baked
+pipeline. A window gets its own
 `Cogl.Pipeline` sharing the baked texture (`shadowPipelineFor`) so cross-fade can
 animate per-window opacity via `setPipelineOpacity`. Scaling alpha is enough because
 the pipeline colour stays opaque white and Cogl's blend is premultiplied: the baked
@@ -232,7 +233,7 @@ Bake steps (`bake()`): allocate `buffer x buffer` texture +
 offscreen, set `opaqueWhite` (pipeline color must stay opaque — shader alpha does
 opacity), add snippet `DECLARATIONS+CODE`, which replaces the fragment stage's tail
 (the same non-replacing form the shell's GLSL effect uses) rather than standing as a
-program of its own, upload `uWinSize/uRadius/uPad/uShadow1..3`,
+program of its own, upload the uniforms the generated shader declares,
 use a 1px placeholder layer for `cogl_tex_coord0_in`, orthographic `buffer`,
 `clear4f(CLEAR_COLOR_BUFFER,0,0,0,0)` (driver texture is not zeroed; hollow mask
 skips interior writes, so uncleared pixels would show through rounded corners),
@@ -278,17 +279,18 @@ is the offscreen window pass (the clip) plus these eight textured rectangles; th
 correctness and less per-frame JS reconcile, not an order-of-magnitude cheaper redraw.
 
 Style change cross-fades (the transition and why nothing resizes are the model in
-`decoration-model.md`, *How a style change is drawn*). The fade is driven at
-`FADE_STEP_MS = 16ms` (~60fps) with `GLib.timeout_add`,
-Stepping `bezier(t, EASE_OUT)` solved by four Newton iterations. Mid-fade arrival keeps
+`decoration-model.md`, *How a style change is drawn*). The fade advances from the paint pass, not
+from a timer: progress is `bezier(t, EASE_OUT)` solved by four Newton iterations over the wall clock,
+and a blend still running asks for the next frame by queueing a redraw from inside the paint, so its
+duration is real time at whatever rate the display runs at. Mid-fade arrival keeps
 whichever side is more visible (`_progress >= 0.5`) as outgoing and carries its weight
 (`keptWeight = progress` or `(1-progress)*outgoing.weight`), so a burst of focus
 changes reads as one motion, never a pop.
 
-Lifecycle: `destroy()` removes `GLib.Source`, unbinds, disconnects `windowActor::destroy`,
+Lifecycle: `destroy()` drops the blend state (`_fadeStart = 0`), unbinds, disconnects `windowActor::destroy`,
 clears style/outgoing and removes from container — idempotent for disable/reload.
 `FADE_MS` and `EASE_OUT` are both read from the generated `ADWAITA_STYLE.transition`
-(libadwaita `$backdrop_transition` = `200ms ease-out`); only `FADE_STEP_MS` is local. See
+(libadwaita `$backdrop_transition` = `200ms ease-out`). See
 `_relayout` for the relayout cache.
 
 ## Preferences (`src/prefs.js`)

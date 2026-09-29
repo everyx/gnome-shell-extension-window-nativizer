@@ -103,7 +103,7 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * @param {{radius:number,shadows:Array<object>}} style - resolved for current window state
+     * @param {{radius:number,shadows:Array<object>,animate?:boolean,border?:boolean}} style - resolved for current window state
      */
     setShadowStyle(style) {
         const {radius, shadows, animate = false} = style;

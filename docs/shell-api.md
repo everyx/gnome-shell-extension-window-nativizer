@@ -2,8 +2,10 @@
 
 Every row of the API table in [shell-compatibility.md](shell-compatibility.md) links here. The
 version status in that table is derived from `tools/shell-api.json` and deliberately not repeated
-below: a fact a machine can extract should be extracted, because the four rows that used to state
-it by hand were wrong.
+below, with one exception: a section that explains a watershed has to say which line it happened on,
+because "the signature changed" is not actionable on its own. Everything else - which versions share
+which shape, what the declaration is - is the table's and the record's to state. A fact a machine
+can extract should be extracted, because the four rows that used to state it by hand were wrong.
 
 What is written here is the part nothing can derive - why the extension needs the call, and what to
 watch for when a new GNOME line appears. Sections are named after the entry id in
@@ -22,7 +24,9 @@ docks) in the eligibility checks, the rule fingerprints and the inspector picker
 
 ## is_maximized
 
-`win.is_maximized()` - canonical from 49. `detector.isWindowMaximized()` probes for the method
+`win.is_maximized()` - the canonical query where it exists; the status column of the table in
+[shell-compatibility.md](shell-compatibility.md) says from which line, and the record holds the
+declaration. `detector.isWindowMaximized()` probes for the method
 rather than the version, so the fallback is chosen by what the shell offers. Note that Mutter
 defines `meta_window_is_maximized()` in `src/core/window.c` from 48 but does not declare it in the
 public header until 49: GJS cannot call what the header does not declare, so 48 still needs the
@@ -73,7 +77,9 @@ resolved per monitor, so this is read before either.
 
 `win.begin_grab_op()` - three shapes, not two. 45 takes `(op, device, sequence, time)`; 46-48 adds
 `pos_hint`; 49-51 replaces device and sequence with a `sprite`. `compat/grabOp.js` dispatches on
-arity, which separates 46-48 from the rest but cannot separate 45 from 49-51, so 45 is not reached.
+arity, which separates 46-48 from the rest; 45 and 49-51 both declare four, so it asks a second
+question - whether the backend can produce a pointer sprite at all - and that is what tells them
+apart.
 
 ## get_compositor_private
 
@@ -203,7 +209,7 @@ both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the
 
 ## clutter_set_uniform_float
 
-`effect.set_uniform_float()` - added in 51. The modern branch of `compat/shaderEffect.js` inherits
+`effect.set_uniform_float()` - the modern branch of `compat/shaderEffect.js` inherits
 it rather than reimplementing it: going through `set_uniform_value` would drop vector components.
 
 ## cogl_pipeline_set_uniform_float
@@ -218,7 +224,7 @@ away in 51, which is why the compat class exists at all.
 
 ## backend_get_sprite
 
-`backend.get_sprite()` - added in 49, in the same release the grab operation started taking a sprite
+`backend.get_sprite()` - in the same release the grab operation started taking a sprite
 instead of a device and a sequence. `compat/grabOp.js` dispatches on this pair: 45 and 49-51 both
 declare four parameters, so arity alone cannot tell them apart.
 
@@ -264,6 +270,24 @@ tearing down.
 `St.BoxLayout:vertical` - deprecated in 48, removed in 51. The migration guide attributes the
 removal to `St.Widget`; upstream it is declared on `St.BoxLayout`. The extension does not use it
 either way, and the entry is recorded so the attribution stays corrected.
+
+## st_system_color_scheme
+
+`St.SystemColorScheme` - the enum `St.Settings:color-scheme` reports. `PREFER_DARK` is the value the
+tiled ring's colour follows, and the only one this extension reads.
+
+## st_settings_enable_animations
+
+`St.Settings:enable-animations` - the user's animation setting, watched for changes. GTK hands a CSS
+transition no frame clock when it is off, so a native window changes its shadow in one frame and ours
+has to stop blending for the same reason.
+
+## st_settings_color_scheme
+
+`St.Settings:color-scheme` - the system colour scheme, also watched. It is the closest honest signal
+for the tiled ring's `currentColor`, which belongs to the client: the client's own foreground is not
+readable from the compositor, and the GTK3 theme name is the user's separate choice for exactly the
+clients this extension decorates.
 
 ## st_settings_get
 

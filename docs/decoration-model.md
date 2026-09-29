@@ -19,7 +19,7 @@ already look like ours?    the Adwaita look                                  ─
 
 your rules?                per window kind: which axes the user reversed
 any policy?                tiled neighbour, crisp text on fractional scaling
-rounding them?             the client's own ring is cleared exactly when the shadow is ours
+rounding them?             the client's own ring is cleared exactly when the ring we draw is ours
                            └───────────────────────────────▶ draw
 ```
 
@@ -136,7 +136,7 @@ had. Rounding those corners abandons the shape the shadow was cast by, and the s
 pixels inside the window's texture: it cannot be erased selectively, only wholesale. So
 the shadow changes owner along with the shape, and the rule is one line:
 
-**the ring is cleared exactly when the shadow is ours** (`clearRing` in
+**the ring is cleared exactly when the ring we draw is ours** (`clearRing` in
 `evaluateWindowActions()`). With no rule in play, clipping a window that declared a ring
 makes the shadow ours first, so an ordinary client-decorated window ends up with one
 shadow matching the corners we drew. A rule decides each axis itself, by reversing it:
@@ -469,7 +469,10 @@ the reading being one-sided; the last is simply not verified yet.
   no outline, *Which style applies*), as does `prefer-crisp-text` on a fractional
   monitor and a reversed shadow axis.
 - **A tiled window whose client keeps its own shadow keeps it.** Tiling only ever
-  drops the shadow we would draw; it does not clear the client's ring.
+  drops the shadow we would draw. The tiled style is the case that is not a shadow: it draws the 1px
+  ring itself, so the client's ring is cleared for ours to replace rather than stack on top - and only
+  when we are in fact drawing one, so an SSD frame or a window that does not allow resizing keeps its
+  own.
 - **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
   margin is already in logical pixels and answers "declared or not" directly (*The
   margins, and the scale question*); whether an X11 / XWayland window on a scaled
@@ -507,9 +510,10 @@ libadwaita's own CSS selectors:
 
     fullscreen > maximized > tiled > focused | backdrop
 
-The result is `{radius, shadows, outline}`: the corner radius, up to three shadow
-layers (`{blur, spread, alpha}`), and the outline libadwaita paints around a
-decorated window. Fullscreen and maximized windows get neither outline nor
+The result is the resolved style: the corner radius, up to three shadow layers, and the outline
+libadwaita paints around a decorated window - plus, since a style change is not always a shadow
+change, whether that change animates and whether the window is drawing the tiled ring. `styleForWindow`
+in `src/lib/style.js` is what returns it and `tools/gen-style.mjs` is where its fields come from. Fullscreen and maximized windows get neither outline nor
 shadows — they are flush with the screen edge, where a shadow would be a line on it.
 Tiled windows drop the outline and rounded corners (radius 0), retaining only the 1px
 border shadow unless matched with an adjacent tile.

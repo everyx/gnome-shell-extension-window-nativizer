@@ -47,6 +47,7 @@ const SOURCES = {
  *   file   - the file itself, recorded as present/absent
  *   getter - a JS accessor, cut from 'get name()' to the end of the line
  *   const  - a literal in a build file, cut as 'name = value'
+ *   enum   - the first value of a C enum, cut as the line that names it
  *   export - a module-level export in a shell JS file, cut as 'export let name = ...'
  * `expectAbsent: true` records an audited negative - a symbol we looked for and did not find. It
  * fails the audit if upstream ever declares it, because the prose says it does not exist.
@@ -107,6 +108,9 @@ const SURFACE = [
     {id: 'shell_glsl_effect_h', member: 'Shell.GLSLEffect', repo: 'gnome-shell', kind: 'file', file: 'src/shell-glsl-effect.h'},
     {id: 'window_tracker_get_default', member: 'Shell.WindowTracker.get_default()', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-window-tracker.h', sym: 'shell_window_tracker_get_default'},
     {id: 'st_box_layout_vertical', member: 'St.BoxLayout:vertical', repo: 'gnome-shell', kind: 'prop', file: 'src/st/st-box-layout.c', sym: 'vertical'},
+    {id: 'st_system_color_scheme', member: 'St.SystemColorScheme', repo: 'gnome-shell', kind: 'enum', file: 'src/st/st-settings.h', sym: 'ST_SYSTEM_COLOR_SCHEME'},
+    {id: 'st_settings_enable_animations', member: 'St.Settings:enable-animations', repo: 'gnome-shell', kind: 'prop', file: 'src/st/st-settings.c', sym: 'enable-animations'},
+    {id: 'st_settings_color_scheme', member: 'St.Settings:color-scheme', repo: 'gnome-shell', kind: 'prop', file: 'src/st/st-settings.c', sym: 'color-scheme'},
     {id: 'st_settings_get', member: 'St.Settings.get()', repo: 'gnome-shell', kind: 'fn', file: 'src/st/st-settings.h', sym: 'st_settings_get'},
     {id: 'main_overview', member: 'Main.overview', repo: 'gnome-shell', kind: 'export', file: 'js/ui/main.js', sym: 'overview'},
     {id: 'main_ui_group', member: 'Main.uiGroup', repo: 'gnome-shell', kind: 'export', file: 'js/ui/main.js', sym: 'uiGroup'},
@@ -202,6 +206,10 @@ function declaration(text, kind, sym) {
         const m = new RegExp(`^export let ${sym}\\b.*$`, 'm').exec(text ?? '');
         return m ? m[0].trim() : null;
     }
+    case 'enum': {
+        const m = new RegExp(`^\\s*${sym}\\w*\\s*=.*$`, 'm').exec(text ?? '');
+        return m ? m[0].trim() : null;
+    }
     case 'const': {
         const m = new RegExp(`^\\s*${sym}\\s*=\\s*(.+?)\\s*$`, 'm').exec(text ?? '');
         return m ? `${sym} = ${m[1]}` : null;
@@ -272,7 +280,7 @@ function report(data) {
         for (const [decl, majors] of byDecl)
             console.log(`    ${majors.join(',')}: ${decl}`);
     }
-    console.log(`\n${data.surface.length} 条依赖面，其中 ${changed} 条在 ${data.majors[0]}–${data.majors.at(-1)} 之间有变化`);
+    console.log(`\n${data.surface.length} entries in the surface, ${changed} of them changed between ${data.majors[0]} and ${data.majors.at(-1)}`);
 }
 
 if (MODE === 'diff') {
@@ -292,7 +300,7 @@ if (MODE === 'diff') {
         console.log(`    ${a}: ${before ?? '(absent)'}`);
         console.log(`    ${b}: ${after ?? '(absent)'}`);
     }
-    console.log(`\n${SURFACE.length} 条依赖面在 ${a} → ${b} 之间有 ${differing} 条变化`);
+    console.log(`\n${differing} of ${SURFACE.length} entries differ between ${a} and ${b}`);
 } else if (MODE === 'check') {
     if (!existsSync(OUT)) {
         console.error(`[audit-shell-api] --check failed: ${path.relative(ROOT, OUT)} does not exist`);
