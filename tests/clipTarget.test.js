@@ -6,7 +6,6 @@
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {
     isForeignWidget,
-    hasForeignInjectedWidget,
     isCompatibleSurfaceGeometry,
     resolveClipTarget,
 } from '../src/lib/clipTarget.js';
@@ -65,33 +64,6 @@ describe('clipTarget', () => {
             const stBin = {constructor: {name: 'StWidget'}};
             expect(isForeignWidget(stWidget)).toBe(true);
             expect(isForeignWidget(stBin)).toBe(true);
-        });
-    });
-
-    describe('hasForeignInjectedWidget', () => {
-        it('returns false for null or childless actor', () => {
-            expect(hasForeignInjectedWidget(null, mockSt)).toBe(false);
-            expect(hasForeignInjectedWidget(createMockActor({children: []}), mockSt)).toBe(false);
-        });
-
-        it('returns false for native window actors with only surface children', () => {
-            const surface = new MockSurfaceActor();
-            const actor = createMockActor({children: [surface]});
-            expect(hasForeignInjectedWidget(actor, mockSt)).toBe(false);
-        });
-
-        it('detects foreign widget when inserted at index 0 (Blur my Shell pattern)', () => {
-            const blurWidget = new MockStWidget();
-            const surface = new MockSurfaceActor();
-            const actor = createMockActor({children: [blurWidget, surface]});
-            expect(hasForeignInjectedWidget(actor, mockSt)).toBe(true);
-        });
-
-        it('detects foreign widget when inserted at a later index', () => {
-            const surface = new MockSurfaceActor();
-            const foreignWidget = new MockStWidget();
-            const actor = createMockActor({children: [surface, foreignWidget]});
-            expect(hasForeignInjectedWidget(actor, mockSt)).toBe(true);
         });
     });
 

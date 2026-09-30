@@ -38,28 +38,6 @@ export function isForeignWidget(child, St = null) {
 }
 
 /**
- * Determines whether the window actor contains foreign injected widgets.
- * @param {object|null} actor
- * @param {object|null} [St]
- * @returns {boolean}
- */
-export function hasForeignInjectedWidget(actor, St = null) {
-    if (!actor)
-        return false;
-
-    // Fast path: Blur my Shell typically inserts its blur actor at index 0 (v72 / main)
-    const firstChild = actor.get_first_child?.();
-    if (isForeignWidget(firstChild, St))
-        return true;
-
-    const children = actor.get_children?.();
-    if (!children || children.length <= 1)
-        return false;
-
-    return children.some(child => isForeignWidget(child, St));
-}
-
-/**
  * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
  * @param {object|null} candidate
  * @param {object|null} win
@@ -105,10 +83,14 @@ export function resolveClipTarget(win, actor, St = null) {
     const isX11 = win?.get_client_type?.() === CLIENT_TYPE_X11;
     const defaultTarget = isX11 ? actor.get_first_child?.() ?? actor : actor;
 
-    if (!hasForeignInjectedWidget(actor, St))
+    const children = actor.get_children?.();
+    if (!children || children.length === 0)
         return defaultTarget;
 
-    const children = actor.get_children?.() ?? [];
+    const hasForeign = children.some(child => isForeignWidget(child, St));
+    if (!hasForeign)
+        return defaultTarget;
+
     const surfaceContainer = children.find(child => !isForeignWidget(child, St));
 
     if (surfaceContainer && !isCompatibleSurfaceGeometry(surfaceContainer, win))

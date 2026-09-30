@@ -6,27 +6,36 @@ import {sanitizeRuleTitles, sanitizeWindowRules} from './rules.js';
 export const SETTINGS_KEY_WINDOW_RULES = 'window-rules';
 
 /**
- * One entry per rule: the axes to reverse, and the display-only title - see
- * docs/rule-model.md § What the pick remembers for the row.
- * @param {object} settings
+ * Validates and normalizes raw entries dictionary in a single pass.
+ * @param {Record<string, {state?: string, title?: string}>} raw
  * @returns {Record<string, {state: string, title: string}>}
  */
-function readEntries(settings) {
-    const raw = readValue(settings, SETTINGS_KEY_WINDOW_RULES);
-    const states = sanitizeWindowRules(statesOf(raw));
-    const titles = sanitizeRuleTitles(titlesOf(raw));
-
+function sanitizeEntries(raw) {
+    const rawStates = {};
+    const rawTitles = {};
+    for (const [key, entry] of Object.entries(raw ?? {})) {
+        if (entry) {
+            rawStates[key] = entry.state;
+            rawTitles[key] = entry.title;
+        }
+    }
+    const states = sanitizeWindowRules(rawStates);
+    const titles = sanitizeRuleTitles(rawTitles);
     const entries = {};
     for (const [key, state] of Object.entries(states))
         entries[key] = {state, title: titles[key] ?? ''};
     return entries;
 }
 
-const statesOf = raw => project(raw, 'state');
-const titlesOf = raw => project(raw, 'title');
-
-const project = (raw, field) => Object.fromEntries(
-    Object.entries(raw).map(([key, entry]) => [key, entry?.[field]]));
+/**
+ * One entry per rule: the axes to reverse, and the display-only title - see
+ * docs/rule-model.md § What the pick remembers for the row.
+ * @param {object} settings
+ * @returns {Record<string, {state: string, title: string}>}
+ */
+function readEntries(settings) {
+    return sanitizeEntries(readValue(settings, SETTINGS_KEY_WINDOW_RULES));
+}
 
 /** @param {object} settings @returns {Record<string,string>} Canonical key -> axis state */
 export function getWindowRules(settings) {
@@ -81,12 +90,7 @@ function mergeEntries(entries, {rules = null, upsert = null}) {
 // Coalesce writes: each write notifies Shell and re-evaluates every window.
 function writeEntries(settings, entries) {
     // The one place both halves are validated, whatever wrote them.
-    const states = sanitizeWindowRules(statesOf(entries));
-    const titles = sanitizeRuleTitles(titlesOf(entries));
-    const clean = {};
-    for (const [key, state] of Object.entries(states))
-        clean[key] = {state, title: titles[key] ?? ''};
-
+    const clean = sanitizeEntries(entries);
     const value = new GLib.Variant('a{sa{ss}}', clean);
     try {
         if (settings?.get_value?.(SETTINGS_KEY_WINDOW_RULES)?.equal(value))

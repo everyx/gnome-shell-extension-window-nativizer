@@ -129,7 +129,7 @@ export function setOnProcessKnown(cb) {
  * @returns {{adwaitaLook: boolean, gtk4: boolean}|undefined}
  */
 function answerFor(pid) {
-    return isValidPid(pid) ? processCache.get(pid) : undefined;
+    return processCache.get(pid);
 }
 
 /**
