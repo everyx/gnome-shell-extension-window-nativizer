@@ -7,7 +7,10 @@
  *
  * Subclasses provide shader code via `static getShaderSource()` returning
  * `{hook?, declarations, code, replace?}`, and upload uniforms via
- * `this.set_uniform_float(name, n_components, value)`.
+ * `this.set_uniform_float(name, n_components, value)`. That source must be a constant:
+ * Clutter asks the modern branch for a *static* snippet, so it is built once and
+ * cached on the class - a source that varied per instance would be answered with
+ * whichever instance asked first.
  *
  * The modern branch deliberately defines no `set_uniform_float`: Mutter 51 added the
  * introspectable `clutter_shader_effect_set_uniform_float(name, n_components, value)`
