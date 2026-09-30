@@ -82,6 +82,20 @@ not that GJS can reach it) and runs inside `test:e2e`. Behavioural changes that 
 in prose - "`disable()` cannot be async in 51" - cannot be extracted from a declaration at all, and
 are what reading the migration guide during an audit is for.
 
+**Where the mechanical part stops.** Declaration compatibility is checked across every recorded line,
+and the manifest may only claim a line the record holds: `tools/check-shell-version.mjs`, inside
+`check-style`, fails if `src/metadata.json` claims a major `tools/shell-api.json` has not audited.
+Behaviour is not checked that way - it is verified by hand, through `test:e2e` and the eye, on the one
+line the maintainer runs. There is deliberately no per-version build or runtime matrix: the extension
+branches on what the shell offers at runtime (`resolveBackend`, `backendHasSpriteApi`, arity dispatch,
+optional-method probes) rather than on a version number, so a matrix would buy "does this shell
+start" at seven builds per push, while the failure it would catch - a declaration we rely on and a
+line no longer has - is what the record answers already.
+
+The lower bound stays a decision nothing derives: the record covers 45-51, `shell-version` claims a
+subset of it, and which subset is a choice made by hand while auditing a new line. release-please
+owns only the manifest's `$.version-name` (`release-please-config.json`).
+
 ## Git hooks
 
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
