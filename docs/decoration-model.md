@@ -471,9 +471,9 @@ the reading being one-sided; the last is simply not verified yet.
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
 - **A window whose body cannot be placed inside its buffer is never rounded.**
-  `_frameInsets()` answers null when the frame does not fit inside the buffer at all, or
-  when a rect read throws because the window is being torn down mid-sync (same outcome:
-  the body cannot be placed);
+  `insetsFromRects()` answers null when the frame does not fit inside the buffer at all;
+  a rect read that throws is caught where the inputs are gathered, so the window is skipped —
+  same outcome: the body cannot be placed;
   the guard keeps the clip from cutting a ring it cannot place. A framed X11 window is not
   that case: Mutter sets `buffer_rect = frame->rect`, and `frame->rect` is the frame grown
   by the frame's **invisible borders** (`window-x11.c`, `meta-x11-frame.c`), so the insets

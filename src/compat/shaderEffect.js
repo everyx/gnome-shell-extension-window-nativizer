@@ -5,8 +5,9 @@
  * This module transparently adapts Clutter.ShaderEffect (GNOME 51+) and
  * Shell.GLSLEffect (GNOME 45–50) with zero global prototype mutation.
  *
- * Subclasses provide shader code via `static getSnippet()` returning a Cogl.Snippet,
- * and upload uniforms via `this.set_uniform_float(name, n_components, value)`.
+ * Subclasses provide shader code via `static getShaderSource()` returning
+ * `{hook?, declarations, code, replace?}`, and upload uniforms via
+ * `this.set_uniform_float(name, n_components, value)`.
  *
  * The modern branch deliberately defines no `set_uniform_float`: Mutter 51 added the
  * introspectable `clutter_shader_effect_set_uniform_float(name, n_components, value)`
@@ -44,18 +45,6 @@ export const ShaderEffect = Shell?.GLSLEffect
                     source.code ?? '',
                     Boolean(source.replace)
                 );
-                return;
-            }
-            const snippet = this.constructor.getSnippet?.();
-            if (snippet) {
-                const replace = snippet.get_replace?.();
-                const post = snippet.get_post?.();
-                this.add_glsl_snippet(
-                    snippet.get_hook?.() ?? Cogl.SnippetHook.FRAGMENT,
-                    snippet.get_declarations?.() ?? '',
-                    replace || post || '',
-                    Boolean(replace)
-                );
             }
         }
 
@@ -79,9 +68,9 @@ export const ShaderEffect = Shell?.GLSLEffect
         GTypeName: 'WindowNativizerShaderEffectCompat',
     }, class ShaderEffectModern extends Clutter.ShaderEffect {
         vfunc_get_static_snippet() {
-            const snippet = this.constructor.getSnippet?.();
-            if (snippet)
-                return snippet;
+            if (this.constructor._staticSnippet)
+                return this.constructor._staticSnippet;
+
             const source = this.constructor.getShaderSource?.();
             if (source) {
                 const hook = source.hook ?? Cogl.SnippetHook.FRAGMENT;
@@ -92,7 +81,7 @@ export const ShaderEffect = Shell?.GLSLEffect
                     : new Cogl.Snippet(hook, declarations, post);
                 if (source.replace)
                     s.set_replace(source.code ?? '');
-                return s;
+                return (this.constructor._staticSnippet = s);
             }
             return null;
         }

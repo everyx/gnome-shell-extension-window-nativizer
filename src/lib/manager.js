@@ -427,7 +427,7 @@ export class Manager {
         const clipTarget = target ?? resolveClipTarget(win, actor, St);
         // Attach/detach is a decision, not a frame measurement: it no longer depends on the
         // actor's current allocation (that is why a resize used to drop the effect for a
-        // frame). The only window that gets no effect is one whose `_frameInsets` is null -
+        // frame). The only window that gets no effect is one whose insets is null -
         // a frame that does not fit inside its buffer at all. A framed X11 window is not
         // that case: its buffer is the frame grown by the invisible borders, so it is
         // clipped like any other (measured: the surface child is buffer-sized).
@@ -624,7 +624,7 @@ export class Manager {
             frameWidth: f.width, frameHeight: f.height,
             // Per-side ring, so each consumer keeps the aggregation it needs: the resize
             // band asks about every side, the shadow axis whether either side declares one.
-            insets: this._frameInsets(win),
+            insets: insetsFromRects(b, f),
             monitorScale: getPhysicalMonitorScale(win, 1),
 
             isMaximized,
@@ -730,7 +730,7 @@ export class Manager {
         // the insets, the constrained edges and the monitor rect. A frameless window's null
         // insets read as zero.
         state.resizeBand.setGeometry({
-            insets: insets !== undefined ? insets : this._frameInsets(win),
+            insets: insets ?? null,
             bounds,
             scale: inputs.monitorScale,
             constrainedEdges,
@@ -744,21 +744,6 @@ export class Manager {
         this._syncClip(win, false);
         this._syncShadow(win, false);
         this._syncResizeBand(win, false, null);
-    }
-
-    /**
-     * @param {Meta.Window} win
-     * @returns {import('./frame.js').Insets|null} Ring between the actor (buffer) and the
-     * body (`frame_rect`), measured from the two rects and nothing else. Deliberately does not
-     * look at any actor size: the body is placed against the actor's live size at paint time,
-     * so a lagging actor can never turn this into "no body".
-     */
-    _frameInsets(win) {
-        try {
-            return insetsFromRects(win?.get_buffer_rect?.(), win?.get_frame_rect?.());
-        } catch {
-            return null;
-        }
     }
 
     _applyStyle(win, style, insets, drawClip) {

@@ -77,12 +77,6 @@ export const RoundedClipEffect = GObject.registerClass({
         };
     }
 
-    static getSnippet() {
-        return Cogl.Snippet.new
-            ? Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE)
-            : new Cogl.Snippet(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE);
-    }
-
     _init() {
         super._init();
 
