@@ -96,6 +96,19 @@ To correct a window that looks wrong, open **Preferences** and click **Pick wind
 
 ---
 
+## What a correction cannot fix
+
+Corrections cover the decisions the reading gets wrong. These three are not decisions:
+
+- **Mutter's shadow on a bare X11 window**: an Electron client under X11 keeps one, and loses it in a single step where every window we decorate fades. The compositor draws that shadow outside the window square and GJS cannot clear it, so ours would only be a second one
+- **What a client paints inside its own surface**: a custom titlebar, an in-surface border, its own grips. The compositor sees geometry, not paint
+- **The lighter shadow libadwaita gives a message dialog**: it is a style class inside the client, and the window type is all the compositor sees. Guessing from the type would hit the dialogs that are not message dialogs
+
+Each is recorded with its reasoning in [decoration-model.md](docs/decoration-model.md) § Known
+boundaries.
+
+---
+
 ## Installation
 
 ### Requirements
