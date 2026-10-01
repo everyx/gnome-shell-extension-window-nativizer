@@ -7,41 +7,12 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
 import {shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
-import {getPhysicalMonitorScale, snapSliceBoxesInto} from '../lib/snap.js';
-
-// libadwaita `$backdrop_transition` (200ms ease-out), generated into ADWAITA_STYLE.transition.
-// The blend advances from the paint pass rather than from a timer: progress is computed from the
-// wall clock when a frame is actually drawn, so steps land on displayed frames at any refresh
-// rate, the duration is real time instead of a count of 16ms callbacks, and a blend still running
-// asks for the next frame by queueing a redraw. The curve stays the generated cubic-bezier -
-// Clutter's own EASE_OUT_* modes are different curves, and this one is upstream's.
-//
-// A ClutterTimeline would be the other way to do this and does not work here: a standalone
-// timeline is not driven by the stage's clock in this shell, and measured zero frames in 600ms.
-const FADE_MS = ADWAITA_STYLE.transition.durationMs;
-const EASE_OUT = ADWAITA_STYLE.transition.easing;
-
-/**
- * @param {number} t - 0..1
- * @param {number[]} curve - x1,y1,x2,y2
- * @returns {number}
- */
-function bezier(t, [x1, y1, x2, y2]) {
-    const at = (u, p1, p2) => 3 * (1 - u) ** 2 * u * p1 + 3 * (1 - u) * u ** 2 * p2 + u ** 3;
-    let u = t;
-    for (let i = 0; i < 4; i++) {
-        const slope = 3 * (1 - u) ** 2 * x1 + 6 * (1 - u) * u * (x2 - x1) + 3 * u ** 2 * (1 - x2);
-        if (slope === 0)
-            break;
-        u -= (at(u, x1, x2) - t) / slope;
-    }
-    return at(Math.max(0, Math.min(1, u)), y1, y2);
-}
+import {snapSliceBoxesInto} from '../lib/snap.js';
+import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
@@ -61,11 +32,11 @@ export const ShadowActor = GObject.registerClass({
 
         this._windowActor = windowActor;
         this._container = container;
-        this._style = null;
         this._insets = null;
-        this._outgoing = null;
-        this._progress = 1;
-        this._fadeStart = 0;
+        this._scale = 1.0;
+        this._fade = new ShadowFadeStateMachine({
+            now: () => GLib.get_monotonic_time() / 1000,
+        });
 
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
@@ -81,6 +52,42 @@ export const ShadowActor = GObject.registerClass({
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
         container.insert_child_below(this, windowActor);
+    }
+
+    /** @returns {boolean} Whether a cross-fade animation is currently active */
+    get isFading() {
+        return this._fade.isFading;
+    }
+
+    /** @returns {boolean} Whether the shadow is completely settled */
+    get isSettled() {
+        return this._fade.isSettled;
+    }
+
+    /** @returns {number} Current incoming fade progress [0..1] */
+    get progress() {
+        return this._fade.progress;
+    }
+
+    /** @returns {{style: object, weight: number}|null} */
+    get outgoing() {
+        return this._fade.outgoing;
+    }
+
+    /** @returns {object|null} Current target shadow style */
+    get style() {
+        return this._fade.style;
+    }
+
+    /**
+     * Sets display scale externally, eliminating Shell queries from paint passes.
+     * @param {number} scale
+     */
+    setScale(scale) {
+        if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale) {
+            this._scale = scale;
+            this.queue_relayout();
+        }
     }
 
     /**
@@ -108,54 +115,21 @@ export const ShadowActor = GObject.registerClass({
     setShadowStyle(style) {
         const {radius, shadows, animate = false} = style;
         const key = styleKey(radius, shadows);
-        if (this._style && this._style.key === key)
+        if (this._fade.style && this._fade.style.key === key)
             return;
 
-        // Spread the given style rather than rebuilding it: rebuilding dropped `animate` once and
-        // `border` once, and each time the field was correct everywhere the unit tests looked.
-        if (!this._style) {
-            this._style = {...style, key, pipeline: null};
-            this._progress = 1;
-            this.queue_redraw();
-            return;
-        }
-
-        // Upstream declares the transition on the backdrop state alone, so entering backdrop
-        // fades and every other change - gaining focus, maximizing, tiling - snaps. The flag is
-        // generated from the SCSS, so this file does not decide which states animate. It defaults
-        // to false: most states snap, and a caller that forgets the flag should land on the side
-        // that is merely abrupt rather than the one that fades when upstream does not.
-        if (!animate) {
-            this._finishFade();
-            this._style = {...style, key, pipeline: null};
-            this.queue_redraw();
-            return;
-        }
-
-        const keepStyle = this._progress >= 0.5;
-        const kept = keepStyle ? this._style : this._outgoing?.style;
-        let keptWeight = 0;
-        if (keepStyle)
-            keptWeight = this._progress;
-        else if (this._outgoing)
-            keptWeight = (1 - this._progress) * this._outgoing.weight;
-
-        this._outgoing = kept ? {style: kept, weight: keptWeight} : null;
-        this._style = {...style, key, pipeline: null};
-        this._progress = 0;
-
-        if (this._outgoing)
-            this._startFade();
-        else
-            this._finishFade();
+        const nextStyle = {...style, key, pipeline: null};
+        this._fade.setStyle(nextStyle, {animate});
+        this.queue_redraw();
     }
 
     vfunc_paint_node(node, paintContext) {
-        if (this.width <= 0 || this.height <= 0 || !this._style)
+        const currentStyle = this._fade.style;
+        if (this.width <= 0 || this.height <= 0 || !currentStyle)
             return;
 
         // Bring the blend up to the frame being drawn, then keep frames coming while it runs.
-        if (this._advanceFade())
+        if (this._fade.advance())
             this.queue_redraw();
 
         // Scale by paint opacity; see docs/architecture.md § ShadowActor.
@@ -165,25 +139,25 @@ export const ShadowActor = GObject.registerClass({
 
         const context = paintContext.get_framebuffer().get_context();
 
-        const pipeline = this._pipelineFor(context, this._style);
+        const pipeline = this._pipelineFor(context, currentStyle);
         if (!pipeline)
             return;
 
-        if (this._outgoing && this._progress < 1) {
-            const {style, weight} = this._outgoing;
-            const outgoing = this._pipelineFor(context, style);
-            if (outgoing) {
-                setPipelineOpacity(outgoing, pipelineOpacityFor((1 - this._progress) * weight, paintOpacity));
-                this._addRects(node, outgoing, style);
+        const outgoing = this._fade.outgoing;
+        if (outgoing && this._fade.progress < 1) {
+            const outgoingPipeline = this._pipelineFor(context, outgoing.style);
+            if (outgoingPipeline) {
+                setPipelineOpacity(outgoingPipeline, pipelineOpacityFor(this._fade.outgoingWeight, paintOpacity));
+                this._addRects(node, outgoingPipeline, outgoing.style);
             }
         }
 
-        setPipelineOpacity(pipeline, pipelineOpacityFor(this._outgoing ? this._progress : 1, paintOpacity));
-        this._addRects(node, pipeline, this._style);
+        setPipelineOpacity(pipeline, pipelineOpacityFor(this._fade.incomingWeight, paintOpacity));
+        this._addRects(node, pipeline, currentStyle);
     }
 
     _addRects(node, pipeline, style) {
-        const scale = getPhysicalMonitorScale(this._windowActor, 1.0);
+        const scale = this._scale ?? 1.0;
         const boxes = this._relayout(style, scale);
 
         const pipelineNode = new Clutter.PipelineNode(pipeline);
@@ -249,42 +223,8 @@ export const ShadowActor = GObject.registerClass({
         return entry.boxes;
     }
 
-    /**
-     * Advances the blend to the frame being drawn, and reports whether it is still running - that
-     * answer is what asks for the next frame, since a redraw queued from inside a paint schedules
-     * one. Progress comes from the wall clock, so a frame the compositor skipped costs nothing and
-     * a late frame does not stretch the blend.
-     * @returns {boolean}
-     */
-    _advanceFade() {
-        if (this._fadeStart === 0)
-            return false;
-        const elapsedMs = (GLib.get_monotonic_time() - this._fadeStart) / 1000;
-        this._progress = bezier(Math.min(1, elapsedMs / FADE_MS), EASE_OUT);
-        if (elapsedMs >= FADE_MS) {
-            this._finishFade();
-            return false;
-        }
-        return true;
-    }
-
-    _startFade() {
-        // Starting from 0 on every entry, including a re-entry mid-blend, is what keeps a style
-        // change ramping from the start instead of resuming the previous blend's position.
-        this._fadeStart = GLib.get_monotonic_time();
-        this._progress = 0;
-        this.queue_redraw();
-    }
-
-    _finishFade() {
-        this._fadeStart = 0;
-        this._outgoing = null;
-        this._progress = 1;
-        this.queue_redraw();
-    }
-
     destroy() {
-        this._fadeStart = 0;
+        this._fade.reset();
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
@@ -293,8 +233,6 @@ export const ShadowActor = GObject.registerClass({
         } catch {
             // Already destroyed.
         }
-        this._style = null;
-        this._outgoing = null;
         try {
             this._container?.remove_child(this);
         } catch {
