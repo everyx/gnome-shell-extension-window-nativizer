@@ -619,9 +619,7 @@ function _setupCorrectionsGroup(page, ctx) {
     const rows = [];
 
     // Destroyed from own signal: defer rebuild to idle. One pending is enough, and the key to
-    // highlight rides along, so a rebuild merged from several triggers (our own write's
-    // `changed`, a pick) still highlights once - a concurrent rebuild would otherwise clear
-    // the highlight the pick just set.
+    // highlight rides along so picking a window highlights and expands the new row.
     let renderScheduled = false;
     let pendingHighlight = null;
     const scheduleRenderRules = highlightKey => {
@@ -640,10 +638,6 @@ function _setupCorrectionsGroup(page, ctx) {
             return GLib.SOURCE_REMOVE;
         });
     };
-
-    // The rules can also change from outside this window (another prefs instance, dconf):
-    // without this the rows drift until the window is reopened.
-    settings.connect('changed::window-rules', () => scheduleRenderRules());
 
     const renderRules = highlightKey => {
         for (const row of rows)
@@ -679,7 +673,7 @@ function _setupCorrectionsGroup(page, ctx) {
             // One-shot, like the render above: nothing to cancel, and the guard covers a window
             // that closed in the meantime.
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                // A rebuild (an external rule change) may have replaced the rows by now; the
+                // A queued rebuild may have replaced the rows by now; the
                 // old row is no longer in `rows`, so grabbing focus on it would touch a
                 // destroyed widget.
                 if (isWindowAlive() && rows.includes(focusedRow))
