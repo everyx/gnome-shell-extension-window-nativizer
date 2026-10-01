@@ -15,7 +15,6 @@ import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
-    readWindowString,
 } from './pick.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BG_TRANSPARENTIZE} from './inspectorStyle.generated.js';
@@ -25,12 +24,13 @@ import {
     highlightBoundingBox,
     highlightOuterRadius,
     isDecoratableWindowType,
-    isWindowMaximized,
-    isWindowTiled,
 } from './detector.js';
-import {hasNativeLikeCorners, probeAdwaitaLook} from './nativeLikeCorners.js';
-import {getWindowFromActor} from './pick.js';
-import {resolveWindowIdentity} from './window.js';
+import {
+    getWindowFromActor,
+    readWindow,
+    readWindowString,
+    resolveWindowIdentity,
+} from './window.js';
 
 // Highlight visual styling, generated from the Shell's own pickers: see
 // src/lib/inspectorStyle.generated.js and vendor/gnome-shell/README.md.
@@ -151,23 +151,17 @@ export class InspectorService {
     }
 
     _getExpectedWindowRadius(win) {
-        if (!win)
+        const reading = readWindow(win, {classifier: this._manager?.classifier});
+        if (!reading)
             return 0;
 
-        const isMaximized = isWindowMaximized(win);
-        const isTiled = isWindowTiled(win, {isMaximized});
-        const isFullscreen = Boolean(win.is_fullscreen?.());
-        const hasSsd = Boolean(win.decorated);
-        const isActivelyClipped = Boolean(this._manager?.isWindowActivelyClipped?.(win));
-        const hasNativeCorners = hasNativeLikeCorners(win);
-
         return expectedWindowRadius({
-            isFullscreen,
-            isMaximized,
-            isTiled,
-            isActivelyClipped,
-            hasNativeLikeCorners: hasNativeCorners,
-            hasSsd,
+            isFullscreen: reading.isFullscreen,
+            isMaximized: reading.isMaximized,
+            isTiled: reading.tiled,
+            isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped?.(win)),
+            hasNativeLikeCorners: reading.nativeLikeCorners,
+            hasSsd: reading.hasSsd,
             baseRadius: ADWAITA_STYLE.window.radius,
         });
     }
@@ -208,7 +202,8 @@ export class InspectorService {
                     // Queries never start the /proc read (docs/decoration-model.md § When a
                     // window's corners already look like ours); the event drives it, and the
                     // answer lands a frame later for the next motion to read.
-                    probeAdwaitaLook(targetWin.get_pid?.());
+                    const pid = targetWin.get_pid?.();
+                    this._manager?.classifier?.probeAdwaitaLook(pid);
                     const frame = targetWin.get_frame_rect();
                     const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
                     const innerRadius = this._getExpectedWindowRadius(targetWin);
@@ -286,7 +281,7 @@ export class InspectorService {
         try {
             // The suggested-rule queries read the process cache; start the read at this request
             // boundary so they stay side-effect free.
-            probeAdwaitaLook(win.get_pid?.());
+            this._manager?.classifier?.probeAdwaitaLook(win.get_pid?.());
             const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
             // Display only, see docs/rule-model.md § What the pick remembers for the row.
