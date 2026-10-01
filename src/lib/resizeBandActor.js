@@ -292,8 +292,6 @@ export const ResizeBand = GObject.registerClass({
         super.destroy();
     }
 
-    // ---------- Internal ----------
-
     /**
      * The direction under a pointer event, resolved by GTK's own order. The strip is only
      * the surface that delivered the event; the frame carries the geometry.

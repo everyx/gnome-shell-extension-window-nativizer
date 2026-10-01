@@ -317,7 +317,7 @@ export class InspectorService {
             try {
                 inv.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
-                // invocation already answered
+                // Invocation already answered.
             }
         }
         this._cleanupPickUI();
@@ -345,14 +345,14 @@ export class InspectorService {
         try {
             this._highlight?.destroy();
         } catch {
-            // Already destroyed.
+            // Already destroyed or stage unmanaging.
         }
         this._highlight = null;
 
         try {
             this._overlay?.destroy();
         } catch {
-            // Already destroyed.
+            // Already destroyed or stage unmanaging.
         }
         this._overlay = null;
     }

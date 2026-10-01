@@ -36,7 +36,6 @@ export class WindowDecoration {
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
 
-        // Tri-axis decoration actors & effects
         this.clip = null;
         this.clipTarget = null;
         this.clipInsets = null;
@@ -46,11 +45,9 @@ export class WindowDecoration {
         this.shadow = null;
         this.resizeBand = null;
 
-        // Pending asynchronous tasks
         this.idleId = null;
         this.reconcileTimeout = null;
 
-        // Wiring state
         this.firstFrameDone = false;
         this.actorWired = false;
         this.signals = [];
@@ -76,9 +73,22 @@ export class WindowDecoration {
         return Boolean(this.resizeBand);
     }
 
-    /** @returns {object} Read-only snapshot of current decoration states */
+    /**
+     * Returns a fresh snapshot copy of the current decoration state flags.
+     *
+     * @returns {{
+     *   hasClip: boolean,
+     *   drawClip: boolean,
+     *   isActivelyClipped: boolean,
+     *   clearRing: boolean,
+     *   hasShadow: boolean,
+     *   hasResizeBand: boolean,
+     *   firstFrameDone: boolean,
+     *   isPendingReconcile: boolean,
+     * }}
+     */
     get stateView() {
-        return Object.freeze({
+        return {
             hasClip: Boolean(this.clip),
             drawClip: this.drawClip,
             isActivelyClipped: this.isActivelyClipped,
@@ -87,7 +97,7 @@ export class WindowDecoration {
             hasResizeBand: this.hasResizeBand,
             firstFrameDone: this.firstFrameDone,
             isPendingReconcile: Boolean(this.reconcileTimeout),
-        });
+        };
     }
 
     /**
@@ -296,7 +306,6 @@ export class WindowDecoration {
         this.resizeBand?.restack?.();
     }
 
-    /** Resets mouse cursor on the resize band back to default arrow. */
     resetBandCursor() {
         this.resizeBand?.resetCursor?.();
     }
@@ -323,7 +332,6 @@ export class WindowDecoration {
         this._syncResizeBand(false, null, null);
     }
 
-    /** Detaches clip from target actor safely. */
     _removeClipEffect() {
         if (!this.clip || !this.clipTarget)
             return;

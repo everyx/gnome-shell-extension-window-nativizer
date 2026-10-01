@@ -316,7 +316,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadowRef.destroyed).toBeFalse();
     });
 
-    it('provides an immutable stateView snapshot', () => {
+    it('provides a stateView snapshot of decoration properties', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
             display: mockDisplay,
@@ -326,11 +326,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         const view = deco.stateView;
-        expect(Object.isFrozen(view)).toBeTrue();
-        expect(() => {
-            'use strict';
-            view.hasClip = true;
-        }).toThrow();
+        expect(view).toEqual({
+            hasClip: false,
+            drawClip: false,
+            isActivelyClipped: false,
+            clearRing: false,
+            hasShadow: false,
+            hasResizeBand: false,
+            firstFrameDone: false,
+            isPendingReconcile: false,
+        });
     });
 
     it('delegates helper methods: suspend, restack, resetBandCursor, and undecorate', () => {
