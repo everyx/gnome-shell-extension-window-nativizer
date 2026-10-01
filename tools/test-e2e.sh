@@ -1048,7 +1048,7 @@ POPUP_CHECK="$(shell_eval '
     return JSON.stringify({
         actorCount: actors.length,
         trackedCount: manager ? manager.trackedCount : -1,
-        reconcilePending: Boolean(manager?._reconcileTimeout)
+        reconcilePending: Boolean(manager?.hasPendingWindowReconcile)
     });
 })()
 ')"
@@ -1076,7 +1076,6 @@ shell_eval '
         global.__wnPopupSamples.push({
             actors: global.get_window_actors().length,
             tracked: manager ? manager.trackedCount : -1,
-            pending: Boolean(manager?._reconcileTimeout),
             windowPending: Boolean(manager?.hasPendingWindowReconcile),
         });
         return global.__wnPopupSamples.length < 150 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
@@ -1107,11 +1106,7 @@ POPUP_SAMPLES="$(shell_eval '
         openSamples: open.length,
         survived,
         trackedBad: open.filter(s => s.tracked !== 1).length,
-        reconcileScheduled: open.filter(s => s.pending).length,
-        // A window that loses focus to the popup still reconciles through its own
-        // `notify::appears-focused` signal: that path is not what this fix gates, so it is
-        // reported rather than asserted.
-        windowReconciles: open.filter(s => s.windowPending).length,
+        reconcileScheduled: open.filter(s => s.windowPending).length,
     });
 })()
 ')"
