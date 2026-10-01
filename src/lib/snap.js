@@ -16,7 +16,6 @@
  * - research/gtk/gsk/gskrectprivate.h
  */
 
-import {getWindowFromActor} from './pick.js';
 
 export const SNAP_EPSILON = 0.001;
 
@@ -206,92 +205,4 @@ export function snapSliceBoxesInto(boxes, cast, corner, scale) {
     setActorBox(boxes[7], snappedX2, snappedY1, snappedX3, snappedY2);
 
     return boxes;
-}
-
-/**
- * Recursively climbs the Clutter actor parent hierarchy to locate the enclosing MetaWindow.
- * Essential when effects are attached to child surface containers (e.g. on X11 or with Blur my Shell).
- *
- * @param {object|null} actor
- * @param {number} [maxDepth=8]
- * @returns {object|null} MetaWindow instance if found
- */
-export function findMetaWindow(actor, maxDepth = 8) {
-    let curr = actor;
-    let depth = 0;
-    while (curr && depth < maxDepth) {
-        try {
-            const win = getWindowFromActor(curr) ?? getWindowFromActor(curr._windowActor);
-            if (win)
-                return win;
-
-            // If curr is already a Meta.Window instance itself (not an actor holding one)
-            if (typeof curr.get_monitor === 'function' && typeof curr.get_frame_rect === 'function' && typeof curr.get_parent !== 'function')
-                return curr;
-
-            curr = typeof curr.get_parent === 'function' ? curr.get_parent() : null;
-            depth++;
-        } catch {
-            break;
-        }
-    }
-    return null;
-}
-
-/**
- * Resolves the true physical monitor scale for a window actor.
- * Resolves fractional display scale directly from Meta.Display, bypassing Mutter's
- * integer-ceil'd clutter_actor_get_resource_scale().
- *
- * @param {object|null} actor - Window actor or child
- * @param {number} [fallback=1.0]
- * @returns {number} True physical monitor scale (e.g. 1.0, 1.25, 1.5, 2.0)
- */
-export function getPhysicalMonitorScale(actor, fallback = 1.0) {
-    const win = findMetaWindow(actor);
-    let monitor = -1;
-    if (win) {
-        try {
-            monitor = typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
-        } catch {
-            // win may be partially deallocated during window close
-        }
-    }
-
-    const display = typeof global !== 'undefined' ? global.display : globalThis.global?.display;
-    try {
-        // Infinity when the query is absent: "cannot bound it" must not silently disable
-        // fractional-scale resolution, it only means there is no upper bound to enforce.
-        const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
-        if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_scale === 'function') {
-            const scale = display.get_monitor_scale(monitor);
-            if (scale > 0 && Number.isFinite(scale))
-                return scale;
-        }
-    } catch {
-        // Display or index went away during a rapid topology change.
-    }
-    return fallback;
-}
-
-/**
- * Resolves a window's monitor geometry, or null when the index is stale (an unplugged
- * monitor before Mutter redirects the window) or the display cannot answer. The upper
- * bound is mandatory here: `get_monitor_geometry()` is a Mutter macro that logs a
- * `mutter-CRITICAL` for an out-of-range index, which is how an unplug used to reach syslog.
- *
- * @param {object|null} display - Meta.Display
- * @param {object|null} win - Meta.Window
- * @returns {object|null} monitor rect, or null
- */
-export function resolveMonitorBounds(display, win) {
-    try {
-        const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
-        const monitor = typeof win?.get_monitor === 'function' ? win.get_monitor() : -1;
-        if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_geometry === 'function')
-            return display.get_monitor_geometry(monitor);
-    } catch {
-        // Display or index went stale mid-read.
-    }
-    return null;
 }

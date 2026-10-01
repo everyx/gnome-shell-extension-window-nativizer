@@ -1,131 +1,67 @@
 // Pure pick contract shared by extension and prefs — see docs/architecture.md.
 
-import {WindowType, WindowClientType} from './mutterRules.generated.js';
+import {WindowClientType} from './mutterRules.generated.js';
 
-import {hasDeclaredMarginRing} from './frame.js';
 import {
-    CLIENT_TYPE_TOKEN_WAYLAND,
-    CLIENT_TYPE_TOKEN_X11,
-    buildRuleKey,
+    buildRuleKeyFromProperties,
     boolString,
 } from './rules.js';
+import {
+    readWindowString,
+    readDeclaredIdentity,
+    getWindowFromActor,
+    readWindow,
+    isWindowReading,
+} from './window.js';
 
 // Generated from vendor/mutter/window.h.
 export {WindowClientType};
+
+// Re-exported window inspection utilities for backward compatibility.
+export {
+    buildRuleKeyFromProperties,
+    readWindowString,
+    readDeclaredIdentity,
+    getWindowFromActor
+};
 
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/WindowNativizer';
 
 /**
- * Reads a window string, returning '' when GJS rejects non-UTF-8 C bytes: an app
- * may set any bytes as its class, and one unreadable name must not cost the
- * window its decision.
- *
- * @param {Function} getter - Reads the window field; the throw is inside the call
- * @returns {string} The field, or '' when unreadable
+ * @param {object} winOrReading - Meta.Window or existing WindowReading
+ * @param {string|null} [wmClassOverride]
+ * @returns {Record<string,string>}
  */
-export function readWindowString(getter) {
-    try {
-        return getter() ?? '';
-    } catch {
-        return '';
-    }
-}
-
-/**
- * Declared identity, first non-blank source wins. A whitespace-only field (an X11 client may
- * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
- * become a rule key.
- * @param {object} win
- * @returns {string} declared identity or ''
- */
-export function readDeclaredIdentity(win) {
-    for (const read of [
-        () => win?.get_wm_class?.(),
-        () => win?.get_sandboxed_app_id?.(),
-        () => win?.get_gtk_application_id?.(),
-    ]) {
-        const identity = readWindowString(read).trim();
-        if (identity)
-            return identity;
-    }
-    return '';
-}
-
-/**
- * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
- * variations: `meta_window` (current), `metaWindow`, then the `get_meta_window()`
- * modern method. A getter may throw on a half-destroyed actor, which must not escape.
- *
- * @param {object|null} actor
- * @returns {object|null} Meta.Window instance or null
- */
-export function getWindowFromActor(actor) {
-    if (!actor)
-        return null;
-    try {
-        return actor.meta_window ?? actor.metaWindow ?? actor.get_meta_window?.() ?? null;
-    } catch {
-        return null;
-    }
-}
-
-/** @param {object} win @param {string|null} [wmClassOverride] @returns {Record<string,string>} */
-export function extractWindowProperties(win, wmClassOverride = null) {
-    if (!win)
+export function extractWindowProperties(winOrReading, wmClassOverride = null) {
+    if (!winOrReading)
         return {};
 
-    const wmClass = wmClassOverride || readDeclaredIdentity(win);
-    const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
-    const isX11 = win.get_client_type?.() === WindowClientType.X11;
-    const f = win.get_frame_rect?.();
-    const b = win.get_buffer_rect?.();
+    const reading = isWindowReading(winOrReading)
+        ? winOrReading
+        : readWindow(winOrReading, {wmClassOverride});
+    if (!reading)
+        return {};
 
-    let hasRing = false;
-    if (typeof win.hasRing === 'boolean')
-        hasRing = win.hasRing;
-    else if (f && b)
-        hasRing = hasDeclaredMarginRing({buffer: b, frame: f, hasSsd: Boolean(win.decorated)});
-
-    // Values are strings for D-Bus a{ss}; prefs parses them back for buildRuleKey().
-    // Transient state rides along too: a rule outlives it, so prefs tells the user
-    // the rule takes effect once the window is restored.
     const props = {
-        wmClass,
-        'clientType': isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
-        'windowType': String(windowType),
-        'hasParent': boolString(win.get_transient_for?.()),
-        'allowsResize': boolString(win.allows_resize?.()),
-        'isAttachedDialog': boolString(win.is_attached_dialog?.()),
-        'hasRing': boolString(hasRing),
-        // The kind's SSD flag: prefs needs it to know the resize axis cannot apply
-        // (the frame owns the handles), and the key carries it.
-        'hasSsd': boolString(Boolean(win.decorated)),
-        'isMaximized': boolString(win.is_maximized?.() ?? false),
-        'isFullscreen': boolString(win.is_fullscreen?.() ?? false),
-        'hasTileMatch': boolString(win.get_tile_match?.() ?? false),
+        wmClass: wmClassOverride || reading.declaredWmClass,
+        clientType: reading.clientTypeToken,
+        windowType: String(reading.windowType),
+        hasParent: boolString(reading.hasParent),
+        allowsResize: boolString(reading.allowsResize),
+        isAttachedDialog: boolString(reading.isAttachedDialog),
+        hasRing: boolString(reading.hasRing),
+        hasSsd: boolString(reading.hasSsd),
+        isMaximized: boolString(reading.isMaximized),
+        isFullscreen: boolString(reading.isFullscreen),
+        hasTileMatch: boolString(reading.hasTileMatch),
     };
 
+    const f = reading.frameRect;
     if (f && Number.isFinite(f.width) && Number.isFinite(f.height) && f.width > 0 && f.height > 0) {
         props.width = String(Math.round(f.width));
         props.height = String(Math.round(f.height));
     }
 
     return props;
-}
-
-/** @param {Record<string,string>} [properties] @returns {string} canonical key or '' */
-export function buildRuleKeyFromProperties(properties = {}) {
-    const allowsResize = properties.allowsResize === 'true';
-    return buildRuleKey(properties.wmClass, {
-        clientType: properties.clientType,
-        windowType: Number(properties.windowType ?? WindowType.NORMAL),
-        hasParent: properties.hasParent === 'true',
-        allowsResize,
-        isAttachedDialog: properties.isAttachedDialog === 'true',
-        hasRing: properties.hasRing === 'true',
-        hasSsd: properties.hasSsd === 'true',
-        width: !allowsResize && properties.width ? Number(properties.width) : null,
-        height: !allowsResize && properties.height ? Number(properties.height) : null,
-    });
 }

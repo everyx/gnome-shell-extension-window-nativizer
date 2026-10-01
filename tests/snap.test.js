@@ -9,10 +9,12 @@ import {
     snapCoordToGrid,
     snapRectToGrid,
     snapSliceBoxesInto,
+} from '../src/lib/snap.js';
+import {
     findMetaWindow,
     getPhysicalMonitorScale,
     resolveMonitorBounds,
-} from '../src/lib/snap.js';
+} from '../src/lib/window.js';
 
 function createMockBox() {
     return {
