@@ -76,31 +76,28 @@ export function getWindowFromActor(actor) {
 }
 
 /**
- * Recursively climbs the Clutter actor parent hierarchy to locate the enclosing MetaWindow.
+ * Resolves the enclosing MetaWindow from a window actor, child container, or Meta.Window instance.
  * Essential when effects are attached to child surface containers (e.g. on X11 or with Blur my Shell).
  *
- * @param {object|null} actor
+ * @param {object|null} actorOrWin - Window actor, child, or Meta.Window instance
  * @param {number} [maxDepth=8]
  * @returns {object|null} MetaWindow instance if found
  */
-export function findMetaWindow(actor, maxDepth = 8) {
-    let curr = actor;
-    let depth = 0;
-    while (curr && depth < maxDepth) {
-        try {
+export function findMetaWindow(actorOrWin, maxDepth = 8) {
+    if (!actorOrWin)
+        return null;
+    if (typeof actorOrWin.get_monitor === 'function' && typeof actorOrWin.get_parent !== 'function')
+        return actorOrWin;
+    try {
+        let curr = actorOrWin;
+        for (let depth = 0; curr && depth < maxDepth; depth++) {
             const win = getWindowFromActor(curr) ?? getWindowFromActor(curr._windowActor);
             if (win)
                 return win;
-
-            // If curr is already a Meta.Window instance itself (not an actor holding one)
-            if (typeof curr.get_monitor === 'function' && typeof curr.get_frame_rect === 'function' && typeof curr.get_parent !== 'function')
-                return curr;
-
             curr = typeof curr.get_parent === 'function' ? curr.get_parent() : null;
-            depth++;
-        } catch {
-            break;
         }
+    } catch {
+        // Actor partially deallocated during window teardown.
     }
     return null;
 }

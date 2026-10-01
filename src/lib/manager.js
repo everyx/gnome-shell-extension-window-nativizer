@@ -132,11 +132,6 @@ export class Manager {
     disable() {
         this._inOverview = false;
 
-        if (this._reconcileTimeout) {
-            GLib.Source.remove(this._reconcileTimeout);
-            this._reconcileTimeout = null;
-        }
-
         // Teardown each window decoration domain object.
         for (const deco of this._windows.values()) {
             try {
@@ -350,17 +345,6 @@ export class Manager {
                 // Window went away while the process answer landed.
             }
         }
-    }
-
-    _reconcileDebounced() {
-        if (this._reconcileTimeout)
-            return;
-        this._reconcileTimeout = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT, 50, () => {
-                this._reconcileTimeout = null;
-                this._reconcile();
-                return GLib.SOURCE_REMOVE;
-            });
     }
 
     _reconcileWindowDebounced(win) {

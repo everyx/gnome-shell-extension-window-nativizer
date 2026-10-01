@@ -492,8 +492,6 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             window.present();
 
             if (err) {
-                // A second pick while one is in progress comes back as G_IO_ERROR_BUSY; say so
-                // instead of blaming the extension.
                 const busy = err.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.BUSY) ?? false;
                 showError(window,
                     _('Window Pick Failed'),
@@ -618,8 +616,8 @@ function _setupCorrectionsGroup(page, ctx) {
 
     const rows = [];
 
-    // Destroyed from own signal: defer rebuild to idle. One pending is enough, and the key to
-    // highlight rides along so picking a window highlights and expands the new row.
+    // Defer rebuild to idle so a widget destroyed from its own signal (e.g. trash button)
+    // is safely dropped by GTK, and coalesce rapid calls so the latest highlightKey wins.
     let renderScheduled = false;
     let pendingHighlight = null;
     const scheduleRenderRules = highlightKey => {
@@ -628,8 +626,6 @@ function _setupCorrectionsGroup(page, ctx) {
         if (renderScheduled)
             return;
         renderScheduled = true;
-        // The id is deliberately not kept: the callback removes itself, and `isWindowAlive()` is
-        // what makes a tick that lands after the window closed harmless - cancelling buys nothing.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             renderScheduled = false;
             if (isWindowAlive())
@@ -669,18 +665,8 @@ function _setupCorrectionsGroup(page, ctx) {
             }
         }
 
-        if (focusedRow) {
-            // One-shot, like the render above: nothing to cancel, and the guard covers a window
-            // that closed in the meantime.
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                // A queued rebuild may have replaced the rows by now; the
-                // old row is no longer in `rows`, so grabbing focus on it would touch a
-                // destroyed widget.
-                if (isWindowAlive() && rows.includes(focusedRow))
-                    focusedRow.grab_focus();
-                return GLib.SOURCE_REMOVE;
-            });
-        }
+        if (focusedRow && isWindowAlive())
+            focusedRow.grab_focus();
     };
 
     _setupWindowPickerAction(pickButton, ctx, ruleKey => scheduleRenderRules(ruleKey));
