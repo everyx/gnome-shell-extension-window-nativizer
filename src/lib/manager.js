@@ -132,7 +132,8 @@ export class Manager {
     disable() {
         this._inOverview = false;
 
-        // Teardown each window decoration domain object.
+        // Isolate per-window errors so a failure on one window never aborts teardown
+        // of remaining windows or drops global signal and state disconnection.
         for (const deco of this._windows.values()) {
             try {
                 deco.destroy();
@@ -161,7 +162,7 @@ export class Manager {
             try {
                 actor.destroy();
             } catch {
-                // Already destroyed.
+                // Actor already finalized or torn down mid-sweep.
             }
         }
         for (const winActor of global.get_window_actors?.() ?? []) {
@@ -195,8 +196,6 @@ export class Manager {
     _isDark() {
         return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
     }
-
-    // ---------- Internal ----------
 
     _disconnectSignals(signalsList) {
         if (!Array.isArray(signalsList))

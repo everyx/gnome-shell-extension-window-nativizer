@@ -3,6 +3,7 @@ import {
     readDeclaredIdentity,
     getWindowFromActor,
     readWindowString,
+    safeRead,
     isWindowReading,
 } from '../src/lib/window.js';
 import {WindowType, WindowClientType} from '../src/lib/mutterRules.generated.js';
@@ -184,6 +185,143 @@ describe('window inspection (readWindow)', () => {
         expect(reading.nativeLikeCorners).toBeTrue();
         expect(reading.hasGtk4Client).toBeTrue();
     });
+
+    it('handles throwing classifier methods gracefully during teardown', () => {
+        const mockWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_pid: () => 1234,
+        };
+        const throwingClassifier = {
+            hasNativeLikeCorners: () => {
+                throw new Error('classifier torn down');
+            },
+            hasGtk4Client: () => {
+                throw new Error('classifier torn down');
+            },
+        };
+
+        const reading = readWindow(mockWin, {classifier: throwingClassifier});
+        expect(reading).not.toBeNull();
+        expect(reading.nativeLikeCorners).toBeFalse();
+        expect(reading.hasGtk4Client).toBeFalse();
+    });
+
+    it('handles throwing identity resolvers while respecting wmClassOverride chaining', () => {
+        const throwingIdentityWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
+            get_wm_class: () => {
+                throw new Error('invalid UTF-8');
+            },
+            get_sandboxed_app_id: () => {
+                throw new Error('dbus error');
+            },
+            get_gtk_application_id: () => {
+                throw new Error('app gone');
+            },
+            get_pid: () => {
+                throw new Error('pid inaccessible');
+            },
+        };
+
+        const overrideReading = readWindow(throwingIdentityWin, {wmClassOverride: 'explicit_override'});
+        expect(overrideReading).not.toBeNull();
+        expect(overrideReading.wmClass).toBe('explicit_override');
+
+        const fallbackReading = readWindow(throwingIdentityWin);
+        expect(fallbackReading).not.toBeNull();
+        expect(fallbackReading.wmClass).toBe('');
+    });
+
+    it('passes pid fallback -1 to classifier.hasGtk4Client when win.get_pid throws', () => {
+        let receivedPid = null;
+        const throwingPidWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_pid: () => {
+                throw new Error('pid lookup failed');
+            },
+        };
+        const mockClassifier = {
+            hasGtk4Client: pid => {
+                receivedPid = pid;
+                return pid > 0;
+            },
+        };
+
+        const reading = readWindow(throwingPidWin, {classifier: mockClassifier});
+        expect(reading).not.toBeNull();
+        expect(reading.pid).toBe(-1);
+        expect(receivedPid).toBe(-1);
+        expect(reading.hasGtk4Client).toBeFalse();
+    });
+
+    it('falls back to true when allows_resize throws', () => {
+        const win = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            allows_resize: () => {
+                throw new Error('finalized');
+            },
+        };
+        const reading = readWindow(win);
+        expect(reading).not.toBeNull();
+        expect(reading.allowsResize).toBeTrue();
+    });
+
+    it('falls back to NORMAL when get_window_type throws', () => {
+        const win = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_window_type: () => {
+                throw new Error('finalized');
+            },
+        };
+        const reading = readWindow(win);
+        expect(reading).not.toBeNull();
+        expect(reading.windowType).toBe(WindowType.NORMAL);
+    });
+
+    it('falls back to false for throwing tile, fullscreen, maximize, and ring getters', () => {
+        const throwingFlagsWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_tile_match: () => {
+                throw new Error('tile error');
+            },
+            is_fullscreen: () => {
+                throw new Error('fullscreen error');
+            },
+            is_maximized: () => {
+                throw new Error('is_maximized error');
+            },
+            get hasRing() {
+                throw new Error('ring error');
+            },
+        };
+        const reading = readWindow(throwingFlagsWin);
+        expect(reading).not.toBeNull();
+        expect(reading.hasTileMatch).toBeFalse();
+        expect(reading.isFullscreen).toBeFalse();
+        expect(reading.isMaximized).toBeFalse();
+        expect(reading.tiled).toBeFalse();
+        expect(reading.hasRing).toBeFalse();
+    });
+
+    it('falls back to false when get_maximized throws in isolation', () => {
+        const throwingGetMaximizedWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_maximized: () => {
+                throw new Error('get_maximized error');
+            },
+        };
+        const reading = readWindow(throwingGetMaximizedWin);
+        expect(reading).not.toBeNull();
+        expect(reading.isMaximized).toBeFalse();
+        expect(reading.tiled).toBeFalse();
+    });
 });
 
 describe('readDeclaredIdentity', () => {
@@ -240,6 +378,18 @@ describe('readWindowString', () => {
         expect(readWindowString(() => {
             throw new Error('utf8 error');
         })).toBe('');
+    });
+});
+
+describe('safeRead', () => {
+    it('returns evaluated value or fallback on throw or nullish', () => {
+        expect(safeRead(() => 42, 0)).toBe(42);
+        expect(safeRead(() => true, false)).toBeTrue();
+        expect(safeRead(() => null, 'fallback')).toBe('fallback');
+        expect(safeRead(() => undefined, 'fallback')).toBe('fallback');
+        expect(safeRead(() => {
+            throw new Error('finalized');
+        }, false)).toBeFalse();
     });
 });
 

@@ -22,6 +22,23 @@ function listWindowActors() {
 }
 
 /**
+ * Executes a getter safely, returning a fallback value if the call throws
+ * (e.g. during Mutter window teardown or C-boundary marshalling errors).
+ *
+ * @template T
+ * @param {() => T} getter
+ * @param {T} fallback
+ * @returns {T}
+ */
+export function safeRead(getter, fallback) {
+    try {
+        return getter() ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+/**
  * Reads a window string, returning '' when GJS rejects non-UTF-8 C bytes: an app
  * may set any bytes as its class, and one unreadable name must not cost the
  * window its decision.
@@ -30,11 +47,7 @@ function listWindowActors() {
  * @returns {string} The field, or '' when unreadable
  */
 export function readWindowString(getter) {
-    try {
-        return getter() ?? '';
-    } catch {
-        return '';
-    }
+    return safeRead(getter, '');
 }
 
 /**
@@ -277,126 +290,42 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     const hasValidGeometry = Boolean(b && f && b.width > 0 && b.height > 0 && f.width > 0 && f.height > 0);
     const insets = hasValidGeometry ? insetsFromRects(b, f) : null;
 
-    let isX11 = false;
-    let hasSsd = false;
-    let maximizedHorizontally = false;
-    let maximizedVertically = false;
-    let appearsFocused = false;
-    try {
-        isX11 = win.get_client_type?.() === WindowClientType.X11;
-        hasSsd = Boolean(win.decorated);
-        maximizedHorizontally = Boolean(win.maximized_horizontally);
-        maximizedVertically = Boolean(win.maximized_vertically);
-        appearsFocused = Boolean(win.appears_focused);
-    } catch {
-        // Window torn down.
-    }
+    const isX11 = safeRead(() => win.get_client_type?.() === WindowClientType.X11, false);
+    const hasSsd = safeRead(() => Boolean(win.decorated), false);
+    const maximizedHorizontally = safeRead(() => Boolean(win.maximized_horizontally), false);
+    const maximizedVertically = safeRead(() => Boolean(win.maximized_vertically), false);
+    const appearsFocused = safeRead(() => Boolean(win.appears_focused), false);
 
-    let hasRing = false;
-    try {
+    const hasRing = safeRead(() => {
         if (typeof win.hasRing === 'boolean')
-            hasRing = win.hasRing;
-        else if (hasValidGeometry)
-            hasRing = hasDeclaredMarginRing({buffer: b, frame: f, hasSsd});
-    } catch {
-        // Fallback false.
-    }
+            return win.hasRing;
+        if (hasValidGeometry)
+            return hasDeclaredMarginRing({buffer: b, frame: f, hasSsd});
+        return false;
+    }, false);
 
-    let isMaximized = false;
-    try {
-        isMaximized = isWindowMaximized(win);
-    } catch {
-        // Fallback false.
-    }
+    const isMaximized = safeRead(() => isWindowMaximized(win), false);
+    const hasTileMatch = safeRead(() => Boolean(win.get_tile_match?.()), false);
+    const isFullscreen = safeRead(() => Boolean(win.is_fullscreen?.()), false);
+    const windowType = safeRead(() => win.get_window_type?.() ?? WindowType.NORMAL, WindowType.NORMAL);
+    const pid = safeRead(() => win.get_pid?.() ?? -1, -1);
+    const hasParent = safeRead(() => Boolean(win.get_transient_for?.()), false);
+    const isAttachedDialog = safeRead(() => Boolean(win.is_attached_dialog?.()), false);
+    const allowsResize = safeRead(() => Boolean(win.allows_resize?.()), true);
 
-    let hasTileMatch = false;
-    try {
-        hasTileMatch = Boolean(win.get_tile_match?.());
-    } catch {
-        // Fallback false.
-    }
+    const declaredWmClass = safeRead(() => readDeclaredIdentity(win), '');
+    const wmClass = wmClassOverride || declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
 
-    let isFullscreen = false;
-    try {
-        isFullscreen = Boolean(win.is_fullscreen?.());
-    } catch {
-        // Fallback false.
-    }
-
-    let windowType = WindowType.NORMAL;
-    try {
-        windowType = win.get_window_type?.() ?? WindowType.NORMAL;
-    } catch {
-        // Fallback NORMAL.
-    }
-
-    let pid = -1;
-    try {
-        pid = win.get_pid?.() ?? -1;
-    } catch {
-        // Fallback -1.
-    }
-
-    let hasParent = false;
-    try {
-        hasParent = Boolean(win.get_transient_for?.());
-    } catch {
-        // Fallback false.
-    }
-
-    let isAttachedDialog = false;
-    try {
-        isAttachedDialog = Boolean(win.is_attached_dialog?.());
-    } catch {
-        // Fallback false.
-    }
-
-    let allowsResize = true;
-    try {
-        allowsResize = Boolean(win.allows_resize?.());
-    } catch {
-        // Fallback true.
-    }
-
-    let declaredWmClass = '';
-    try {
-        declaredWmClass = readDeclaredIdentity(win);
-    } catch {
-        // Fallback ''.
-    }
-    let wmClass = wmClassOverride || declaredWmClass;
-    if (!wmClass) {
-        try {
-            wmClass = resolveWindowIdentity(win);
-        } catch {
-            // Fallback ''.
-        }
-    }
-
-    // When no classifier is provided (or methods throw), nativeLikeCorners and hasGtk4Client
-    // default to false. Callers requiring process classification must pass a ProcessClassifier.
-    let nativeLikeCorners = false;
-    try {
-        if (classifier && typeof classifier.hasNativeLikeCorners === 'function')
-            nativeLikeCorners = Boolean(classifier.hasNativeLikeCorners(win));
-    } catch {
-        // Fallback false.
-    }
-
-    let hasGtk4 = false;
-    try {
-        if (classifier && typeof classifier.hasGtk4Client === 'function')
-            hasGtk4 = Boolean(classifier.hasGtk4Client(pid));
-    } catch {
-        // Fallback false.
-    }
-
-    let tiled = false;
-    try {
-        tiled = isWindowTiled(win, {isMaximized, hasTileMatch});
-    } catch {
-        // Fallback false.
-    }
+    // Process classification defaults to false when classifier is omitted or throws.
+    const nativeLikeCorners = safeRead(
+        () => Boolean(classifier && typeof classifier.hasNativeLikeCorners === 'function' && classifier.hasNativeLikeCorners(win)),
+        false
+    );
+    const hasGtk4 = safeRead(
+        () => Boolean(classifier && typeof classifier.hasGtk4Client === 'function' && classifier.hasGtk4Client(pid)),
+        false
+    );
+    const tiled = safeRead(() => isWindowTiled(win, {isMaximized, hasTileMatch}), false);
 
     return {
         bufferRect: b,

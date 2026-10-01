@@ -8,7 +8,7 @@ import Cogl from 'gi://Cogl';
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 import {SHADOW_PAD, shadowGeometry} from './shadowGeometry.js';
 
-const LAYER_COUNT = 3; // shader has 3 layers
+const LAYER_COUNT = 3; // shader expects 3 layers
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
