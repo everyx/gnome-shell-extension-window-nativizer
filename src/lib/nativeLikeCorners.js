@@ -12,25 +12,11 @@ import Gio from 'gi://Gio';
 const GTK4_PROVIDER = 'libadwaita-1.so';
 const ADWAITA_PROVIDERS = [
     GTK4_PROVIDER,
-    'libhandy-1.so',  // GTK3 predecessor (window.csd.unified)
+    'libhandy-1.so', // GTK3 predecessor (window.csd.unified)
 ];
 
 /** What a process maps, for the two questions asked of it. */
 const NO_PROVIDER = Object.freeze({adwaitaLook: false, gtk4: false});
-
-/** pid -> the answer, once it has landed. Absent while a read is in flight. */
-const processCache = new Map();
-
-/**
- * pid -> the read in flight, as `{cancellable}`: a GObject at module scope is a rejection. The
- * entry is its own token, so dropping it (forgetProcess, destroy) cancels the read and makes a late
- * answer unrecognisable - by then the pid may be another process.
- */
-const inFlight = new Map();
-
-/** Fires with the pid when an answer lands; Manager re-decides that process's windows. */
-let onProcessKnown = null;
-let destroyed = false;
 
 /**
  * Reads /proc/<pid>/maps off the main loop: GIO runs a local file's async read in a worker thread,
@@ -51,50 +37,11 @@ function readMaps(pid, done, cancellable) {
 }
 
 /**
- * @param {number} pid
- * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} reader
- */
-function startRead(pid, reader) {
-    const entry = {cancellable: new Gio.Cancellable()};
-    inFlight.set(pid, entry);
-    const done = (mapsText, error) => {
-        if (inFlight.get(pid) !== entry)
-            return;
-        inFlight.delete(pid);
-        // A process whose maps cannot be read is decorated, and cached as such: a retry per query
-        // would start a read per reconcile. forgetProcess() is the retry point (last window closed).
-        processCache.set(pid, error ? NO_PROVIDER : classifyProcess(mapsText));
-        onProcessKnown?.(pid);
-    };
-    try {
-        reader(pid, done, entry.cancellable);
-    } catch (error) {
-        // A reader that throws instead of answering must not leave the pid pending: that window
-        // would then never be decided.
-        done(null, error);
-    }
-}
-
-/**
  * @param {*} pid
  * @returns {boolean}
  */
 function isValidPid(pid) {
     return typeof pid === 'number' && Number.isInteger(pid) && pid > 0;
-}
-
-/**
- * Initiates an async read of /proc/<pid>/maps if not already cached, in flight, or destroyed.
- * @param {number} pid
- * @param {object} [deps]
- * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
- */
-export function probeAdwaitaLook(pid, deps = {}) {
-    if (destroyed || !isValidPid(pid))
-        return;
-    if (processCache.has(pid) || inFlight.has(pid))
-        return;
-    startRead(pid, deps.readMaps ?? readMaps);
 }
 
 /**
@@ -112,109 +59,152 @@ export function classifyProcess(mapsText) {
 }
 
 /**
- * Registers the callback that fires when a process's answer lands, so the caller can re-decide
- * the windows it left alone. `null` unregisters; `destroy()` clears it.
- * @param {((pid: number) => void)|null} cb
+ * Manages per-process classification and async /proc/<pid>/maps probe lifecycle.
+ * Instantiated and held by Manager to eliminate module-level global state and leaks.
  */
-export function setOnProcessKnown(cb) {
-    onProcessKnown = cb;
-}
+export class ProcessClassifier {
+    /**
+     * @param {object} [options]
+     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [options.readMaps]
+     */
+    constructor(options = {}) {
+        /** @type {Map<number, {adwaitaLook: boolean, gtk4: boolean}>} */
+        this._processCache = new Map();
+        /** @type {Map<number, {cancellable: Gio.Cancellable}>} */
+        this._inFlight = new Map();
+        /** @type {((pid: number) => void)|null} */
+        this._onProcessKnown = null;
+        this._destroyed = false;
+        this._readMaps = options.readMaps ?? readMaps;
+    }
 
-/**
- * Pure snapshot read: answers only from `processCache` and never starts a read. Starting one is
- * the caller's job, through the `probeAdwaitaLook()` command. A query that drives I/O makes its
- * own result depend on evaluation order (docs/decoration-model.md § When a window's corners
- * already look like ours).
- * @param {number} pid
- * @returns {{adwaitaLook: boolean, gtk4: boolean}|undefined}
- */
-function answerFor(pid) {
-    return processCache.get(pid);
-}
+    /** @returns {boolean} */
+    get isDestroyed() {
+        return this._destroyed;
+    }
 
-/**
- * Whether a process has the Adwaita look.
- * @param {number} pid
- * @returns {boolean} Whether the process has the Adwaita look (from the cache; unknown reads as true)
- */
-export function hasAdwaitaLook(pid) {
-    if (!isValidPid(pid))
-        return false;
+    /**
+     * Initiates an async read of /proc/<pid>/maps if not already cached, in flight, or destroyed.
+     * @param {number} pid
+     * @param {object} [deps]
+     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
+     */
+    probeAdwaitaLook(pid, deps = {}) {
+        if (this._destroyed || !isValidPid(pid))
+            return;
+        if (this._processCache.has(pid) || this._inFlight.has(pid))
+            return;
+        this._startRead(pid, deps.readMaps ?? this._readMaps);
+    }
 
-    return answerFor(pid)?.adwaitaLook ?? true;
-}
+    /**
+     * @param {number} pid
+     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} reader
+     */
+    _startRead(pid, reader) {
+        const entry = {cancellable: new Gio.Cancellable()};
+        this._inFlight.set(pid, entry);
+        const done = (mapsText, error) => {
+            if (this._inFlight.get(pid) !== entry)
+                return;
+            this._inFlight.delete(pid);
+            // A process whose maps cannot be read is decorated, and cached as such: a retry per query
+            // would start a read per reconcile. forgetProcess() is the retry point (last window closed).
+            this._processCache.set(pid, error ? NO_PROVIDER : classifyProcess(mapsText));
+            try {
+                this._onProcessKnown?.(pid);
+            } catch (cbError) {
+                if (typeof logError === 'function')
+                    logError(cbError, '[window-nativizer] Error in onProcessKnown callback');
+            }
+        };
+        try {
+            reader(pid, done, entry.cancellable);
+        } catch (error) {
+            done(null, error);
+        }
+    }
 
-/**
- * Whether a process is a GTK4 client, i.e. whether it maps libadwaita.
- *
- * GTK4 sizes a CSD window's input region from `RESIZE_HANDLE_SIZE` whatever the shadow is, so a
- * GTK4 client's own handle is a constant the declared margins can prove. GTK3 sizes its handle from
- * the theme instead, so nothing else can be read that way (docs/decoration-model.md § The resize
- * band).
- * @param {number} pid
- * @returns {boolean} Whether the process is a GTK4 client (from the cache; unknown reads as false)
- */
-export function hasGtk4Client(pid) {
-    if (!isValidPid(pid))
-        return false;
+    /**
+     * Whether a process has the Adwaita look.
+     * @param {number} pid
+     * @returns {boolean} Whether the process has the Adwaita look (from the cache; unknown reads as true)
+     */
+    hasAdwaitaLook(pid) {
+        if (!isValidPid(pid))
+            return false;
 
-    // Unlike `hasAdwaitaLook()`, an unknown answer is not a yes: only a landed answer may
-    // take a band away from a window.
-    return answerFor(pid)?.gtk4 ?? false;
-}
+        return this._processCache.get(pid)?.adwaitaLook ?? true;
+    }
 
-/**
- * Whether an asynchronous answer is currently in flight for a pid.
- * @param {number} pid
- * @returns {boolean}
- */
-export function isAdwaitaLookPending(pid) {
-    if (destroyed || !isValidPid(pid))
-        return false;
-    return inFlight.has(pid);
-}
+    /**
+     * Whether a process is a GTK4 client, i.e. whether it maps libadwaita.
+     * @param {number} pid
+     * @returns {boolean} Whether the process is a GTK4 client (from the cache; unknown reads as false)
+     */
+    hasGtk4Client(pid) {
+        if (!isValidPid(pid))
+            return false;
 
-/**
- * Whether window's own process already rounds corners.
- * @param {object} win - Meta.Window
- * @returns {boolean} Whether window's own process already rounds corners.
- */
-export function hasNativeLikeCorners(win) {
-    if (!win)
-        return false;
-    return hasAdwaitaLook(win.get_pid?.());
-}
+        // Unlike `hasAdwaitaLook()`, an unknown answer is not a yes: only a landed answer may
+        // take a band away from a window.
+        return this._processCache.get(pid)?.gtk4 ?? false;
+    }
 
-/**
- * Forgets a process from the cache and cancels any read in flight.
- * @param {number} pid
- */
-export function forgetProcess(pid) {
-    const entry = inFlight.get(pid);
-    inFlight.delete(pid);
-    processCache.delete(pid);
-    entry?.cancellable.cancel();
-}
+    /**
+     * Whether an asynchronous answer is currently in flight for a pid.
+     * @param {number} pid
+     * @returns {boolean}
+     */
+    isAdwaitaLookPending(pid) {
+        if (this._destroyed || !isValidPid(pid))
+            return false;
+        return this._inFlight.has(pid);
+    }
 
-/**
- * Clear the cache and the callback, and cancel every read in flight (extension disable()).
- */
-export function destroy() {
-    destroyed = true;
-    onProcessKnown = null;
-    const entries = [...inFlight.values()];
-    inFlight.clear();
-    processCache.clear();
-    for (const entry of entries)
-        entry.cancellable.cancel();
-}
+    /**
+     * Whether window's own process already rounds corners.
+     * @param {object} win - Meta.Window
+     * @returns {boolean} Whether window's own process already rounds corners.
+     */
+    hasNativeLikeCorners(win) {
+        if (!win)
+            return false;
+        return this.hasAdwaitaLook(win.get_pid?.());
+    }
 
-/**
- * Initializes or re-arms the module state for an active extension session, preserving any registered callback.
- */
-export function init() {
-    const cb = onProcessKnown;
-    destroy();
-    destroyed = false;
-    onProcessKnown = cb;
+    /**
+     * Forgets a process from the cache and cancels any read in flight.
+     * @param {number} pid
+     */
+    forgetProcess(pid) {
+        const entry = this._inFlight.get(pid);
+        this._inFlight.delete(pid);
+        this._processCache.delete(pid);
+        entry?.cancellable.cancel();
+    }
+
+    /**
+     * Registers the callback that fires when a process's answer lands, so the caller can re-decide
+     * the windows it left alone. `null` unregisters; `destroy()` clears it.
+     * @param {((pid: number) => void)|null} cb
+     */
+    setOnProcessKnown(cb) {
+        this._onProcessKnown = cb;
+    }
+
+    /**
+     * Clear the cache and the callback, and cancel every read in flight.
+     */
+    destroy() {
+        if (this._destroyed)
+            return;
+        this._destroyed = true;
+        this._onProcessKnown = null;
+        const entries = [...this._inFlight.values()];
+        this._inFlight.clear();
+        this._processCache.clear();
+        for (const entry of entries)
+            entry.cancellable.cancel();
+    }
 }

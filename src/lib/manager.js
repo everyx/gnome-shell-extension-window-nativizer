@@ -19,14 +19,7 @@ import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {readWindow} from './window.js';
-import {
-    destroy as destroyNativeLikeCorners,
-    forgetProcess,
-    init as initNativeLikeCorners,
-    isAdwaitaLookPending,
-    probeAdwaitaLook,
-    setOnProcessKnown,
-} from './nativeLikeCorners.js';
+import {ProcessClassifier} from './nativeLikeCorners.js';
 import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
@@ -51,14 +44,22 @@ export class Manager {
         this._highContrast = false;
         this._animationsEnabled = true;
         this._dark = false;
+        /** @type {ProcessClassifier|null} */
+        this._classifier = null;
+    }
+
+    /** @returns {ProcessClassifier|null} */
+    get classifier() {
+        return this._classifier;
     }
 
     enable() {
         shadowTexture.reset();
-        initNativeLikeCorners();
+        this._classifier?.destroy();
+        this._classifier = new ProcessClassifier();
 
         // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
-        setOnProcessKnown(pid => this._onProcessKnown(pid));
+        this._classifier.setOnProcessKnown(pid => this._onProcessKnown(pid));
 
         // Suspend clip effects during overview to preserve downscaled preview sharpness.
         this._inOverview = Boolean(Main.overview.visible);
@@ -165,7 +166,8 @@ export class Manager {
         this._rules = null;
         // Sweep after signals gone so no reconcile can re-populate mid-teardown.
         this._tearDownStrays();
-        destroyNativeLikeCorners();
+        this._classifier?.destroy();
+        this._classifier = null;
         shadowTexture.destroy();
     }
 
@@ -365,7 +367,7 @@ export class Manager {
             }
             // Last window for pid gone → drop process cache (also cleared in destroy()).
             if (!hasPeer)
-                forgetProcess(pid);
+                this._classifier?.forgetProcess(pid);
         }
     }
 
@@ -515,8 +517,8 @@ export class Manager {
             // still being read: wait for it rather than drawing a shadow we would have to take back.
             // `_onProcessKnown()` runs this again when the answer lands.
             const pid = win.get_pid?.();
-            probeAdwaitaLook(pid);
-            if (isAdwaitaLookPending(pid))
+            this._classifier?.probeAdwaitaLook(pid);
+            if (this._classifier?.isAdwaitaLookPending(pid))
                 return;
 
             const inputs = this._decorationInputs(win);
@@ -606,7 +608,7 @@ export class Manager {
 
     /** @param {Meta.Window} win @returns {object|null} */
     _collectDecorationInputs(win) {
-        const reading = readWindow(win);
+        const reading = readWindow(win, {classifier: this._classifier});
         if (!reading || !reading.hasValidGeometry)
             return null;
 
