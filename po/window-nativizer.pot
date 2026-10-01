@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 14:19+0800\n"
+"POT-Creation-Date: 2026-10-01 16:05+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -221,27 +221,27 @@ msgid ""
 "for one axis"
 msgstr ""
 
-#: src/prefs.js:659
+#: src/prefs.js:653
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
-#: src/prefs.js:723
+#: src/prefs.js:717
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:729
+#: src/prefs.js:723
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:730
+#: src/prefs.js:724
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:735
+#: src/prefs.js:729
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:736
+#: src/prefs.js:730
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"

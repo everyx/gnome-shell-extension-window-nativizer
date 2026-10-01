@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 14:19+0800\n"
+"POT-Creation-Date: 2026-10-01 16:05+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -220,27 +220,27 @@ msgid ""
 "for one axis"
 msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
 
-#: src/prefs.js:659
+#: src/prefs.js:653
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "点击上方按钮，选取装饰不正确的窗口"
 
-#: src/prefs.js:723
+#: src/prefs.js:717
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:729
+#: src/prefs.js:723
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:730
+#: src/prefs.js:724
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制窗口在不同显示器缩放下的装饰方式"
 
-#: src/prefs.js:735
+#: src/prefs.js:729
 msgid "Prioritize crisp text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:736
+#: src/prefs.js:730
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"

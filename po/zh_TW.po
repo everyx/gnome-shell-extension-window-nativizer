@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 14:19+0800\n"
+"POT-Creation-Date: 2026-10-01 16:05+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -220,27 +220,27 @@ msgid ""
 "for one axis"
 msgstr "修正按視窗種類生效；開關修正其中一個軸的自動判斷"
 
-#: src/prefs.js:659
+#: src/prefs.js:653
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
 
-#: src/prefs.js:723
+#: src/prefs.js:717
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:729
+#: src/prefs.js:723
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:730
+#: src/prefs.js:724
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
 
-#: src/prefs.js:735
+#: src/prefs.js:729
 msgid "Prioritize crisp text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:736
+#: src/prefs.js:730
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
