@@ -1,6 +1,4 @@
-/**
- * Manager: window lifecycle → decoration reconciliation. Shell/Mutter surface in docs/shell-compatibility.md.
- */
+// Central window decoration manager — lifecycle and orchestration in docs/architecture.md.
 
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
@@ -15,16 +13,14 @@ import {
     suggestedRuleWouldChange,
 } from './detector.js';
 import {extractWindowProperties} from './pick.js';
-import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
-import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
-import {resolveClipTarget} from './clipTarget.js';
-import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
-import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
+import {WindowDecoration} from './windowDecoration.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
-import {resolveMonitorBounds} from './snap.js';
+import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
+import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
+import {RESIZE_BAND_G_TYPE, ResizeBand} from './resizeBandActor.js';
 
 
 /** @returns {string|undefined} Registered GType name; name comparison survives module re-evaluation. */
@@ -36,7 +32,8 @@ export class Manager {
     /** @param {import('../extension.js').default} ext */
     constructor(ext) {
         this._settings = ext.getSettings();
-        this._windows = new Map();  // Meta.Window -> decorations state
+        /** @type {Map<Meta.Window, WindowDecoration>} */
+        this._windows = new Map();  // Meta.Window -> WindowDecoration
         this._signals = [];
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
@@ -85,12 +82,6 @@ export class Manager {
             // reconciles through its own `notify::appears-focused`, so this is the belt to
             // that suspenders. Focus landing on an unmanaged popup (issue #13) is still
             // carried by the window that lost focus.
-            //
-            // Reconciled now, not debounced. The debounce exists to coalesce geometry churn, and
-            // a focus change has none; what it selects is the one animation the user is watching.
-            // The later debounced pass still runs for the geometry signals and is a no-op when
-            // the style has not moved - ShadowActor.setShadowStyle returns early on an identical
-            // key - so nothing restarts the blend behind this.
             const previous = this._lastFocusWindow;
             const focusWin = global.display.focus_window;
             this._lastFocusWindow = focusWin;
@@ -145,15 +136,11 @@ export class Manager {
             GLib.Source.remove(this._reconcileTimeout);
             this._reconcileTimeout = null;
         }
-        // One window must not take the whole teardown with it. `_undecorate` reads the window's
-        // actor, and an exception escaping here skips everything below - leaving the global
-        // handlers connected and `extension._manager` set, which makes every later enable() a
-        // silent no-op. `_tearDownStrays()` in the tail sweeps whatever a skipped iteration left.
-        for (const [win, state] of this._windows) {
+
+        // Teardown each window decoration domain object.
+        for (const deco of this._windows.values()) {
             try {
-                this._dropPendingWork(state);
-                this._disconnectSignals(state.signals);
-                this._undecorate(win);
+                deco.destroy();
             } catch (e) {
                 logError(e, '[window-nativizer] Failed to tear down a window decoration');
             }
@@ -207,24 +194,11 @@ export class Manager {
     }
 
     /**
-     * Whether libadwaita would be using its dark palette. `prefer-dark` is the preference, and the
-     * palette follows it; the GTK3 theme name is the user's separate choice for the clients this
-     * extension decorates, so it is not the signal.
+     * Whether libadwaita would be using its dark palette.
      * @returns {boolean}
      */
     _isDark() {
         return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
-    }
-
-    _dropPendingWork(state) {
-        if (state.idleId) {
-            GLib.Source.remove(state.idleId);
-            state.idleId = null;
-        }
-        if (state.reconcileTimeout) {
-            GLib.Source.remove(state.reconcileTimeout);
-            state.reconcileTimeout = null;
-        }
     }
 
     // ---------- Internal ----------
@@ -261,13 +235,16 @@ export class Manager {
     _trackWindow(win) {
         if (!win || !isDecoratableWindowType(win.get_window_type?.()) || this._windows.has(win))
             return;
-        const state = {
-            clip: null, clipTarget: null, clipInsets: null, clearRing: false, drawClip: false, shadow: null,
-            resizeBand: null,
-            idleId: null, reconcileTimeout: null,
-            firstFrameDone: false, actorWired: false, signals: [],
-        };
-        this._windows.set(win, state);
+
+        const deco = new WindowDecoration(win, {
+            container: global.window_group,
+            display: global.display,
+            RoundedClipEffect,
+            ShadowActor,
+            ResizeBand,
+            St,
+        });
+        this._windows.set(win, deco);
 
         const windowSignals = [
             'position-changed', 'size-changed',
@@ -275,19 +252,19 @@ export class Manager {
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
         ];
         for (const sig of windowSignals)
-            this._connect(state.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
+            this._connect(deco.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
 
         // Focus is not geometry, so it is not debounced: the shadow it selects is the animation
         // the user is watching, and delaying its start by the debounce window is visible against
-        // the window's own backdrop change. See the focus-window handler above.
-        this._connect(state.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
+        // the window's own backdrop change.
+        this._connect(deco.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
 
-        this._connect(state.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
+        this._connect(deco.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
 
         const actor = win.get_compositor_private();
-        this._wireActorSignals(win, state, actor);
+        this._wireActorSignals(win, deco, actor);
         if (actor && actor.width > 0 && actor.height > 0) {
-            state.firstFrameDone = true;
+            deco.firstFrameDone = true;
             this._reconcileWindow(win);
         } else {
             this._reconcileWindowDebounced(win);
@@ -295,25 +272,22 @@ export class Manager {
     }
 
     /**
-     * Connects the actor-driven signals once the window actor exists. It is null at
-     * `window-created` (Mutter creates the MetaWindowActor at map), so this is re-checked from
-     * every reconcile until it lands; otherwise first-frame deferral and late foreign-widget
-     * injection would never be observed.
-     * @param {Meta.Window} win @param {object} state @param {object|null} actor
+     * Connects the actor-driven signals once the window actor exists.
+     * @param {Meta.Window} win @param {WindowDecoration} deco @param {object|null} actor
      */
-    _wireActorSignals(win, state, actor) {
-        if (!actor || state.actorWired)
+    _wireActorSignals(win, deco, actor) {
+        if (!actor || deco.actorWired)
             return;
-        state.actorWired = true;
+        deco.actorWired = true;
 
-        this._connect(state.signals, actor, 'notify::allocation', () => {
-            if (!state.firstFrameDone && actor.width > 0 && actor.height > 0) {
-                if (state.idleId)
-                    GLib.Source.remove(state.idleId);
+        this._connect(deco.signals, actor, 'notify::allocation', () => {
+            if (!deco.firstFrameDone && actor.width > 0 && actor.height > 0) {
+                if (deco.idleId)
+                    GLib.Source.remove(deco.idleId);
                 // Defer to idle: don't mutate actor tree during allocation.
-                state.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    state.idleId = null;
-                    state.firstFrameDone = true;
+                deco.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    deco.idleId = null;
+                    deco.firstFrameDone = true;
                     this._reconcileWindow(win);
                     return GLib.SOURCE_REMOVE;
                 });
@@ -321,32 +295,24 @@ export class Manager {
                 this._reconcileWindowDebounced(win);
             }
         }, true);
-        // React to late-injection or dynamic removal of foreign extension widgets (e.g. Blur my Shell).
-        // Precondition: tracks direct child mutations on MetaWindowActor; deeper nested widget injections
-        // are not monitored.
-        this._connect(state.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
-        this._connect(state.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
+        this._connect(deco.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
+        this._connect(deco.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
     }
 
     _forgetWindow(win) {
-        const state = this._windows.get(win);
-        if (state) {
-            this._dropPendingWork(state);
-            this._disconnectSignals(state.signals);
-            // The band takes clicks, so it cannot fade with the window: drop it now.
-            state.resizeBand?.destroy();
-            state.resizeBand = null;
-            // Keep clip/shadow to fade with windowActor on close.
-        }
+        const deco = this._windows.get(win);
+        if (deco)
+            deco.destroy({keepVisualsForClose: true});
+
+        this._windows.delete(win);
+        if (this._lastFocusWindow === win)
+            this._lastFocusWindow = null;
+
         // Remove the entry before reading the pid: a deallocated window's get_pid() can throw,
         // and the entry must already be gone or it would be re-synced forever. That throw costs the
         // `forgetProcess` below, the only prune site for the process cache, so a process reusing
         // this pid would be decorated from the dead one's answer. Left as is: every caller holds
         // the window for the duration of the call, so the throw has no demonstrated trigger.
-        this._windows.delete(win);
-        // Do not keep the focus reference to a window that is gone.
-        if (this._lastFocusWindow === win)
-            this._lastFocusWindow = null;
         let pid = -1;
         try {
             pid = win.get_pid?.() ?? -1;
@@ -373,7 +339,6 @@ export class Manager {
 
     /**
      * A process's answer landed after nothing could be decided for its windows: decide them now.
-     * Not debounced - this is one event per process, not a burst of signals.
      * @param {number} pid
      */
     _onProcessKnown(pid) {
@@ -399,157 +364,46 @@ export class Manager {
     }
 
     _reconcileWindowDebounced(win) {
-        const state = this._windows.get(win);
-        if (!state || state.reconcileTimeout)
+        const deco = this._windows.get(win);
+        if (!deco || deco.reconcileTimeout)
             return;
-        state.reconcileTimeout = GLib.timeout_add(
+        deco.reconcileTimeout = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, 50, () => {
-                state.reconcileTimeout = null;
+                deco.reconcileTimeout = null;
                 this._reconcileWindow(win);
                 return GLib.SOURCE_REMOVE;
             });
     }
 
-    /** Sync clip; clearRing erases client's shadow ring even when corners stay square (see docs/decoration-model.md § Rounding a window takes its shadow over). */
-    _syncClip(win, wantEffect, clearRing = false, target = null, insets = null) {
-        const state = this._windows.get(win);
-        if (!state)
-            return;
-        const actor = win.get_compositor_private();
-        if (!actor)
-            return;
-
-        const clipTarget = target ?? resolveClipTarget(win, actor, St);
-        // Attach/detach is a decision, not a frame measurement: it no longer depends on the
-        // actor's current allocation (that is why a resize used to drop the effect for a
-        // frame). The only window that gets no effect is one whose insets is null -
-        // a frame that does not fit inside its buffer at all. A framed X11 window is not
-        // that case: its buffer is the frame grown by the invisible borders, so it is
-        // clipped like any other (measured: the surface child is buffer-sized).
-        const wanted = wantEffect && Boolean(insets);
-
-        const hasClip = Boolean(state.clip);
-        if (wanted !== hasClip) {
-            if (wanted) {
-                state.clip = new RoundedClipEffect();
-                if (this._inOverview)
-                    state.clip.set_enabled(false);
-                state.clipTarget = clipTarget;
-                state.clipTarget.add_effect(state.clip);
-            } else {
-                this._removeClipEffect(state);
-                state.clip = null;
-                state.clipTarget = null;
-            }
-        } else if (wanted) {
-            // X11 may replace surface child; re-pin if target moved.
-            if (clipTarget !== state.clipTarget) {
-                this._removeClipEffect(state);
-                state.clipTarget = clipTarget;
-                clipTarget.add_effect(state.clip);
-            }
-        }
-        state.clipInsets = state.clip ? insets : null;
-        state.clearRing = state.clip ? Boolean(clearRing) : false;
-    }
-
-    _onOverviewShowing() {
-        this._inOverview = true;
-        this._setClipsEnabled(false);
-    }
-
-    _onOverviewHidden() {
-        this._inOverview = false;
-        this._setClipsEnabled(true);
-    }
-
-    /** Suspend or resume clip effects across all managed windows (see docs/decoration-model.md § Overview downscaling and offscreen effects). */
-    _setClipsEnabled(enabled) {
-        for (const state of this._windows.values()) {
-            if (state.clip)
-                state.clip.set_enabled(enabled);
-        }
-    }
-
-    /** Detach clip; tolerates X11 surface child already destroyed. */
-    _removeClipEffect(state) {
-        try {
-            state.clipTarget?.remove_effect(state.clip);
-        } catch {
-            // Target already gone.
-        }
-    }
-
-    _syncShadow(win, wantShadow) {
-        const state = this._windows.get(win);
-        if (!state)
-            return;
-        const actor = win.get_compositor_private();
-        if (!actor)
-            return;
-
-        const hasShadow = Boolean(state.shadow);
-        if (wantShadow !== hasShadow) {
-            if (wantShadow) {
-                state.shadow = new ShadowActor(actor, global.window_group);
-            } else {
-                state.shadow.destroy();
-                state.shadow = null;
-            }
-        }
-    }
-
     _reconcileWindow(win) {
-        const state = this._windows.get(win);
-        if (!state)
+        const deco = this._windows.get(win);
+        if (!deco)
             return;
 
-        // The window or its actor can be torn down midway through any of the reads and
-        // syncs below. Guard the whole per-window unit so a teardown race skips this one
-        // window and leaves the reconcile pass (signals, monitor change) alive for the rest.
         try {
             const actor = win.get_compositor_private();
-            this._wireActorSignals(win, state, actor);
+            this._wireActorSignals(win, deco, actor);
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
-            // Whether the process maps an Adwaita provider decides this window, and that answer is
-            // still being read: wait for it rather than drawing a shadow we would have to take back.
-            // `_onProcessKnown()` runs this again when the answer lands.
             const pid = win.get_pid?.();
             this._classifier?.probeAdwaitaLook(pid);
             if (this._classifier?.isAdwaitaLookPending(pid))
                 return;
 
             const inputs = this._decorationInputs(win);
-            if (!inputs)
+            if (!inputs) {
+                deco.undecorate();
                 return;
+            }
             const actions = evaluateWindowActions(inputs);
 
-            // One inset set for clip and shadow so they cannot drift mid-resize - and the one
-            // `_decorationInputs` already read, not a second read of the same rects.
-            const target = resolveClipTarget(win, actor, St);
-            const insets = inputs.insets;
-
-            this._syncClip(win, actions.drawClip || actions.clearRing, actions.clearRing, target, insets);
-
-            // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
-            // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring.
-            // But the ring is only ours on a window we decorate at all. The resolved style is
-            // computed whether or not the window is ours, so a native window that is tiled resolves
-            // to a style with a border while drawing none of the three axes; the axes are the
-            // decision, and the style only says what to draw once there is one.
-            // A clip-ring that has no clip yet means the client's shadow is still visible and ours
-            // would double it; the ring is drawn regardless, because it replaces rather than adds.
-            const deferToClientShadow = actions.clearRing && !state.clip;
-            this._syncShadow(win, actions.drawRing || (!deferToClientShadow && actions.drawShadow));
-
-            // The resize axis is independent of the decoration or tiling: a tile match
-            // only takes the shadow, never the grab band.
-            this._syncResizeBand(win, actions.drawResize, inputs, insets);
-
-            if (state.clip || state.shadow)
-                this._applyStyle(win, actions.style, insets, actions.drawClip);
+            deco.apply({
+                actions,
+                inputs,
+                actor,
+                inOverview: this._inOverview,
+            });
         } catch {
             // Window went away mid-sync; the next signal re-runs it if it comes back.
         }
@@ -566,15 +420,26 @@ export class Manager {
         return this._rules;
     }
 
+    _onOverviewShowing() {
+        this._inOverview = true;
+        this._setClipsEnabled(false);
+    }
+
+    _onOverviewHidden() {
+        this._inOverview = false;
+        this._setClipsEnabled(true);
+    }
+
+    /** Suspend or resume clip effects across all managed windows. */
+    _setClipsEnabled(enabled) {
+        for (const deco of this._windows.values())
+            deco.suspend(!enabled);
+    }
+
     _restackActors() {
-        for (const [win, state] of this._windows) {
+        for (const [win, deco] of this._windows) {
             try {
-                const actor = win.get_compositor_private();
-                if (!actor)
-                    continue;
-                if (state.shadow)
-                    global.window_group.set_child_below_sibling(state.shadow, actor);
-                state.resizeBand?.restack();
+                deco.restack(win.get_compositor_private());
             } catch {
                 // Window went away mid-restack; the next restack drops it.
             }
@@ -583,16 +448,12 @@ export class Manager {
 
     /** Back to the arrow on every band; the next motion event over one sets it again. */
     _resetBandCursors() {
-        for (const state of this._windows.values())
-            state.resizeBand?.resetCursor();
+        for (const deco of this._windows.values())
+            deco.resetBandCursor();
     }
 
     /**
      * Inputs for evaluateWindowActions; shared with suggestedRuleWouldChange().
-     * Any read on a window that is being torn down can throw, so the whole gather is
-     * one guarded unit: an unreadable window yields null and its caller skips it,
-     * rather than aborting every other window in the same reconcile pass.
-     *
      * @param {Meta.Window} win
      * @returns {object|null}
      */
@@ -632,7 +493,7 @@ export class Manager {
         const inputs = this._decorationInputs(win);
         if (!inputs)
             return null;
-        return suggestedRuleWouldChange(extractWindowProperties(win, inputs.wmClass), inputs, ruleState);
+        return suggestedRuleWouldChange(extractWindowProperties(inputs, inputs.wmClass), inputs, ruleState);
     }
 
     /**
@@ -645,106 +506,41 @@ export class Manager {
     }
 
     /**
+     * Read-only state inspection snapshot for a tracked window decoration.
+     * Serves as the single explicit introspection boundary for E2E tests and debugging.
+     * @param {Meta.Window} win
+     * @returns {object|null}
+     */
+    stateView(win) {
+        return this._windows.get(win)?.stateView ?? null;
+    }
+
+    /**
+     * Number of windows currently tracked by the manager.
+     * @returns {number}
+     */
+    get trackedCount() {
+        return this._windows.size;
+    }
+
+    /**
+     * Whether any tracked window has a pending debounce reconcile timer.
+     * @returns {boolean}
+     */
+    get hasPendingWindowReconcile() {
+        for (const deco of this._windows.values()) {
+            if (deco.reconcileTimeout)
+                return true;
+        }
+        return false;
+    }
+
+    /**
      * Whether the window is actively managed with a rounded clip.
-     * A window with clearRing attaches a clip at radius 0 to erase client shadow margins,
-     * which does not constitute an active rounded corner clip.
-     *
      * @param {object} win - Meta.Window
      * @returns {boolean}
      */
     isWindowActivelyClipped(win) {
-        const state = this._windows.get(win);
-        return Boolean(state?.clip && state?.drawClip);
-    }
-
-    /**
-     * @param {Meta.Window} win
-     * @param {boolean} want
-     * @param {object} inputs - From _decorationInputs(): frame size and monitor scale
-     * @param {import('./frame.js').Insets|null} [insets]
-     */
-    _syncResizeBand(win, want, inputs, insets) {
-        const state = this._windows.get(win);
-        if (!state)
-            return;
-
-        if (!want) {
-            state.resizeBand?.destroy();
-            state.resizeBand = null;
-            return;
-        }
-
-        const actor = win.get_compositor_private();
-        if (!actor)
-            return;
-
-        if (!state.resizeBand)
-            state.resizeBand = new ResizeBand(actor, global.window_group);
-
-        let bounds = null;
-        try {
-            bounds = resolveMonitorBounds(global.display, win);
-        } catch {
-            // Defend against window deallocation or monitor hotplug races
-        }
-
-        // Which edges Mutter holds fixed is a decision, and it changes on Mutter's own
-        // signals, so it is derived here and the actor only carries the result.
-        const constrainedEdges = normalizeConstrainedEdges({
-            maximizedHorizontally: inputs.maximizedHorizontally,
-            maximizedVertically: inputs.maximizedVertically,
-        });
-
-        // Geometry, not decisions: the actor carries it live and the band derives its
-        // regions from the actor's size on every allocation, so this only has to hand over
-        // the insets, the constrained edges and the monitor rect. A frameless window's null
-        // insets read as zero.
-        state.resizeBand.setGeometry({
-            insets: insets ?? null,
-            bounds,
-            scale: inputs.monitorScale,
-            constrainedEdges,
-        });
-    }
-
-    _undecorate(win) {
-        const state = this._windows.get(win);
-        if (state)
-            state.drawClip = false;
-        this._syncClip(win, false);
-        this._syncShadow(win, false);
-        this._syncResizeBand(win, false, null);
-    }
-
-    _applyStyle(win, style, insets, drawClip) {
-        const state = this._windows.get(win);
-        const actor = win.get_compositor_private();
-        if (!state || !actor)
-            return;
-
-        state.drawClip = Boolean(drawClip && style.radius > 0);
-
-        if (state.clip && state.clipInsets) {
-            // Radius 0 keeps corners square; the clip still clears the ring outside body.
-            // Only the decisions are uploaded here; the effect places the body against the
-            // actor's live size in its own paint.
-            state.clip.setParams({
-                insets: state.clipInsets,
-                radius: drawClip ? style.radius : 0,
-                outline: drawClip ? style.outline : null,
-                clearRing: state.clearRing,
-            });
-        }
-        if (state.shadow) {
-            // Shadow cast by body, not actor (actor includes client's ring).
-            state.shadow.setShadowInsets(insets);
-
-            // Spread rather than rebuild: rebuilding dropped `animate` once, and the default then
-            // faded a state that upstream snaps. Only `radius` is overridden here.
-            state.shadow.setShadowStyle({
-                ...style,
-                radius: state.clip && drawClip ? style.radius : 0,
-            });
-        }
+        return Boolean(this._windows.get(win)?.isActivelyClipped);
     }
 }

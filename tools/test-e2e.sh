@@ -183,18 +183,26 @@ CHECK_RESULT="$(shell_eval '
     const children = parent ? parent.get_children().map(c => c.toString()) : [];
     const hasShadow = children.some(c => c.includes("WindowNativizerShadowActor"));
     const hasBand = children.some(c => c.includes("WindowNativizerResizeBand"));
+
+    // Verify Manager.stateView(win) introspection seam
+    const ext = typeof Main !== "undefined" ? Main.extensionManager.lookup("'"$UUID"'")?.stateObj : null;
+    const stateView = (ext?._manager && winActor.meta_window) ? ext._manager.stateView(winActor.meta_window) : null;
     return JSON.stringify({
         hasClip,
         hasShadow,
         hasBand,
+        hasStateView: Boolean(stateView),
+        stateViewClip: stateView?.hasClip ?? false,
+        stateViewShadow: stateView?.hasShadow ?? false,
+        stateViewBand: stateView?.hasResizeBand ?? false,
         actorCount: actors.length
     });
 })()
 ')"
 
 echo ">> Attachment check: $CHECK_RESULT"
-if ! check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand": true}'; then
-    echo "!! RoundedClipEffect, WindowNativizerShadowActor or WindowNativizerResizeBand was not attached!"
+if ! check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand": true, "hasStateView": true, "stateViewClip": true, "stateViewShadow": true, "stateViewBand": true}'; then
+    echo "!! RoundedClipEffect, WindowNativizerShadowActor or WindowNativizerResizeBand was not attached, or stateView mismatch!"
     exit 1
 fi
 echo ">> Clip effect, shadow actor and resize band successfully verified on active window."
@@ -243,7 +251,7 @@ BLEND_RESULT="$(shell_eval "
     const other = tracked[1];
     const targetShadow = shadows.find(s => s._windowActor?.meta_window === target);
     const alive = w => global.get_window_actors().some(a => a.meta_window === w);
-    const settledNow = () => targetShadow._outgoing === null && targetShadow._progress === 1;
+    const settledNow = () => targetShadow.isSettled;
 
     // Start from the focused state, or the first activation below changes nothing.
     if (alive(target))
@@ -253,7 +261,7 @@ BLEND_RESULT="$(shell_eval "
     if (alive(other))
         other.activate(global.get_current_time());
     await sleep(50);
-    const fadeStarted = targetShadow._outgoing !== null;
+    const fadeStarted = targetShadow.isFading;
     let fadeSettled = false;
     for (let i = 0; i < 60 && !fadeSettled; i++) {
         await sleep(25);
@@ -264,8 +272,8 @@ BLEND_RESULT="$(shell_eval "
         target.activate(global.get_current_time());
     await sleep(50);
     const snapped = settledNow();
-    const focusIn = {focused: target.appears_focused, outgoing: targetShadow._outgoing !== null,
-        progress: targetShadow._progress};
+    const focusIn = {focused: target.appears_focused, outgoing: targetShadow.isFading,
+        progress: targetShadow.progress};
 
     // With animations off, GTK hands a CSS transition no frame clock, so upstream snaps in both
     // directions - losing focus must then start no blend at all. The setting reaches the shell
@@ -279,7 +287,7 @@ BLEND_RESULT="$(shell_eval "
     if (alive(other))
         other.activate(global.get_current_time());
     await sleep(250);
-    const animationsOffStarted = targetShadow._outgoing !== null;
+    const animationsOffStarted = targetShadow.isFading;
     const animationsOffSettled = settledNow();
 
     iface.set_boolean('enable-animations', wasAnimations);
@@ -584,9 +592,8 @@ fi
 echo ">> Tiled ring pixel verified at the layer alpha."
 
 
-# These read ShadowActor's private fields on purpose: the blend's outgoing style, progress and
-# resolved layer are what the assertions are about, and nothing public exposes them. They are stable
-# within this repo - if they are renamed the probe fails loudly rather than silently passing.
+# Inspect the tiled ring style via ShadowActor's public properties (style.border, style.shadows).
+# The blend's settled state and styles are exposed cleanly by the ShadowFadeStateMachine.
 #
 # The tiled style's ring is drawn by the shadow actor, and that actor was gated on "has shadow" -
 # which a tiled window does not have, so the ring was never drawn at all. The band assertion above
@@ -600,12 +607,12 @@ TILED_STYLE="$(shell_eval '
     return JSON.stringify({
         verticalOnly: w.maximized_vertically && !w.maximized_horizontally,
         actor: Boolean(s),
-        border: s && s._style && s._style.border ? true : false,
+        border: s && s.style && s.style.border ? true : false,
         // The ring is the only layer the tiled style has, and it carries the colour - which is
         // what the upstream tiled rule is: a 1px box-shadow whose colour is currentColor.
-        shadowLayers: s && s._style && s._style.shadows ? s._style.shadows.length : -1,
-        layerColored: s && s._style && s._style.shadows && s._style.shadows[0]
-            ? Boolean(s._style.shadows[0].color) : false,
+        shadowLayers: s && s.style && s.style.shadows ? s.style.shadows.length : -1,
+        layerColored: s && s.style && s.style.shadows && s.style.shadows[0]
+            ? Boolean(s.style.shadows[0].color) : false,
     });
 })()
 ')"
@@ -1040,7 +1047,7 @@ POPUP_CHECK="$(shell_eval '
     const actors = global.get_window_actors();
     return JSON.stringify({
         actorCount: actors.length,
-        trackedCount: manager ? manager._windows.size : -1,
+        trackedCount: manager ? manager.trackedCount : -1,
         reconcilePending: Boolean(manager?._reconcileTimeout)
     });
 })()
@@ -1059,7 +1066,7 @@ fi
 # loses focus to the popup still reconciles through its own `notify::appears-focused` signal,
 # which is reported, not asserted. The synchronous paths (`grab-op-end`, `restacked`) are not
 # observable this way at all. Reading the manager's own bookkeeping is what the assertion is
-# about: "the popup is not tracked" is a statement about `_windows`.
+# about: "the popup is not tracked" is a statement about trackedCount.
 shell_eval '
 (() => {
     global.__wnPopupSamples = [];
@@ -1068,9 +1075,9 @@ shell_eval '
         const manager = ext?.stateObj?._manager;
         global.__wnPopupSamples.push({
             actors: global.get_window_actors().length,
-            tracked: manager ? manager._windows.size : -1,
+            tracked: manager ? manager.trackedCount : -1,
             pending: Boolean(manager?._reconcileTimeout),
-            windowPending: [...(manager?._windows?.values?.() ?? [])].some(s => s.reconcileTimeout),
+            windowPending: Boolean(manager?.hasPendingWindowReconcile),
         });
         return global.__wnPopupSamples.length < 150 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
     });
@@ -1275,7 +1282,7 @@ manager_state() {
         const Main = await import("resource:///org/gnome/shell/ui/main.js");
         const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
         const m = ext?._manager;
-        return JSON.stringify({hasManager: !!m, windows: m?._windows?.size ?? -1});
+        return JSON.stringify({hasManager: !!m, windows: m?.trackedCount ?? -1});
     })()
     ')"
     python3 - "$reply" << 'PYEOF'
@@ -1381,7 +1388,7 @@ FAULT_STATE="$(shell_eval '
     }
     const state = {
         threw,
-        windows: manager._windows.size,
+        windows: manager.trackedCount,
         globalSignals: manager._signals.length,
         settingsHandlers: manager._settingsHandlerIds.length,
         dropped: ext._manager === null,
@@ -1412,7 +1419,7 @@ read_session_state() {
         const kids = global.window_group.get_children();
         return JSON.stringify({
             actors: global.get_window_actors().length,
-            tracked: m?._windows?.size ?? -1,
+            tracked: m?.trackedCount ?? -1,
             bands: kids.filter(c => c.toString().includes("WindowNativizerResizeBand")).length,
             shadows: kids.filter(c => c.toString().includes("WindowNativizerShadowActor")).length,
         });

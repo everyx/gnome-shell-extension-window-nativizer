@@ -11,16 +11,19 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/clipTarget.js` | clip effect target resolution: selects window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry (pure) |
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
 | `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`bodyFrame`/`insetsFromRects` (pure) |
-| `lib/nativeLikeCorners.js` | shell-side probe: whether a window's corners already look like ours — an inference from the Adwaita look, consulted by the corner axis and by the resize band's eligibility |
-| `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
-| `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
+| `lib/nativeLikeCorners.js` | process classification instance (`ProcessClassifier`): asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
+| `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
+| `lib/pick.js` | the picker's D-Bus contract, rule recommendation evaluation, and property dictionary extraction |
+| `lib/snap.js` | pure grid snapping math: `snapCoordToGrid`, `snapRectToGrid`, actor box snapping, and 8-slice geometry layout (pure) |
 | `lib/style.js` | which decoration parameters a window state gets, and pipeline opacity modulation (pure) |
 | `lib/settings.js` | GSettings IO adapter |
 | `lib/resizeBand.js` | the window's resize band: four hit strips clipped to the monitor, plus `edgeForPoint()`, GTK's direction order (pure) |
 | `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
-| `lib/window.js` | shell-side identity gathering (`Shell.WindowTracker`, live window list) |
-| `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
+| `lib/window.js` | deep module for reading Meta.Window properties, actor discovery, physical monitor scale, and geometry normalization (`readWindow`) |
+| `lib/windowDecoration.js` | single-window decoration lifecycle and tri-axis actors (`RoundedClipEffect`, `ShadowActor`, `ResizeBand`), phased teardown, and read-only state view (`stateView`) |
+| `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, window decoration lifecycle orchestration, and read-only inspection surfaces (`trackedCount`, `hasPendingWindowReconcile`, `stateView`) |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
+| `effects/shadowFade.js` | pure cubic-bezier transition curves, monotonic clock progression, and interrupted cross-fade state machine (`ShadowFadeStateMachine`) (pure) |
 | `effects/` | rounded clipping (`clipEffect.js`), pure shadow geometry (`shadowGeometry.js`), the shadow actor (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
 | `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects incl. `uniformLocation.js`, grab ops, actor cursors) across GNOME 45–51 (pure) |
 
@@ -33,8 +36,8 @@ tested without a session; the processes only gather inputs and apply results.
 
 The picker is the only conversation between them: `inspector.js` implements
 `PickWindow() -> a{ss}`, the prefs window calls it, and it refuses to create a rule
-the extension reports as ineffective. `lib/pick.js` holds that contract so the prefs
-process can speak it without importing shell-only code.
+the extension reports as ineffective. `lib/pick.js` defines that D-Bus contract and
+property serialization so both sides share the same wire format.
 
 For the selection mechanics we followed KDE's KWin
 (`InputRedirection::startInteractiveWindowSelection` with its `clientToVariantMap`)
@@ -127,13 +130,12 @@ container is inserted in `global.window_group` above its own window actor, so it
 another window or shell chrome, and `_restackActors()` re-pins it on `restacked` (the same
 signal the shadow is pinned below its window on). Like the shadow it is bound to the window
 actor (`Clutter.BindConstraint`, grown by 12px per side, the band's depth) and derives its
-regions from the actor's live size in `vfunc_allocate`, from the insets and monitor rect the
-manager stored; the debounced reconcile hands over those decisions - the eligibility, and the
-relative insets - while the one absolute rectangle it needs, the monitor rect it clips to,
-rides along with them, so a resize cannot leave the band behind. The container follows the
-window actor's `visible` so a minimized window leaves no strip behind. Created and destroyed by
-`_syncResizeBand()`; dropped in `_undecorate()` and, before the close animation, in
-`_forgetWindow()` — a band that outlived its window would go on taking clicks.
+regions from the actor's live size in `vfunc_allocate`. The debounced reconcile hands over those decisions
+— the eligibility, and the relative insets — while `WindowDecoration` resolves the monitor rectangle it
+clips to, so a resize cannot leave the band behind. The container follows the
+window actor's `visible` so a minimized window leaves no strip behind. Managed and synchronized by
+`WindowDecoration`; dropped in `WindowDecoration.undecorate()` and, before the close animation, during
+`WindowDecoration.destroy({keepVisualsForClose: true})` — a band that outlived its window would go on taking clicks.
 See `decoration-model.md` § The resize band for why it exists and what it costs.
 
 ## Effects — RoundedClipEffect (`effects/clipEffect.js`)
@@ -282,17 +284,18 @@ is the offscreen window pass (the clip) plus these eight textured rectangles; th
 correctness and less per-frame JS reconcile, not an order-of-magnitude cheaper redraw.
 
 Style change cross-fades (the transition and why nothing resizes are the model in
-`decoration-model.md`, *How a style change is drawn*). The fade advances from the paint pass, not
-from a timer: progress is `bezier(t, EASE_OUT)` solved by four Newton iterations over the wall clock,
-and a blend still running asks for the next frame by queueing a redraw from inside the paint, so its
-duration is real time at whatever rate the display runs at. Mid-fade arrival keeps
-whichever side is more visible (`_progress >= 0.5`) as outgoing and carries its weight
-(`keptWeight = progress` or `(1-progress)*outgoing.weight`), so a burst of focus
-changes reads as one motion, never a pop.
+`decoration-model.md`, *How a style change is drawn*). The fade progression and interrupted
+animation blending are encapsulated in the pure `ShadowFadeStateMachine` (`effects/shadowFade.js`).
+The fade advances from the paint pass, not from a timer: progress is evaluated via cubic-bezier
+curve solved by Newton iterations over monotonic time, and a blend still running asks for the next
+frame by queueing a redraw from inside the paint, so its duration is real time at whatever rate
+the display runs at. Mid-fade arrival keeps whichever side is more visible (`progress >= 0.5`) as
+outgoing and carries its weight (`keptWeight = progress` or `(1-progress)*outgoing.weight`), so a
+burst of focus changes reads as one continuous motion, never a pop.
 
-Lifecycle: `destroy()` drops the blend state (`_fadeStart = 0`), unbinds, disconnects `windowActor::destroy`,
+Lifecycle: `destroy()` resets the state machine, unbinds, disconnects `windowActor::destroy`,
 clears style/outgoing and removes from container — idempotent for disable/reload.
-`FADE_MS` and `EASE_OUT` are both read from the generated `ADWAITA_STYLE.transition`
+Transition parameters are read from the generated `ADWAITA_STYLE.transition`
 (libadwaita `$backdrop_transition` = `200ms ease-out`). See
 `_relayout` for the relayout cache.
 
