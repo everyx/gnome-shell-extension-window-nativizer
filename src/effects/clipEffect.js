@@ -14,7 +14,7 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../compat/index.js';
 
 import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
-import {getPhysicalMonitorScale, snapRectToGrid, SnapRule} from '../lib/snap.js';
+import {snapRectToGrid, SnapRule} from '../lib/snap.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -96,6 +96,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._lastFrameW = -1;
         this._lastFrameH = -1;
         this._lastScale = -1;
+        this._scale = 1.0;
 
         this._sizeVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
@@ -111,8 +112,13 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param {number} params.radius - Corner radius in px
      * @param {{color:number[],alpha:number}|null} params.outline
      * @param {boolean} [params.clearRing=false]
+     * @param {number} [params.scale=1.0] - Monitor fractional/integer scale
      */
-    setParams({insets, radius, outline, clearRing = false}) {
+    setParams({insets, radius, outline, clearRing = false, scale = 1.0}) {
+        const scaleChanged = typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale;
+        if (scaleChanged)
+            this._scale = scale;
+
         const nextOutlineVec = outline
             ? [
                 outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
@@ -131,7 +137,8 @@ export const RoundedClipEffect = GObject.registerClass({
         if (last.left === insets.left && last.top === insets.top &&
             last.right === insets.right && last.bottom === insets.bottom &&
             this._radius === radius && !outlineChanged &&
-            this._clearRing === clearRing)
+            this._clearRing === clearRing &&
+            !scaleChanged)
             return;
 
         const insetsChanged = last.left !== insets.left || last.top !== insets.top ||
@@ -188,7 +195,7 @@ export const RoundedClipEffect = GObject.registerClass({
         // debounced, the actor is not). `bodyFrame` then returns the whole actor, so the pass
         // still runs: a body with no area is not the same as a frame with nothing to draw.
         const rawFrame = bodyFrame({width, height}, this._insets);
-        const scale = getPhysicalMonitorScale(actor, 1.0);
+        const scale = this._scale ?? 1.0;
         const frame = snapRectToGrid(rawFrame, scale, SnapRule.GROW);
 
         if (this._lastScale !== scale) {

@@ -5,11 +5,11 @@ import {
     CLIENT_TYPE_TOKEN_X11,
     RULE_AXES,
     RuleAxis,
+    buildRuleKeyFromProperties,
     buildRuleState,
     resolveRule,
     withRule,
 } from './rules.js';
-import {buildRuleKeyFromProperties} from './pick.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';

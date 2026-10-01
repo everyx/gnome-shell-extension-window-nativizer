@@ -370,3 +370,19 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
         return parseRuleState(rules[genericKey]);
     return null;
 }
+
+/** @param {Record<string,string>} [properties] @returns {string} canonical key or '' */
+export function buildRuleKeyFromProperties(properties = {}) {
+    const allowsResize = properties.allowsResize === 'true';
+    return buildRuleKey(properties.wmClass, {
+        clientType: properties.clientType,
+        windowType: Number(properties.windowType ?? WindowType.NORMAL),
+        hasParent: properties.hasParent === 'true',
+        allowsResize,
+        isAttachedDialog: properties.isAttachedDialog === 'true',
+        hasRing: properties.hasRing === 'true',
+        hasSsd: properties.hasSsd === 'true',
+        width: !allowsResize && properties.width ? Number(properties.width) : null,
+        height: !allowsResize && properties.height ? Number(properties.height) : null,
+    });
+}

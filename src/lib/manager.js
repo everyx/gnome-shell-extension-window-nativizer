@@ -11,22 +11,17 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {
     evaluateWindowActions,
     isDecoratableWindowType,
-    isWindowMaximized,
-    isWindowTiled,
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
-import {insetsFromRects} from './frame.js';
 import {extractWindowProperties} from './pick.js';
 import {ResizeBand, RESIZE_BAND_G_TYPE} from './resizeBandActor.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
-import {resolveWindowIdentity} from './window.js';
+import {readWindow} from './window.js';
 import {
     destroy as destroyNativeLikeCorners,
     forgetProcess,
-    hasGtk4Client,
-    hasNativeLikeCorners,
     init as initNativeLikeCorners,
     isAdwaitaLookPending,
     probeAdwaitaLook,
@@ -36,10 +31,8 @@ import {resolveClipTarget} from './clipTarget.js';
 import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
 import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
-import {getPhysicalMonitorScale, resolveMonitorBounds} from './snap.js';
+import {resolveMonitorBounds} from './snap.js';
 
-// Mutter enum value; the generated copy exists so modules and tests without the gi://Meta typelib can still read Mutter's constants.
-const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
 
 /** @returns {string|undefined} Registered GType name; name comparison survives module re-evaluation. */
 function gtypeName(object) {
@@ -611,43 +604,18 @@ export class Manager {
         }
     }
 
-    /** @param {Meta.Window} win @returns {object} */
+    /** @param {Meta.Window} win @returns {object|null} */
     _collectDecorationInputs(win) {
-        const b = win.get_buffer_rect();
-        const f = win.get_frame_rect();
-        const clientType = win.get_client_type?.();
-        const isMaximized = isWindowMaximized(win);
-        const hasTileMatch = Boolean(win.get_tile_match?.());
+        const reading = readWindow(win);
+        if (!reading || !reading.hasValidGeometry)
+            return null;
 
         return {
-            bufferWidth: b.width, bufferHeight: b.height,
-            frameWidth: f.width, frameHeight: f.height,
-            // Per-side ring, so each consumer keeps the aggregation it needs: the resize
-            // band asks about every side, the shadow axis whether either side declares one.
-            insets: insetsFromRects(b, f),
-            monitorScale: getPhysicalMonitorScale(win, 1),
-
-            isMaximized,
-            maximizedHorizontally: Boolean(win.maximized_horizontally),
-            maximizedVertically: Boolean(win.maximized_vertically),
-            isFullscreen: typeof win?.is_fullscreen === 'function' ? win.is_fullscreen() : false,
-            hasSsd: Boolean(win?.decorated),
-            isX11: clientType === CLIENT_TYPE_X11,
-            nativeLikeCorners: hasNativeLikeCorners(win),
-            hasGtk4Client: hasGtk4Client(win?.get_pid?.()),
-            windowType: typeof win?.get_window_type === 'function' ? win.get_window_type() : 0,
-            hasParent: Boolean(win.get_transient_for?.()),
-            isAttachedDialog: Boolean(win.is_attached_dialog?.()),
-            allowsResize: Boolean(win.allows_resize?.()),
-            hasTileMatch,
-            wmClass: resolveWindowIdentity(win),
-
-            focused: win.appears_focused,
-            tiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
+            ...reading,
+            focused: reading.appearsFocused,
             highContrast: this._highContrast,
             animationsEnabled: this._animationsEnabled,
             dark: this._dark,
-
             rules: this._windowRules,
             preferCrispText: this._preferCrispText,
         };
