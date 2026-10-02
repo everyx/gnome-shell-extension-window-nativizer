@@ -41,7 +41,12 @@ export class WindowDecoration {
         this.clipTarget = null;
         this.clipInsets = null;
         this.clearRing = false;
+        this.effectiveClearRing = false;
         this.drawClip = false;
+
+        this._style = null;
+        this._scale = 1.0;
+        this._inOverview = false;
 
         this.shadow = null;
         this.resizeBand = null;
@@ -82,6 +87,7 @@ export class WindowDecoration {
      *   drawClip: boolean,
      *   isActivelyClipped: boolean,
      *   clearRing: boolean,
+     *   effectiveClearRing: boolean,
      *   hasShadow: boolean,
      *   hasResizeBand: boolean,
      *   firstFrameDone: boolean,
@@ -94,6 +100,7 @@ export class WindowDecoration {
             drawClip: this.drawClip,
             isActivelyClipped: this.isActivelyClipped,
             clearRing: this.clearRing,
+            effectiveClearRing: this.effectiveClearRing,
             hasShadow: this.hasShadow,
             hasResizeBand: this.hasResizeBand,
             firstFrameDone: this.firstFrameDone,
@@ -118,7 +125,7 @@ export class WindowDecoration {
 
     /**
      * Applies evaluated actions and inputs to the tri-axis window decoration.
-     * Core public interface: apply(params), suspend(suspended), destroy(options).
+     * Core public interface: apply(params), setOverviewMode(inOverview), destroy(options).
      *
      * @param {object} params
      * @param {import('./detector.js').WindowActions} params.actions
@@ -151,12 +158,15 @@ export class WindowDecoration {
     }
 
     /**
-     * Suspend or resume clip effect (e.g. during Shell overview).
-     * @param {boolean} suspended
+     * Updates decoration state when entering or exiting Shell overview.
+     * @param {boolean} inOverview
      */
-    suspend(suspended) {
-        if (this.clip)
-            this.clip.set_enabled?.(!suspended);
+    setOverviewMode(inOverview) {
+        this._inOverview = Boolean(inOverview);
+        if (!this.clip)
+            return;
+        this.clip.setOverviewMode?.(this._inOverview);
+        this._syncClipParams();
     }
 
     /**
@@ -180,8 +190,6 @@ export class WindowDecoration {
             if (wanted) {
                 const ClipClass = this._RoundedClipEffect;
                 this.clip = ClipClass ? new ClipClass() : null;
-                if (inOverview && this.clip)
-                    this.clip.set_enabled?.(false);
                 this.clipTarget = clipTarget;
                 this.clipTarget?.add_effect?.(this.clip);
             } else {
@@ -198,7 +206,9 @@ export class WindowDecoration {
             }
         }
         this.clipInsets = this.clip ? insets : null;
-        this.clearRing = this.clip ? Boolean(clearRing || !hasPositiveInsets(insets)) : false;
+        this.clearRing = Boolean(clearRing);
+        this.effectiveClearRing = this.clip ? Boolean(clearRing || !hasPositiveInsets(insets)) : false;
+        this.setOverviewMode(inOverview);
     }
 
     /**
@@ -271,23 +281,32 @@ export class WindowDecoration {
      * @param {number} [scale=1.0]
      */
     _applyStyle(style, insets, drawClip, scale = 1.0) {
+        this._style = style;
+        this._scale = scale;
         this.drawClip = Boolean(drawClip && style.radius > 0);
 
-        if (this.clip && this.clipInsets) {
-            this.clip.setParams?.({
-                insets: this.clipInsets,
-                radius: drawClip ? style.radius : 0,
-                outline: drawClip ? style.outline : null,
-                clearRing: this.clearRing,
-                scale,
-            });
-        }
+        this._syncClipParams();
         if (this.shadow) {
             this.shadow.setScale?.(scale);
             this.shadow.setShadowInsets?.(insets);
             this.shadow.setShadowStyle?.({
                 ...style,
                 radius: this.clip && drawClip ? style.radius : 0,
+            });
+        }
+    }
+
+    /**
+     * Synchronizes clip parameters to shader, suppressing inner outline during overview.
+     */
+    _syncClipParams() {
+        if (this.clip && this.clipInsets && this._style) {
+            this.clip.setParams?.({
+                insets: this.clipInsets,
+                radius: this.drawClip ? this._style.radius : 0,
+                outline: this.drawClip && !this._inOverview ? this._style.outline : null,
+                clearRing: this.effectiveClearRing,
+                scale: this._scale,
             });
         }
     }
@@ -328,6 +347,7 @@ export class WindowDecoration {
      */
     undecorate() {
         this.drawClip = false;
+        this._style = null;
         this._syncClip(false);
         this._syncShadow(false);
         this._syncResizeBand(false, null, null);

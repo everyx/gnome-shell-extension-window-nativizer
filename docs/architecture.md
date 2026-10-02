@@ -176,9 +176,11 @@ synchronising only when dimensions or frame insets actually shift. Static repain
 incur no uniform uploads, and dynamic resizing avoids redundant pipeline state changes.
 See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
 
-During GNOME Shell overview mode, `RoundedClipEffect` is suspended (`set_enabled(false)`)
-to prevent aliasing artifacts on downscaled window previews; newly created windows inherit
-the suspended state until overview exit.
+During GNOME Shell overview mode, `RoundedClipEffect` retains active corner rounding while
+dynamically configuring hardware trilinear mipmapping (`LINEAR_MIPMAP_LINEAR`) and suppressing
+the 1px inner outline (`outline: null`) to prevent thumbnail aliasing and moiré artifacts.
+Upon returning to the desktop, standard filtering (`NEAREST`/`LINEAR`) and inner outline are
+restored seamlessly.
 
 During window close transitions, Clutter property bindings (opacity, scale, transform) keep
 `ShadowActor` synchronized with `windowActor` until actor destruction, preventing jarring shadow

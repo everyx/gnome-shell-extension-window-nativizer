@@ -44,7 +44,8 @@ echo ">> Extension is ACTIVE."
 echo ">> [test-e2e] Verifying the GJS surface this extension calls..."
 GJS_TYPELIB_DIRS="$( { ls -d /usr/lib/mutter-[0-9]* /usr/lib64/mutter-[0-9]* /usr/lib/*/mutter-[0-9]* \
     /usr/lib/gnome-shell /usr/lib64/gnome-shell /usr/lib/*/gnome-shell 2>/dev/null || true; } | tr '\n' ':' | sed 's/:$//')"
-GJS_LIB_DIRS="$( { ls -d /usr/lib/gnome-shell /usr/lib64/gnome-shell /usr/lib/*/gnome-shell 2>/dev/null || true; } | tr '\n' ':' | sed 's/:$//')"
+GJS_LIB_DIRS="$( { ls -d /usr/lib/mutter-[0-9]* /usr/lib64/mutter-[0-9]* /usr/lib/*/mutter-[0-9]* \
+    /usr/lib/gnome-shell /usr/lib64/gnome-shell /usr/lib/*/gnome-shell 2>/dev/null || true; } | tr '\n' ':' | sed 's/:$//')"
 GJS_SURFACE_OUT="$(LD_LIBRARY_PATH="$GJS_LIB_DIRS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     GI_TYPELIB_PATH="$GJS_TYPELIB_DIRS" gjs -m "$ROOT/tools/gjs-surface.js" 2>&1)" || {
     echo "$GJS_SURFACE_OUT"
@@ -794,14 +795,15 @@ for edge, want in expected.items():
 PYEOF
 echo ">> Declared-margin window verified: band present, all four strips hug the frame."
 
-# (f) Overview lifecycle assertion: RoundedClipEffect must be suspended (enabled=false)
-# during overview showing, and restored (enabled=true) upon returning to desktop (hidden).
-# This prevents low-res downsampling blur on overview preview clones (issue #7903).
-echo ">> [test-e2e] Verifying clip effect suspension in overview..."
-OVERVIEW_SUSPEND_STATE="$(shell_eval '
+# (f) Overview lifecycle assertion: RoundedClipEffect must remain enabled in overview,
+# activating hardware mipmapping (Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR) to prevent downsampling aliasing,
+# and restoring standard desktop filtering upon returning to desktop.
+echo ">> [test-e2e] Verifying clip effect and hardware mipmapping lifecycle in overview..."
+OVERVIEW_STATE="$(shell_eval '
 (async () => {
     const Main = await import("resource:///org/gnome/shell/ui/main.js");
     const GLib = imports.gi.GLib;
+    const Cogl = imports.gi.Cogl;
     const actors = global.get_window_actors();
     const target = actors.find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
     if (!target) return JSON.stringify({error: "window not found"});
@@ -811,45 +813,75 @@ OVERVIEW_SUSPEND_STATE="$(shell_eval '
     const initialClip = getClip();
     const initialEnabled = initialClip ? initialClip.get_enabled() : null;
 
-    const pollState = async (expectedOverview, expectedClipEnabled, maxRetries = 20) => {
+    const getMinFilter = clip => {
+        const pipeline = clip?.get_pipeline?.();
+        if (!pipeline?.get_layer_filters)
+            return null;
+        try {
+            const filters = pipeline.get_layer_filters(0);
+            return Array.isArray(filters) ? filters[0] : filters;
+        } catch {
+            return null;
+        }
+    };
+
+    const pollState = async (expectedOverview, expectedMipmapped, maxRetries = 20) => {
         for (let i = 0; i < maxRetries; i++) {
             await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
             const clip = getClip();
-            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() === expectedClipEnabled) {
-                return { matched: true, overviewVisible: Main.overview.visible, clipEnabled: clip.get_enabled(), hasClip: true };
+            const minFilter = getMinFilter(clip);
+            const isMipmapped = minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR;
+            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() && isMipmapped === expectedMipmapped) {
+                return {
+                    matched: true,
+                    overviewVisible: Main.overview.visible,
+                    clipEnabled: clip.get_enabled(),
+                    minFilter,
+                    isMipmapped,
+                    hasClip: true
+                };
             }
         }
         const clip = getClip();
+        const minFilter = getMinFilter(clip);
         return {
             matched: false,
             overviewVisible: Main.overview.visible,
             hasClip: Boolean(clip),
-            clipEnabled: clip ? clip.get_enabled() : null
+            clipEnabled: clip ? clip.get_enabled() : null,
+            minFilter,
+            isMipmapped: minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR
         };
     };
 
     Main.overview.show();
-    const overviewRes = await pollState(true, false);
+    const clipDuringShowing = getClip();
+    const showingModeEarly = clipDuringShowing ? clipDuringShowing._overviewMode : false;
+    const overviewRes = await pollState(true, true);
 
     Main.overview.hide();
-    const desktopRes = await pollState(false, true);
+    const desktopRes = await pollState(false, false);
 
     return JSON.stringify({
         hasClip: Boolean(initialClip) && overviewRes.hasClip && desktopRes.hasClip,
         initialEnabled,
+        showingModeEarly,
         overviewVisible: overviewRes.overviewVisible,
         inOverviewEnabled: overviewRes.clipEnabled,
+        inOverviewMipmapped: overviewRes.isMipmapped,
+        inOverviewMinFilter: overviewRes.minFilter,
         desktopOverviewVisible: desktopRes.overviewVisible,
-        restoredEnabled: desktopRes.clipEnabled
+        restoredEnabled: desktopRes.clipEnabled,
+        restoredMipmapped: desktopRes.isMipmapped
     });
 })()
 ')"
-echo ">> Overview suspend check: $OVERVIEW_SUSPEND_STATE"
-if ! check_fields "$OVERVIEW_SUSPEND_STATE" '{"hasClip": true, "initialEnabled": true, "overviewVisible": true, "inOverviewEnabled": false, "desktopOverviewVisible": false, "restoredEnabled": true}'; then
-    echo "!! Overview suspend assertion failed: clip effect was not properly toggled during overview!"
+echo ">> Overview state check: $OVERVIEW_STATE"
+if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "showingModeEarly": true, "overviewVisible": true, "inOverviewEnabled": true, "inOverviewMipmapped": true, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredMipmapped": false}'; then
+    echo "!! Overview assertion failed: clip effect or hardware mipmapping was not properly managed during overview!"
     exit 1
 fi
-echo ">> Overview clip effect suspension verified: disabled during overview, restored on desktop."
+echo ">> Overview lifecycle verified: clip retained and hardware mipmapping activated in overview, restored on desktop."
 
 # The declared-margin client closes itself (--hold); wait for it to go before proceeding.
 for i in $(seq 1 40); do
@@ -1791,7 +1823,7 @@ echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"
 echo "   - Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 echo "   - Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
-echo "   - Overview Clip Suspension: PASSED (disabled during overview, restored on desktop)"
+echo "   - Overview Clip Mode: PASSED (corners retained with hardware mipmapping in overview, restored on desktop)"
 echo "   - Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 echo "   - Partial & Full Maximize: PASSED (tiled ring drawn, constrained strips collapsed, fully maximized dropped, unmaximized restored)"
 echo "   - Libadwaita client left alone: $LIBNATIVE_RESULT"

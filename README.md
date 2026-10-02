@@ -55,7 +55,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips Libadwaita, Libhandy, and Firefox
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
-- **Overview-aware**: Suspends corner clipping during GNOME Shell overview mode to keep downscaled window previews sharp
+- **Overview-aware**: Retains rounded corners in overview previews using hardware mipmapping to eliminate thumbnail blur and moiré
 - **Clean tile seams**: The edge shared with another tile gets no ring, so no doubled line appears where two tiles meet
 
 ### 🔍 Crisp Text Protection
