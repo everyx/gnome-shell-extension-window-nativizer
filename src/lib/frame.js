@@ -70,6 +70,15 @@ export function insetsFromRects(buffer, frame) {
 }
 
 /**
+ * Whether the insets represent any positive margin.
+ * @param {Insets|null} insets
+ * @returns {boolean}
+ */
+export function hasPositiveInsets(insets) {
+    return Boolean(insets && (insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0));
+}
+
+/**
  * Whether the client declared its own outer margin ring between buffer and frame.
  * SSD windows are drawn by the compositor frame, not the client, so hasSsd => false.
  * @param {object} [params={}]
@@ -81,9 +90,6 @@ export function insetsFromRects(buffer, frame) {
 export function hasDeclaredMarginRing({buffer = null, frame = null, hasSsd = false} = {}) {
     if (hasSsd)
         return false;
-    const insets = insetsFromRects(buffer, frame);
-    if (!insets)
-        return false;
-    return insets.left > 0 || insets.right > 0 || insets.top > 0 || insets.bottom > 0;
+    return hasPositiveInsets(insetsFromRects(buffer, frame));
 }
 
