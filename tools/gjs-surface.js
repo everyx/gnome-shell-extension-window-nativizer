@@ -84,6 +84,7 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'ActorMeta', member: 'set_enabled', params: ['is_enabled']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'enabled', property: true},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
+    {ns: 'Clutter', cls: 'OffscreenEffect', member: 'get_pipeline', arity: 0},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
@@ -95,6 +96,11 @@ const SURFACE = [
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
+    {ns: 'Cogl', cls: 'Pipeline', member: 'set_layer_filters', params: ['layer_index', 'min_filter', 'mag_filter']},
+    // The C prototype takes two out-pointers (min_filter, mag_filter); GJS folds them into an
+    // out-argument return array [min_filter, mag_filter], matching get_buffer_rect's out-arg pattern.
+    {ns: 'Cogl', cls: 'Pipeline', member: 'get_layer_filters', params: ['layer_index']},
+    {ns: 'Cogl', cls: 'PipelineFilter', enum: true, members: ['LINEAR_MIPMAP_LINEAR', 'LINEAR', 'NEAREST']},
     // gnome-shell, only reachable from inside the shell
     {ns: 'Shell', cls: 'GLSLEffect', class: true, optional: true},
     // The C prototype has five parameters; GJS shows three, because g-ir-scanner folds the

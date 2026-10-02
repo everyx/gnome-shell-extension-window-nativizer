@@ -58,12 +58,13 @@ export class Manager {
         // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
         this._classifier.setOnProcessKnown(pid => this._onProcessKnown(pid));
 
-        // Suspend clip effects during overview to preserve downscaled preview sharpness.
+        // Track overview state to switch between standard and mipmapped hardware filtering.
         this._inOverview = Boolean(Main.overview.visible);
         this._lastFocusWindow = global.display.focus_window;
         this._highContrast = St.Settings.get().high_contrast;
         this._animationsEnabled = St.Settings.get().enable_animations;
         this._dark = this._isDark();
+        // Maintain overview mode across the showing-to-hidden transition.
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
@@ -405,18 +406,18 @@ export class Manager {
 
     _onOverviewShowing() {
         this._inOverview = true;
-        this._setClipsEnabled(false);
+        this._syncOverviewDecos();
     }
 
     _onOverviewHidden() {
         this._inOverview = false;
-        this._setClipsEnabled(true);
+        this._syncOverviewDecos();
     }
 
-    /** Suspend or resume clip effects across all managed windows. */
-    _setClipsEnabled(enabled) {
+    /** Synchronize overview mode across all managed window decorations. */
+    _syncOverviewDecos() {
         for (const deco of this._windows.values())
-            deco.suspend(!enabled);
+            deco.setOverviewMode(this._inOverview);
     }
 
     _restackActors() {

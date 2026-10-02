@@ -103,6 +103,8 @@ export const RoundedClipEffect = GObject.registerClass({
         this._scaleVec = [1.0];
         this._radiusVec = [0];
         this._clearRingVec = [0];
+
+        this._overviewMode = false;
     }
 
     /**
@@ -134,22 +136,23 @@ export const RoundedClipEffect = GObject.registerClass({
             this._outlineVec[3] !== nextOutlineVec[3];
 
         const last = this._insets;
+        const nextClearRing = Boolean(clearRing);
         if (last.left === insets.left && last.top === insets.top &&
             last.right === insets.right && last.bottom === insets.bottom &&
             this._radius === radius && !outlineChanged &&
-            this._clearRing === clearRing &&
+            this._clearRing === nextClearRing &&
             !scaleChanged)
             return;
 
         const insetsChanged = last.left !== insets.left || last.top !== insets.top ||
             last.right !== insets.right || last.bottom !== insets.bottom;
         const radiusChanged = this._radius !== radius;
-        const clearRingChanged = this._clearRing !== clearRing;
+        const clearRingChanged = this._clearRing !== nextClearRing;
 
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
         this._radius = radius;
         this._outline = outline;
-        this._clearRing = clearRing;
+        this._clearRing = nextClearRing;
 
         if (radiusChanged) {
             this._radiusVec[0] = radius;
@@ -162,7 +165,7 @@ export const RoundedClipEffect = GObject.registerClass({
         }
 
         if (clearRingChanged) {
-            this._clearRingVec[0] = clearRing ? 1 : 0;
+            this._clearRingVec[0] = nextClearRing ? 1 : 0;
             this.set_uniform_float('uClearRing', 1, this._clearRingVec);
         }
 
@@ -171,6 +174,18 @@ export const RoundedClipEffect = GObject.registerClass({
         if (insetsChanged)
             this._lastFrameW = -1;
 
+        this.queue_repaint();
+    }
+
+    /**
+     * Toggles hardware-filtered mipmapping for downscaled overview thumbnails.
+     * @param {boolean} inOverview
+     */
+    setOverviewMode(inOverview) {
+        const next = Boolean(inOverview);
+        if (this._overviewMode === next)
+            return;
+        this._overviewMode = next;
         this.queue_repaint();
     }
 
@@ -223,6 +238,18 @@ export const RoundedClipEffect = GObject.registerClass({
             this._lastFrameY = frame.y;
             this._lastFrameW = frame.width;
             this._lastFrameH = frame.height;
+        }
+
+        if (this._overviewMode) {
+            const pipeline = this.get_pipeline();
+            if (pipeline?.set_layer_filters) {
+                // Override layer 0 filters to maintain hardware mipmapping during overview mode.
+                pipeline.set_layer_filters(
+                    0,
+                    Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR,
+                    Cogl.PipelineFilter.LINEAR
+                );
+            }
         }
 
         super.vfunc_paint_target(node, paintContext);

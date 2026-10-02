@@ -11,6 +11,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         constructor() {
             this.enabled = true;
             this.params = null;
+            this.overviewMode = false;
         }
 
         set_enabled(val) {
@@ -19,6 +20,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setParams(params) {
             this.params = params;
+        }
+
+        setOverviewMode(val) {
+            this.overviewMode = val;
         }
     }
 
@@ -122,6 +127,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             drawClip: false,
             isActivelyClipped: false,
             clearRing: false,
+            effectiveClearRing: false,
             hasShadow: false,
             hasResizeBand: false,
             firstFrameDone: false,
@@ -151,10 +157,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasClip).toBeFalse();
         expect(mockActor.effects.length).toBe(0);
 
-        // Attach clip while in overview -> disabled
+        // Attach clip while in overview -> enabled and in overview mode
         deco._syncClip(true, false, mockActor, insets, true);
         expect(deco.hasClip).toBeTrue();
-        expect(deco.clip.enabled).toBeFalse();
+        expect(deco.clip.enabled).toBeTrue();
+        expect(deco.clip.overviewMode).toBeTrue();
     });
 
     it('manages shadow actor lifecycle in _syncShadow', () => {
@@ -247,6 +254,48 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.shadow.scale).toBe(1);
     });
 
+    it('applies overview mode settings through apply() contract', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const outline = {color: [1, 1, 1], alpha: 0.1};
+        const actions = {
+            drawClip: true,
+            clearRing: false,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {
+                radius: 12,
+                outline,
+                shadows: [],
+            },
+        };
+        const inputs = {
+            insets: {left: 10, top: 10, right: 10, bottom: 10},
+            monitorScale: 1,
+        };
+
+        // apply while in overview (clip retained, overviewMode enabled, outline suppressed to avoid subpixel fringe)
+        deco.apply({actions, inputs, actor: mockActor, inOverview: true});
+        expect(deco.hasClip).toBeTrue();
+        expect(deco.clip.enabled).toBeTrue();
+        expect(deco.clip.overviewMode).toBeTrue();
+        expect(deco.clip.params.outline).toBeNull();
+
+        // apply on desktop (outline restored, overviewMode disabled)
+        deco.apply({actions, inputs, actor: mockActor, inOverview: false});
+        expect(deco.hasClip).toBeTrue();
+        expect(deco.clip.enabled).toBeTrue();
+        expect(deco.clip.overviewMode).toBeFalse();
+        expect(deco.clip.params.outline).toEqual(outline);
+    });
+
     it('forces clearRing true on windows without shadow insets (e.g. WeChat) to eliminate outer corner fringe', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
@@ -272,8 +321,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.hasClip).toBeTrue();
-        // WindowDecoration must set clearRing to true so the shader erases outer rectangular corners
-        expect(deco.clearRing).toBeTrue();
+        // WindowDecoration retains clearRing as false (client declared no ring)
+        // while computing effectiveClearRing as true so shader erases outer rectangular corners
+        expect(deco.clearRing).toBeFalse();
+        expect(deco.effectiveClearRing).toBeTrue();
         expect(deco.clip.params.clearRing).toBeTrue();
     });
 
@@ -361,6 +412,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             drawClip: false,
             isActivelyClipped: false,
             clearRing: false,
+            effectiveClearRing: false,
             hasShadow: false,
             hasResizeBand: false,
             firstFrameDone: false,
@@ -368,7 +420,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
     });
 
-    it('delegates helper methods: suspend, restack, resetBandCursor, and undecorate', () => {
+    it('delegates helper methods: setOverviewMode, restack, resetBandCursor, and undecorate', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
             display: mockDisplay,
@@ -378,15 +430,36 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         const insets = {left: 10, top: 10, right: 10, bottom: 10};
-        deco._syncClip(true, false, mockActor, insets);
-        deco._syncShadow(true, mockActor);
-        deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
+        const outline = {color: [1, 1, 1], alpha: 0.1};
+        const actions = {
+            drawClip: true,
+            clearRing: false,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {radius: 12, outline, shadows: []},
+        };
+        const inputs = {insets, monitorScale: 1};
+        deco.apply({actions, inputs, actor: mockActor});
 
-        // suspend
-        deco.suspend(true);
-        expect(deco.clip.enabled).toBeFalse();
-        deco.suspend(false);
+        // setOverviewMode entering overview (outline suppressed, overviewMode enabled)
+        deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeTrue();
+        expect(deco.clip.overviewMode).toBeTrue();
+        expect(deco.clip.params.outline).toBeNull();
+
+        // setOverviewMode leaving overview (outline restored, overviewMode disabled)
+        deco.setOverviewMode(false);
+        expect(deco.clip.enabled).toBeTrue();
+        expect(deco.clip.overviewMode).toBeFalse();
+        expect(deco.clip.params.outline).toEqual(outline);
+
+        // setOverviewMode safely no-ops when clip is null
+        const bareDeco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+        });
+        expect(() => bareDeco.setOverviewMode(true)).not.toThrow();
 
         // restack
         deco.restack(mockActor);

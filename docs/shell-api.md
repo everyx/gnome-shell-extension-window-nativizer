@@ -217,6 +217,29 @@ it rather than reimplementing it: going through `set_uniform_value` would drop v
 `pipeline.set_uniform_float()` - uploads the shadow's uniforms on the Cogl pipeline. GJS exposes two
 signatures for it, probed once in `effects/shadowTexture.js`.
 
+## offscreen_effect_get_pipeline
+
+`effect.get_pipeline()` - retrieves the underlying Cogl pipeline from `Clutter.OffscreenEffect`.
+`RoundedClipEffect` queries this during paint to configure hardware mipmapping on the offscreen FBO.
+
+## cogl_pipeline_set_layer_filters
+
+`pipeline.set_layer_filters()` - configures the minification and magnification filters on a Cogl pipeline
+texture layer. Used in `RoundedClipEffect` to set `LINEAR_MIPMAP_LINEAR` during overview mode.
+
+## cogl_pipeline_get_layer_filters
+
+`pipeline.get_layer_filters()` - queries the active minification and magnification filters on a Cogl pipeline
+texture layer. The C prototype takes two `(out)` parameters (`CoglPipelineFilter *min_filter, *mag_filter`);
+GJS folds these out-arguments into a two-element return array `[min_filter, mag_filter]` rather than accepting
+pointers. Used in E2E integration test assertions to verify that hardware mipmapping is actually applied
+to the pipeline layer during overview mode and restored upon returning to desktop.
+
+## cogl_pipeline_filter
+
+`Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
+Read by `RoundedClipEffect` when setting layer filters for overview thumbnails.
+
 ## shell_glsl_set_uniform_float
 
 `effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The whole file goes
