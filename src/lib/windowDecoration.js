@@ -12,6 +12,7 @@
 import GLib from 'gi://GLib';
 
 import {resolveClipTarget} from './clipTarget.js';
+import {hasPositiveInsets} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
 
@@ -197,7 +198,7 @@ export class WindowDecoration {
             }
         }
         this.clipInsets = this.clip ? insets : null;
-        this.clearRing = this.clip ? Boolean(clearRing) : false;
+        this.clearRing = this.clip ? Boolean(clearRing || !hasPositiveInsets(insets)) : false;
     }
 
     /**

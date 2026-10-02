@@ -22,7 +22,7 @@ uniform vec2 uSize;       // Actor size in px
 uniform vec4 uFrame;      // Body rect in actor coords: x, y, w, h (px)
 uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
-uniform float uClearRing; // 1 erases client shadow ring, 0 keeps it
+uniform float uClearRing; // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uScale;     // Physical device scale factor
 
 // _clutter_actor_box_enlarge_for_effects (tools/gen-clutter.mjs) pads 2px top-left, 3px total
@@ -60,7 +60,7 @@ const CODE = `
     // Physical 1px anti-aliasing transition across all monitor DPI scales:
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
-    cogl_color_out *= mix(keep, corner * inSquare, uClearRing);
+    cogl_color_out *= mix(keep, corner, uClearRing);
 `;
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';

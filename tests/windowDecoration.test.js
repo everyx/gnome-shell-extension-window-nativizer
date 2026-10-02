@@ -247,6 +247,36 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.shadow.scale).toBe(1);
     });
 
+    it('forces clearRing true on windows without shadow insets (e.g. WeChat) to eliminate outer corner fringe', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const actions = {
+            drawClip: true,
+            clearRing: false, // detector reports false because no client shadow exists to clear
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {radius: 15, outline: null, shadows: []},
+        };
+        const zeroInsets = {left: 0, top: 0, right: 0, bottom: 0};
+        const inputs = {
+            insets: zeroInsets,
+            monitorScale: 1,
+        };
+
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.hasClip).toBeTrue();
+        // WindowDecoration must set clearRing to true so the shader erases outer rectangular corners
+        expect(deco.clearRing).toBeTrue();
+        expect(deco.clip.params.clearRing).toBeTrue();
+    });
+
     it('performs clean phased teardown in destroy()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
