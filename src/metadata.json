@@ -9,5 +9,5 @@
     ],
     "settings-schema": "org.gnome.shell.extensions.window-nativizer",
     "gettext-domain": "window-nativizer",
-    "version-name": "0.9.0"
+    "version-name": "0.10.0"
 }

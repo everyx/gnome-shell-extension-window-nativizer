@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.9.0...v0.10.0) (2026-10-03)
+
+
+### Features
+
+* **effects:** retain rounded corners in overview with hardware mipmapping ([#80](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/80)) ([1416bc4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1416bc4e03667a238ea86589b4e6d870468482e1))
+
+
+### Bug Fixes
+
+* **effects:** erase outer corner fringe on windows without shadow insets ([401ca43](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/401ca4390aa0b1bc74f0d7b5bf7e05e41606e51d))
+* **lib:** do not treat libxul as an adwaita provider ([a27a4bb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a27a4bbc8bd047f2163e4047b168e6c64941eb8c))
+* **prefs:** do not auto-collapse rule row when toggling axis switch ([f977cd5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f977cd5d29452299e3f4ed24e5453dcb0038483f))
+
+
+### Documentation
+
+* **compat:** record the invariant the cached static snippet relies on ([38ea4f2](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/38ea4f2c09979007515dddfe57136b2c83e1c518))
+* **decoration-model:** say what Mutter's X11 shadow costs on a focus change ([345aea6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/345aea654dc093081ff645bd1a02f251da0f651d))
+* **development:** say where the API-compatibility claim stops being mechanical ([387c983](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/387c983ed84a5484bda804728c020b2828f471e4))
+* **readme:** say what a correction cannot fix ([abcbeaf](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/abcbeaf2de639be06d1abd122264303aef76fbbf))
+
 ## [0.9.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.8.1...v0.9.0) (2026-09-29)
 
 
