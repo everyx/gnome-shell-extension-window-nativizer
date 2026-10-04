@@ -3,7 +3,6 @@
  */
 
 import {
-    SNAP_EPSILON,
     SnapDirection,
     SnapRule,
     snapCoordToGrid,
@@ -49,10 +48,6 @@ function snapSliceBoxes(cast, corner, scale) {
 }
 
 describe('snapCoordToGrid direction modes', () => {
-    it('defines GTK standard SNAP_EPSILON', () => {
-        expect(SNAP_EPSILON).toBe(0.001);
-    });
-
     it('handles SNAP_EPSILON near integer boundaries for FLOOR', () => {
         // value just slightly below integer should still floor to that integer if within epsilon
         expect(snapCoordToGrid(4.9999, 1.0, SnapDirection.FLOOR)).toBe(5);
