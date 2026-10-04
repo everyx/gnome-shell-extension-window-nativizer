@@ -4,6 +4,7 @@
  */
 
 import {WindowType} from '../src/lib/mutterRules.generated.js';
+import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {
     HIGHLIGHT_BORDER_WIDTH,
     computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
@@ -1208,13 +1209,13 @@ describe('the pick heuristic', () => {
         });
 
         it('returns baseRadius when the window is actively clipped by the extension', () => {
-            expect(expectedWindowRadius({isActivelyClipped: true})).toBe(15);
-            expect(expectedWindowRadius({isActivelyClipped: true, hasSsd: true})).toBe(15);
+            expect(expectedWindowRadius({isActivelyClipped: true})).toBe(ADWAITA_STYLE.window.radius);
+            expect(expectedWindowRadius({isActivelyClipped: true, hasSsd: true})).toBe(ADWAITA_STYLE.window.radius);
             expect(expectedWindowRadius({isActivelyClipped: true, baseRadius: 12})).toBe(12);
         });
 
         it('returns baseRadius for native-like applications without SSD', () => {
-            expect(expectedWindowRadius({hasNativeLikeCorners: true, hasSsd: false})).toBe(15);
+            expect(expectedWindowRadius({hasNativeLikeCorners: true, hasSsd: false})).toBe(ADWAITA_STYLE.window.radius);
             expect(expectedWindowRadius({hasNativeLikeCorners: true, hasSsd: false, baseRadius: 16})).toBe(16);
         });
 

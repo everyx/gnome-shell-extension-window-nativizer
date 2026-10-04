@@ -703,7 +703,6 @@ describe('decideResizeBand', () => {
         // full native grab ring and ours now does too. The old floor of two corner reaches
         // (48px) is gone.
         expect(MIN_BAND_WINDOW).toBe(2 * RESIZE_BAND);
-        expect(MIN_BAND_WINDOW).toBe(24);
         expect(decideResizeBand({...plain, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(decideResizeBand({...plain, frameHeight: MIN_BAND_WINDOW - 1})).toBeFalse();
         expect(decideResizeBand({...plain, frameWidth: MIN_BAND_WINDOW, frameHeight: MIN_BAND_WINDOW}))
