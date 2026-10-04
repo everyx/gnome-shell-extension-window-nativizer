@@ -16,8 +16,8 @@ uniform vec2 uPad;          // Shadow actor padding per side (px)
 uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes this as a flat
                             // varying; one quad per bake makes a uniform equivalent).
 
-const float PI = 3.141592653589793;
-const float SQRT1_2 = 0.7071067811865475;
+const float PI = 3.1415926535897932384626433832795;
+const float SQRT1_2 = 1.4142135623730951;
 
 // ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
 // Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
