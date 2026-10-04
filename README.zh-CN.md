@@ -135,13 +135,32 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 ---
 
-## 进阶：让应用自己也像原生
+## 进阶
+
+### 应用内部主题
 
 本扩展只管窗口本身。窗口里面的标题栏、按钮、菜单来自应用自己的主题，窗口装饰改不了。想让那些也对上：
 
 - **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** — GTK3 应用用，libadwaita 的非官方 GTK3 移植；它还有一份[清单](https://github.com/lassekongo83/adw-gtk3#related-projects)，涵盖 Electron、Wine、Java 以及非 libadwaita 的 GTK4 应用。
 - **[Legacy Theme Scheme Auto Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/)** — 让 GTK3 应用跟着深色模式走。
 - **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** — Qt 应用用，换成 Adwaita 风格的标题栏。
+
+### 定制 Mutter
+
+某些底层限制无法单靠扩展解决，作者维护的补丁分支（[everyx/mutter](https://gitlab.gnome.org/everyx/mutter/-/tree/everyx?ref_type=heads)）针对性做了以下增强：
+
+- **HDR 屏幕离屏着色保真**：传递 `color-state` 并支持 FP16 离屏纹理，彻底解决 HDR 显示器上应用圆角后窗口被强制调暗（降至 SDR 100 nits）的问题（[#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)）。
+- **分数倍缩放离屏渲染修复**：集成上游未合并的 [MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)，消除分数倍缩放下离屏特效边缘偶发的亚像素黑缝与透明裂缝（[#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)）。
+- **X11 阴影失焦平滑过渡**：为 Mutter 自绘阴影的 X11 窗口（如 Electron 应用）补齐 200ms ease-out 淡出过渡，对齐 Libadwaita 原生手感，消除瞬切跳变。
+- **更多稳定性与性能修复**：一并集成了若干尚未合并的上游修复（如子表面生命周期防损、构建优化等）。
+
+**Arch Linux 用户一键安装：**
+
+该包已收录在 [Arch Linux CN](https://github.com/archlinuxcn/repo/tree/master/archlinuxcn/mutter-everyx) 源中。配置并启用 `[archlinuxcn]` 后即可直接安装：
+
+```sh
+sudo pacman -S mutter-everyx
+```
 
 ---
 

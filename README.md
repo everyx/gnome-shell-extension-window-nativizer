@@ -139,6 +139,8 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 ## Going Further
 
+### In-App Theming
+
 This extension only fixes the window frame. What's inside — title bar, buttons, menus — comes from
 the app's own theme, and no window decoration can change it. For that:
 
@@ -149,6 +151,23 @@ the app's own theme, and no window decoration can change it. For that:
   so GTK3 apps follow dark mode.
 - **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** for Qt apps — Adwaita-style
   title bars.
+
+### Patched Mutter
+
+Certain compositor-level limitations cannot be solved by an extension alone. The author maintains a tailored Mutter patchset ([everyx/mutter](https://gitlab.gnome.org/everyx/mutter/-/tree/everyx?ref_type=heads)):
+
+- **HDR Color Fidelity on Offscreen Effects**: Propagates window `color-state` and enables FP16 offscreen textures, preventing clipped HDR windows from being forcibly dimmed to 100 nits SDR ([#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)).
+- **Fractional Offscreen Rendering**: Incorporates upstream [MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) to eliminate subpixel edge seams under fractional scaling ([#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)).
+- **Smooth X11 Shadow Transitions**: Adds a 200ms ease-out backdrop fade for Mutter-rendered X11 window shadows (e.g. Electron apps), matching Libadwaita's smooth transitions instead of snapping instantly.
+- **Upstream Fixes & Stability**: Includes several pending upstream patches for surface lifecycle handling and performance optimizations.
+
+**Installation for Arch Linux Users:**
+
+Pre-packaged in the [Arch Linux CN](https://github.com/archlinuxcn/repo/tree/master/archlinuxcn/mutter-everyx) repository. If you have enabled `[archlinuxcn]`, install it with:
+
+```sh
+sudo pacman -S mutter-everyx
+```
 
 ---
 
