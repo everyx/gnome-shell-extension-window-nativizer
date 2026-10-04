@@ -1,5 +1,3 @@
-// Tracks libadwaita's window.csd — see docs/decoration-model.md.
-
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**

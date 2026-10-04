@@ -4,8 +4,7 @@
  * bound to the window actor (position and size), and the strips are placed from the
  * actor's live size on every allocation, so a resize cannot leave the band behind. The
  * children are only hit surfaces; the direction comes from `edgeForPoint()`, GTK's own
- * order. Model and cost in docs/decoration-model.md § The resize band; lifecycle in
- * docs/architecture.md.
+ * order.
  */
 
 import Atk from 'gi://Atk';
@@ -356,7 +355,7 @@ export const ResizeBand = GObject.registerClass({
         const [x, y] = event.get_coords();
         const posHint = new Graphene.Point({x, y});
 
-        // Hand off to Mutter via the compositor grab helper (details in docs/shell-compatibility.md).
+        // Hand off to Mutter via the compositor grab helper.
         const grabbed = beginWindowGrabOp(
             win,
             DIRECTION_GRAB_OP[direction],

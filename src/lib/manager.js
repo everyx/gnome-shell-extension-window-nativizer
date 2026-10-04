@@ -1,5 +1,3 @@
-// Central window decoration manager — lifecycle and orchestration in docs/architecture.md.
-
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';

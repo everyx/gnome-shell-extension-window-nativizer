@@ -1,5 +1,3 @@
-// Shell-side window inspection and reading — candidate order in docs/rule-model.md.
-
 function getShell() {
     try {
         return globalThis.imports?.gi?.Shell ?? null;

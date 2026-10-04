@@ -5,7 +5,7 @@
  * `get_edge_for_coordinates()` (`vendor/gtk/gtkwindow.c`), first match wins.
  * `computeResizeBands()` answers where an event is delivered: four disjoint rectangles
  * that cover the ring, carrying no direction of their own. Pure, so both can be tested
- * without a session; the model is in docs/decoration-model.md § The resize band.
+ * without a session.
  */
 
 import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
@@ -41,9 +41,7 @@ export const RESIZE_BAND_REGIONS = ['top', 'right', 'bottom', 'left'];
 
 /**
  * Which of a window's four edges Mutter holds fixed: `maximized_vertically` fixes the top and
- * bottom, `maximized_horizontally` the left and right, and both together are all four. Why those
- * two flags are the whole reading, and why the frame's geometry is not, is in
- * docs/decoration-model.md § The resize band.
+ * bottom, `maximized_horizontally` the left and right, and both together are all four.
  * @param {object} [params={}]
  * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null] - Edges already known
  * @param {boolean} [params.maximizedHorizontally=false]
@@ -71,7 +69,7 @@ export function normalizeConstrainedEdges({
  * the client, so a point inside the body is null here.
  *
  * A constrained edge resolves to null, and the corner regions beside it to the unconstrained straight
- * edge - the one place this extends GTK, recorded in docs/decoration-model.md § The resize band.
+ * edge (extending GTK hit-test behavior for constrained windows).
  * @param {Rect} frame - Window body, in the same space as `x`/`y`
  * @param {number} x
  * @param {number} y
@@ -109,7 +107,7 @@ export function edgeForPoint(frame, x, y, {
     });
 
     // GTK's order, and GTK's first match wins - on a narrow window the earlier band takes the
-    // overlap of the two corner reaches (decoration-model.md § The resize band).
+    // overlap of the two corner reaches.
     if (x < left && x >= left - b) {
         if (constrained.left)
             return null;

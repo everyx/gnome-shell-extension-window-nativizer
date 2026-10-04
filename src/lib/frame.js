@@ -1,7 +1,7 @@
 /**
  * Frame geometry: the body inside the actor that carries it. The actor is the client's
  * buffer — body plus the ring the client reserved for its own shadow — so both the clip
- * effect and the shadow actor place their geometry with this. Pure: docs/architecture.md.
+ * effect and the shadow actor place their geometry with this.
  */
 
 /** No ring: the actor is the body. Used as the fallback when no margin was readable. */
@@ -28,7 +28,7 @@ export function frameFromInsets(size, insets = ZERO_INSETS) {
 /**
  * The body to paint for an actor of `size`. Falls back to the whole actor when the ring
  * would leave no body - the insets are debounced, the actor is not, so the caller must keep
- * painting instead of skipping the frame (docs/decoration-model.md).
+ * painting instead of skipping the frame.
  * @param {{width: number, height: number}} size - Actor size, logical px
  * @param {Insets} [insets=ZERO_INSETS] - Ring the client declared, per side
  * @returns {{x: number, y: number, width: number, height: number}} Body in actor coords

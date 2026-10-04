@@ -1,6 +1,5 @@
 /**
  * RoundedClipEffect: clips the window body to a rounded rect with optional 1px inner outline.
- * See docs/architecture.md (Rounded clip) for body vs actor, SDF and clearRing.
  *
  * Geometry is computed in `vfunc_paint_target`, from the actor's live size plus the insets
  * stored here. The body rect used to be snapshotted by the manager's 50ms reconcile, which

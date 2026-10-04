@@ -1,5 +1,3 @@
-// Interactive window picker — selection mechanics in docs/architecture.md.
-
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -199,9 +197,8 @@ export class InspectorService {
             try {
                 const targetWin = this._findTargetWindow(x, y);
                 if (targetWin) {
-                    // Queries never start the /proc read (docs/decoration-model.md § When a
-                    // window's corners already look like ours); the event drives it, and the
-                    // answer lands a frame later for the next motion to read.
+                    // Queries never start the /proc read synchronously; the event drives it,
+                    // and the answer lands a frame later for the next motion to read.
                     const pid = targetWin.get_pid?.();
                     this._manager?.classifier?.probeAdwaitaLook(pid);
                     const frame = targetWin.get_frame_rect();
@@ -284,7 +281,7 @@ export class InspectorService {
             this._manager?.classifier?.probeAdwaitaLook(win.get_pid?.());
             const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
-            // Display only, see docs/rule-model.md § What the pick remembers for the row.
+            // Display only, not used in rule identity matching.
             const title = readWindowString(() => win.get_title());
             if (title)
                 properties.windowTitle = title;

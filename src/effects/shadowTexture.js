@@ -1,5 +1,5 @@
 /**
- * Shadow baking: one baked buffer per style, sliced into 8 rects (see docs/architecture.md).
+ * Shadow baking: one baked buffer per style, sliced into 8 rects.
  * The pure geometry it bakes and slices lives in shadowGeometry.js.
  */
 

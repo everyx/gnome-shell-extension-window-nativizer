@@ -1,6 +1,5 @@
 /**
- * Pure shadow geometry: the baked square and how it slices across a window
- * (see docs/architecture.md § Shadow baking).
+ * Pure shadow geometry: the baked square and how it slices across a window.
  *
  * Kept free of GI imports so the degenerate-size rules stay unit-testable; the Cogl
  * bake lives in shadowTexture.js.

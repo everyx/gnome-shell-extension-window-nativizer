@@ -6,7 +6,6 @@
  * - ResizeBand (grab handles)
  *
  * Designed with dependency injection for full unit-testability without GNOME Shell private typelibs.
- * See docs/architecture.md and docs/decoration-model.md.
  */
 
 import GLib from 'gi://GLib';

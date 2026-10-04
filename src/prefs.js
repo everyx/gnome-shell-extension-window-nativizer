@@ -380,7 +380,7 @@ function _buildRuleRow(ruleKey, state, sample, ctx, onRefresh) {
     const caps = keyAxisCapabilities(properties);
     const decoratable = isDecoratableKind(properties);
 
-    // Dimmed sample of the kind, not its name - see docs/rule-model.md.
+    // Dimmed sample title of the picked window instance, displayed beside the application name.
     const row = new Adw.ExpanderRow({
         title: sample && sample !== name
             ? `${asMarkup(name)} <span alpha="55%">${asMarkup(sample)}</span>`

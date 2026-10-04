@@ -1,5 +1,3 @@
-// Pure pick contract shared by extension and prefs — see docs/architecture.md.
-
 import {WindowClientType} from './mutterRules.generated.js';
 
 import {

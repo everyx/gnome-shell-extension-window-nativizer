@@ -1,5 +1,5 @@
 /**
- * Window Nativizer entry point. See docs/architecture.md for module map.
+ * Window Nativizer extension entry point.
  */
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';

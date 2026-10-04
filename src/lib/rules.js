@@ -1,5 +1,3 @@
-// Window-kind rule model — see docs/rule-model.md; pure logic, unit-testable.
-
 import {WindowType} from './mutterRules.generated.js';
 
 /** D-Bus / rule-key tokens for the client-type field. */
@@ -186,8 +184,7 @@ export function buildRuleKey(wmClass, {
 }
 
 /**
- * The title a rule was picked from, keyed like the rule itself - see docs/rule-model.md
- * § What the pick remembers for the row.
+ * Sanitizes window titles associated with picked rules (display only, keyed by canonical rule key).
  * @param {Record<string, string>} [rawTitles={}]
  * @returns {Record<string, string>} Canonical key -> one-line title
  */

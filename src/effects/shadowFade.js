@@ -2,8 +2,6 @@
  * Pure transition state machine and mathematics for window shadow cross-fades.
  * Decouples fade timing, cubic-bezier easing, and interruptible weight blending
  * from Clutter/GObject actor rendering.
- *
- * See docs/architecture.md § ShadowActor and docs/decoration-model.md.
  */
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';

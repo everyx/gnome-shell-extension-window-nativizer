@@ -1,5 +1,3 @@
-// GSettings IO for window rules — see docs/rule-model.md.
-
 import GLib from 'gi://GLib';
 import {sanitizeRuleTitles, sanitizeWindowRules} from './rules.js';
 
@@ -28,8 +26,7 @@ function sanitizeEntries(raw) {
 }
 
 /**
- * One entry per rule: the axes to reverse, and the display-only title - see
- * docs/rule-model.md § What the pick remembers for the row.
+ * One entry per rule: the axes to reverse, and the display-only title.
  * @param {object} settings
  * @returns {Record<string, {state: string, title: string}>}
  */
@@ -57,7 +54,7 @@ export function setWindowRules(settings, rules) {
 }
 
 /**
- * One entry, one write - see docs/rule-model.md § What the pick remembers for the row.
+ * Updates or inserts a single rule entry and its display-only title.
  * @param {object} settings @param {string} key @param {string} state @param {string} title
  */
 export function setWindowRule(settings, key, state, title) {

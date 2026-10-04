@@ -1,6 +1,5 @@
 /**
  * ShadowActor: 8-slice baked shadow below window actor; cross-fades on style change.
- * See docs/architecture.md (ShadowActor, Shadow baking) for geometry and animation.
  */
 
 import Clutter from 'gi://Clutter';
@@ -132,7 +131,7 @@ export const ShadowActor = GObject.registerClass({
         if (this._fade.advance())
             this.queue_redraw();
 
-        // Scale by paint opacity; see docs/architecture.md § ShadowActor.
+        // Inherit Clutter actor paint opacity (e.g. for window minimize/fade animations).
         const paintOpacity = this.get_paint_opacity() / 255;
         if (paintOpacity <= 0)
             return;

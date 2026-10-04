@@ -1,13 +1,12 @@
 /**
  * Native-like corners: inference that a window already has Adwaita radius because its process maps
  * an Adwaita provider. GTK theme is not a provider. The same reading answers whether the client is
- * GTK4, which the resize band asks about. docs/decoration-model.md § When a window's corners
- * already look like ours.
+ * GTK4, which the resize band asks about.
  */
 
 import Gio from 'gi://Gio';
 
-// Per-process via /proc/<pid>/maps; docs/decoration-model.md has the provider table. The first is
+// Per-process via /proc/<pid>/maps. The first is
 // the only GTK4 one, whose own resize handle the band can prove from a window's declared ring.
 const GTK4_PROVIDER = 'libadwaita-1.so';
 const ADWAITA_PROVIDERS = [

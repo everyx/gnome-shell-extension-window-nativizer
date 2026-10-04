@@ -15,8 +15,6 @@ import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 
-// Four-layer model in docs/decoration-model.md; pure logic, unit-testable.
-
 // 2× the libadwaita radius: below it the two corner arcs overlap, so no rounded rect fits (helper surface, e.g. wl-clipboard 1×1).
 const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
@@ -80,7 +78,7 @@ export function checkDecorationEligibility({
 /**
  * Whether the client declared a decoration ring of its own, on either axis.
  * Same question Mutter answers with the boolean `has_custom_frame_extents` (set
- * whenever the property exists, 4px as much as 40px; see docs/decoration-model.md),
+ * whenever the property exists, 4px as much as 40px),
  * and it reads the same way: a declared extent means the client draws its own frame.
  * An SSD window's ring is drawn by the frame client (`mutter-x11-frames`), not by the
  * client itself, so it does not count as a declaration (`hasSsd ⇒ false`). The policy
@@ -276,7 +274,6 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
  * `resize-only` rule is valid, and a window we draw nothing else on can still be
  * grabbable. Capability gates (unresizable, maximized/fullscreen, SSD, too small)
  * are never overridden; reversing the axis bypasses only the GTK4 reading below.
- * See docs/decoration-model.md § The resize band.
  * @param {object} params
  * @param {boolean} [params.reversed=false] - Whether the rule reverses this axis
  * @param {boolean} [params.allowsResize=true]
@@ -311,15 +308,14 @@ export function decideResizeBand({
     if (hasSsd)
         return false;
     // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
-    // axis), never a native one: GTK's input region does not depend on the window size
-    // (docs/decoration-model.md § The resize band).
+    // axis), never a native one: GTK's input region does not depend on the window size.
     if (!(frameWidth >= MIN_BAND_WINDOW) || !(frameHeight >= MIN_BAND_WINDOW))
         return false;
 
     // The automatic reading: its own handle is already at least as wide as a native one on
     // every side. Only GTK4 can be read this way: it sizes the handle itself, so its declared
     // margins prove it, while a GTK3 window's margins are its shadow and say nothing about the
-    // theme's handle (docs/decoration-model.md § The resize band). A bare window reserves no
+    // theme's handle. A bare window reserves no
     // ring, so its band sits on the desktop around it.
     const {narrowestSides} =
         declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
@@ -398,7 +394,7 @@ export function evaluateWindowActions({
         frameHeight,
     });
 
-    // A rule reverses the automatic decision on the axes it names; see docs/rule-model.md.
+    // A rule reverses the automatic decision on the axes it names.
     const corners = resolveAxisValue(rule, RuleAxis.CORNERS, baseline.corners);
 
     // Clip needs something to draw; radius 0 + no outline would be a wasted offscreen pass.
@@ -512,7 +508,7 @@ export function ruleAxisCapabilities({
  * Picker suggestion: correct every axis this kind can be corrected on. The user picked the
  * window because it looks wrong, so the pick is the whole correction rather than the
  * smallest one; an axis the kind cannot be corrected on is left out, because a rule naming
- * it could not take effect. See docs/rule-model.md § The pick heuristic.
+ * it could not take effect.
  * @param {WindowEvaluationParams} params
  * @returns {string} Canonical stored state; '' when the kind can be corrected on nothing
  */

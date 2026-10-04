@@ -14,7 +14,7 @@
  * is NOT a literal - it is what that rule yields on an integer-aligned box:
  *   origin = box->x1 - (ceilf (box->x2 + 0.75f) - width - 3) = 2
  * The 2/1 split only holds when the box is integer-aligned; the per-axis total stays
- * 3. See docs/architecture.md (Shadow baking).
+ * 3.
  *
  * Note: EFFECT_ROUNDING_PAD (0.75f) is part of the upstream rule and is consumed
  * only at generation time (to derive EFFECT_PADDING_ORIGIN); it has no runtime consumer

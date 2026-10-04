@@ -354,7 +354,7 @@ echo ">> 0 leaked actors confirmed."
 #    the band is the only actor that takes clicks, so one that survived disable would keep
 #    swallowing them. tools/probe-window.js is a plain non-CSD GTK4 window that stays open.
 echo ">> [test-e2e] Testing extension disable / re-enable lifecycle with an open window..."
-# Decorated: the band lives in the ring the client reserved (docs/decoration-model.md).
+# Decorated: the band lives in the ring the client reserved.
 "$DEV" app env WINDOW_NATIVIZER_DECORATED=1 gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
 PROBE_PID=$!
 PROBE_UP=0
