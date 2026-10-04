@@ -30,6 +30,7 @@ deploy_ext() {
     [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"
     [[ -d "$SRC_DIR/icons" ]] && cp -r "$SRC_DIR/icons" "$EXT_DIR/"
     [[ -d "$SRC_DIR/locale" ]] && cp -r "$SRC_DIR/locale" "$EXT_DIR/"
+    [[ -d "$SRC_DIR/prefs" ]] && cp -r "$SRC_DIR/prefs" "$EXT_DIR/"
     if [[ -d "$SRC_DIR/schemas" ]]; then
         mkdir -p "$EXT_DIR/schemas"
         cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"

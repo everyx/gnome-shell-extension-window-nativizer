@@ -1,1 +1,4 @@
+src/lib/rulePresenter.js
+src/prefs/conflictDialog.js
+src/prefs/ruleUi.js
 src/prefs.js
