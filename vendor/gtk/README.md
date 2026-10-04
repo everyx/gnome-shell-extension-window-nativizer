@@ -10,6 +10,8 @@ from upstream GTK.
     box-shadow algorithm (erf, erf_range, gauss, ellipse_x, blur_rect, blur_corner,
     blur_rounded_rect). `tools/gen-shader.mjs` extracts it, generating shader code
     (do not edit the generated file directly).
+  - `common.glsl` (gsk/gpu/shaders) defines math constants (`PI`, `SQRT1_2`) prepended by GTK's
+    shader compiler. `tools/gen-shader.mjs` extracts them into `src/effects/shadowShader.generated.js`.
   - `gtkwindow.c` (gtk/) defines `RESIZE_HANDLE_SIZE` and `RESIZE_HANDLE_CORNER_SIZE`, the CSD
     input-region geometry. `tools/gen-gtk.mjs` extracts them into
     `src/lib/gtkRules.generated.js`.

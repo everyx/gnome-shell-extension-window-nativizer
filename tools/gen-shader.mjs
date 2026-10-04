@@ -20,6 +20,7 @@ import { EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA } from '../src/lib/clutterE
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GTK_VENDOR = path.join(ROOT, 'vendor', 'gtk');
 const SHADER_SRC = path.join(GTK_VENDOR, 'gskgpuboxshadow.glsl');
+const COMMON_SRC = path.join(GTK_VENDOR, 'common.glsl');
 const COMMIT_FILE = path.join(GTK_VENDOR, 'COMMIT');
 const OUT_FILE = path.join(ROOT, 'src', 'effects', 'shadowShader.generated.js');
 
@@ -28,8 +29,22 @@ const CHECK = process.argv.includes('--check');
 if (!existsSync(SHADER_SRC)) {
     throw new Error(`[gen-shader] Missing vendor file: ${SHADER_SRC}`);
 }
+if (!existsSync(COMMON_SRC)) {
+    throw new Error(`[gen-shader] Missing vendor file: ${COMMON_SRC}`);
+}
 const commit = existsSync(COMMIT_FILE) ? readFileSync(COMMIT_FILE, 'utf8').trim() : 'unknown';
 const rawGlsl = readFileSync(SHADER_SRC, 'utf8');
+const rawCommonGlsl = readFileSync(COMMON_SRC, 'utf8');
+
+// Extracts an object-like number macro definition: `#define NAME 1.234`
+function parseDefine(glsl, name) {
+    const re = new RegExp(`^#define\\s+${name}\\s+([0-9.]+)`, 'm');
+    const m = glsl.match(re);
+    if (!m) {
+        throw new Error(`[gen-shader] Assertion failed: #define ${name} not found in common.glsl`);
+    }
+    return m[1];
+}
 
 // Extracts a C/GLSL function block from signature to balanced closing brace.
 function extractFunction(source, signature) {
@@ -78,6 +93,9 @@ const header = `/**
  */
 `;
 
+const pi = parseDefine(rawCommonGlsl, 'PI');
+const sqrt1_2 = parseDefine(rawCommonGlsl, 'SQRT1_2');
+
 const declarations = `
 uniform vec2 uWinSize;      // Window size (px)
 uniform float uRadius;       // Window corner radius (px)
@@ -88,8 +106,8 @@ uniform vec2 uPad;          // Shadow actor padding per side (px)
 uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes this as a flat
                             // varying; one quad per bake makes a uniform equivalent).
 
-const float PI = 3.141592653589793;
-const float SQRT1_2 = 0.7071067811865475;
+const float PI = ${pi};
+const float SQRT1_2 = ${sqrt1_2};
 
 // ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
 // Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
