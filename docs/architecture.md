@@ -197,7 +197,7 @@ is shared by all windows of that style. The bake runs the GLSL from
 Canonical bake window: square `2*(pad+radius)` — leaves a straight middle `2*pad` which
 exceeds the blur reach, so a strip from the middle is a settled profile. Geometry
 (`shadowGeometry`):
-`corner = SHADOW_PAD + radius`, `window = 2*corner`, `buffer = 2*corner + 2*SHADOW_PAD + BAKE_EXTRA`.
+`corner = 2*SHADOW_PAD + radius`, `window = 2*(SHADOW_PAD+radius)`, `buffer = 2*corner + BAKE_EXTRA`.
 `SHADOW_PAD` is generated (`ADWAITA_STYLE.shadowPad`, `tools/gen-style.mjs`): the farthest
 Gaussian reach over every shadow set — `3 * 0.5 * blur + spread`, i.e. `3σ` with
 `σ = blur/2`, 26px for the largest layer — plus the 2px Cogl offscreen offset
@@ -207,10 +207,13 @@ Slicing (`shadowSlices`): 8 rects (4 corners 1:1, 4 edges stretched from a 1px s
 middle — the interior is the hollow mask of `decoration-model.md`.
 A window smaller than `2*corner` scales corners down (`c = min(corner, w/2, h/2)`),
 which is the correct shape when the window is all corner. Tex coords are normalized
-(`1/buffer`). The edge strip is taken from the middle of the canonical edge
-(`edge = (BAKE_ORIGIN + SHADOW_PAD + window/2)/buffer`), not at the corner boundary:
-the corner pulls the profile tighter for ~3σ along its edge, so sampling at the
-boundary would make the stretched edge darker and shorter.
+(`1/buffer`). The corner slice spans `2*SHADOW_PAD + radius` (reaching `SHADOW_PAD`
+into the straight edge beyond the geometric corner arc), aligning with Mutter's
+`inner_border = shape_border + spread` (`meta-shadow-factory.c`). This ensures the cutline
+sits where the Gaussian decay has fully settled to the 1D edge profile, guaranteeing
+seamless $C^0$ photometric continuity across corner and edge slices without step jumps.
+The edge strip is sampled from the middle of the canonical edge
+(`edge = (BAKE_ORIGIN + SHADOW_PAD + window/2)/buffer`).
 
 The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFFSET`, which
 is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from.

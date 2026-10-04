@@ -195,7 +195,9 @@ export const ShadowActor = GObject.registerClass({
             previous.width !== cast.width || previous.height !== cast.height;
 
         if (castChanged || !style.slices) {
-            style.slices = shadowSlices(shadowGeometry(style.radius), cast.width, cast.height);
+            const geometry = shadowGeometry(style.radius);
+            style.slices = shadowSlices(geometry, cast.width, cast.height);
+            style.corner = geometry.corner;
             // Freeze to enforce the immutability contract so token-aliasing in entry.cast cannot be defeated
             style.cast = Object.freeze(cast);
         }
@@ -213,10 +215,9 @@ export const ShadowActor = GObject.registerClass({
         }
 
         if (entry.cast !== style.cast) {
-            const corner = SHADOW_PAD + style.radius;
             // Actor-Local snapping: cutlines remain invariant in local space during window drag,
             // while mutating pre-allocated boxes in-place on resize achieves zero GC allocation.
-            snapSliceBoxesInto(entry.boxes, style.cast, corner, scale);
+            snapSliceBoxesInto(entry.boxes, style.cast, style.corner, scale);
             entry.cast = style.cast;
         }
 

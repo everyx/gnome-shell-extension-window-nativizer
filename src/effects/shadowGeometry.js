@@ -22,15 +22,17 @@ const BAKE_EXTRA = EFFECT_PADDING_EXTRA;
 
 /**
  * Canonical square 2*(pad+radius) with middle 2*pad (settled strip).
+ * Corner slice spans 2*pad+radius so the cutline sits at the settled profile (C0 continuity).
  * @param {number} radius - Corner radius in px
  * @returns {{corner:number,window:number,buffer:number}} sizes in px
  */
 export function shadowGeometry(radius) {
-    const corner = SHADOW_PAD + radius;
+    const corner = 2 * SHADOW_PAD + radius;
+    const window = 2 * (SHADOW_PAD + radius);
     return {
         corner,
-        window: 2 * corner,
-        buffer: 2 * corner + 2 * SHADOW_PAD + BAKE_EXTRA,
+        window,
+        buffer: 2 * corner + BAKE_EXTRA,
     };
 }
 
