@@ -93,6 +93,7 @@ const XGETTEXT_ARGS = [
     '--language=JavaScript',
     '--keyword=_',
     '--keyword=N_',
+    '--keyword=ngettext:1,2',
     '--from-code=UTF-8',
     '--files-from=' + potFilesList,
     '--add-comments',
