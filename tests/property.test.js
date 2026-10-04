@@ -14,7 +14,8 @@ import {
     snapSliceBoxesInto,
 } from '../src/lib/snap.js';
 import {bodyFrame, frameFromInsets, insetsFromRects} from '../src/lib/frame.js';
-import {shadowGeometry, shadowSlices} from '../src/effects/shadowGeometry.js';
+import {shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
+import {EFFECT_PADDING_EXTRA} from '../src/lib/clutterEffectPadding.generated.js';
 import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
@@ -181,8 +182,9 @@ describe('property: shadowGeometry', () => {
             const radius = range(rng, 0, 200);
             const geometry = shadowGeometry(radius);
             expect(geometry.corner).toBeGreaterThan(0);
-            expect(geometry.window).toBe(2 * geometry.corner);
+            expect(geometry.window).toBe(2 * (geometry.corner - SHADOW_PAD));
             expect(geometry.buffer).toBeGreaterThan(geometry.window);
+            expect(geometry.buffer).toBe(2 * geometry.corner + EFFECT_PADDING_EXTRA);
 
             const boxes = shadowSlices(geometry, range(rng, -30, 1200), range(rng, -30, 1200));
             expect(boxes.length).toBe(8);

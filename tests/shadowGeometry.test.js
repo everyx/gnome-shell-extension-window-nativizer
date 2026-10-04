@@ -8,9 +8,25 @@ import {shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeo
 describe('shadowGeometry', () => {
     it('sizes the bake buffer from pad, radius and the Cogl offscreen padding', () => {
         const {corner, window, buffer} = shadowGeometry(12);
-        expect(corner).toBe(SHADOW_PAD + 12);
-        expect(window).toBe(2 * corner);
+        expect(corner).toBe(2 * SHADOW_PAD + 12);
+        expect(window).toBe(2 * (SHADOW_PAD + 12));
         expect(buffer).toBeGreaterThan(window);
+    });
+
+    it('guarantees seamless texture coordinate continuity at slice junctions', () => {
+        const geometry = shadowGeometry(15);
+        const slices = shadowSlices(geometry, 800, 600);
+        // At the junction between corner and edge slices, texture coordinates meet at
+        // the settled midpoint (edge), guaranteeing C0 continuity across quads
+        expect(slices[0].s2).toBeCloseTo(slices[4].s1, 6);
+        expect(slices[1].s1).toBeCloseTo(slices[4].s1, 6);
+        expect(slices[2].s2).toBeCloseTo(slices[5].s1, 6);
+        expect(slices[3].s1).toBeCloseTo(slices[5].s1, 6);
+
+        expect(slices[0].t2).toBeCloseTo(slices[6].t1, 6);
+        expect(slices[2].t1).toBeCloseTo(slices[6].t1, 6);
+        expect(slices[1].t2).toBeCloseTo(slices[7].t1, 6);
+        expect(slices[3].t1).toBeCloseTo(slices[7].t1, 6);
     });
 });
 
