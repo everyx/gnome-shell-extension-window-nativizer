@@ -25,7 +25,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
 | `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
-| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
+| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if the decision closure reaches a `gi://` module, if the decision baseline no longer matches the code, or if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run pack` | builds `dist/<uuid>.shell-extension.zip` |
 | `pnpm run shexli` | analyses that zip |
@@ -96,6 +96,38 @@ line no longer has - is what the record answers already.
 The lower bound stays a decision nothing derives: the record covers 45-51, `shell-version` claims a
 subset of it, and which subset is a choice made by hand while auditing a new line. release-please
 owns only the manifest's `$.version-name` (`release-please-config.json`).
+
+## The decision core and its baseline
+
+The decision layer is the half of the extension that has no Shell in it: read a window into plain
+values, decide, and hand the answer to the actors. Two checks keep it that way, and both run inside
+`check-style`.
+
+**The closure check.** `tools/check-pure-core.mjs` walks the import graph of the decision entry
+points and fails on any `gi://` or `resource://` specifier anywhere in it. That is what makes a
+version question out of a policy question impossible: `evaluateWindowActions` cannot consult the
+Shell it is on, so its answer cannot drift with the Shell version. Reading `globalThis.imports`
+lazily is not an import and does not count.
+
+**The baseline.** `tools/decision-baseline.json` records the output of `evaluateWindowActions` over
+the corpus in `tools/decision-baseline-cases.mjs`, and `tools/gen-decision-baseline.mjs --check`
+fails when the code no longer reproduces it. The corpus is curated boundaries plus a seeded fill
+(the same PRNG idiom as `tests/property.test.js`), so a reproducible failure is a fact rather than
+an accident of when it ran. Only the output is stored - the five action booleans, a semantic digest
+of the resolved style, and the reason - and a rule that stops applying shows up in the reason, which
+is how a change to the rule key surfaces without storing keys.
+
+The baseline is not a test of the current code (it was generated from it). It is what a reshape of
+the decision layer is checked against: regenerate, and the diff is the complete behavioural change,
+reviewable line by line instead of argued about in prose. Regenerate deliberately:
+
+```sh
+node tools/gen-decision-baseline.mjs            # rewrite the record
+node tools/gen-decision-baseline.mjs --check    # what check-style runs
+```
+
+A failure prints the differing cases with the inputs behind each one; `--verbose` prints all of
+them rather than the first twenty.
 
 ## Git hooks
 
