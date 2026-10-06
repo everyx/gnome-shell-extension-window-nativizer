@@ -88,7 +88,7 @@ and the manifest may only claim a line the record holds: `tools/check-shell-vers
 `check-style`, fails if `src/metadata.json` claims a major `tools/shell-api.json` has not audited.
 Behaviour is not checked that way - it is verified by hand, through `test:e2e` and the eye, on the one
 line the maintainer runs. There is deliberately no per-version build or runtime matrix: the extension
-branches on what the shell offers at runtime (`resolveBackend`, `backendHasSpriteApi`, arity dispatch,
+branches on what the shell offers at runtime (backend capability checks, arity dispatch,
 optional-method probes) rather than on a version number, so a matrix would buy "does this shell
 start" at seven builds per push, while the failure it would catch - a declaration we rely on and a
 line no longer has - is what the record answers already.
@@ -129,7 +129,7 @@ fenced block.
 
 `tools/dev.sh shell` starts the headless shell with `--unsafe-mode`, which exposes
 `org.gnome.Shell.Eval`. Together with the session bus address in the shell's
-`/proc/<pid>/environ` (the way `get_dbus_bus()` in `tools/test-e2e.sh` reads it), that
+`/proc/<pid>/environ` (the way `tools/test-e2e.sh` reads it), that
 is enough to measure the effects from outside, with no probe code added to the
 extension:
 
@@ -227,8 +227,8 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
 
 **Comments are for the line they sit on.** Keep one when deleting it would make the next
-line unreadable or easy to misread: what an otherwise arbitrary condition selects (the
-window-type test in `checkDecorationEligibility()`), which entry of a literal array means
+line unreadable or easy to misread: what an otherwise arbitrary condition selects (a
+window-type test), which entry of a literal array means
 what (the slice table in the shadow texture), a unit, an endpoint. Anything that needs
 another file, the history of a decision, or an upstream source to make sense belongs in
 `docs/` — measured numbers and their evidence, trade-offs, rejected alternatives, case

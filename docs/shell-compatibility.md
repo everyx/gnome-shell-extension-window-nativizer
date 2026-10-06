@@ -86,8 +86,8 @@ Anything here that stops being true is an upstream compatibility break, not an i
 
 Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
 operation signature, the per-actor cursor, and the Mutter typelib naming. The shader base class, the
-grab signature and the per-actor cursor are bridged through `src/compat/`, and the maximize query
-through `detector.isWindowMaximized()`; the typelib name is never spelled, so it binds whatever
+grab signature and the per-actor cursor are bridged through compatibility shims, and the maximize query
+through a capability probe; the typelib name is never spelled, so it binds whatever
 `gi://Meta` ships. What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
 computed rather than remembered.
@@ -95,7 +95,7 @@ computed rather than remembered.
 ## Additional GNOME 51 upstream changes audited
 
 GNOME Shell 51 migration guide lists additional upstream breaking changes that were audited for applicability:
-- **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. Our `extension.js:disable()` is completely synchronous.
+- **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. The extension's `disable()` is completely synchronous.
 - **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely on GNOME 49–51: the dispatch asks whether the backend can produce a pointer sprite at all, and only the 45–48 path reaches for a device.
 - **`St.ButtonMask` enum renames**: Not used by this extension.
 - **`St.BoxLayout:vertical` property removed** (deprecated since 48): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
@@ -133,13 +133,13 @@ defect that fires on a normal path has to be dealt with here rather than worked 
 ## Working rules
 
 - **The decisions and queries are pure (Command-Query Separation).** Everything that decides
-  decoration delegates to pure functions (`detector.js`); shell-side queries and predicates
+  decoration delegates to pure functions; shell-side queries and predicates
   (`is*`, `has*`, `should*`) strictly read in-memory cache/state snapshots without mutating state
   or launching implicit I/O. Asynchronous operations (such as `/proc/<pid>/maps` reads) are
   triggered exclusively by explicit lifecycle commands, preventing timing inversions and flicker.
 - **Outside the window picker, only the resize band takes input.** Every actor the extension
   adds is `reactive: false` except the band's four strip children, which exist to start a
-  resize grab, and the picker's full-stage overlay (`lib/inspector.js`), which is reactive and
+  resize grab, and the picker's full-stage overlay, which is reactive and
   takes `button-press-event` under a `pushModal` grab for the duration of a pick.
   `decoration-model.md` § The resize band records what that costs and how to reverse it per kind.
 - **`enable()` and `disable()` are idempotent.** After `disable()` nothing of ours

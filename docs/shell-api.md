@@ -26,7 +26,7 @@ docks) in the eligibility checks, the rule fingerprints and the inspector picker
 
 `win.is_maximized()` - the canonical query where it exists; the status column of the table in
 [shell-compatibility.md](shell-compatibility.md) says from which line, and the record holds the
-declaration. `detector.isWindowMaximized()` probes for the method
+declaration. The extension probes for the method
 rather than the version, so the fallback is chosen by what the shell offers. Note that Mutter
 defines `meta_window_is_maximized()` in `src/core/window.c` from 48 but does not declare it in the
 public header until 49: GJS cannot call what the header does not declare, so 48 still needs the
@@ -50,13 +50,13 @@ it is deliberately not in the rule fingerprint).
 
 ## get_pid
 
-`win.get_pid()` - the owning process id. Keys the per-process corner inference and its cache
-eviction, and is the only handle on the client when reading `/proc/<pid>/maps`.
+`win.get_pid()` - the owning process id. Keys the per-process corner inference, and is the only
+handle on the client when reading `/proc/<pid>/maps`.
 
 ## get_frame_rect
 
-`win.get_frame_rect()` - the window body with the margin excluded; the rectangle `RoundedClipEffect`
-rounds.
+`win.get_frame_rect()` - the window body with the margin excluded; the rectangle the rounded clip
+is derived from.
 
 ## get_buffer_rect
 
@@ -77,7 +77,7 @@ resolved per monitor, so this is read before either.
 ## begin_grab_op
 
 `win.begin_grab_op()` - three shapes, not two. 45 takes `(op, device, sequence, time)`; 46-48 adds
-`pos_hint`; 49-51 replaces device and sequence with a `sprite`. `compat/grabOp.js` dispatches on
+`pos_hint`; 49-51 replaces device and sequence with a `sprite`. The extension dispatches on
 arity, which separates 46-48 from the rest; 45 and 49-51 both declare four, so it asks a second
 question - whether the backend can produce a pointer sprite at all - and that is what tells them
 apart.
@@ -149,7 +149,7 @@ chaining, and the only place the extension asks for a scale.
 
 ## get_n_monitors
 
-`global.display.get_n_monitors()` - bounds the monitor-index check in the window scale/bounds helpers (`window.js` `getPhysicalMonitorScale` / `resolveMonitorBounds`).
+`global.display.get_n_monitors()` - bounds the monitor-index checks the extension makes before it resolves a monitor's scale or bounds.
 
 ## get_tab_list
 
@@ -169,12 +169,12 @@ hand-written table called it non-existent, which is true only from 50 on.
 ## set_cursor_type
 
 `actor.set_cursor_type()` - per-actor cursor, introduced in Clutter 50.
-`compat/actorCursor.js:setActorCursor()` degrades on 45-49 without breaking resizing.
+The extension degrades on 45-49 without breaking resizing.
 
 ## set_child_above_sibling
 
-`global.window_group.set_child_above_sibling()` - re-pins the band above its window actor on
-`restacked` (`manager.js:_restackActors`).
+`global.window_group.set_child_above_sibling()` - re-pins the band above its window actor on the
+`restacked` signal.
 
 ## set_child_below_sibling
 
@@ -190,9 +190,9 @@ and size, so their geometry follows a resize without a JS tick.
 
 `effect.set_enabled()` - the offscreen-pass toggle a `Clutter.ActorMeta` effect exposes. A real
 method (`clutter_actor_meta_set_enabled`), not something GJS derives from the property of the same
-name; the effect inherits it from `Clutter.ActorMeta`. The extension does not call it: `_syncClip()`
-adds and removes the effect instead (`windowDecoration.js`), so the entry records the API and its
-property rather than a call site.
+name; the effect inherits it from `Clutter.ActorMeta`. The extension does not call it: it attaches
+and detaches the effect instead, so the entry records the API and its property rather than a call
+site.
 
 ## actor_meta_enabled
 
@@ -207,29 +207,29 @@ cited as if it were the API. The extension reads neither the property nor the me
 
 ## offscreen_effect_paint_target
 
-`Clutter.OffscreenEffect:vfunc_paint_target()` - the hook `RoundedClipEffect` reads the live actor
+`Clutter.OffscreenEffect:vfunc_paint_target()` - the hook the clip effect reads the live actor
 size in. It inherits the slot through `Shell.GLSLEffect` (45-50) or `Clutter.ShaderEffect` (51),
 both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the same hook.
 
 ## clutter_set_uniform_float
 
-`effect.set_uniform_float()` - the modern branch of `compat/shaderEffect.js` inherits
+`effect.set_uniform_float()` - the extension inherits
 it rather than reimplementing it: going through `set_uniform_value` would drop vector components.
 
 ## cogl_pipeline_set_uniform_float
 
 `pipeline.set_uniform_float()` - uploads the shadow's uniforms on the Cogl pipeline. GJS exposes two
-signatures for it, probed once in `effects/shadowTexture.js`.
+signatures for it, so the extension probes which one the host provides.
 
 ## offscreen_effect_get_pipeline
 
 `effect.get_pipeline()` - retrieves the underlying Cogl pipeline from `Clutter.OffscreenEffect`.
-`RoundedClipEffect` queries this during paint to configure hardware mipmapping on the offscreen FBO.
+The extension queries this during paint to configure hardware mipmapping on the offscreen FBO.
 
 ## cogl_pipeline_set_layer_filters
 
 `pipeline.set_layer_filters()` - configures the minification and magnification filters on a Cogl pipeline
-texture layer. Used in `RoundedClipEffect` to set `LINEAR_MIPMAP_LINEAR` during overview mode.
+texture layer. Used to set `LINEAR_MIPMAP_LINEAR` during overview mode.
 
 ## cogl_pipeline_get_layer_filters
 
@@ -242,7 +242,7 @@ to the pipeline layer during overview mode and restored upon returning to deskto
 ## cogl_pipeline_filter
 
 `Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
-Read by `RoundedClipEffect` when setting layer filters for overview thumbnails.
+Used when configuring the layer filters for overview thumbnails.
 
 ## shell_glsl_set_uniform_float
 
@@ -252,7 +252,7 @@ away in 51, which is why the compat class exists at all.
 ## backend_get_sprite
 
 `backend.get_sprite()` - in the same release the grab operation started taking a sprite
-instead of a device and a sequence. `compat/grabOp.js` dispatches on this pair: 45 and 49-51 both
+instead of a device and a sequence. The extension dispatches on this pair: 45 and 49-51 both
 declare four parameters, so arity alone cannot tell them apart.
 
 ## backend_get_pointer_sprite
@@ -320,8 +320,8 @@ is the `-st-accent-color` CSS term, resolved by St from `St.Settings:accent-colo
 
 ## main_overview
 
-`Main.overview` - the shell's overview object, exported from `js/ui/main.js`. `Manager.enable()`
-runs after the shell has built it, so it is read directly: `visible` seeds the manager's overview
+`Main.overview` - the shell's overview object, exported from `js/ui/main.js`. The extension enables
+after the shell has built it, so it is read directly: `visible` seeds the manager's overview
 mode, and `showing`/`hidden` flip it.
 
 ## main_ui_group
@@ -333,5 +333,5 @@ window actor rather than inside the window's own actor tree.
 ## overview_visible
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
-then switch each clip effect's layer filter to hardware mipmapping (`RoundedClipEffect.setOverviewMode()`),
+then switch each clip effect's layer filter to hardware mipmapping,
 so downscaled previews stay filtered; the effect is retained, not suspended.
