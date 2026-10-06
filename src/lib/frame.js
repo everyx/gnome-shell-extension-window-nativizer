@@ -79,21 +79,6 @@ export function hasPositiveInsets(insets) {
 }
 
 /**
- * Whether the client declared its own outer margin ring between buffer and frame.
- * SSD windows are drawn by the compositor frame, not the client, so hasSsd => false.
- * @param {object} [params={}]
- * @param {{x: number, y: number, width: number, height: number}|null} [params.buffer=null]
- * @param {{x: number, y: number, width: number, height: number}|null} [params.frame=null]
- * @param {boolean} [params.hasSsd=false]
- * @returns {boolean}
- */
-export function hasDeclaredMarginRing({buffer = null, frame = null, hasSsd = false} = {}) {
-    if (hasSsd)
-        return false;
-    return hasPositiveInsets(insetsFromRects(buffer, frame));
-}
-
-/**
  * Safe inward inset margin (px) for client-decorated windows with declared rings.
  * GTK3 CSD windows render a 1px border stroke with Cairo half-pixel stroke
  * centering (0.5px outside, 0.5px inside) and a CSS outline ring. Inwardly

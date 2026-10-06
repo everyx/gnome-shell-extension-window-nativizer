@@ -22,7 +22,7 @@
  */
 
 import {WindowType} from '../src/lib/mutterRules.generated.js';
-import {hasDeclaredMarginRing} from '../src/lib/frame.js';
+import {clientDeclaredRing} from '../src/lib/detector.js';
 
 /** Base sizes, chosen to straddle the two size gates: MIN_DECORABLE_SIZE (2 x 15) and MIN_BAND_WINDOW (2 x 12). */
 export const SIZES = Object.freeze({
@@ -134,7 +134,14 @@ function makeCase(spec) {
         bufferRect,
         frameRect,
         declaredWmClass: wmClass,
-        hasRing: hasDeclaredMarginRing({buffer: bufferRect, frame: frameRect, hasSsd}),
+        hasRing: clientDeclaredRing({
+            hasSsd,
+            insets,
+            bufferWidth: bufferRect.width,
+            bufferHeight: bufferRect.height,
+            frameWidth: frameRect.width,
+            frameHeight: frameRect.height,
+        }),
 
         // Evaluation fields.
         bufferWidth: bufferRect.width,
