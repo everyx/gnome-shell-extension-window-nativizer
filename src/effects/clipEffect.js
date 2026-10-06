@@ -56,10 +56,15 @@ const CODE = `
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    // Physical 1px anti-aliasing transition across all monitor DPI scales:
+    float effR = min(uRadius, min(frameHalf.x, frameHalf.y));
+    vec2 q = abs(fromCenter) - frameHalf + effR;
+    bool isCorner = q.x > 0.0 && q.y > 0.0;
+
+    // Physical 1px anti-aliasing transition on corner arcs:
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
-    cogl_color_out *= mix(keep, corner, uClearRing);
+    float straight = mix(1.0, inSquare, uClearRing);
+    cogl_color_out *= isCorner ? mix(keep, corner, uClearRing) : straight;
 `;
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
@@ -210,7 +215,7 @@ export const RoundedClipEffect = GObject.registerClass({
         // still runs: a body with no area is not the same as a frame with nothing to draw.
         const rawFrame = bodyFrame({width, height}, this._insets);
         const scale = this._scale ?? 1.0;
-        const frame = snapRectToGrid(rawFrame, scale, SnapRule.GROW);
+        const frame = snapRectToGrid(rawFrame, scale, SnapRule.ROUND);
 
         if (this._lastScale !== scale) {
             this._scaleVec[0] = scale;
