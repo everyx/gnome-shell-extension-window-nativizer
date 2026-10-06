@@ -139,19 +139,19 @@ export function buildAxisSwitch(axis, corrected, onChange) {
  * @param {{
  *   name: string,
  *   sampleTitle?: string|null,
- *   properties: object,
+ *   kind: object,
  *   appInfo?: object|null,
  * }} options
  */
 export function setupRuleRowHeader(row, options) {
-    const {name, sampleTitle, properties, appInfo} = options;
+    const {name, sampleTitle, kind, appInfo} = options;
 
     let titleMarkup = asMarkup(name);
     if (sampleTitle && sampleTitle !== name)
         titleMarkup += ` <span alpha="55%">${asMarkup(sampleTitle)}</span>`;
     row.title = titleMarkup;
 
-    row.subtitle = asMarkup(windowKindSentence(properties));
+    row.subtitle = asMarkup(windowKindSentence(kind));
     row.title_lines = 1;
     row.subtitle_lines = 2;
 

@@ -33,7 +33,7 @@ export class Manager {
         /** @type {Map<Meta.Window, WindowDecoration>} */
         this._windows = new Map();  // Meta.Window -> WindowDecoration
         this._signals = [];
-        this._rules = null;         // fingerprint -> rule state, invalidated on settings change
+        this._rules = null;         // [{kind, state, title}], invalidated on settings change
         this._inOverview = false;
         this._lastFocusWindow = null;
         this._highContrast = false;

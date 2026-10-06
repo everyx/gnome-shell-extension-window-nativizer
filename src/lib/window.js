@@ -51,7 +51,7 @@ export function readWindowString(getter) {
 /**
  * Declared identity, first non-blank source wins. A whitespace-only field (an X11 client may
  * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
- * become a rule key.
+ * become part of a rule kind.
  * @param {object} win
  * @returns {string} declared identity or ''
  */

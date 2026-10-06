@@ -12,7 +12,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
 | `lib/frame.js` | body-inside-actor geometry (pure) |
 | `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
-| `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
+| `lib/rules.js` | the window-kind rule model: kinds, matching, sanitising, and canonical rule evaluation (pure) |
 | `lib/pick.js` | the picker's bus name/path and property dictionary |
 | `lib/snap.js` | grid snapping math and the 8-slice geometry layout (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
@@ -244,9 +244,9 @@ left of the expander arrow, spaced from the icon group. The expanded body carrie
 axis, titled with the axis itself - the same word an unavailable axis uses for its reason row -
 and the switch's tooltip says what turning it on does.
 
-The kind sentence names all seven structural attributes of a rule key, folding the parent
+The kind sentence names the structural attributes of a window kind, folding the parent
 attributes into one phrase and the two ring attributes into the frame clause;
-`docs/rule-model.md` has the full grammar. Text for markup-aware widgets is escaped, while
+`docs/rule-model.md` has the full field model. Text for markup-aware widgets is escaped, while
 toasts, alerts and plain labels take plain text.
 
 The pick button and the import/export menu are the group's header suffix (Adwaita's

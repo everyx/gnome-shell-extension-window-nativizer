@@ -23,7 +23,7 @@ import {
     edgeForPoint,
     normalizeConstrainedEdges,
 } from '../src/lib/resizeBand.js';
-import {buildRuleKey, parseRuleKey} from '../src/lib/rules.js';
+import {buildRuleState, kindId, resolveRule, sameKind, sanitizeRules} from '../src/lib/rules.js';
 
 const ITER = 400;
 const EPS = 1e-9;
@@ -275,47 +275,74 @@ describe('property: resizeBand', () => {
 });
 
 describe('property: rules', () => {
-    it('a valid random kind round-trips through buildRuleKey and parseRuleKey', () => {
-        const rng = mulberry32(0xd15ea5e);
-        const identities = ['wechat', 'Firefox', 'org.example.App', 'my app', 'window:5', 'a:b', '%odd%'];
+    const rng = mulberry32(0xd15ea5e);
+    const identities = ['wechat', 'Firefox', 'org.example.App', 'my app', 'window:5', 'a:b', '%odd%'];
+    const states = [
+        'corners', 'shadow', 'resize',
+        'corners,shadow', 'corners,resize', 'shadow,resize', 'corners,shadow,resize',
+    ];
+
+    function randomKind(identity) {
+        const allowsResize = pick(rng, [true, false]);
+        return {
+            identity,
+            clientType: pick(rng, ['wayland', 'x11']),
+            windowType: Math.floor(range(rng, 0, 4)),
+            hasParent: pick(rng, [true, false]),
+            allowsResize,
+            attachedDialog: pick(rng, [true, false]),
+            hasRing: pick(rng, [true, false]),
+            hasSsd: pick(rng, [true, false]),
+            width: allowsResize ? null : Math.floor(range(rng, 1, 500)),
+            height: allowsResize ? null : Math.floor(range(rng, 1, 500)),
+        };
+    }
+
+    function toRecord(kind, state) {
+        return {
+            identity: kind.identity,
+            client_type: kind.clientType,
+            window_type: kind.windowType,
+            has_parent: kind.hasParent,
+            allows_resize: kind.allowsResize,
+            attached_dialog: kind.attachedDialog,
+            has_ring: kind.hasRing,
+            has_ssd: kind.hasSsd,
+            width: kind.width ?? 0,
+            height: kind.height ?? 0,
+            state,
+            title: '',
+        };
+    }
+
+    it('a random kind and state survive sanitize -> resolve', () => {
         for (let i = 0; i < ITER; i++) {
-            const wmClass = pick(rng, identities);
-            const allowsResize = pick(rng, [true, false]);
-            const props = {
-                clientType: pick(rng, ['wayland', 'x11']),
-                windowType: Math.floor(range(rng, 0, 4)),
-                hasParent: pick(rng, [true, false]),
-                allowsResize,
-                isAttachedDialog: pick(rng, [true, false]),
-                hasRing: pick(rng, [true, false]),
-                hasSsd: pick(rng, [true, false]),
-                width: allowsResize ? null : Math.floor(range(rng, 1, 500)),
-                height: allowsResize ? null : Math.floor(range(rng, 1, 500)),
-            };
+            const k = randomKind(pick(rng, identities));
+            const state = pick(rng, states);
+            const rules = sanitizeRules([toRecord(k, state)]);
 
-            const key = buildRuleKey(wmClass, props);
-            expect(key).not.toBe('');
-
-            // parseRuleKey returns the *decoded* identity, so the round-trip is: parse, then
-            // rebuild with buildRuleKey - not string concatenation, which would drop the
-            // escaping (e.g. 'window:5' -> 'window%3A5').
-            const parsed = parseRuleKey(key);
-            expect(parsed).not.toBeNull();
-            expect(parsed.baseWmClass).toBe(wmClass.trim().toLowerCase());
-
-            const p = parsed.properties;
-            const rebuilt = buildRuleKey(parsed.baseWmClass, {
-                clientType: p.client_type,
-                windowType: p.window_type,
-                hasParent: p.has_parent,
-                allowsResize: p.allows_resize,
-                isAttachedDialog: p.attached_dialog,
-                hasRing: p.has_ring,
-                hasSsd: p.has_ssd,
-                width: p.width ?? null,
-                height: p.height ?? null,
-            });
-            expect(rebuilt).toBe(key);
+            expect(rules.length).toBe(1);
+            expect(sameKind(rules[0].kind, k)).toBeTrue();
+            expect(buildRuleState(resolveRule(k, rules))).toBe(state);
         }
+    });
+
+    it('kindId identifies a kind up to identity case and distinguishes its fields', () => {
+        for (let i = 0; i < ITER; i++) {
+            const k = randomKind(pick(rng, identities));
+            const spelled = {...k, identity: k.identity.toUpperCase()};
+            expect(kindId(k)).toBe(kindId(spelled));
+            expect(sameKind(k, spelled)).toBeTrue();
+
+            const changed = {...k, hasRing: !k.hasRing};
+            expect(kindId(changed)).not.toBe(kindId(k));
+            expect(sameKind(k, changed)).toBeFalse();
+        }
+    });
+
+    it('a no-op state is dropped, so resolve never sees it', () => {
+        const k = randomKind('wechat');
+        expect(sanitizeRules([toRecord(k, '')])).toEqual([]);
+        expect(resolveRule(k, [])).toBeNull();
     });
 });

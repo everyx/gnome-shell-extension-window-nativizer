@@ -20,7 +20,7 @@ client from an X11 one, which decides whether an X11 frame is in the way.
 ## get_window_type
 
 `win.get_window_type()` - returns `Meta.WindowType`. Gates the non-decoratable kinds (menus, popups,
-docks) in the eligibility checks, the rule fingerprints and the inspector picker.
+docks) in the eligibility checks, the window kinds and the inspector picker.
 
 ## is_maximized
 
@@ -46,7 +46,7 @@ decision before any geometry is computed.
 
 `win.get_tile_match()` - the adjacent matching tile, or null. Two tiles that match each other are
 not a maximize, and the decoration decision has to know the difference (it is transient state, so
-it is deliberately not in the rule fingerprint).
+it is deliberately not part of the kind).
 
 ## get_pid
 
@@ -95,12 +95,12 @@ user cannot see.
 
 ## is_attached_dialog
 
-`win.is_attached_dialog()` - part of the picker's fingerprint: an attached dialog is not a window to
+`win.is_attached_dialog()` - part of the window kind: an attached dialog is not a window to
 decorate on its own.
 
 ## get_transient_for
 
-`win.get_transient_for()` - the same fingerprint: a window with a parent is treated as a dialog.
+`win.get_transient_for()` - the same kind: a window with a parent is treated as a dialog.
 
 ## located_on_workspace
 
@@ -285,7 +285,7 @@ this is recorded - to keep the typelib names quoted in prose from drifting.
 ## window_tracker_get_default
 
 `Shell.WindowTracker.get_default()` - resolves the app a window belongs to, which is the id the
-identity fingerprint is built from. Guarded, because the tracker is unusable while the session is
+window kind's identity is built from. Guarded, because the tracker is unusable while the session is
 tearing down.
 
 ## st_box_layout_vertical

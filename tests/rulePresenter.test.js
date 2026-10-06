@@ -33,26 +33,26 @@ describe('rulePresenter', () => {
 
     describe('isDecoratableKind', () => {
         it('identifies decoratable normal windows and dialogs', () => {
-            expect(isDecoratableKind({window_type: WindowType.NORMAL})).toBeTrue();
-            expect(isDecoratableKind({window_type: WindowType.DIALOG})).toBeTrue();
-            expect(isDecoratableKind({window_type: WindowType.MODAL_DIALOG})).toBeTrue();
+            expect(isDecoratableKind({windowType: WindowType.NORMAL})).toBeTrue();
+            expect(isDecoratableKind({windowType: WindowType.DIALOG})).toBeTrue();
+            expect(isDecoratableKind({windowType: WindowType.MODAL_DIALOG})).toBeTrue();
         });
 
-        it('identifies non-decoratable window types or null properties', () => {
+        it('identifies non-decoratable window types or null kind', () => {
             expect(isDecoratableKind(null)).toBeFalse();
             expect(isDecoratableKind(undefined)).toBeFalse();
             // POPUP_MENU / DROPDOWN_MENU are not decoratable
-            expect(isDecoratableKind({window_type: WindowType.DROPDOWN_MENU})).toBeFalse();
-            expect(isDecoratableKind({window_type: WindowType.POPUP_MENU})).toBeFalse();
+            expect(isDecoratableKind({windowType: WindowType.DROPDOWN_MENU})).toBeFalse();
+            expect(isDecoratableKind({windowType: WindowType.POPUP_MENU})).toBeFalse();
         });
     });
 
     describe('keyAxisCapabilities', () => {
         it('computes default capabilities for resizable normal windows', () => {
             const caps = keyAxisCapabilities({
-                window_type: WindowType.NORMAL,
-                allows_resize: true,
-                has_ssd: false,
+                windowType: WindowType.NORMAL,
+                allowsResize: true,
+                hasSsd: false,
             });
             expect(caps).toEqual({
                 [RuleAxis.CORNERS]: true,
@@ -63,16 +63,16 @@ describe('rulePresenter', () => {
 
         it('disables resize capability for fixed-size windows or SSD frames', () => {
             const fixedCaps = keyAxisCapabilities({
-                window_type: WindowType.NORMAL,
-                allows_resize: false,
-                has_ssd: false,
+                windowType: WindowType.NORMAL,
+                allowsResize: false,
+                hasSsd: false,
             });
             expect(fixedCaps[RuleAxis.RESIZE]).toBeFalse();
 
             const ssdCaps = keyAxisCapabilities({
-                window_type: WindowType.NORMAL,
-                allows_resize: true,
-                has_ssd: true,
+                windowType: WindowType.NORMAL,
+                allowsResize: true,
+                hasSsd: true,
             });
             expect(ssdCaps[RuleAxis.RESIZE]).toBeFalse();
         });
@@ -85,12 +85,12 @@ describe('rulePresenter', () => {
         });
 
         it('explains resize unavailability for SSD frames', () => {
-            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {has_ssd: true});
+            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {hasSsd: true});
             expect(reason).toBe('The window frame can already be resized');
         });
 
         it('explains resize unavailability for fixed-size windows', () => {
-            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {allows_resize: false});
+            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {allowsResize: false});
             expect(reason).toBe('Fixed-size windows have no resize handle');
         });
     });
@@ -122,51 +122,67 @@ describe('rulePresenter', () => {
     });
 
     describe('windowKindSentence', () => {
-        it('returns empty string for null/undefined properties', () => {
+        it('returns empty string for null/undefined kind', () => {
             expect(windowKindSentence(null)).toBe('');
             expect(windowKindSentence(undefined)).toBe('');
         });
 
         it('formats Wayland top-level resizable window without parent', () => {
             const sentence = windowKindSentence({
-                client_type: 'wayland',
-                window_type: WindowType.NORMAL,
-                has_parent: false,
-                allows_resize: true,
+                clientType: 'wayland',
+                windowType: WindowType.NORMAL,
+                hasParent: false,
+                allowsResize: true,
+                attachedDialog: false,
+                hasRing: true,
+                hasSsd: false,
+                width: null,
+                height: null,
             });
             expect(sentence).toBe('Wayland window, with no parent, resizable');
         });
 
         it('formats X11 dialog attached to parent with fixed dimensions', () => {
             const sentence = windowKindSentence({
-                client_type: 'x11',
-                window_type: WindowType.DIALOG,
-                has_parent: true,
-                attached_dialog: true,
-                allows_resize: false,
-                size: '480x320',
+                clientType: 'x11',
+                windowType: WindowType.DIALOG,
+                hasParent: true,
+                attachedDialog: true,
+                allowsResize: false,
+                hasRing: true,
+                hasSsd: false,
+                width: 480,
+                height: 320,
             });
             expect(sentence).toBe('X11 dialog, attached to its parent, fixed-size (480×320)');
         });
 
         it('formats window with system-drawn frame', () => {
             const sentence = windowKindSentence({
-                client_type: 'wayland',
-                window_type: WindowType.NORMAL,
-                has_parent: false,
-                has_ssd: true,
-                allows_resize: false,
+                clientType: 'wayland',
+                windowType: WindowType.NORMAL,
+                hasParent: false,
+                attachedDialog: false,
+                hasSsd: true,
+                hasRing: false,
+                allowsResize: false,
+                width: null,
+                height: null,
             });
             expect(sentence).toBe('Wayland window, with no parent, frame drawn by the system, fixed-size');
         });
 
         it('formats window with declared zero shadow margins', () => {
             const sentence = windowKindSentence({
-                client_type: 'wayland',
-                window_type: WindowType.NORMAL,
-                has_parent: false,
-                has_ring: false,
-                allows_resize: true,
+                clientType: 'wayland',
+                windowType: WindowType.NORMAL,
+                hasParent: false,
+                attachedDialog: false,
+                hasRing: false,
+                hasSsd: false,
+                allowsResize: true,
+                width: null,
+                height: null,
             });
             expect(sentence).toBe('Wayland window, with no parent, no shadow margins, resizable');
         });

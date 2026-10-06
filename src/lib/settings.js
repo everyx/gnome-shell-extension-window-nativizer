@@ -1,73 +1,92 @@
 import GLib from 'gi://GLib';
-import {sanitizeRuleTitles, sanitizeWindowRules} from './rules.js';
+import {kindId, sanitizeRules} from './rules.js';
 
-export const SETTINGS_KEY_WINDOW_RULES = 'window-rules';
+export const SETTINGS_KEY_WINDOW_RULES = 'window-rules-v2';
 
 /**
- * Validates and normalizes raw entries dictionary in a single pass.
- * @param {Record<string, {state?: string, title?: string}>} raw
- * @returns {Record<string, {state: string, title: string}>}
+ * Flattens an in-memory entry into the stored record. The settings layer is the only
+ * place that knows the on-disk spelling of a kind.
+ * @param {{kind: object, state: string, title?: string}} entry
+ * @returns {object}
+ */
+function recordFromEntry({kind, state, title}) {
+    return {
+        identity: kind.identity,
+        client_type: kind.clientType,
+        window_type: kind.windowType,
+        has_parent: kind.hasParent,
+        allows_resize: kind.allowsResize,
+        attached_dialog: kind.attachedDialog,
+        has_ring: kind.hasRing,
+        has_ssd: kind.hasSsd,
+        width: kind.width ?? 0,
+        height: kind.height ?? 0,
+        state,
+        title: title ?? '',
+    };
+}
+
+/**
+ * Accepts either the raw record array GSettings hands back or a UI entry map keyed by
+ * kindId, and returns the record array sanitizeRules validates.
+ * @param {*} raw
+ * @returns {Array<object>}
+ */
+function asRecords(raw) {
+    if (Array.isArray(raw))
+        return raw;
+    if (!raw || typeof raw !== 'object')
+        return [];
+    return Object.values(raw)
+        .filter(entry => entry && typeof entry === 'object' && entry.kind && typeof entry.kind === 'object')
+        .map(recordFromEntry);
+}
+
+/**
+ * Validates and normalizes raw entries in a single pass.
+ * @param {*} raw - Raw stored records, or UI entries keyed by kindId
+ * @returns {Record<string, {kind: object, state: string, title: string}>}
  */
 export function sanitizeEntries(raw) {
-    const rawStates = {};
-    const rawTitles = {};
-
-    for (const [key, entry] of Object.entries(raw ?? {})) {
-        if (entry && typeof entry === 'object') {
-            rawStates[key] = entry.state;
-            rawTitles[key] = entry.title;
-        }
-    }
-
-    const states = sanitizeWindowRules(rawStates);
-    const titles = sanitizeRuleTitles(rawTitles);
-
     const entries = {};
-    for (const [key, state] of Object.entries(states)) {
-        entries[key] = {
-            state,
-            title: titles[key] ?? '',
-        };
-    }
+    for (const rule of sanitizeRules(asRecords(raw)))
+        entries[kindId(rule.kind)] = rule;
     return entries;
 }
 
 /**
- * One entry per rule: active state and display sample title.
+ * One entry per rule: the kind, its active state, and a display-only sample title.
  * @param {object} settings
- * @returns {Record<string, {state: string, title: string}>}
+ * @returns {Record<string, {kind: object, state: string, title: string}>}
  */
 export function readEntries(settings) {
     return sanitizeEntries(readValue(settings, SETTINGS_KEY_WINDOW_RULES));
 }
 
-/** @param {object} settings @returns {Record<string,string>} Canonical key -> axis state */
+/** @param {object} settings @returns {Array<{kind: object, state: string, title: string}>} */
 export function getWindowRules(settings) {
-    return Object.fromEntries(
-        Object.entries(readEntries(settings)).map(([key, entry]) => [key, entry.state]));
+    return Object.values(readEntries(settings));
 }
 
-/** @param {object} settings @returns {Record<string,string>} Canonical key -> title */
+/** @param {object} settings @returns {Record<string, string>} kindId -> title */
 export function getRuleTitles(settings) {
-    return Object.fromEntries(
-        Object.entries(readEntries(settings))
-            .filter(([, entry]) => entry.title)
-            .map(([key, entry]) => [key, entry.title]));
-}
-
-/** @param {object} settings @param {Record<string,string>} rules */
-export function setWindowRules(settings, rules) {
-    writeEntries(settings, mergeEntries(readEntries(settings), {rules}));
+    const titles = {};
+    for (const [id, entry] of Object.entries(readEntries(settings))) {
+        if (entry.title)
+            titles[id] = entry.title;
+    }
+    return titles;
 }
 
 /**
  * Updates or inserts a single rule entry and its display-only title.
- * @param {object} settings @param {string} key @param {string} state @param {string} [title='']
+ * @param {object} settings @param {object} kind @param {string} state @param {string} [title='']
  */
-export function setWindowRule(settings, key, state, title = '') {
+export function setWindowRule(settings, kind, state, title = '') {
     const entries = readEntries(settings);
     const nextEntries = {...entries};
-    nextEntries[key] = {
+    nextEntries[kindId(kind)] = {
+        kind,
         state,
         title: title ?? '',
     };
@@ -75,9 +94,9 @@ export function setWindowRule(settings, key, state, title = '') {
 }
 
 /**
- * Writes raw entries map directly after sanitization.
+ * Writes the UI entry map directly after sanitization.
  * @param {object} settings
- * @param {Record<string, {state: string, title?: string}>} entries
+ * @param {Record<string, {kind: object, state: string, title?: string}>} entries
  */
 export function setAllRuleEntries(settings, entries) {
     writeEntries(settings, entries);
@@ -85,37 +104,27 @@ export function setAllRuleEntries(settings, entries) {
 
 /**
  * Serializes active window rules into a canonical JSON export string.
- * @param {Record<string, {state: string, title?: string}>} entries
+ * @param {Record<string, {kind: object, state: string, title?: string}>} entries
  * @returns {string} Formatted JSON string
  */
 export function exportRulesJson(entries) {
     const clean = sanitizeEntries(entries);
-    const rules = {};
-    for (const [key, entry] of Object.entries(clean)) {
-        const rule = {state: entry.state};
-        if (entry.title)
-            rule.title = entry.title;
-        rules[key] = rule;
-    }
-    const payload = {
-        version: 1,
-        rules,
-    };
-    return JSON.stringify(payload, null, 2);
+    const rules = Object.values(clean).map(recordFromEntry);
+    return JSON.stringify({version: 2, rules}, null, 2);
 }
 
 /**
  * Parses and sanitizes rules from JSON text, separating non-conflicting entries from conflicts.
- * @param {Record<string, {state: string, title: string}>} existingEntries
+ * @param {Record<string, {kind: object, state: string, title: string}>} existingEntries
  * @param {string} jsonText
  * @returns {{
  *   hasConflicts: boolean,
- *   nextEntries?: Record<string, {state: string, title: string}>,
+ *   nextEntries?: Record<string, {kind: object, state: string, title: string}>,
  *   addedCount?: number,
  *   updatedCount?: number,
- *   conflicts?: Array<{key: string, existingState: string, importedState: string, existingTitle: string, importedTitle: string}>,
- *   nonConflictingEntries?: Record<string, {state: string, title: string}>,
- *   cleanImported?: Record<string, {state: string, title: string}>,
+ *   conflicts?: Array<{key: string, kind: object, existingState: string, importedState: string, existingTitle: string, importedTitle: string}>,
+ *   nonConflictingEntries?: Record<string, {kind: object, state: string, title: string}>,
+ *   cleanImported?: Record<string, {kind: object, state: string, title: string}>,
  *   importedKeys: string[],
  * }}
  */
@@ -130,39 +139,26 @@ export function importRulesJson(existingEntries, jsonText) {
         throw new Error('Invalid JSON format');
     }
 
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    if (!parsed || typeof parsed !== 'object')
         throw new Error('Invalid rules payload');
 
     let rawRules = null;
-    if (parsed.version !== undefined) {
-        if (parsed.version !== 1)
-            throw new Error(`Unsupported format version: ${parsed.version}`);
-        if (parsed.rules && typeof parsed.rules === 'object' && !Array.isArray(parsed.rules))
-            rawRules = parsed.rules;
-    } else if (parsed.rules && typeof parsed.rules === 'object' && !Array.isArray(parsed.rules)) {
-        rawRules = parsed.rules;
-    } else {
+    if (Array.isArray(parsed)) {
         rawRules = parsed;
+    } else {
+        // The field-based payload is the second shape this key has had. The first one is refused
+        // by version rather than translated: a translator would keep the old grammar alive for a
+        // shape nothing writes any more.
+        if (parsed.version !== undefined && parsed.version !== 2)
+            throw new Error(`Unsupported format version: ${parsed.version} (only the current format can be imported)`);
+        if (Array.isArray(parsed.rules))
+            rawRules = parsed.rules;
     }
 
-    if (!rawRules || Object.keys(rawRules).length === 0)
+    if (!rawRules || rawRules.length === 0)
         throw new Error('No rules found in content');
 
-    const candidateRaw = {};
-    for (const [key, val] of Object.entries(rawRules)) {
-        if (val && typeof val === 'object') {
-            candidateRaw[key] = {
-                state: val.state,
-                title: val.title,
-            };
-        } else if (typeof val === 'string') {
-            candidateRaw[key] = {
-                state: val,
-                title: '',
-            };
-        }
-    }
-    const cleanImported = sanitizeEntries(candidateRaw);
+    const cleanImported = sanitizeEntries(rawRules);
     const importedKeys = Object.keys(cleanImported);
     if (importedKeys.length === 0)
         throw new Error('No valid rules found');
@@ -172,17 +168,19 @@ export function importRulesJson(existingEntries, jsonText) {
     let addedCount = 0;
     let updatedCount = 0;
 
-    for (const [key, importedEntry] of Object.entries(cleanImported)) {
-        const existing = existingEntries[key];
+    for (const [id, importedEntry] of Object.entries(cleanImported)) {
+        const existing = existingEntries[id];
         if (!existing) {
-            nonConflictingEntries[key] = {
+            nonConflictingEntries[id] = {
+                kind: importedEntry.kind,
                 state: importedEntry.state,
                 title: importedEntry.title,
             };
             addedCount++;
         } else if (existing.state !== importedEntry.state) {
             conflicts.push({
-                key,
+                key: id,
+                kind: importedEntry.kind,
                 existingState: existing.state,
                 importedState: importedEntry.state,
                 existingTitle: existing.title || '',
@@ -192,7 +190,7 @@ export function importRulesJson(existingEntries, jsonText) {
             // Same state: supplement title if existing title is empty
             const titleSupplemented = Boolean(!existing.title && importedEntry.title);
             if (titleSupplemented) {
-                nonConflictingEntries[key] = {
+                nonConflictingEntries[id] = {
                     ...existing,
                     title: importedEntry.title,
                 };
@@ -222,9 +220,9 @@ export function importRulesJson(existingEntries, jsonText) {
 
 /**
  * Applies user conflict resolutions and merges with non-conflicting entries.
- * @param {Record<string, {state: string, title?: string}>} existingEntries
- * @param {Record<string, {state: string, title?: string}>} nonConflictingEntries
- * @param {Record<string, {state: string, title?: string}>} cleanImported
+ * @param {Record<string, {kind: object, state: string, title?: string}>} existingEntries
+ * @param {Record<string, {kind: object, state: string, title?: string}>} nonConflictingEntries
+ * @param {Record<string, {kind: object, state: string, title?: string}>} cleanImported
  * @param {Record<string, 'existing'|'imported'>} resolutions
  * @returns {{nextEntries: Record<string, object>, resolvedUpdatedCount: number}}
  */
@@ -232,20 +230,21 @@ export function applyConflictResolutions(existingEntries, nonConflictingEntries,
     const nextEntries = {...nonConflictingEntries};
     let resolvedUpdatedCount = 0;
 
-    for (const [key, choice] of Object.entries(resolutions ?? {})) {
-        const imported = cleanImported[key];
-        const existing = existingEntries[key];
+    for (const [id, choice] of Object.entries(resolutions ?? {})) {
+        const imported = cleanImported[id];
+        const existing = existingEntries[id];
         if (!imported)
             continue;
 
         if (choice === 'imported') {
-            nextEntries[key] = {
+            nextEntries[id] = {
+                kind: imported.kind,
                 state: imported.state,
                 title: imported.title || existing?.title || '',
             };
             resolvedUpdatedCount++;
         } else if (existing) {
-            nextEntries[key] = existing;
+            nextEntries[id] = existing;
         }
     }
 
@@ -255,29 +254,29 @@ export function applyConflictResolutions(existingEntries, nonConflictingEntries,
     };
 }
 
-/**
- * Read-modify-write over the one key. A rule write keeps the titles of surviving keys.
- */
-function mergeEntries(entries, {rules = null}) {
-    const merged = {};
-    const keys = new Set([...Object.keys(entries), ...Object.keys(rules ?? {})]);
-    for (const key of keys) {
-        const stored = entries[key];
-        const state = rules ? rules[key] ?? '' : stored?.state ?? '';
-        const title = stored?.title ?? '';
-
-        if (!state)
-            continue;
-
-        merged[key] = {state, title};
-    }
-    return merged;
+/** @param {{kind: object, state: string, title: string}} entry @returns {object} A dict of wrapped variants for `aa{sv}` */
+function entryToVariant(entry) {
+    const record = recordFromEntry(entry);
+    return {
+        identity: new GLib.Variant('s', record.identity),
+        client_type: new GLib.Variant('s', record.client_type),
+        window_type: new GLib.Variant('i', record.window_type),
+        has_parent: new GLib.Variant('b', record.has_parent),
+        allows_resize: new GLib.Variant('b', record.allows_resize),
+        attached_dialog: new GLib.Variant('b', record.attached_dialog),
+        has_ring: new GLib.Variant('b', record.has_ring),
+        has_ssd: new GLib.Variant('b', record.has_ssd),
+        width: new GLib.Variant('i', record.width),
+        height: new GLib.Variant('i', record.height),
+        state: new GLib.Variant('s', record.state),
+        title: new GLib.Variant('s', record.title),
+    };
 }
 
 // Coalesce writes: each write notifies Shell and re-evaluates every window.
 function writeEntries(settings, entries) {
     const clean = sanitizeEntries(entries);
-    const value = new GLib.Variant('a{sa{ss}}', clean);
+    const value = new GLib.Variant('aa{sv}', Object.values(clean).map(entryToVariant));
     try {
         if (settings?.get_value?.(SETTINGS_KEY_WINDOW_RULES)?.equal(value))
             return;
@@ -289,8 +288,28 @@ function writeEntries(settings, entries) {
 
 function readValue(settings, key) {
     try {
-        return settings?.get_value?.(key)?.deep_unpack() ?? null;
+        const variant = settings?.get_value?.(key) ?? null;
+        if (!variant)
+            return null;
+        if (typeof variant.recursiveUnpack === 'function')
+            return variant.recursiveUnpack();
+        return unwrapRecordVariants(variant.deep_unpack());
     } catch {
         return null;
     }
+}
+
+// `a{sv}` holds a variant per value; deep_unpack leaves them wrapped on GJS versions
+// without recursiveUnpack, so unwrap each leaf before the parser sees it.
+function unwrapRecordVariants(records) {
+    if (!Array.isArray(records))
+        return records;
+    return records.map(record => {
+        if (!record || typeof record !== 'object')
+            return record;
+        const out = {};
+        for (const [field, value] of Object.entries(record))
+            out[field] = value && typeof value.deepUnpack === 'function' ? value.deepUnpack() : value;
+        return out;
+    });
 }

@@ -20,7 +20,8 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 import {evaluateWindowActions, declaredSides} from '../src/lib/detector.js';
-import {extractWindowProperties, buildRuleKeyFromProperties} from '../src/lib/pick.js';
+import {extractWindowProperties} from '../src/lib/pick.js';
+import {kindFromProperties} from '../src/lib/rules.js';
 import {buildCases} from './decision-baseline-cases.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,25 +43,25 @@ function styleDigest(style) {
 }
 
 /**
- * The rule map a case runs against. The key is built the way `Manager` builds it for a pick -
- * through `extractWindowProperties`, not by hand - so the corpus pins the picker's key against
- * the runtime's reading. `foreign` stores the matching key under a different identity, which is
- * the one shape that can never match.
+ * The rule array a case runs against. The kind is built the way `Manager` builds it
+ * for a pick - through `extractWindowProperties`, not by hand - so the corpus pins the
+ * picker's kind against the runtime's reading. `foreign` stores the matching kind
+ * under a different identity, which is the one shape that can never match.
  * @param {object} params
  * @param {string|null} ruleState
  * @param {boolean} foreign
- * @returns {Record<string, string>}
+ * @returns {Array<{kind: object, state: string, title: string}>}
  */
 function rulesFor(params, ruleState, foreign) {
     if (!ruleState && !foreign)
-        return {};
+        return [];
 
     const properties = extractWindowProperties(params, params.wmClass);
-    const key = buildRuleKeyFromProperties(properties);
-    if (!key)
-        return {};
+    const kind = kindFromProperties(properties);
+    if (!kind)
+        return [];
 
-    return {[foreign ? key.replace(/^[^:]+/, 'other') : key]: ruleState ?? 'corners'};
+    return [{kind: foreign ? {...kind, identity: 'other'} : kind, state: ruleState ?? 'corners', title: ''}];
 }
 
 /** @param {object} c @returns {string} One recorded line for the case */

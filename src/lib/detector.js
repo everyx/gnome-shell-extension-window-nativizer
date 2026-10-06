@@ -5,10 +5,11 @@ import {
     CLIENT_TYPE_TOKEN_X11,
     RULE_AXES,
     RuleAxis,
-    buildRuleKeyFromProperties,
     buildRuleState,
+    kindFromProperties,
+    parseRuleState,
     resolveRule,
-    withRule,
+    sameKind,
 } from './rules.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
@@ -257,7 +258,7 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [tiled=false]
  * @property {boolean} [highContrast=false]
  * @property {string} [wmClass]
- * @property {Record<string, string>} [rules={}]
+ * @property {Array<{kind: object, state: string, title?: string}>} [rules=[]]
  * @property {boolean} [preferCrispText=false]
  */
 
@@ -400,7 +401,7 @@ export function evaluateWindowActions({
     animationsEnabled = true,
     dark = false,
     wmClass,
-    rules = {},
+    rules = [],
     preferCrispText = false,
 }) {
     const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled, dark});
@@ -420,17 +421,18 @@ export function evaluateWindowActions({
     // clip" is separate and handled here, so the predicate can stay pure.
     const clientOwnRing = clientDeclaredRing({hasSsd, insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
 
-    const rule = resolveRule(wmClass, rules, {
+    const rule = resolveRule({
+        identity: wmClass ?? '',
         clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         windowType,
         hasParent: Boolean(hasParent),
         allowsResize,
-        isAttachedDialog,
+        attachedDialog: Boolean(isAttachedDialog),
         hasRing: clientOwnRing,
-        hasSsd,
-        frameWidth,
-        frameHeight,
-    });
+        hasSsd: Boolean(hasSsd),
+        width: !allowsResize && Number.isFinite(frameWidth) && frameWidth > 0 ? Math.round(frameWidth) : null,
+        height: !allowsResize && Number.isFinite(frameHeight) && frameHeight > 0 ? Math.round(frameHeight) : null,
+    }, rules);
 
     // A rule reverses the automatic decision on the axes it names.
     const corners = resolveAxisValue(rule, RuleAxis.CORNERS, baseline.corners);
@@ -498,14 +500,24 @@ export function evaluateWindowActions({
 
 /**
  * @param {WindowEvaluationParams} params
- * @param {{key: string, state: string}} rule
+ * @param {object} kind
+ * @param {string} state
  * @returns {boolean}
  */
-function ruleWouldChangeActions(params, {key, state}) {
+function ruleWouldChangeActions(params, kind, state) {
+    const axes = parseRuleState(state);
+    if (!axes)
+        return false;
+    const canonical = buildRuleState(axes);
+    const otherRules = (params.rules ?? []).filter(rule => !sameKind(rule.kind, kind));
+    const rules = canonical
+        ? [...otherRules, {kind, state: canonical, title: ''}]
+        : otherRules;
+
     const before = evaluateWindowActions(params);
     const after = evaluateWindowActions({
         ...params,
-        rules: withRule(params.rules, key, state),
+        rules,
     });
 
     return before.drawShadow !== after.drawShadow ||
@@ -562,11 +574,11 @@ export function suggestedRuleState(params) {
  * @returns {boolean|null} Null when the window cannot be identified
  */
 export function suggestedRuleWouldChange(properties, params, state) {
-    const key = buildRuleKeyFromProperties(properties);
-    if (!key)
+    const kind = kindFromProperties(properties);
+    if (!kind)
         return null;
 
-    return ruleWouldChangeActions(kindParams(params), {key, state});
+    return ruleWouldChangeActions(kindParams(params), kind, state);
 }
 
 /**

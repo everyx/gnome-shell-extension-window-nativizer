@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 00:02+0800\n"
+"POT-Creation-Date: 2026-10-06 23:40+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -45,8 +45,8 @@ msgstr "窗口边框本身已可调整大小"
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的窗口没有可调整大小的边缘"
 
-#: src/lib/rulePresenter.js:132 src/prefs/conflictDialog.js:156
-#: src/prefs/conflictDialog.js:161
+#: src/lib/rulePresenter.js:132 src/prefs/conflictDialog.js:155
+#: src/prefs/conflictDialog.js:160
 msgid "Automatic"
 msgstr "自动"
 
@@ -101,39 +101,39 @@ msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/lib/rulePresenter.js:184
+#: src/lib/rulePresenter.js:185
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/lib/rulePresenter.js:187
+#: src/lib/rulePresenter.js:188
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/lib/rulePresenter.js:191
+#: src/lib/rulePresenter.js:192
 msgid "resizable"
 msgstr "可调整大小"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/lib/rulePresenter.js:199
+#: src/lib/rulePresenter.js:200
 msgid "frame drawn by the system"
 msgstr "由系统绘制边框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/lib/rulePresenter.js:202
+#: src/lib/rulePresenter.js:203
 msgid "no shadow margins"
 msgstr "无阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/lib/rulePresenter.js:207
+#: src/lib/rulePresenter.js:208
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/lib/rulePresenter.js:211
+#: src/lib/rulePresenter.js:212
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
@@ -207,13 +207,13 @@ msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:290
+#: src/prefs.js:289
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有响应——请重启会话后重新选取"
 
-#: src/prefs.js:298
+#: src/prefs.js:297
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
@@ -221,100 +221,100 @@ msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:328
+#: src/prefs.js:327
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:329
+#: src/prefs.js:328
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:339
+#: src/prefs.js:338
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"
 
-#: src/prefs.js:352
+#: src/prefs.js:351
 msgid "No corrections to export"
 msgstr "没有可导出的修正规则"
 
-#: src/prefs.js:364
+#: src/prefs.js:363
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已将 %d 条修正规则导出到剪贴板"
 
-#: src/prefs.js:390
+#: src/prefs.js:389
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪贴板为空或不包含文本"
 
-#: src/prefs.js:426 src/prefs.js:448
+#: src/prefs.js:425 src/prefs.js:447
 msgid "All rules in clipboard are already up to date"
 msgstr "剪贴板中的所有规则已是最新"
 
-#: src/prefs.js:435 src/prefs.js:458
+#: src/prefs.js:434 src/prefs.js:457
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功导入 %d 条规则"
 
-#: src/prefs.js:465
+#: src/prefs.js:464
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "导入失败：%s"
 
-#: src/prefs.js:477
+#: src/prefs.js:476
 msgid "Pick window…"
 msgstr "选取窗口…"
 
-#: src/prefs.js:480
+#: src/prefs.js:479
 msgid "The correction applies to every window of its kind"
 msgstr "这条修正对此类所有窗口生效"
 
-#: src/prefs.js:485
+#: src/prefs.js:484
 msgid "Import from Clipboard"
 msgstr "从剪贴板导入"
 
-#: src/prefs.js:486
+#: src/prefs.js:485
 msgid "Export to Clipboard"
 msgstr "导出到剪贴板"
 
-#: src/prefs.js:492 src/prefs.js:495
+#: src/prefs.js:491 src/prefs.js:494
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs.js:507
+#: src/prefs.js:506
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs.js:508
+#: src/prefs.js:507
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
 
-#: src/prefs.js:544
+#: src/prefs.js:543
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "点击上方按钮，选取装饰不正确的窗口"
 
-#: src/prefs.js:614
+#: src/prefs.js:613
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:620
+#: src/prefs.js:619
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:621
+#: src/prefs.js:620
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制窗口在不同显示器缩放下的装饰方式"
 
-#: src/prefs.js:626
+#: src/prefs.js:625
 msgid "Prioritize crisp text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:627
+#: src/prefs.js:626
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"

@@ -3,40 +3,112 @@
  * Run: pnpm test
  */
 
+import {kindId, kindFromProperties} from '../src/lib/rules.js';
 import {
-    buildRuleKey,
-} from '../src/lib/rules.js';
-import {
-    getRuleTitles, getWindowRules, setWindowRule, setWindowRules,
+    getRuleTitles, getWindowRules, readEntries, setWindowRule, setAllRuleEntries,
     exportRulesJson, importRulesJson, applyConflictResolutions,
     SETTINGS_KEY_WINDOW_RULES,
 } from '../src/lib/settings.js';
 
-describe('getWindowRules', () => {
-    const validKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
+/** A kind with the defaults every case shares. */
+function kind(identity, overrides = {}) {
+    return {
+        identity,
+        clientType: 'wayland',
+        windowType: 0,
+        hasParent: false,
+        allowsResize: true,
+        attachedDialog: false,
+        hasRing: false,
+        hasSsd: false,
+        width: null,
+        height: null,
+        ...overrides,
+    };
+}
 
-    it('unpacks and sanitizes the rule map from mock settings', () => {
-        const mockSettings = {
-            get_value: (key) => {
-                if (key === SETTINGS_KEY_WINDOW_RULES) {
-                    return {
-                        deep_unpack: () => ({
-                            [validKey]: {state: 'corners', title: 'Chat'},
-                            'bad:foo=bar': {state: 'corners'},
-                            [buildRuleKey('legacy-shape')]: {state: 'shadow,corners'},
-                        }),
-                    };
-                }
+/** The flat stored record for a kind. */
+function record(identity, state, overrides = {}, title = '') {
+    const k = kind(identity, overrides);
+    return {
+        identity: k.identity,
+        client_type: k.clientType,
+        window_type: k.windowType,
+        has_parent: k.hasParent,
+        allows_resize: k.allowsResize,
+        attached_dialog: k.attachedDialog,
+        has_ring: k.hasRing,
+        has_ssd: k.hasSsd,
+        width: k.width ?? 0,
+        height: k.height ?? 0,
+        state,
+        title,
+    };
+}
+
+/** The in-memory entry shape. */
+function entry(identity, state, title = '', overrides = {}) {
+    return {kind: kind(identity, overrides), state, title};
+}
+
+/** A `v` value is wrapped in the stored variant; recursiveUnpack flattens it. */
+function unpack(value) {
+    if (typeof value.recursiveUnpack === 'function')
+        return value.recursiveUnpack();
+    return value.deep_unpack();
+}
+
+/** GSettings double backed by a plain record array. */
+function createMockSettings(initialRecords = []) {
+    let stored = initialRecords;
+    const writes = [];
+    return {
+        get_value(key) {
+            if (key !== SETTINGS_KEY_WINDOW_RULES)
                 return null;
-            },
+            return {
+                deep_unpack: () => stored,
+                equal: other => JSON.stringify(unpack(other)) === JSON.stringify(stored),
+            };
+        },
+        set_value(key, value) {
+            writes.push(key);
+            stored = unpack(value);
+        },
+        getStored: () => stored,
+        getWrites: () => writes,
+    };
+}
+
+describe('readEntries / getWindowRules', () => {
+    it('unpacks and sanitizes the stored record array', () => {
+        const mockSettings = createMockSettings([
+            record('wechat', 'corners', {hasParent: true, allowsResize: false}, 'Chat'),
+            {...record('bad', 'corners'), client_type: 'macos'},
+            {...record('legacy-shape', 'shadow,corners')},
+        ]);
+
+        expect(getWindowRules(mockSettings)).toEqual([
+            entry('wechat', 'corners', 'Chat', {hasParent: true, allowsResize: false}),
+        ]);
+        expect(Object.keys(readEntries(mockSettings))).toEqual([kindId(kind('wechat', {hasParent: true, allowsResize: false}))]);
+    });
+
+    it('reads a client-built kind the same way', () => {
+        const properties = {
+            wmClass: 'wechat', clientType: 'wayland', windowType: '0',
+            hasParent: 'false', allowsResize: 'true', isAttachedDialog: 'false',
+            hasRing: 'false', hasSsd: 'false',
         };
-        expect(getWindowRules(mockSettings)).toEqual({[validKey]: 'corners'});
+        const built = kindFromProperties(properties);
+        const mockSettings = createMockSettings([record('wechat', 'corners')]);
+        expect(Object.keys(readEntries(mockSettings))).toEqual([kindId(built)]);
     });
 
     it('returns an empty map on null or throwing settings', () => {
-        expect(getWindowRules(null)).toEqual({});
-        expect(getWindowRules({})).toEqual({});
-        expect(getWindowRules({
+        expect(readEntries(null)).toEqual({});
+        expect(readEntries({})).toEqual({});
+        expect(readEntries({
             get_value: () => {
                 throw new Error('boom');
             },
@@ -44,380 +116,262 @@ describe('getWindowRules', () => {
     });
 });
 
-describe('setWindowRules', () => {
-    it('sanitizes and writes the GSettings key', () => {
-        const saved = new Map();
-        const mockSettings = {
-            set_value: (key, val) => {
-                saved.set(key, val);
-            },
-        };
-        setWindowRules(mockSettings, {
-            [buildRuleKey('wechat')]: 'corners',
-            'invalid:key': 'corners',
-            [buildRuleKey('wechat-app')]: 'shadow,corners',
+describe('setWindowRule / setAllRuleEntries', () => {
+    it('writes the stored record array under the v2 key', () => {
+        const settings = createMockSettings();
+        setAllRuleEntries(settings, {
+            [kindId(kind('wechat'))]: entry('wechat', 'corners'),
+            [kindId(kind('wechat-app'))]: entry('wechat-app', 'corners,shadow'),
         });
 
-        expect(saved.has(SETTINGS_KEY_WINDOW_RULES)).toBeTrue();
-        expect(saved.get(SETTINGS_KEY_WINDOW_RULES).deep_unpack()).toEqual({
-            [buildRuleKey('wechat')]: {state: 'corners', title: ''},
-        });
+        expect(settings.getWrites()).toEqual([SETTINGS_KEY_WINDOW_RULES]);
+        expect(settings.getStored()).toEqual([
+            record('wechat', 'corners'),
+            record('wechat-app', 'corners,shadow'),
+        ]);
     });
 
     it('skips writing when the stored value already matches', () => {
-        let writes = 0;
-        const mockSettings = {
-            get_value: () => ({equal: () => true}),
-            set_value: () => { writes++; },
-        };
-        setWindowRules(mockSettings, {[buildRuleKey('wechat')]: 'corners'});
-        expect(writes).toBe(0);
+        const settings = createMockSettings([record('wechat', 'corners')]);
+        setWindowRule(settings, kind('wechat'), 'corners');
+        expect(settings.getWrites()).toEqual([]);
     });
 
     it('writes when the stored value differs', () => {
-        let writes = 0;
-        const mockSettings = {
-            get_value: () => ({equal: () => false}),
-            set_value: () => { writes++; },
-        };
-        setWindowRules(mockSettings, {[buildRuleKey('wechat')]: 'corners'});
-        expect(writes).toBe(1);
+        const settings = createMockSettings([record('wechat', 'corners')]);
+        setWindowRule(settings, kind('wechat'), 'corners,shadow');
+        expect(settings.getWrites().length).toBe(1);
+        expect(settings.getStored()).toEqual([record('wechat', 'corners,shadow')]);
+    });
+
+    it('stores a rule strictly with kind, state and title', () => {
+        const settings = createMockSettings();
+        setWindowRule(settings, kind('wechat'), 'corners', 'Local WeChat');
+        expect(settings.getStored()).toEqual([record('wechat', 'corners', {}, 'Local WeChat')]);
     });
 });
 
 describe('rule titles', () => {
-    const validKey = buildRuleKey('wechat');
-    const reading = entries => ({
-        get_value: () => ({deep_unpack: () => entries, equal: () => false}),
+    const stored = record('wechat', 'corners', {}, 'Login');
+
+    it('reads a title beside its state, and only for a valid record', () => {
+        const settings = createMockSettings([
+            stored,
+            {...record('bad', 'corners', {}, 'not a rule'), client_type: 'macos'},
+        ]);
+        expect(getWindowRules(settings)).toEqual([entry('wechat', 'corners', 'Login')]);
+        expect(getRuleTitles(settings)).toEqual({[kindId(kind('wechat'))]: 'Login'});
     });
 
-    it('reads a title beside its state, and only for a key that is a rule key', () => {
-        const entries = {
-            [validKey]: {state: 'corners', title: '  登录\n对话框  '},
-            'bad:foo=bar': {state: 'corners', title: 'not a rule key'},
-        };
-        expect(getWindowRules(reading(entries))).toEqual({[validKey]: 'corners'});
-        expect(getRuleTitles(reading(entries))).toEqual({[validKey]: '登录 对话框'});
+    it('folds the title to one line on read', () => {
+        const settings = createMockSettings([record('wechat', 'corners', {}, '  登录\n对话框  ')]);
+        expect(getRuleTitles(settings)).toEqual({[kindId(kind('wechat'))]: '登录 对话框'});
     });
 
     it('keeps a long title whole: the row ellipsizes it by width, not by length', () => {
         const long = 'y'.repeat(200);
-        expect(getRuleTitles(reading({[validKey]: {state: 'corners', title: long}}))[validKey])
-            .toBe(long);
-    });
-
-    it('never lets a title reach the state, so matching cannot see it', () => {
-        const titles = getRuleTitles(reading({[validKey]: {state: 'corners', title: 'Login'}}));
-        expect(titles[validKey]).toBe('Login');
-        expect(JSON.stringify(getWindowRules(reading({
-            [validKey]: {state: 'corners', title: 'Login'},
-        })))).not.toContain('Login');
+        const settings = createMockSettings([record('wechat', 'corners', {}, long)]);
+        expect(getRuleTitles(settings)[kindId(kind('wechat'))]).toBe(long);
     });
 
     it('writes a title into the same entry, keeping the state', () => {
-        const saved = new Map();
-        const mockSettings = {
-            get_value: () => ({
-                deep_unpack: () => ({[validKey]: {state: 'corners', title: ''}}),
-                equal: () => false,
-            }),
-            set_value: (key, val) => saved.set(key, val),
-        };
-        setWindowRule(mockSettings, validKey, 'corners', 'Login');
-        expect(saved.get(SETTINGS_KEY_WINDOW_RULES).deep_unpack())
-            .toEqual({[validKey]: {state: 'corners', title: 'Login'}});
+        const settings = createMockSettings([record('wechat', 'corners')]);
+        setWindowRule(settings, kind('wechat'), 'corners', 'Login');
+        expect(settings.getStored()).toEqual([record('wechat', 'corners', {}, 'Login')]);
     });
 
-    it('keeps a title across a state-only write', () => {
-        const saved = new Map();
-        const mockSettings = {
-            get_value: () => ({
-                deep_unpack: () => ({[validKey]: {state: 'corners', title: 'Login'}}),
-                equal: () => false,
-            }),
-            set_value: (key, val) => saved.set(key, val),
-        };
-        setWindowRules(mockSettings, {[validKey]: 'shadow'});
-        expect(saved.get(SETTINGS_KEY_WINDOW_RULES).deep_unpack())
-            .toEqual({[validKey]: {state: 'shadow', title: 'Login'}});
+    it('keeps a title across a state-only write of another entry', () => {
+        const settings = createMockSettings([
+            record('wechat', 'corners', {}, 'Login'),
+            record('firefox', 'shadow'),
+        ]);
+        setAllRuleEntries(settings, {
+            [kindId(kind('wechat'))]: entry('wechat', 'corners', 'Login'),
+            [kindId(kind('firefox'))]: entry('firefox', 'corners'),
+        });
+        const stored = settings.getStored();
+        expect(stored.find(r => r.identity === 'wechat').title).toBe('Login');
     });
 
     it('drops a title with its rule, so display metadata cannot outlive it', () => {
-        const kept = buildRuleKey('wechat');
-        const orphan = buildRuleKey('wechat-app');
-        const saved = new Map();
-        const mockSettings = {
-            get_value: () => ({
-                deep_unpack: () => ({
-                    [kept]: {state: 'corners', title: 'Chat'},
-                    [orphan]: {state: 'shadow', title: 'Old'},
-                }),
-                equal: () => false,
-            }),
-            set_value: (key, val) => saved.set(key, val),
-        };
-        setWindowRules(mockSettings, {[kept]: 'corners'});
-        expect(saved.get(SETTINGS_KEY_WINDOW_RULES).deep_unpack())
-            .toEqual({[kept]: {state: 'corners', title: 'Chat'}});
+        const settings = createMockSettings([
+            record('wechat', 'corners', {}, 'Chat'),
+            record('wechat-app', 'shadow', {}, 'Old'),
+        ]);
+        setAllRuleEntries(settings, {[kindId(kind('wechat'))]: entry('wechat', 'corners', 'Chat')});
+        expect(settings.getStored()).toEqual([record('wechat', 'corners', {}, 'Chat')]);
     });
 
     it('returns empty maps on null or throwing settings', () => {
         expect(getRuleTitles(null)).toEqual({});
-        expect(getWindowRules(null)).toEqual({});
+        expect(getWindowRules(null)).toEqual([]);
     });
 });
 
 describe('importRulesJson & exportRulesJson', () => {
-    const keyWechat = buildRuleKey('wechat');
-    const keyFirefox = buildRuleKey('firefox');
+    const wechatId = kindId(kind('wechat'));
+    const firefoxId = kindId(kind('firefox'));
 
-    it('exports entries to canonical JSON format', () => {
+    it('exports entries as a version 2 record array', () => {
         const entries = {
-            [keyWechat]: {state: 'corners', title: 'WeChat'},
-            [keyFirefox]: {state: 'shadow', title: 'Firefox'},
+            [wechatId]: entry('wechat', 'corners', 'WeChat'),
+            [firefoxId]: entry('firefox', 'shadow', 'Firefox'),
         };
-        const json = exportRulesJson(entries);
-        const parsed = JSON.parse(json);
-        expect(parsed.version).toBe(1);
-        expect(parsed.rules[keyWechat]).toEqual({state: 'corners', title: 'WeChat'});
-        expect(parsed.rules[keyFirefox]).toEqual({state: 'shadow', title: 'Firefox'});
+        const parsed = JSON.parse(exportRulesJson(entries));
+        expect(parsed.version).toBe(2);
+        expect(parsed.rules).toEqual([
+            record('wechat', 'corners', {}, 'WeChat'),
+            record('firefox', 'shadow', {}, 'Firefox'),
+        ]);
     });
 
-    it('throws error on empty or invalid JSON', () => {
+    it('round-trips through import', () => {
+        const entries = {[wechatId]: entry('wechat', 'corners', 'WeChat')};
+        const res = importRulesJson({}, exportRulesJson(entries));
+        expect(res.hasConflicts).toBeFalse();
+        expect(res.nextEntries).toEqual(entries);
+    });
+
+    it('throws on empty, invalid or ruleless JSON', () => {
         expect(() => importRulesJson({}, '')).toThrowError(/Empty clipboard/);
         expect(() => importRulesJson({}, 'not a json')).toThrowError(/Invalid JSON/);
         expect(() => importRulesJson({}, '{}')).toThrowError(/No rules found/);
-        expect(() => importRulesJson({}, '{"rules": {}}')).toThrowError(/No rules found/);
+        expect(() => importRulesJson({}, '{"version": 2, "rules": []}')).toThrowError(/No rules found/);
+    });
+
+    it('refuses the earlier payload shape, by version', () => {
+        // The first shape this payload had: string keys over a{sa{ss}} rules.
+        const legacy = JSON.stringify({
+            version: 1,
+            rules: {
+                'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false':
+                    {state: 'corners', title: 'Firefox'},
+            },
+        });
+        expect(() => importRulesJson({}, legacy)).toThrowError(/Unsupported format version: 1/);
     });
 
     it('imports new rules into empty entries', () => {
-        const payload = JSON.stringify({
-            version: 1,
-            rules: {
-                [keyWechat]: {state: 'corners', title: 'WeChat'},
-            },
-        });
+        const payload = JSON.stringify({version: 2, rules: [record('wechat', 'corners', {}, 'WeChat')]});
         const res = importRulesJson({}, payload);
         expect(res.hasConflicts).toBeFalse();
         expect(res.addedCount).toBe(1);
         expect(res.updatedCount).toBe(0);
-        expect(res.nextEntries[keyWechat]).toEqual({
-            state: 'corners',
-            title: 'WeChat',
-        });
-        expect(res.importedKeys).toEqual([keyWechat]);
+        expect(res.nextEntries[wechatId]).toEqual(entry('wechat', 'corners', 'WeChat'));
+        expect(res.importedKeys).toEqual([wechatId]);
     });
 
-    it('detects conflict when imported state differs from existing state', () => {
-        const initial = {
-            [keyWechat]: {state: 'corners', title: 'My WeChat'},
-        };
+    it('accepts an unversioned record array and a bare array', () => {
+        const rules = [record('firefox', 'shadow')];
+        for (const payload of [JSON.stringify({rules}), JSON.stringify(rules)]) {
+            const res = importRulesJson({}, payload);
+            expect(res.addedCount).toBe(1);
+            expect(res.nextEntries[firefoxId]).toEqual(entry('firefox', 'shadow'));
+        }
+    });
+
+    it('detects a conflict when the imported state differs', () => {
+        const initial = {[wechatId]: entry('wechat', 'corners', 'My WeChat')};
         const payload = JSON.stringify({
-            rules: {
-                [keyWechat]: {state: 'corners,shadow', title: 'Community WeChat'},
-            },
+            version: 2,
+            rules: [record('wechat', 'corners,shadow', {}, 'Community WeChat')],
         });
         const res = importRulesJson(initial, payload);
         expect(res.hasConflicts).toBeTrue();
-        expect(res.conflicts.length).toBe(1);
-        expect(res.conflicts[0]).toEqual({
-            key: keyWechat,
+        expect(res.conflicts).toEqual([{
+            key: wechatId,
+            kind: kind('wechat'),
             existingState: 'corners',
             importedState: 'corners,shadow',
             existingTitle: 'My WeChat',
             importedTitle: 'Community WeChat',
-        });
+        }]);
         expect(res.nonConflictingEntries).toEqual(initial);
-        expect(res.cleanImported[keyWechat]).toEqual({
-            state: 'corners,shadow',
-            title: 'Community WeChat',
-        });
-        expect(res.importedKeys).toEqual([keyWechat]);
+        expect(res.cleanImported[wechatId]).toEqual(entry('wechat', 'corners,shadow', 'Community WeChat'));
+        expect(res.importedKeys).toEqual([wechatId]);
     });
 
-    it('does not detect conflict when imported state matches existing state and respects idempotency', () => {
-        const initial = {
-            [keyWechat]: {state: 'corners', title: 'My WeChat'},
-        };
-        const payload = JSON.stringify({
-            rules: {
-                [keyWechat]: {state: 'corners', title: 'Community WeChat'},
-            },
-        });
+    it('is idempotent when the imported state matches and the title is set', () => {
+        const initial = {[wechatId]: entry('wechat', 'corners', 'My WeChat')};
+        const payload = JSON.stringify({version: 2, rules: [record('wechat', 'corners', {}, 'Community WeChat')]});
         const res = importRulesJson(initial, payload);
         expect(res.hasConflicts).toBeFalse();
         expect(res.addedCount).toBe(0);
-        expect(res.updatedCount).toBe(0); // Idempotent: existing title preserved, no update
-        expect(res.nextEntries[keyWechat]).toEqual(initial[keyWechat]);
-        expect(res.importedKeys).toEqual([keyWechat]);
+        expect(res.updatedCount).toBe(0);
+        expect(res.nextEntries[wechatId]).toEqual(initial[wechatId]);
+        expect(res.importedKeys).toEqual([wechatId]);
     });
 
-    it('supplements missing title on matching existing rule and counts as update', () => {
-        const initial = {
-            [keyWechat]: {state: 'corners', title: ''},
-        };
-        const payload = JSON.stringify({
-            rules: {
-                [keyWechat]: {state: 'corners', title: 'Community Title'},
-            },
-        });
+    it('supplements a missing existing title and counts it as an update', () => {
+        const initial = {[wechatId]: entry('wechat', 'corners', '')};
+        const payload = JSON.stringify({version: 2, rules: [record('wechat', 'corners', {}, 'Community Title')]});
         const res = importRulesJson(initial, payload);
         expect(res.hasConflicts).toBeFalse();
-        expect(res.addedCount).toBe(0);
         expect(res.updatedCount).toBe(1);
-        expect(res.nextEntries[keyWechat].title).toBe('Community Title');
+        expect(res.nextEntries[wechatId].title).toBe('Community Title');
     });
 
-    it('handles compound imports with both new rules and conflicting existing rules', () => {
-        const initial = {
-            [keyWechat]: {state: 'corners', title: 'Local WeChat'},
-        };
+    it('handles a compound import with both new and conflicting rules', () => {
+        const initial = {[wechatId]: entry('wechat', 'corners', 'Local WeChat')};
         const payload = JSON.stringify({
-            rules: {
-                [keyWechat]: {state: 'corners,shadow', title: 'Community WeChat'},
-                [keyFirefox]: {state: 'shadow', title: 'Community Firefox'},
-            },
+            version: 2,
+            rules: [
+                record('wechat', 'corners,shadow', {}, 'Community WeChat'),
+                record('firefox', 'shadow', {}, 'Community Firefox'),
+            ],
         });
         const res = importRulesJson(initial, payload);
         expect(res.hasConflicts).toBeTrue();
         expect(res.conflicts.length).toBe(1);
-        expect(res.conflicts[0].key).toBe(keyWechat);
-        expect(res.nonConflictingEntries[keyFirefox]).toEqual({
-            state: 'shadow',
-            title: 'Community Firefox',
-        });
-        expect(res.nonConflictingEntries[keyWechat]).toEqual(initial[keyWechat]);
+        expect(res.nonConflictingEntries[firefoxId]).toEqual(entry('firefox', 'shadow', 'Community Firefox'));
+        expect(res.nonConflictingEntries[wechatId]).toEqual(initial[wechatId]);
     });
 
-    it('supports flat JSON object and string state shorthand', () => {
+    it('filters invalid records while keeping valid ones', () => {
         const payload = JSON.stringify({
-            [keyFirefox]: 'shadow',
+            version: 2,
+            rules: [
+                record('firefox', 'shadow', {}, 'Valid'),
+                {...record('bad', 'corners'), client_type: 'macos'},
+            ],
         });
         const res = importRulesJson({}, payload);
-        expect(res.hasConflicts).toBeFalse();
         expect(res.addedCount).toBe(1);
-        expect(res.nextEntries[keyFirefox]).toEqual({
-            state: 'shadow',
-            title: '',
-        });
+        expect(res.nextEntries[firefoxId]).toBeDefined();
+        expect(res.nextEntries[kindId(kind('bad'))]).toBeUndefined();
     });
 
-    it('filters out invalid rule keys while keeping valid ones', () => {
+    it('throws when every provided rule is invalid', () => {
         const payload = JSON.stringify({
-            rules: {
-                [keyFirefox]: {state: 'shadow', title: 'Valid'},
-                'invalid:key:format': {state: 'corners'},
-            },
-        });
-        const res = importRulesJson({}, payload);
-        expect(res.hasConflicts).toBeFalse();
-        expect(res.addedCount).toBe(1);
-        expect(res.nextEntries[keyFirefox]).toBeDefined();
-        expect(res.nextEntries['invalid:key:format']).toBeUndefined();
-    });
-
-    it('throws error when all provided rules are invalid', () => {
-        const payload = JSON.stringify({
-            rules: {
-                'invalid:key': {state: 'corners'},
-                'another:bad:key': {state: 'shadow'},
-            },
+            version: 2,
+            rules: [
+                {...record('bad', 'corners'), client_type: 'macos'},
+                {...record('worse', 'corners'), window_type: '0'},
+            ],
         });
         expect(() => importRulesJson({}, payload)).toThrowError(/No valid rules found/);
     });
 });
 
 describe('applyConflictResolutions', () => {
-    const keyWechat = buildRuleKey('wechat');
-    const keyFirefox = buildRuleKey('firefox');
+    const wechatId = kindId(kind('wechat'));
+    const firefoxId = kindId(kind('firefox'));
 
-    const existingEntries = {
-        [keyWechat]: {state: 'corners', title: 'My WeChat'},
-    };
-    const nonConflicting = {
-        [keyFirefox]: {state: 'shadow', title: 'Firefox'},
-    };
-    const cleanImported = {
-        [keyWechat]: {state: 'corners,shadow', title: 'Imported WeChat'},
-    };
+    const existingEntries = {[wechatId]: entry('wechat', 'corners', 'My WeChat')};
+    const nonConflicting = {[firefoxId]: entry('firefox', 'shadow', 'Firefox')};
+    const cleanImported = {[wechatId]: entry('wechat', 'corners,shadow', 'Imported WeChat')};
 
-    it('applies imported rule when choice is imported', () => {
-        const res = applyConflictResolutions(
-            existingEntries,
-            nonConflicting,
-            cleanImported,
-            {[keyWechat]: 'imported'}
-        );
+    it('applies the imported rule when the choice is imported', () => {
+        const res = applyConflictResolutions(existingEntries, nonConflicting, cleanImported, {[wechatId]: 'imported'});
         expect(res.resolvedUpdatedCount).toBe(1);
-        expect(res.nextEntries[keyWechat]).toEqual({
-            state: 'corners,shadow',
-            title: 'Imported WeChat',
-        });
-        expect(res.nextEntries[keyFirefox]).toEqual(nonConflicting[keyFirefox]);
+        expect(res.nextEntries[wechatId]).toEqual(entry('wechat', 'corners,shadow', 'Imported WeChat'));
+        expect(res.nextEntries[firefoxId]).toEqual(nonConflicting[firefoxId]);
     });
 
-    it('preserves existing rule when choice is existing', () => {
-        const res = applyConflictResolutions(
-            existingEntries,
-            nonConflicting,
-            cleanImported,
-            {[keyWechat]: 'existing'}
-        );
+    it('preserves the existing rule when the choice is existing', () => {
+        const res = applyConflictResolutions(existingEntries, nonConflicting, cleanImported, {[wechatId]: 'existing'});
         expect(res.resolvedUpdatedCount).toBe(0);
-        expect(res.nextEntries[keyWechat]).toEqual(existingEntries[keyWechat]);
-        expect(res.nextEntries[keyFirefox]).toEqual(nonConflicting[keyFirefox]);
+        expect(res.nextEntries[wechatId]).toEqual(existingEntries[wechatId]);
+        expect(res.nextEntries[firefoxId]).toEqual(nonConflicting[firefoxId]);
     });
 });
-
-describe('setWindowRule storage purity', () => {
-    const key = buildRuleKey('wechat');
-
-    function createMockSettings(initialEntries = {}) {
-        let stored = initialEntries;
-        return {
-            get_value() {
-                return {
-                    deep_unpack() {
-                        const out = {};
-                        for (const [k, v] of Object.entries(stored)) {
-                            out[k] = {...v};
-                        }
-                        return out;
-                    },
-                    equal() {
-                        return false;
-                    },
-                };
-            },
-            set_value(_k, val) {
-                stored = val.deep_unpack();
-            },
-            getStored() {
-                return stored;
-            },
-        };
-    }
-
-    it('stores a rule strictly with state and title (100% clean schema)', () => {
-        const settings = createMockSettings();
-        setWindowRule(settings, key, 'corners', 'Local WeChat');
-        const stored = settings.getStored();
-        expect(stored[key]).toEqual({
-            state: 'corners',
-            title: 'Local WeChat',
-        });
-    });
-
-    it('updates rule cleanly without extra metadata fields', () => {
-        const settings = createMockSettings({
-            [key]: {state: 'corners', title: 'Old WeChat'},
-        });
-        setWindowRule(settings, key, 'corners,shadow', 'New WeChat');
-        const stored = settings.getStored();
-        expect(stored[key]).toEqual({
-            state: 'corners,shadow',
-            title: 'New WeChat',
-        });
-    });
-});
-

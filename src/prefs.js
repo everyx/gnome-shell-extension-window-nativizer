@@ -9,7 +9,8 @@ import {ExtensionPreferences, gettext as _, ngettext} from 'resource:///org/gnom
 import {
     RULE_AXES,
     buildRuleState,
-    parseRuleKey,
+    kindFromProperties,
+    kindId,
     parseRuleState,
 } from './lib/rules.js';
 import {
@@ -28,7 +29,6 @@ import {
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
-    buildRuleKeyFromProperties,
 } from './lib/pick.js';
 import {
     setWindowRule,
@@ -94,7 +94,8 @@ function showError(parentWindow, heading, body) {
 
 /**
  * @typedef {object} DisplayRuleRow
- * @property {string} key - Canonical rule key
+ * @property {string} key - The kind's UI map id
+ * @property {object} kind - The window kind the row describes
  * @property {string} state - Active axis state
  * @property {string} title - Picked window's sample title, shown dimmed beside the app name
  * @property {boolean} isRecentlyImported - Whether imported in current session
@@ -105,15 +106,15 @@ function showError(parentWindow, heading, body) {
 function _prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
     const rows = [];
     for (const [key, entry] of Object.entries(entries ?? {})) {
-        if (!entry || !entry.state)
+        if (!entry || !entry.state || !entry.kind)
             continue;
 
-        const {baseWmClass} = parseRuleKey(key);
-        const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-        const appName = appInfo?.name || baseWmClass || key;
+        const appInfo = findAppInfoByWmClass(entry.kind.identity, installedApps);
+        const appName = appInfo?.name || entry.kind.identity || key;
 
         rows.push({
             key,
+            kind: entry.kind,
             state: entry.state,
             title: entry.title || '',
             isRecentlyImported: Boolean(recentImportKeys?.has(key)),
@@ -139,19 +140,18 @@ function _prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
 
 function _buildRuleRow(rowData, ctx, onRefresh) {
     const {settings, installedApps, iconTheme} = ctx;
-    const {key: ruleKey, state, title: sample, isRecentlyImported, appName, appInfo: cachedAppInfo} = rowData;
-    const {baseWmClass, properties} = parseRuleKey(ruleKey);
-    const appInfo = cachedAppInfo ?? findAppInfoByWmClass(baseWmClass, installedApps);
-    const name = appName || appInfo?.name || baseWmClass || ruleKey;
+    const {key: ruleKey, kind, state, title: sample, isRecentlyImported, appName, appInfo: cachedAppInfo} = rowData;
+    const appInfo = cachedAppInfo ?? findAppInfoByWmClass(kind.identity, installedApps);
+    const name = appName || appInfo?.name || kind.identity || ruleKey;
     const corrected = parseRuleState(state) ?? new Set();
-    const caps = keyAxisCapabilities(properties);
-    const decoratable = isDecoratableKind(properties);
+    const caps = keyAxisCapabilities(kind);
+    const decoratable = isDecoratableKind(kind);
 
     const row = new Adw.ExpanderRow();
     setupRuleRowHeader(row, {
         name,
         sampleTitle: sample,
-        properties,
+        kind,
         appInfo,
     });
     if (isRecentlyImported)
@@ -213,7 +213,7 @@ function _buildRuleRow(rowData, ctx, onRefresh) {
                 title: asMarkup(axisName(axis)),
                 sensitive: false,
             });
-            const reason = axisUnavailableReason(axis, decoratable, properties);
+            const reason = axisUnavailableReason(axis, decoratable, kind);
             const reasonLabel = new Gtk.Label({
                 label: reason,
                 css_classes: ['dim-label'],
@@ -262,9 +262,9 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             if (!props || Object.keys(props).length === 0)
                 return;
 
-            const ruleKey = buildRuleKeyFromProperties(props);
+            const kind = kindFromProperties(props);
 
-            if (!ruleKey) {
+            if (!kind) {
                 window.add_toast(new Adw.Toast({
                     title: _('No correction added: this window could not be identified'),
                 }));
@@ -273,8 +273,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
 
             // The inspector only offers decoratable windows, so this guards
             // future callers - and names the reason instead of a generic refusal.
-            const {properties: pickedProperties} = parseRuleKey(ruleKey);
-            if (pickedProperties && !isDecoratableKind(pickedProperties)) {
+            if (!isDecoratableKind(kind)) {
                 window.add_toast(new Adw.Toast({title: neverDecorated()}));
                 return;
             }
@@ -301,12 +300,13 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             }
 
             const state = buildRuleState(suggested);
+            const ruleKey = kindId(kind);
 
             const existingEntries = readEntries(settings);
             const isExisting = Object.prototype.hasOwnProperty.call(existingEntries, ruleKey);
 
             // One write: the rule and the sample it came from are one entry.
-            setWindowRule(settings, ruleKey, state,
+            setWindowRule(settings, kind, state,
                 typeof props.windowTitle === 'string' ? props.windowTitle : '');
 
             // Read-back is a persistence check, not redundancy: sanitize inside
@@ -320,9 +320,8 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
 
             onRulePicked(ruleKey);
 
-            const {baseWmClass} = parseRuleKey(ruleKey);
-            const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-            const name = appInfo?.name || baseWmClass || ruleKey;
+            const appInfo = findAppInfoByWmClass(kind.identity, installedApps);
+            const name = appInfo?.name || kind.identity || ruleKey;
 
             const toastTitle = isExisting
                 ? _('Correction updated for %s: %s').format(name, ruleSummaryText(state))

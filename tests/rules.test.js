@@ -1,5 +1,5 @@
 /**
- * rule model unit tests: keys, states and resolution (jasmine-gjs).
+ * rule model unit tests: kinds, states and resolution (jasmine-gjs).
  * Run: pnpm test
  */
 
@@ -8,13 +8,53 @@ import {
 } from '../src/lib/mutterRules.generated.js';
 import {
     RuleAxis, RULE_AXES, parseRuleState, buildRuleState,
-    resolveRule, parseRuleKey, buildRuleKey,
-    sanitizeWindowRules, sanitizeRuleTitles, withRule,
+    resolveRule, kindFromProperties, kindId, sameKind, sanitizeRules,
 } from '../src/lib/rules.js';
 
 /** Comparable shape for a resolveRule() result: canonical stored form. */
 function resolved(result) {
     return result && buildRuleState(result);
+}
+
+/** A kind with the defaults every case shares, overridden as needed. */
+function kind(identity, overrides = {}) {
+    return {
+        identity,
+        clientType: 'wayland',
+        windowType: WindowType.NORMAL,
+        hasParent: false,
+        allowsResize: true,
+        attachedDialog: false,
+        hasRing: false,
+        hasSsd: false,
+        width: null,
+        height: null,
+        ...overrides,
+    };
+}
+
+/** One stored record, using the flat field names the settings layer writes. */
+function record(identity, state, overrides = {}) {
+    const k = kind(identity, overrides);
+    return {
+        identity: k.identity,
+        client_type: k.clientType,
+        window_type: k.windowType,
+        has_parent: k.hasParent,
+        allows_resize: k.allowsResize,
+        attached_dialog: k.attachedDialog,
+        has_ring: k.hasRing,
+        has_ssd: k.hasSsd,
+        width: k.width ?? 0,
+        height: k.height ?? 0,
+        state,
+        title: '',
+    };
+}
+
+/** The sanitized array resolveRule consumes. */
+function rulesOf(...records) {
+    return sanitizeRules(records);
 }
 
 describe('rule state vocabulary', () => {
@@ -63,444 +103,253 @@ describe('rule state vocabulary', () => {
     });
 });
 
-describe('resolveRule', () => {
-    const mainKey = buildRuleKey('wechat');
-    const fixedChildKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-
-    it('exact fingerprint match, returning the reversed axes', () => {
-        const rules = {
-            [mainKey]: 'corners',
-            [fixedChildKey]: 'corners,shadow',
-        };
-        expect(resolved(resolveRule('wechat', rules))).toBe('corners');
-        expect(resolved(resolveRule('wechat', rules, {hasParent: true, allowsResize: false})))
-            .toBe('corners,shadow');
-    });
-
-    it('an unnamed axis is not in the result: it follows the decision', () => {
-        const rules = {[mainKey]: 'shadow'};
-        expect([...resolveRule('wechat', rules)]).toEqual(['shadow']);
-    });
-
-    it('does not fall back to the application: a different window kind of the same app does not match', () => {
-        const rules = {[fixedChildKey]: 'corners,shadow'};
-
-        expect(resolveRule('wechat', rules)).toBeNull();
-        expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: true})).toBeNull();
-        expect(resolveRule('wechat', rules, {clientType: 'x11', hasParent: true, allowsResize: false})).toBeNull();
-        expect(resolveRule('wechat', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false})).toBeNull();
-    });
-
-    it('matches an identity whatever case the window spells it in', () => {
-        const upperRule = buildRuleKey('WeChat', {hasParent: true, allowsResize: false});
-        expect(resolved(resolveRule('wechat', {[upperRule]: 'corners,shadow'}, {hasParent: true, allowsResize: false})))
-            .toBe('corners,shadow');
-
-        const lowerRule = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-        expect(resolved(resolveRule('WeChat', {[lowerRule]: 'corners,shadow'}, {hasParent: true, allowsResize: false})))
-            .toBe('corners,shadow');
-    });
-
-    it('exact size match distinguishes fixed-size windows of the same kind', () => {
-        const qrDialogKey = buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420});
-        const toolbarKey = buildRuleKey('wechat', {allowsResize: false, width: 240, height: 48});
-
-        const rules = {
-            [qrDialogKey]: 'corners,shadow',
-            [toolbarKey]: 'corners,shadow,resize',
-        };
-
-        expect(resolved(resolveRule('wechat', rules, {
-            allowsResize: false,
-            frameWidth: 360,
-            frameHeight: 420,
-        }))).toBe('corners,shadow');
-
-        expect(resolved(resolveRule('wechat', rules, {
-            allowsResize: false,
-            frameWidth: 240,
-            frameHeight: 48,
-        }))).toBe('corners,shadow,resize');
-
-        // Other size of the same kind does not match
-        expect(resolveRule('wechat', rules, {
-            allowsResize: false,
-            frameWidth: 500,
-            frameHeight: 300,
-        })).toBeNull();
-    });
-
-    it('falls back to generic rule without size when exact size rule is absent', () => {
-        const genericFixedKey = buildRuleKey('wechat', {allowsResize: false});
-        const exactQrKey = buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420});
-
-        const rules = {
-            [genericFixedKey]: 'corners',
-            [exactQrKey]: 'corners,shadow',
-        };
-
-        expect(resolved(resolveRule('wechat', rules, {
-            allowsResize: false,
-            frameWidth: 360,
-            frameHeight: 420,
-        }))).toBe('corners,shadow');
-
-        expect(resolved(resolveRule('wechat', rules, {
-            allowsResize: false,
-            frameWidth: 600,
-            frameHeight: 400,
-        }))).toBe('corners');
-    });
-
-    it('no match returns null', () => {
-        expect(resolveRule('unknown-app', {[mainKey]: 'corners'})).toBeNull();
-        expect(resolveRule(null, {[mainKey]: 'corners'})).toBeNull();
-        expect(resolveRule('', {[mainKey]: 'corners'})).toBeNull();
-    });
-
-    it('every fingerprint field participates in matching', () => {
-        const base = buildRuleKey('app', {
-            clientType: 'wayland', windowType: WindowType.NORMAL,
-            hasParent: true, allowsResize: false, isAttachedDialog: false, hasSsd: false,
-        });
-        const rules = {[base]: 'corners'};
-
-        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).not.toBeNull();
-        expect(resolveRule('app', rules, {clientType: 'x11', windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
-        expect(resolveRule('app', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
-        expect(resolveRule('app', rules, {hasParent: true, allowsResize: true, isAttachedDialog: false})).toBeNull();
-        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false, isAttachedDialog: true})).toBeNull();
-        // has_ssd is part of the kind: an SSD window is a different kind.
-        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false, hasSsd: true})).toBeNull();
-    });
-});
-
-describe('buildRuleKey', () => {
-    it('always emits the full window-kind fingerprint', () => {
-        expect(buildRuleKey('wechat')).toBe(
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
-    });
-
-    it('encodes every structural field', () => {
-        expect(buildRuleKey('wechat', {
+describe('kindFromProperties', () => {
+    it('builds the full kind from the picker wire map', () => {
+        expect(kindFromProperties({
+            wmClass: 'wechat',
             clientType: 'x11',
-            windowType: 3,
+            windowType: String(WindowType.MODAL_DIALOG),
+            hasParent: 'true',
+            allowsResize: 'true',
+            isAttachedDialog: 'true',
+            hasRing: 'true',
+            hasSsd: 'true',
+        })).toEqual({
+            identity: 'wechat',
+            clientType: 'x11',
+            windowType: WindowType.MODAL_DIALOG,
             hasParent: true,
-            allowsResize: false,
-            isAttachedDialog: true,
+            allowsResize: true,
+            attachedDialog: true,
             hasRing: true,
             hasSsd: true,
-        })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true,has_ring=true,has_ssd=true');
+            width: null,
+            height: null,
+        });
     });
 
-    it('orders has_ring and has_ssd before size in the canonical key', () => {
-        const key = buildRuleKey('wechat', {
+    it('defaults a missing client type to Wayland and a missing type to normal', () => {
+        expect(kindFromProperties({wmClass: 'wechat'})).toEqual({
+            identity: 'wechat',
             clientType: 'wayland',
             windowType: WindowType.NORMAL,
             hasParent: false,
             allowsResize: false,
-            isAttachedDialog: false,
-            hasRing: true,
+            attachedDialog: false,
+            hasRing: false,
             hasSsd: false,
-            width: 360,
-            height: 420,
+            width: null,
+            height: null,
         });
-        expect(key).toBe(
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=true,has_ssd=false,size=360x420'
+    });
+
+    it('carries width/height only for fixed-size windows', () => {
+        expect(kindFromProperties({
+            wmClass: 'wechat', allowsResize: 'false', width: '360', height: '420',
+        }).width).toBe(360);
+        expect(kindFromProperties({
+            wmClass: 'wechat', allowsResize: 'false', width: '360', height: '420',
+        }).height).toBe(420);
+        // A resizable window's size is not stable, so it is not part of the kind.
+        const resizable = kindFromProperties({
+            wmClass: 'wechat', allowsResize: 'true', width: '800', height: '600',
+        });
+        expect(resizable.width).toBeNull();
+        expect(resizable.height).toBeNull();
+    });
+
+    it('returns null when nothing identifies the window', () => {
+        expect(kindFromProperties({})).toBeNull();
+        expect(kindFromProperties({wmClass: ''})).toBeNull();
+        expect(kindFromProperties({wmClass: '   '})).toBeNull();
+        expect(kindFromProperties({wmClass: 42})).toBeNull();
+    });
+});
+
+describe('kindId and sameKind', () => {
+    it('kindId is a stable UI key that ignores identity case', () => {
+        expect(kindId(kind('wechat'))).toBe(kindId(kind('wechat')));
+        expect(kindId(kind('WeChat'))).toBe(kindId(kind('wechat')));
+        expect(kindId(kind('wechat'))).not.toBe(kindId(kind('firefox')));
+        expect(kindId(kind('wechat'))).not.toBe(kindId(kind('wechat', {hasRing: true})));
+        expect(kindId(null)).toBe('');
+    });
+
+    it('sameKind compares every field, identity case-insensitively', () => {
+        expect(sameKind(kind('WeChat'), kind('wechat'))).toBeTrue();
+        expect(sameKind(kind('wechat'), kind('wechat', {allowsResize: false}))).toBeFalse();
+        expect(sameKind(kind('wechat'), kind('wechat', {hasSsd: true}))).toBeFalse();
+        expect(sameKind(kind('wechat', {width: 1, height: 2}), kind('wechat', {width: 1, height: 3}))).toBeFalse();
+        expect(sameKind(null, kind('wechat'))).toBeFalse();
+        expect(sameKind(kind('wechat'), null)).toBeFalse();
+    });
+});
+
+describe('resolveRule', () => {
+    it('matches the exact kind and returns the reversed axes', () => {
+        const rules = rulesOf(
+            record('wechat', 'corners'),
+            record('wechat', 'corners,shadow', {hasParent: true, allowsResize: false}),
         );
-        expect(key.indexOf('has_ring=true')).toBeLessThan(key.indexOf('has_ssd=false'));
-        expect(key.indexOf('has_ssd=false')).toBeLessThan(key.indexOf('size=360x420'));
-    });
-
-    it('distinguishes Firefox main window and Picture-in-Picture window via has_ring', () => {
-        const firefoxMain = buildRuleKey('firefox', {hasRing: true});
-        const firefoxPip = buildRuleKey('firefox', {hasRing: false});
-
-        expect(firefoxMain).toBe(
-            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false');
-        expect(firefoxPip).toBe(
-            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
-        expect(firefoxMain).not.toBe(firefoxPip);
-
-        const userRules = {[firefoxMain]: 'corners,shadow'};
-        expect(resolveRule('firefox', userRules, {hasRing: true})).not.toBeNull();
-        expect(resolveRule('firefox', userRules, {hasRing: false})).toBeNull();
-    });
-
-    it('distinguishes an SSD window from a bare one via has_ssd', () => {
-        const bare = buildRuleKey('wps', {hasSsd: false});
-        const ssd = buildRuleKey('wps', {hasSsd: true});
-
-        expect(bare).toBe(
-            'wps:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
-        expect(ssd).toBe(
-            'wps:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=true');
-        expect(bare).not.toBe(ssd);
-    });
-
-    it('encodes size only for fixed-size windows (allowsResize=false)', () => {
-        expect(buildRuleKey('wechat', {
-            allowsResize: false,
-            width: 360,
-            height: 420,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420');
-
-        // Resizable windows never encode size
-        expect(buildRuleKey('wechat', {
-            allowsResize: true,
-            width: 800,
-            height: 600,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
-
-        // Rounds fractional sizes to integers
-        expect(buildRuleKey('wechat', {
-            allowsResize: false,
-            width: 359.8,
-            height: 420.2,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420');
-    });
-
-    it('never collapses to a bare application key', () => {
-        expect(buildRuleKey('wechat', {hasParent: false})).not.toBe('wechat');
-        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).not.toBe('wechat');
-    });
-
-    it('empty or whitespace-only wmClass returns empty string', () => {
-        expect(buildRuleKey('')).toBe('');
-        expect(buildRuleKey(null)).toBe('');
-        expect(buildRuleKey('   ')).toBe('');
-        expect(buildRuleKey('\t\n')).toBe('');
-    });
-});
-
-describe('parseRuleKey', () => {
-    const key = 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false';
-
-    it('parses base wmClass, specifier and typed properties', () => {
-        expect(parseRuleKey(key)).toEqual({
-            baseWmClass: 'wechat',
-            specifier: 'client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false',
-            properties: {
-                client_type: 'wayland',
-                window_type: 0,
-                has_parent: true,
-                allows_resize: false,
-                attached_dialog: false,
-                has_ring: false,
-                has_ssd: false,
-            },
-        });
-    });
-
-    it('parses fixed-size key with dimensions', () => {
-        const sizedKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420';
-        expect(parseRuleKey(sizedKey)).toEqual({
-            baseWmClass: 'wechat',
-            specifier: 'client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420',
-            properties: {
-                client_type: 'wayland',
-                window_type: 0,
-                has_parent: false,
-                allows_resize: false,
-                attached_dialog: false,
-                has_ring: false,
-                has_ssd: false,
-                size: '360x420',
-                width: 360,
-                height: 420,
-            },
-        });
-    });
-
-    it('empty or null', () => {
-        expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null, properties: null});
-        expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null, properties: null});
-    });
-
-    it('rejects bare app keys, truncated specifiers and unknown fields', () => {
-        const invalid = [
-            'wechat',
-            'wechat:dialog',
-            'wechat:title=Exit',
-            'wechat:has_parent=true,allows_resize=false',
-            'wechat:foo=bar',
-            // A 6-field key from before has_ssd is no longer a kind.
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false',
-            'wechat:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false',
-            // Resizable window MUST NOT have size
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false,size=800x600',
-        ];
-        for (const bad of invalid)
-            expect(parseRuleKey(bad)).toEqual({baseWmClass: '', specifier: null, properties: null});
-    });
-});
-
-describe('rule key contract & round-trip', () => {
-    it('round-trip: buildRuleKey -> parseRuleKey', () => {
-        const keys = [
-            buildRuleKey('wechat'),
-            buildRuleKey('wechat', {hasParent: true, allowsResize: false}),
-            buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420}),
-            buildRuleKey('steam', {clientType: 'x11', windowType: WindowType.MODAL_DIALOG, isAttachedDialog: true, hasSsd: true}),
-        ];
-        for (const key of keys) {
-            const parsed = parseRuleKey(key);
-            expect(`${parsed.baseWmClass}:${parsed.specifier}`).toBe(key);
-        }
-    });
-
-    it('escapes identities the key grammar would otherwise split or drop', () => {
-        const colonKey = buildRuleKey('window:5');
-        expect(colonKey.startsWith('window%3A5:')).toBeTrue();
-        expect(parseRuleKey(colonKey).baseWmClass).toBe('window:5');
-
-        const spacedKey = buildRuleKey('my app');
-        expect(parseRuleKey(spacedKey).baseWmClass).toBe('my app');
-    });
-
-    it('lowercases an identity but changes nothing else about it', () => {
-        expect(buildRuleKey('wechat').startsWith('wechat:')).toBeTrue();
-        expect(buildRuleKey('org.gnome.Nautilus').startsWith('org.gnome.nautilus:')).toBeTrue();
-    });
-
-    it('prefs-generated keys match resolveRule for the picked kind only', () => {
-        const picked = {hasParent: true, allowsResize: false};
-        const prefsGeneratedRules = {
-            [buildRuleKey('code', picked)]: 'corners,shadow',
-        };
-        expect(resolved(resolveRule('code', prefsGeneratedRules, picked)))
+        expect(resolved(resolveRule(kind('wechat'), rules))).toBe('corners');
+        expect(resolved(resolveRule(kind('wechat', {hasParent: true, allowsResize: false}), rules)))
             .toBe('corners,shadow');
-        expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
-        expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
+    });
+
+    it('an unnamed axis is not in the result: it follows the decision', () => {
+        const rules = rulesOf(record('wechat', 'shadow'));
+        expect([...resolveRule(kind('wechat'), rules)]).toEqual(['shadow']);
+    });
+
+    it('does not fall back to the application: a different window kind of the same app does not match', () => {
+        const rules = rulesOf(record('wechat', 'corners,shadow', {hasParent: true, allowsResize: false}));
+
+        expect(resolveRule(kind('wechat'), rules)).toBeNull();
+        expect(resolveRule(kind('wechat', {hasParent: true, allowsResize: true}), rules)).toBeNull();
+        expect(resolveRule(kind('wechat', {clientType: 'x11', hasParent: true, allowsResize: false}), rules)).toBeNull();
+        expect(resolveRule(kind('wechat', {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false}), rules)).toBeNull();
+    });
+
+    it('matches an identity whatever case the window spells it in', () => {
+        const upper = rulesOf(record('WeChat', 'corners,shadow', {hasParent: true, allowsResize: false}));
+        expect(resolved(resolveRule(kind('wechat', {hasParent: true, allowsResize: false}), upper)))
+            .toBe('corners,shadow');
+
+        const lower = rulesOf(record('wechat', 'corners,shadow', {hasParent: true, allowsResize: false}));
+        expect(resolved(resolveRule(kind('WeChat', {hasParent: true, allowsResize: false}), lower)))
+            .toBe('corners,shadow');
+    });
+
+    it('exact size match distinguishes fixed-size windows of the same kind', () => {
+        const rules = rulesOf(
+            record('wechat', 'corners,shadow', {allowsResize: false, width: 360, height: 420}),
+            record('wechat', 'corners,shadow,resize', {allowsResize: false, width: 240, height: 48}),
+        );
+
+        expect(resolved(resolveRule(kind('wechat', {allowsResize: false, width: 360, height: 420}), rules)))
+            .toBe('corners,shadow');
+        expect(resolved(resolveRule(kind('wechat', {allowsResize: false, width: 240, height: 48}), rules)))
+            .toBe('corners,shadow,resize');
+        // Another size of the same kind does not match an exact-size rule.
+        expect(resolveRule(kind('wechat', {allowsResize: false, width: 500, height: 300}), rules)).toBeNull();
+    });
+
+    it('falls back to a size-less rule when the exact size is absent', () => {
+        const rules = rulesOf(
+            record('wechat', 'corners', {allowsResize: false}),
+            record('wechat', 'corners,shadow', {allowsResize: false, width: 360, height: 420}),
+        );
+
+        expect(resolved(resolveRule(kind('wechat', {allowsResize: false, width: 360, height: 420}), rules)))
+            .toBe('corners,shadow');
+        expect(resolved(resolveRule(kind('wechat', {allowsResize: false, width: 600, height: 400}), rules)))
+            .toBe('corners');
+    });
+
+    it('no match returns null', () => {
+        const rules = rulesOf(record('wechat', 'corners'));
+        expect(resolveRule(kind('unknown-app'), rules)).toBeNull();
+        expect(resolveRule(kind(''), rules)).toBeNull();
+        expect(resolveRule(null, rules)).toBeNull();
+        expect(resolveRule(kind('wechat'), [])).toBeNull();
+    });
+
+    it('every kind field participates in matching', () => {
+        const rules = rulesOf(record('app', 'corners', {hasParent: true, allowsResize: false}));
+        const base = {hasParent: true, allowsResize: false};
+
+        expect(resolveRule(kind('app', base), rules)).not.toBeNull();
+        expect(resolveRule(kind('app', {...base, clientType: 'x11'}), rules)).toBeNull();
+        expect(resolveRule(kind('app', {...base, windowType: WindowType.DIALOG}), rules)).toBeNull();
+        expect(resolveRule(kind('app', {...base, allowsResize: true}), rules)).toBeNull();
+        expect(resolveRule(kind('app', {...base, attachedDialog: true}), rules)).toBeNull();
+        expect(resolveRule(kind('app', {...base, hasRing: true}), rules)).toBeNull();
+        // has_ssd is part of the kind: an SSD window is a different kind.
+        expect(resolveRule(kind('app', {...base, hasSsd: true}), rules)).toBeNull();
     });
 });
 
-describe('sanitizeWindowRules', () => {
-    const mainKey = buildRuleKey('wechat');
-    const childKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-
-    it('canonicalises the axis order of a stored state', () => {
-        const input = {
-            [mainKey]: 'corners',
-            [childKey]: 'corners,shadow',
-            [buildRuleKey('resize-app')]: 'shadow,resize',
-        };
-        expect(sanitizeWindowRules(input)).toEqual({
-            [mainKey]: 'corners',
-            [childKey]: 'corners,shadow',
-            [buildRuleKey('resize-app')]: 'shadow,resize',
-        });
+describe('sanitizeRules', () => {
+    it('canonicalises the axis order and keeps the kind', () => {
+        const rules = sanitizeRules([
+            record('wechat', 'corners'),
+            record('wechat', 'corners,shadow', {hasParent: true, allowsResize: false}),
+            record('resize-app', 'shadow,resize'),
+        ]);
+        expect(rules).toEqual([
+            {kind: kind('wechat'), state: 'corners', title: ''},
+            {kind: kind('wechat', {hasParent: true, allowsResize: false}), state: 'corners,shadow', title: ''},
+            {kind: kind('resize-app'), state: 'shadow,resize', title: ''},
+        ]);
     });
 
-    it('drops bare app keys, truncated specifiers and malformed keys', () => {
-        const input = {
-            [mainKey]: 'corners',
-            'wechat': 'corners',
-            'wechat:dialog': 'corners',
-            'wechat:title=Exit': 'corners',
-            'wechat:has_parent=true,allows_resize=false': 'corners',
-            'invalid:key:too:many:colons': 'corners',
-            'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false': 'corners',
-            'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false': 'corners',
-            [buildRuleKey('valid_app')]: 123,
-        };
-        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'corners'});
+    it('drops records that cannot describe a kind', () => {
+        const good = record('valid_app', 'corners');
+        const bad = [
+            null,
+            'not a record',
+            {...good, identity: ''},
+            {...good, client_type: 'macos'},
+            {...good, window_type: '0'},
+            {...good, has_parent: 'true'},
+            {...good, width: 'wide'},
+            // width/height may only be a pair, and only on a fixed-size window.
+            {...good, allows_resize: true, width: 360, height: 420},
+            {...good, allows_resize: false, width: 360, height: 0},
+        ];
+        expect(sanitizeRules([good, ...bad])).toEqual([{kind: kind('valid_app'), state: 'corners', title: ''}]);
     });
 
-    it('drops entries naming an invalid state, including "nothing reversed"', () => {
-        const input = {
-            [mainKey]: 'corners',
-            [childKey]: 'not-a-valid-mode',
-            [buildRuleKey('legacy-all')]: 'both',
-            [buildRuleKey('legacy-axes')]: 'corners=on',
-            [buildRuleKey('empty')]: '',
-        };
-        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'corners'});
+    it('drops a state that reverses nothing, and an invalid one', () => {
+        const rules = sanitizeRules([
+            record('wechat', 'corners'),
+            record('empty', ''),
+            record('legacy-all', 'both'),
+            record('legacy-axes', 'corners=on'),
+            record('misordered', 'shadow,corners'),
+        ]);
+        expect(rules).toEqual([{kind: kind('wechat'), state: 'corners', title: ''}]);
     });
 
-    it('canonicalises the identity to lowercase when storing it', () => {
-        const canonical = buildRuleKey('wechat');
-        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
-
-        expect(buildRuleKey('WeChat')).toBe(canonical);
-        expect(sanitizeWindowRules({[asSpelled]: 'corners'})).toEqual({
-            [canonical]: 'corners',
-        });
+    it('deduplicates on the kind, first wins, identity case-insensitively', () => {
+        const rules = sanitizeRules([
+            record('WeChat', 'corners'),
+            record('wechat', 'corners,shadow'),
+        ]);
+        expect(rules).toEqual([{kind: kind('WeChat'), state: 'corners', title: ''}]);
     });
 
-    it('rejects case-colliding duplicate keys deterministically', () => {
-        const canonical = buildRuleKey('wechat');
-        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
-        const input = {
-            [asSpelled]: 'corners',
-            [canonical]: 'corners,shadow',
-        };
-        expect(sanitizeWindowRules(input)).toEqual({
-            [canonical]: 'corners',
-        });
+    it('folds the sample title to one line', () => {
+        const rules = sanitizeRules([{...record('wechat', 'corners'), title: '  登录\n对话框  '}]);
+        expect(rules[0].title).toBe('登录 对话框');
     });
 
-    it('handles undefined or non-object input as an empty map', () => {
-        expect(sanitizeWindowRules(undefined)).toEqual({});
-        expect(sanitizeWindowRules(null)).toEqual({});
-        expect(sanitizeWindowRules('string')).toEqual({});
-        expect(sanitizeWindowRules({})).toEqual({});
+    it('handles non-array input as an empty list', () => {
+        expect(sanitizeRules(undefined)).toEqual([]);
+        expect(sanitizeRules(null)).toEqual([]);
+        expect(sanitizeRules('string')).toEqual([]);
+        expect(sanitizeRules({})).toEqual([]);
+        expect(sanitizeRules([])).toEqual([]);
     });
 });
 
-describe('sanitizeRuleTitles', () => {
-    const key = buildRuleKey('wechat', {});
-    const specifier = key.slice(key.indexOf(':') + 1);
-
-    it('canonicalises the key the same way the states are', () => {
-        // A hand-edited or legacy mixed-case identity must land under the lowercased key, or
-        // readEntries() pairs it with the canonical state and loses the title on the next write.
-        expect(sanitizeRuleTitles({[`WeChat:${specifier}`]: 'WeChat'})).toEqual({[key]: 'WeChat'});
+describe('kind contract & round-trip', () => {
+    it('a valid kind survives sanitize -> resolve', () => {
+        const stored = record('wechat', 'corners,shadow', {allowsResize: false, width: 360, height: 420});
+        const rules = sanitizeRules([stored]);
+        expect(rules.length).toBe(1);
+        expect(resolved(resolveRule(rules[0].kind, rules))).toBe('corners,shadow');
+        // The identity the picker sent resolves from the kind the store kept.
+        expect(resolved(resolveRule(kind('wechat', {allowsResize: false, width: 360, height: 420}), rules)))
+            .toBe('corners,shadow');
     });
 
-    it('drops one of a case-colliding pair', () => {
-        const titles = sanitizeRuleTitles({
-            [`WeChat:${specifier}`]: 'A',
-            [`wechat:${specifier}`]: 'B',
-        });
-        expect(Object.keys(titles)).toEqual([key]);
-    });
+    it('prefs-generated kinds match resolveRule for the picked kind only', () => {
+        const picked = {hasParent: true, allowsResize: false};
+        const prefsGenerated = sanitizeRules([record('code', 'corners,shadow', picked)]);
 
-    it('still rejects a malformed key or a blank title', () => {
-        expect(sanitizeRuleTitles({'not a key': 'x'})).toEqual({});
-        expect(sanitizeRuleTitles({[key]: '   '})).toEqual({});
-    });
-});
-
-describe('withRule', () => {
-    const key = buildRuleKey('wechat', {hasParent: true});
-
-    it('stores the canonical form of the state it was given', () => {
-        expect(withRule({}, key, 'corners')).toEqual({[key]: 'corners'});
-        expect(withRule({}, key, 'corners,shadow')).toEqual({[key]: 'corners,shadow'});
-        expect(withRule({}, key, 'shadow,resize')).toEqual({[key]: 'shadow,resize'});
-    });
-
-    it('removes the key when nothing is reversed: no rule', () => {
-        expect(withRule({[key]: 'corners'}, key, '')).toEqual({});
-    });
-
-    it('replaces the state already stored for the kind', () => {
-        const stored = buildRuleKey('WeChat', {hasParent: true});
-        const updated = withRule({[stored]: 'corners'}, key, 'corners,shadow');
-        expect(updated).toEqual({[key]: 'corners,shadow'});
-    });
-
-    it('leaves the rule map it was given untouched', () => {
-        const rules = {[key]: 'shadow'};
-        withRule(rules, key, 'corners');
-        expect(rules).toEqual({[key]: 'shadow'});
-    });
-
-    it('refuses anything outside the axis grammar', () => {
-        expect(() => withRule({}, key, 'shadow,corners')).toThrow();
-        expect(() => withRule({}, key, 'corners=on')).toThrow();
-        expect(() => withRule({}, key, 'both')).toThrow();
-        expect(() => withRule({}, key, undefined)).toThrow();
+        expect(resolved(resolveRule(kind('code', picked), prefsGenerated))).toBe('corners,shadow');
+        expect(resolveRule(kind('code', {hasParent: true, allowsResize: true}), prefsGenerated)).toBeNull();
+        expect(resolveRule(kind('code'), prefsGenerated)).toBeNull();
     });
 });

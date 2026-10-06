@@ -7,10 +7,10 @@ import {
     WindowType,
 } from '../src/lib/mutterRules.generated.js';
 import {
-    chooseWindowIdentity, isWindowBackedAppId,
+    chooseWindowIdentity, isWindowBackedAppId, kindFromProperties, sameKind,
 } from '../src/lib/rules.js';
 import {
-    WindowClientType, buildRuleKeyFromProperties, extractWindowProperties,
+    WindowClientType, extractWindowProperties,
     getWindowFromActor, readDeclaredIdentity, readWindowString,
 } from '../src/lib/pick.js';
 
@@ -98,7 +98,7 @@ describe('extractWindowProperties', () => {
         expect(extractWindowProperties(pipWin).hasRing).toBe('false');
     });
 
-    it('carries the SSD flag, so the key can tell an SSD kind from a bare one', () => {
+    it('carries the SSD flag, so the kind can tell an SSD window from a bare one', () => {
         const ssdWin = {
             get_wm_class: () => 'wps',
             get_window_type: () => WindowType.NORMAL,
@@ -111,9 +111,9 @@ describe('extractWindowProperties', () => {
         const props = extractWindowProperties(ssdWin);
         expect(props.hasSsd).toBe('true');
         // The same window without the frame is a different kind.
-        expect(buildRuleKeyFromProperties(props)).toContain('has_ssd=true');
-        expect(buildRuleKeyFromProperties(props)).not.toBe(
-            buildRuleKeyFromProperties({...props, hasSsd: 'false'}));
+        expect(kindFromProperties(props).hasSsd).toBeTrue();
+        expect(sameKind(kindFromProperties(props), kindFromProperties({...props, hasSsd: 'false'})))
+            .toBeFalse();
     });
 
     it('falls back to get_sandboxed_app_id when wm_class is unavailable', () => {

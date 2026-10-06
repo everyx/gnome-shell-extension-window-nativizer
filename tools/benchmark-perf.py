@@ -30,7 +30,7 @@ CLIENT_SCRIPT = os.path.join(ROOT, "tools", "perf-client.py")
 DEV_SH = os.path.join(ROOT, "tools", "dev.sh")
 UUID = "window-nativizer@everyx.github.io"
 WINDOW_NATIVIZER_DISPLAY = "wayland-window-nativizer"
-# The harness' own dconf store. The band is flipped through a `window-rules` axis reversal
+# The harness' own dconf store. The band is flipped through a `window-rules-v2` axis reversal
 # for the perf client's kind, never through the developer's dconf, and dev.sh inherits
 # it for the nested session it starts.
 BENCH_CONFIG = os.path.join(STATE_DIR, "config")
@@ -146,8 +146,10 @@ def band_actors(bus):
 
 
 # The perf client's window kind: undecorated GTK4 on Wayland, no shadow ring.
-PERF_RULE_KEY = ("dev.windownativizer.perf:client_type=wayland,window_type=0,"
-                 "has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false")
+PERF_RULE_FIELDS = ("'identity': <'dev.windownativizer.perf'>, 'client_type': <'wayland'>, "
+                    "'window_type': <0>, 'has_parent': <false>, 'allows_resize': <true>, "
+                    "'attached_dialog': <false>, 'has_ring': <false>, 'has_ssd': <false>, "
+                    "'width': <0>, 'height': <0>")
 
 
 def set_band(enabled, bus, verify=True):
@@ -156,9 +158,9 @@ def set_band(enabled, bus, verify=True):
     `verify`, wait for the band actors to follow - a rule that never arrived would
     otherwise look like a saving. Without it (no window on stage to carry a band yet)
     only the write is done, and the caller checks the band on the window it measures."""
-    rules = "{}" if enabled else "{'%s': {'state': 'resize'}}" % PERF_RULE_KEY
+    rules = "[]" if enabled else "[{%s, 'state': <'resize'>, 'title': <''>}]" % PERF_RULE_FIELDS
     subprocess.check_call(
-        ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "window-rules",
+        ["gsettings", "set", "org.gnome.shell.extensions.window-nativizer", "window-rules-v2",
          rules],
         env=dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus, XDG_CONFIG_HOME=BENCH_CONFIG,
                  GSETTINGS_SCHEMA_DIR=SCHEMA_DIR))

@@ -115,7 +115,7 @@ fails when the code no longer reproduces it. The corpus is curated boundaries pl
 (the same PRNG idiom as `tests/property.test.js`), so a reproducible failure is a fact rather than
 an accident of when it ran. Only the output is stored - the five action booleans, a semantic digest
 of the resolved style, and the reason - and a rule that stops applying shows up in the reason, which
-is how a change to the rule key surfaces without storing keys.
+is how a change to the window-kind model surfaces without storing kinds.
 
 The baseline is not a test of the current code (it was generated from it). It is what a reshape of
 the decision layer is checked against: regenerate, and the diff is the complete behavioural change,
@@ -254,7 +254,7 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 |---|---|
 | [decoration-model.md](decoration-model.md) | how a window's decoration is decided, and where it diverges from Mutter on purpose |
 | [decoration-alignment.md](decoration-alignment.md) | how the decoration is measured against libadwaita, what is verified, and what is still open |
-| [rule-model.md](rule-model.md) | the rule key and state format, the reversed axes, identity resolution |
+| [rule-model.md](rule-model.md) | the window kind and state format, the reversed axes, identity resolution |
 | [architecture.md](architecture.md) | modules, the two processes, the actors |
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
 

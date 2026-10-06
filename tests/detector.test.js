@@ -14,11 +14,31 @@ import {
     expectedWindowRadius, highlightBoundingBox, highlightOuterRadius,
 } from '../src/lib/detector.js';
 import {
-    buildRuleKey,
+    kindFromProperties,
+    sameKind,
 } from '../src/lib/rules.js';
-import {
-    buildRuleKeyFromProperties,
-} from '../src/lib/pick.js';
+
+/** A kind with the defaults every decision case shares. */
+function kind(identity, overrides = {}) {
+    return {
+        identity,
+        clientType: 'wayland',
+        windowType: WindowType.NORMAL,
+        hasParent: false,
+        allowsResize: true,
+        attachedDialog: false,
+        hasRing: false,
+        hasSsd: false,
+        width: null,
+        height: null,
+        ...overrides,
+    };
+}
+
+/** One rule in the array resolveRule consumes. */
+function rule(identity, state, overrides = {}) {
+    return {kind: kind(identity, overrides), state, title: ''};
+}
 
 /** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
 function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight) {
@@ -522,7 +542,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            rules: {[buildRuleKey('custom-tool')]: 'corners,shadow'},
+            rules: [rule('custom-tool', 'corners,shadow')],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -535,7 +555,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
-            rules: {[buildRuleKey('overlay-app')]: 'corners,shadow,resize'},
+            rules: [rule('overlay-app', 'corners,shadow,resize')],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -550,7 +570,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'shadow'},
+            rules: [rule('wechat', 'shadow')],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeTrue();
@@ -561,7 +581,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            rules: {[buildRuleKey('custom-tool')]: 'corners'},
+            rules: [rule('custom-tool', 'corners')],
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
@@ -574,7 +594,7 @@ describe('evaluateWindowActions', () => {
         const actionsFor = state => evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
+            rules: [rule('gtk4-app', state, {hasRing: true})],
         });
 
         // Corners reversed off: neither our corners nor the takeover shadow are ours.
@@ -598,7 +618,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             isX11: true,
             wmClass: 'wps',
-            rules: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow'},
+            rules: [rule('wps', 'shadow', {clientType: 'x11'})],
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeTrue();
@@ -610,7 +630,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             isMaximized: true,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'corners,shadow,resize'},
+            rules: [rule('wechat', 'corners,shadow,resize')],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -622,7 +642,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             isFullscreen: true,
             wmClass: 'wechat',
-            rules: {[buildRuleKey('wechat')]: 'corners,shadow,resize'},
+            rules: [rule('wechat', 'corners,shadow,resize')],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -634,7 +654,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             windowType: WindowType.DOCK,
             wmClass: 'dock-app',
-            rules: {[buildRuleKey('dock-app', {windowType: WindowType.DOCK})]: 'corners,shadow,resize'},
+            rules: [rule('dock-app', 'corners,shadow,resize', {windowType: WindowType.DOCK})],
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
@@ -646,21 +666,21 @@ describe('evaluateWindowActions', () => {
         // A rule written for the bare kind does not apply to the SSD kind...
         const bare = evaluateWindowActions({
             ...ssd,
-            rules: {[buildRuleKey('legacy-x11')]: 'corners'},
+            rules: [rule('legacy-x11', 'corners')],
         });
         expect(bare.reason).not.toContain('rule-applied');
         // ...and the SSD kind's own key does.
         const own = evaluateWindowActions({
             ...ssd,
-            rules: {[buildRuleKey('legacy-x11', {hasSsd: true})]: 'corners'},
+            rules: [rule('legacy-x11', 'corners', {hasSsd: true})],
         });
         expect(own.reason).toBe('rule-applied(legacy-x11:corners)');
     });
 
     it('rule for one window kind leaves other kinds of the same app decorated', () => {
-        const rules = {
-            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: 'corners,shadow',
-        };
+        const rules = [
+            rule('wechat', 'corners,shadow', {hasParent: true, allowsResize: false}),
+        ];
 
         // Main window (top-level, resizable) is a different kind -> untouched
         const mainWin = evaluateWindowActions({
@@ -698,9 +718,9 @@ describe('evaluateWindowActions', () => {
     });
 
     it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
-        const rules = {
-            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'corners,shadow',
-        };
+        const rules = [
+            rule('wechat', 'corners,shadow', {clientType: 'wayland', hasParent: true, allowsResize: false}),
+        ];
 
         const waylandChild = evaluateWindowActions({
             ...baseWin,
@@ -742,7 +762,7 @@ describe('evaluateWindowActions', () => {
         const clearRingFor = state => evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
+            rules: [rule('gtk4-app', state, {hasRing: true})],
         }).clearRing;
 
         // The takeover makes the shadow ours, so reversing the shadow retracts it and the
@@ -760,7 +780,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'corners'},
+            rules: [rule('gtk4-app', 'corners', {hasRing: true})],
         });
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
@@ -774,7 +794,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...ringedWindow,
             wmClass: 'gtk4-app',
-            rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: 'corners,shadow'},
+            rules: [rule('gtk4-app', 'corners,shadow', {hasRing: true})],
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
@@ -783,13 +803,10 @@ describe('evaluateWindowActions', () => {
     });
 
     it('applies exact size rule for fixed-size windows to differentiate dialogs', () => {
-        const qrKey = buildRuleKey('multi-dlg-app', {hasRing: true, allowsResize: false, width: 360, height: 420});
-        const toolbarKey = buildRuleKey('multi-dlg-app', {hasRing: true, allowsResize: false, width: 240, height: 48});
-
-        const rules = {
-            [qrKey]: 'shadow',
-            [toolbarKey]: 'corners',
-        };
+        const rules = [
+            rule('multi-dlg-app', 'shadow', {hasRing: true, allowsResize: false, width: 360, height: 420}),
+            rule('multi-dlg-app', 'corners', {hasRing: true, allowsResize: false, width: 240, height: 48}),
+        ];
 
         const qrWin = evaluateWindowActions({
             ...ringedWindow,
@@ -1116,7 +1133,7 @@ describe('the pick heuristic', () => {
             // adds nor removes an axis; prefs separately refuses a pick that changes nothing.
             const decorated = {
                 ...nativeWindow,
-                rules: {[buildRuleKey('adw-app', {hasRing: true})]: 'corners'},
+                rules: [rule('adw-app', 'corners', {hasRing: true})],
             };
             expect(suggestedRuleState(decorated)).toBe('corners,shadow,resize');
         });
@@ -1194,7 +1211,7 @@ describe('the pick heuristic', () => {
         });
 
         it('keys the rule the way the runtime looks it up', () => {
-            expect(buildRuleKeyFromProperties(propertiesFor(plainWindow))).toBe(buildRuleKey('plain-app'));
+            expect(sameKind(kindFromProperties(propertiesFor(plainWindow)), kind('plain-app'))).toBeTrue();
         });
     });
 

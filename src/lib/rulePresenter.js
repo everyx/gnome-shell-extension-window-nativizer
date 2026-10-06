@@ -70,24 +70,24 @@ export function axisName(axis) {
 /**
  * Whether the window kind can be decorated at all - the fact the axis capabilities
  * and the unavailable reason both turn on.
- * @param {{window_type:number}|null} properties
+ * @param {{windowType:number}|null} kind
  * @returns {boolean}
  */
-export function isDecoratableKind(properties) {
-    return !!properties &&
-        isDecoratableWindowType(Number(properties.window_type ?? WindowType.NORMAL));
+export function isDecoratableKind(kind) {
+    return !!kind &&
+        isDecoratableWindowType(kind.windowType ?? WindowType.NORMAL);
 }
 
 /**
- * The shared capability answer, adapted from a rule key's own field names.
- * @param {{window_type:number,allows_resize:boolean,has_ssd:boolean}|null} properties
+ * The shared capability answer, read straight off the kind's own fields.
+ * @param {{windowType:number,allowsResize:boolean,hasSsd:boolean}|null} kind
  * @returns {Record<string, boolean>}
  */
-export function keyAxisCapabilities(properties) {
+export function keyAxisCapabilities(kind) {
     return ruleAxisCapabilities({
-        windowType: Number(properties?.window_type ?? WindowType.NORMAL),
-        allowsResize: properties?.allows_resize !== false,
-        hasSsd: Boolean(properties?.has_ssd),
+        windowType: kind?.windowType ?? WindowType.NORMAL,
+        allowsResize: kind?.allowsResize !== false,
+        hasSsd: Boolean(kind?.hasSsd),
     });
 }
 
@@ -99,15 +99,15 @@ export function neverDecorated() {
 /**
  * @param {string} axis
  * @param {boolean} decoratable - Whether the kind can be decorated at all
- * @param {{allows_resize:boolean,has_ssd:boolean}|null} properties
+ * @param {{allowsResize:boolean,hasSsd:boolean}|null} kind
  * @returns {string} Why the axis cannot be configured here
  */
-export function axisUnavailableReason(axis, decoratable = true, properties = null) {
+export function axisUnavailableReason(axis, decoratable = true, kind = null) {
     // A non-decoratable kind (menus, tooltips) is never about fixed size or a
     // frame, even on the resize row: naming the wrong reason would send the user to
     // fix the wrong thing.
     if (decoratable && axis === RuleAxis.RESIZE) {
-        if (properties?.has_ssd) {
+        if (kind?.hasSsd) {
             // Translators: Shown where a resize control would be, but cannot be used.
             return _('The window frame can already be resized');
         }
@@ -148,18 +148,18 @@ export function windowTypeNoun(windowType) {
 }
 
 /**
- * Formats window key properties into a human-readable descriptive sentence.
- * @param {{client_type:string,window_type:number,has_parent:boolean,allows_resize:boolean,attached_dialog:boolean,has_ring?:boolean,has_ssd?:boolean,size?:string}|null} properties
+ * Formats a window kind into a human-readable descriptive sentence.
+ * @param {{clientType:string,windowType:number,hasParent:boolean,allowsResize:boolean,attachedDialog:boolean,hasRing?:boolean,hasSsd?:boolean,width?:number|null,height?:number|null}|null} kind
  * @returns {string}
  */
-export function windowKindSentence(properties) {
-    if (!properties)
+export function windowKindSentence(kind) {
+    if (!kind)
         return '';
 
-    const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
+    const server = kind.clientType === 'x11' ? _('X11') : _('Wayland');
     // Translators: %s is the client type and the window type, e.g. "Wayland window". If your
     // language puts the type first, use the placeholders as %2$s %1$s.
-    const entity = formatString(_('%s %s'), server, windowTypeNoun(properties.window_type));
+    const entity = formatString(_('%s %s'), server, windowTypeNoun(kind.windowType));
 
     // Translators: The window has no parent window.
     const noParent = _('with no parent');
@@ -169,17 +169,18 @@ export function windowKindSentence(properties) {
     const hasParent = _('with a parent');
 
     let parent;
-    if (!properties.has_parent)
+    if (!kind.hasParent)
         parent = noParent;
-    else if (properties.attached_dialog)
+    else if (kind.attachedDialog)
         parent = attachedParent;
     else
         parent = hasParent;
 
     let size;
-    if (properties.allows_resize === false) {
-        if (properties.size) {
-            const formattedDimensions = String(properties.size).replace('x', '×');
+    if (kind.allowsResize === false) {
+        if (kind.width !== null && kind.width !== undefined &&
+            kind.height !== null && kind.height !== undefined) {
+            const formattedDimensions = `${kind.width}×${kind.height}`;
             // Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
             size = formatString(_('fixed-size (%s)'), formattedDimensions);
         } else {
@@ -191,13 +192,13 @@ export function windowKindSentence(properties) {
         size = _('resizable');
     }
 
-    // One frame clause carries both ring attributes: the key cannot describe a window
+    // One frame clause carries both ring attributes: the kind cannot describe a window
     // that declares a ring and an SSD frame at once (the picker clears has_ring for it).
     let frame = null;
-    if (properties.has_ssd) {
+    if (kind.hasSsd) {
         // Translators: The compositor draws this window's frame, so it owns the resize handles.
         frame = _('frame drawn by the system');
-    } else if (properties.has_ring === false) {
+    } else if (kind.hasRing === false) {
         // Translators: The window declares no shadow margin ring of its own.
         frame = _('no shadow margins');
     }

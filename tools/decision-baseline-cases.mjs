@@ -231,7 +231,7 @@ function curatedCases() {
         }
     }
 
-    // Attached dialogs always have a parent; both attributes ride in the rule key.
+    // Attached dialogs always have a parent; both attributes are part of the kind.
     for (const [hasParent, isAttachedDialog] of [[false, false], [true, false], [true, true]]) {
         add(`parent:${hasParent}/${isAttachedDialog}`, {ring: ring('none'), hasParent, isAttachedDialog});
         add(`parent:${hasParent}/${isAttachedDialog}/ring`, {ring: ring('csd20'), hasParent, isAttachedDialog});

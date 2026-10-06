@@ -1,8 +1,10 @@
 import {WindowType} from './mutterRules.generated.js';
 
-/** D-Bus / rule-key tokens for the client-type field. */
+/** D-Bus / kind tokens for the client-type field. */
 export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
 export const CLIENT_TYPE_TOKEN_X11 = 'x11';
+
+const CLIENT_TYPE_TOKENS = [CLIENT_TYPE_TOKEN_WAYLAND, CLIENT_TYPE_TOKEN_X11];
 
 export const RuleAxis = Object.freeze({
     CORNERS: 'corners',
@@ -60,28 +62,6 @@ export function boolString(value) {
     return value ? 'true' : 'false';
 }
 
-/** Tolerates keys that were never encoded. */
-function decodeIdentity(token) {
-    try {
-        return decodeURIComponent(token);
-    } catch {
-        return token;
-    }
-}
-
-// Lowercased so 'WeChat'/'wechat' are the same kind.
-function encodeIdentity(identity) {
-    return encodeURIComponent(identity.toLowerCase());
-}
-
-/** Lowercases the identity part so old keys canonicalise on read. */
-function normalizeRuleKey(key) {
-    const colonIdx = key.indexOf(':');
-    if (colonIdx < 0)
-        return key;
-    return `${encodeIdentity(decodeIdentity(key.slice(0, colonIdx)))}:${key.slice(colonIdx + 1)}`;
-}
-
 /** Shell's per-window placeholder for unattributed windows. */
 const WINDOW_BACKED_APP_ID_PATTERN = /^window:\d+$/;
 
@@ -108,278 +88,231 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
         return peer.trim();
     if (tracked && !isWindowBackedAppId(tracked))
         return tracked;
-    // pid changes on restart, so a rule keyed on it is session-scoped.
+    // pid changes on restart, so a kind keyed on it is session-scoped.
     return pid > 0 ? `pid-${pid}` : '';
 }
 
-const BOOL_FIELD = '(?:true|false)';
-
-const FINGERPRINT_FIELDS = [
-    {
-        name: 'client_type',
-        render: o => o.clientType,
-        parse: raw => raw,
-    },
-    {name: 'window_type', render: o => o.windowType, parse: raw => Number(raw)},
-    {name: 'has_parent', render: o => boolString(o.hasParent), parse: raw => raw === 'true'},
-    {name: 'allows_resize', render: o => boolString(o.allowsResize), parse: raw => raw === 'true'},
-    {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), parse: raw => raw === 'true'},
-    {name: 'has_ring', render: o => boolString(o.hasRing), parse: raw => raw === 'true'},
-    {name: 'has_ssd', render: o => boolString(o.hasSsd), parse: raw => raw === 'true'},
-];
-
-const FINGERPRINT_MAP = Object.freeze(
-    Object.fromEntries(FINGERPRINT_FIELDS.map(f => [f.name, f]))
-);
-
-// Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
-// to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
-const VALID_RULE_KEY_PATTERN = new RegExp(
-    '^[^\\s:]+:(?:' +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}` +
-    ')$'
-);
-
 /**
- * @param {string} wmClass
- * @param {object} [props={}]
- * @param {string} [props.clientType='wayland']
- * @param {number} [props.windowType=WindowType.NORMAL]
- * @param {boolean} [props.hasParent=false]
- * @param {boolean} [props.allowsResize=true]
- * @param {boolean} [props.isAttachedDialog=false]
- * @param {boolean} [props.hasRing=false]
- * @param {boolean} [props.hasSsd=false]
- * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
- * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
- * @returns {string} Canonical key or '' when wmClass is missing
+ * Builds a window kind from the D-Bus string map the picker sends
+ * (see extractWindowProperties in pick.js). The identity decides whether a rule
+ * can exist at all: without one there is nothing stable to key on.
+ * @param {Record<string, string>} [properties={}]
+ * @returns {{identity: string, clientType: string, windowType: number, hasParent: boolean,
+ *   allowsResize: boolean, attachedDialog: boolean, hasRing: boolean, hasSsd: boolean,
+ *   width: number|null, height: number|null}|null}
  */
-export function buildRuleKey(wmClass, {
-    clientType = CLIENT_TYPE_TOKEN_WAYLAND,
-    windowType = WindowType.NORMAL,
-    hasParent = false,
-    allowsResize = true,
-    isAttachedDialog = false,
-    hasRing = false,
-    hasSsd = false,
-    width = null,
-    height = null,
-} = {}) {
-    if (!wmClass?.trim())
-        return '';
-
-    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd};
-    let specifier = FINGERPRINT_FIELDS
-        .map(field => `${field.name}=${field.render(fields)}`)
-        .join(',');
-
-    const w = Number(width);
-    const h = Number(height);
-    if (!allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
-        specifier += `,size=${Math.round(w)}x${Math.round(h)}`;
-
-    // ':'/whitespace delimit the grammar, so the identity is encoded.
-    return `${encodeIdentity(wmClass)}:${specifier}`;
-}
-
-/**
- * Sanitizes window titles associated with picked rules (display only, keyed by canonical rule key).
- * @param {Record<string, string>} [rawTitles={}]
- * @returns {Record<string, string>} Canonical key -> one-line title
- */
-export function sanitizeRuleTitles(rawTitles = {}) {
-    if (!rawTitles || typeof rawTitles !== 'object')
-        return {};
-
-    const clean = {};
-    const seenKeys = new Map();
-    for (const [key, title] of Object.entries(rawTitles)) {
-        if (!VALID_RULE_KEY_PATTERN.test(key) || typeof title !== 'string')
-            continue;
-        // One line beside an app name: a newline would break the row.
-        const oneLine = title.replace(/[\r\n]+/g, ' ').trim();
-        if (!oneLine)
-            continue;
-        // Same canonicalisation as the states, or a mixed-case stored key would land under
-        // its lowercased state key and lose its title on the next write.
-        const canonicalKey = normalizeRuleKey(key);
-        if (seenKeys.has(canonicalKey)) {
-            console.warn(`[window-nativizer] Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
-            continue;
-        }
-        seenKeys.set(canonicalKey, key);
-        clean[canonicalKey] = oneLine;
-    }
-    return clean;
-}
-
-/**
- * @param {Record<string, string>} [rawRules={}]
- * @returns {Record<string, string>} Canonical key -> canonical axis state
- */
-export function sanitizeWindowRules(rawRules = {}) {
-    if (!rawRules || typeof rawRules !== 'object')
-        return {};
-
-    const clean = {};
-    const seenKeys = new Map();
-
-    for (const [key, state] of Object.entries(rawRules)) {
-        if (!VALID_RULE_KEY_PATTERN.test(key)) {
-            console.warn(`[window-nativizer] Dropping invalid rule key: "${key}"`);
-            continue;
-        }
-
-        const axes = parseRuleState(state);
-        if (!axes) {
-            console.warn(`[window-nativizer] Dropping rule with invalid state: "${state}" for key "${key}"`);
-            continue;
-        }
-
-        // Nothing reversed is no rule: drop the row rather than store ''.
-        const canonical = buildRuleState(axes);
-        if (!canonical)
-            continue;
-
-        const canonicalKey = normalizeRuleKey(key);
-        if (seenKeys.has(canonicalKey)) {
-            const existingKey = seenKeys.get(canonicalKey);
-            console.warn(`[window-nativizer] Dropping case-colliding rule key "${key}" (conflicts with "${existingKey}")`);
-            continue;
-        }
-
-        seenKeys.set(canonicalKey, key);
-        clean[canonicalKey] = canonical;
-    }
-
-    return clean;
-}
-
-/**
- * Stores a state, canonicalising it first. A state with nothing reversed ('') stores
- * nothing: it is the same as having no rule, so the key is removed.
- * @param {Record<string, string>} [rules={}]
- * @param {string} key
- * @param {string} state
- * @returns {Record<string, string>}
- */
-export function withRule(rules = {}, key, state) {
-    const axes = parseRuleState(state);
-    if (!axes)
-        throw new Error(`[window-nativizer] unknown rule state: ${state}`);
-    const next = {...rules};
-    const canonical = buildRuleState(axes);
-    if (!canonical)
-        delete next[key];
-    else
-        next[key] = canonical;
-    return next;
-}
-
-/**
- * @param {string} key
- * @returns {{baseWmClass: string, specifier: string|null, properties: Record<string, string|number|boolean>|null}}
- */
-export function parseRuleKey(key) {
-    if (!key || typeof key !== 'string' || !VALID_RULE_KEY_PATTERN.test(key))
-        return {baseWmClass: '', specifier: null, properties: null};
-
-    const colonIdx = key.indexOf(':');
-    const baseWmClass = decodeIdentity(key.slice(0, colonIdx));
-    const specifier = key.slice(colonIdx + 1);
-
-    const properties = {};
-    for (const pair of specifier.split(',')) {
-        const eqIdx = pair.indexOf('=');
-        const name = pair.slice(0, eqIdx);
-        const val = pair.slice(eqIdx + 1);
-        if (name === 'size') {
-            properties.size = val;
-            const [w, h] = val.split('x').map(Number);
-            properties.width = w;
-            properties.height = h;
-            continue;
-        }
-        const field = FINGERPRINT_MAP[name];
-        if (field)
-            properties[name] = field.parse(val);
-    }
-
-    return {baseWmClass, specifier, properties};
-}
-
-/**
- * @param {string} wmClass
- * @param {Record<string, string>} [rules={}]
- * @param {object} [options={}]
- * @param {string} [options.clientType='wayland']
- * @param {number} [options.windowType=WindowType.NORMAL]
- * @param {boolean} [options.hasParent=false]
- * @param {boolean} [options.allowsResize=true]
- * @param {boolean} [options.isAttachedDialog=false]
- * @param {boolean} [options.hasRing=false]
- * @param {boolean} [options.hasSsd=false]
- * @param {number|null} [options.frameWidth=null]
- * @param {number|null} [options.frameHeight=null]
- * @returns {Set<string>|null} The reversed axes, or null when no rule matched
- */
-export function resolveRule(wmClass, rules = {}, options = {}) {
-    if (!wmClass)
+export function kindFromProperties(properties = {}) {
+    const identity = typeof properties.wmClass === 'string' ? properties.wmClass.trim() : '';
+    if (!identity)
         return null;
 
-    const {
-        clientType = CLIENT_TYPE_TOKEN_WAYLAND,
-        windowType = WindowType.NORMAL,
-        hasParent = false,
-        allowsResize = true,
-        isAttachedDialog = false,
-        hasRing = false,
-        hasSsd = false,
-        frameWidth = null,
-        frameHeight = null,
-    } = options;
-
-    const isFixed = !allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0;
-
-    const has = key => Boolean(key && Object.prototype.hasOwnProperty.call(rules, key));
-    const lookup = key => has(key)
-        ? parseRuleState(rules[key])
-        : null;
-
-    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule.
-    if (isFixed) {
-        const exactKey = buildRuleKey(wmClass, {
-            clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
-            width: frameWidth, height: frameHeight,
-        });
-        const matched = lookup(exactKey);
-        if (matched)
-            return matched;
-    }
-
-    // 2. Generic rule key as fallback for fixed-size, or primary for resizable.
-    const genericKey = buildRuleKey(wmClass, {
-        clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
-    });
-
-    if (has(genericKey))
-        return parseRuleState(rules[genericKey]);
-    return null;
-}
-
-/** @param {Record<string,string>} [properties] @returns {string} canonical key or '' */
-export function buildRuleKeyFromProperties(properties = {}) {
     const allowsResize = properties.allowsResize === 'true';
-    return buildRuleKey(properties.wmClass, {
-        clientType: properties.clientType,
+    // Fixed-size windows may carry a stable size; a resizable window's size is
+    // not stable, so it is not part of the kind.
+    const width = !allowsResize && properties.width ? Number(properties.width) : NaN;
+    const height = !allowsResize && properties.height ? Number(properties.height) : NaN;
+
+    return {
+        identity,
+        clientType: properties.clientType === CLIENT_TYPE_TOKEN_X11
+            ? CLIENT_TYPE_TOKEN_X11
+            : CLIENT_TYPE_TOKEN_WAYLAND,
         windowType: Number(properties.windowType ?? WindowType.NORMAL),
         hasParent: properties.hasParent === 'true',
         allowsResize,
-        isAttachedDialog: properties.isAttachedDialog === 'true',
+        attachedDialog: properties.isAttachedDialog === 'true',
         hasRing: properties.hasRing === 'true',
         hasSsd: properties.hasSsd === 'true',
-        width: !allowsResize && properties.width ? Number(properties.width) : null,
-        height: !allowsResize && properties.height ? Number(properties.height) : null,
-    });
+        width: Number.isFinite(width) && width > 0 ? Math.round(width) : null,
+        height: Number.isFinite(height) && height > 0 ? Math.round(height) : null,
+    };
+}
+
+/**
+ * A stable string for a kind, used only as a UI map key (prefs indexes rows by it).
+ * It is never parsed back - the kind travels beside it - so it is just a fixed-order
+ * tuple, not a grammar. The identity is lowercased here so a re-pick spelled with a
+ * different case updates the same row.
+ * @param {{identity: string}|null} kind
+ * @returns {string}
+ */
+export function kindId(kind) {
+    if (!kind)
+        return '';
+    return JSON.stringify([
+        kind.identity.toLowerCase(),
+        kind.clientType,
+        kind.windowType,
+        kind.hasParent,
+        kind.allowsResize,
+        kind.attachedDialog,
+        kind.hasRing,
+        kind.hasSsd,
+        kind.width,
+        kind.height,
+    ]);
+}
+
+/**
+ * Field equality, with the identity compared case-insensitively: one application can
+ * report itself as 'WeChat' from one window and 'wechat' from the next.
+ * @param {object|null} a
+ * @param {object|null} b
+ * @returns {boolean}
+ */
+export function sameKind(a, b) {
+    if (!a || !b)
+        return false;
+    return a.identity.toLowerCase() === b.identity.toLowerCase() &&
+        a.clientType === b.clientType &&
+        a.windowType === b.windowType &&
+        a.hasParent === b.hasParent &&
+        a.allowsResize === b.allowsResize &&
+        a.attachedDialog === b.attachedDialog &&
+        a.hasRing === b.hasRing &&
+        a.hasSsd === b.hasSsd &&
+        a.width === b.width &&
+        a.height === b.height;
+}
+
+const INVALID_SIZE = Symbol('invalid-size');
+
+/**
+ * Storage spells "no size" as 0. A positive number is kept (rounded); anything else
+ * that is not 0/null/undefined is a malformed record.
+ * @param {*} value
+ * @returns {number|null|typeof INVALID_SIZE}
+ */
+function storedSize(value) {
+    if (value === null || value === undefined || value === 0)
+        return null;
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0)
+        return Math.round(value);
+    return INVALID_SIZE;
+}
+
+const BOOL_RECORD_FIELDS = ['has_parent', 'allows_resize', 'attached_dialog', 'has_ring', 'has_ssd'];
+
+/**
+ * Validates stored records into kinds with their state and display title. A record
+ * that cannot describe a window kind is dropped with a warning naming the field; a
+ * state that reverses nothing is dropped silently, because it is the same as no rule.
+ * @param {Array<object>} [raw=[]]
+ * @returns {Array<{kind: object, state: string, title: string}>}
+ */
+export function sanitizeRules(raw = []) {
+    if (!Array.isArray(raw))
+        return [];
+
+    const rules = [];
+    const seen = new Map();
+
+    for (const record of raw) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+            console.warn('[window-nativizer] Dropping rule with a non-object record');
+            continue;
+        }
+
+        const identity = typeof record.identity === 'string' ? record.identity.trim() : '';
+        if (!identity) {
+            console.warn('[window-nativizer] Dropping rule with no identity');
+            continue;
+        }
+
+        if (!CLIENT_TYPE_TOKENS.includes(record.client_type)) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with unknown client type: "${record.client_type}"`);
+            continue;
+        }
+
+        if (!Number.isInteger(record.window_type)) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with invalid window type: "${record.window_type}"`);
+            continue;
+        }
+
+        const badBool = BOOL_RECORD_FIELDS.find(field => typeof record[field] !== 'boolean');
+        if (badBool) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with non-boolean ${badBool}`);
+            continue;
+        }
+
+        const allowsResize = record.allows_resize;
+        const width = storedSize(record.width);
+        const height = storedSize(record.height);
+        if (width === INVALID_SIZE || height === INVALID_SIZE) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with a non-numeric size`);
+            continue;
+        }
+        // width/height may only be set when the size is stable, and only as a pair.
+        if (allowsResize && (width !== null || height !== null)) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with a size on a resizable window`);
+            continue;
+        }
+        if ((width === null) !== (height === null)) {
+            console.warn(`[window-nativizer] Dropping rule for "${identity}" with an incomplete size`);
+            continue;
+        }
+
+        const axes = parseRuleState(record.state);
+        if (!axes) {
+            console.warn(`[window-nativizer] Dropping rule with invalid state: "${record.state}" for "${identity}"`);
+            continue;
+        }
+        const state = buildRuleState(axes);
+        if (!state)
+            continue;
+
+        const kind = {
+            identity,
+            clientType: record.client_type,
+            windowType: record.window_type,
+            hasParent: record.has_parent,
+            allowsResize,
+            attachedDialog: record.attached_dialog,
+            hasRing: record.has_ring,
+            hasSsd: record.has_ssd,
+            width,
+            height,
+        };
+
+        const id = kindId(kind);
+        if (seen.has(id)) {
+            console.warn(`[window-nativizer] Dropping duplicate rule for "${identity}" (conflicts with "${seen.get(id)}")`);
+            continue;
+        }
+        seen.set(id, identity);
+
+        // One line beside an app name: a newline would break the row.
+        const title = typeof record.title === 'string'
+            ? record.title.replace(/[\r\n]+/g, ' ').trim()
+            : '';
+
+        rules.push({kind, state, title});
+    }
+
+    return rules;
+}
+
+/**
+ * Resolves the rule for a window kind, preserving the two-level match: a fixed-size
+ * window prefers a rule that carries its exact size, then falls back to a size-less
+ * rule for the same kind; a resizable window only ever matches a size-less kind.
+ * @param {{identity: string, allowsResize: boolean, width: number|null, height: number|null}} windowKind
+ * @param {Array<{kind: object, state: string}>} [rules=[]] - The array from sanitizeRules
+ * @returns {Set<string>|null} The reversed axes, or null when no rule matched
+ */
+export function resolveRule(windowKind, rules = []) {
+    if (!windowKind?.identity)
+        return null;
+
+    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule.
+    if (windowKind.allowsResize === false) {
+        const exact = rules.find(rule => sameKind(rule.kind, windowKind));
+        if (exact)
+            return parseRuleState(exact.state);
+    }
+
+    // 2. Size-less kind as fallback for fixed-size, or primary for resizable.
+    const generic = {...windowKind, width: null, height: null};
+    const match = rules.find(rule => sameKind(rule.kind, generic));
+    return match ? parseRuleState(match.state) : null;
 }

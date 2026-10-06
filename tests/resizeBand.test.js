@@ -14,7 +14,7 @@ import {
     RESIZE_CORNER,
 } from '../src/lib/resizeBand.js';
 import {decideResizeBand, evaluateWindowActions} from '../src/lib/detector.js';
-import {buildRuleKey} from '../src/lib/rules.js';
+import {kindFromProperties} from '../src/lib/rules.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 
@@ -727,8 +727,11 @@ describe('decideResizeBand', () => {
         expect([bare.drawShadow, bare.drawClip, bare.drawResize])
             .toEqual([false, true, true]);
 
-        const key = buildRuleKey('wps', {clientType: 'x11'});
-        const reversed = evaluateWindowActions({...base, rules: {[key]: 'resize'}});
+        const kind = kindFromProperties({
+            wmClass: 'wps', clientType: 'x11', windowType: '0', hasParent: 'false',
+            allowsResize: 'true', isAttachedDialog: 'false', hasRing: 'false', hasSsd: 'false',
+        });
+        const reversed = evaluateWindowActions({...base, rules: [{kind, state: 'resize', title: ''}]});
         expect([reversed.drawShadow, reversed.drawClip, reversed.drawResize])
             .toEqual([false, true, false]);
         expect(reversed.reason).toBe('rule-applied(wps:resize)');

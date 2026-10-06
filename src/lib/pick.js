@@ -1,7 +1,6 @@
 import {WindowClientType} from './mutterRules.generated.js';
 
 import {
-    buildRuleKeyFromProperties,
     boolString,
 } from './rules.js';
 import {
@@ -17,7 +16,6 @@ export {WindowClientType};
 
 // Re-exported window inspection utilities for backward compatibility.
 export {
-    buildRuleKeyFromProperties,
     readWindowString,
     readDeclaredIdentity,
     getWindowFromActor

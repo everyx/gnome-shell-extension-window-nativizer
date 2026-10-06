@@ -1,7 +1,7 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 
-import {parseRuleKey, parseRuleState} from '../lib/rules.js';
+import {parseRuleState} from '../lib/rules.js';
 import {keyAxisCapabilities, _, ngettext} from '../lib/rulePresenter.js';
 import {findAppInfoByWmClass} from '../lib/appInfo.js';
 import {setupRuleRowHeader, populateAxisIcons, ensureCustomStyles} from './ruleUi.js';
@@ -129,21 +129,20 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     };
 
     for (const item of conflicts) {
-        const {key, existingState, importedState, existingTitle, importedTitle} = item;
-        const {baseWmClass, properties} = parseRuleKey(key);
-        const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-        const name = appInfo?.name || baseWmClass || key;
+        const {key, kind, existingState, importedState, existingTitle, importedTitle} = item;
+        const appInfo = findAppInfoByWmClass(kind.identity, installedApps);
+        const name = appInfo?.name || kind.identity || '';
         const sample = existingTitle || importedTitle;
 
         const row = new Adw.ActionRow();
         setupRuleRowHeader(row, {
             name,
             sampleTitle: sample,
-            properties,
+            kind,
             appInfo,
         });
 
-        const caps = keyAxisCapabilities(properties);
+        const caps = keyAxisCapabilities(kind);
         const existingCorrected = parseRuleState(existingState) ?? new Set();
         const importedCorrected = parseRuleState(importedState) ?? new Set();
 

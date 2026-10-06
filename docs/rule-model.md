@@ -3,72 +3,81 @@
 A rule is keyed by an application identity plus seven structural attributes of the
 window, and its state names the axes whose automatic decision the user reversed. The
 picker writes rules, the runtime matches them, and the settings layer sanitises them;
-this is the shared description of what a key means.
+this is the shared description of what a kind means.
 
-## Key grammar
+## The window kind
 
-    <identity>:client_type=<wayland|x11>,window_type=<n>,has_parent=<bool>,allows_resize=<bool>,attached_dialog=<bool>,has_ring=<bool>,has_ssd=<bool>[,size=<W>x<H>]
+A rule is keyed by a **window kind**, a plain value rather than a serialised string. It
+names the application identity, the client type (Wayland or X11), the window type,
+whether the window has a parent, whether it is attached to that parent, whether it can be
+resized, whether it declares a shadow margin ring of its own, and whether the compositor
+frames it itself. A fixed-size window also records its logical width and height; a
+resizable window records no size, because a resizable window's size is not stable.
 
-For example:
+There is no grammar left to parse: the runtime builds the kind of a live window and the
+settings layer stores its fields directly, so matching compares field by field. The
+identity is compared case-insensitively - one application can report itself as `WeChat`
+from one window and `wechat` from the next - and it is no longer percent-encoded, because
+there is no delimited string left to escape it for.
 
-    # Firefox main browser window (declares client shadow ring):
-    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false
+The three examples from the string-key era are now three kinds differing only in a field:
 
-    # Firefox Picture-in-Picture (PiP) window (compact borderless video surface without shadow margin ring):
-    firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false
+- **Firefox's main browser window** declares a client shadow margin ring; its
+  Picture-in-Picture window, a compact borderless video surface, declares none. The two
+  agree on every other field and are still different kinds, so a rule for one cannot clip
+  or darken the other.
+- A **fixed-size dialog** also carries its logical dimensions - 360×420 for a login QR
+  code dialog, say - which tell apart dialogs of one application whose structural fields
+  otherwise match.
 
-    # Fixed-size dialog with explicit dimensions:
-    wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420
+Each attribute below carries a rule of its own:
 
-- Field **order is part of the format**: `rules.js` renders it canonically, so string
-  comparison is enough to match.
-- **`has_ring=<bool>` distinguishes standard CSD windows from compact/PiP windows**:
+- **`has_ring` distinguishes standard CSD windows from compact/PiP windows**:
   A standard CSD window reserves a margin ring for its own shadow (`buffer_rect - frame_rect > 0`).
   In contrast, media players, floating video popups (such as Firefox Picture-in-Picture), or borderless
-  utility windows do not declare any shadow margin ring (`buffer_rect === frame_rect`). Incorporating
+  utility windows do not declare any shadow margin ring (`buffer_rect === frame_rect`). Reading
   `has_ring` separates these two kinds cleanly, preventing rules intended for browser main windows
   from unintentionally clipping or darkening PiP video surfaces.
   It is one reading, shared by the picker and the runtime: a declared ring is a positive margin on
   either side of either axis, measured from the two-sided buffer/frame totals. The two used to read
   the fact separately and disagreed - one refused to answer when the frame did not fit inside its
   buffer, the other fell back to the totals and answered anyway - so a window in that state had a
-  rule written under one key and looked up under the other, and the rule could never match.
-- **Backward compatibility**: none. The key and the state grammar are the current
-  shape only — an older key or an older state is dropped rather than migrated, which is
-  what an unreleased model may do.
-- **`has_ssd=<bool>` names a kind the compositor frames itself**: Mutter's own
+  rule written under one kind and looked up under the other, and the rule could never match.
+- **Backward compatibility**: none. The field model is the current shape only - an older
+  string key or state grammar is dropped rather than migrated, which is what an unreleased
+  model may do.
+- **`has_ssd` names a kind the compositor frames itself**: Mutter's own
   `Meta.Window.decorated` is a policy flag - the best reading the GJS side has, not proof of a
   live (`mutter-x11-frames`) frame - and where the compositor frames the window, that frame, not
-  the client, runs the resize grab. The flag is part of the key so the preferences window can
+  the client, runs the resize grab. The flag is part of the kind so the preferences window can
   tell the kind apart and not offer a resize axis it could never act on. An application that
   switches decoration mode becomes a different kind.
 - An **attached dialog always has a parent** — Mutter only attaches a transient whose
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
-  `attached_dialog` cannot vary independently: `attached_dialog=true` implies
-  `has_parent=true`. That is why the prefs sentence can fold both into one phrase
-  without losing a case.
-- The **`size=<W>x<H>` specifier is exclusively for fixed-size windows** (`allows_resize=false`):
+  `attached_dialog` cannot vary independently: `attached_dialog` implies `has_parent`. That
+  is why the prefs sentence can fold both into one phrase without losing a case.
+- The **size is exclusively for fixed-size windows** (`allows_resize=false`):
   One application often creates multiple distinct fixed dialogs or floating bars (e.g. login
   QR code dialog, screenshot toolbar, about box) that share identical window type and parent
   attributes. Because fixed-size windows cannot be resized by the user, their dimensions are
-  inherently stable static fingerprints. Adding the logical dimensions (`frame_rect` width and
-  height rounded to integers) distinguishes these dialogs without collision.
-  Resizable windows (`allows_resize=true`) **must never** have a `size` specifier, as manual
-  resizing would immediately invalidate the rule.
+  inherently stable and belong in the kind. The logical dimensions (`frame_rect` width and
+  height rounded to integers) distinguish these dialogs without collision.
+  Resizable windows (`allows_resize=true`) **must never** carry a size, as manual resizing
+  would immediately invalidate the rule; a stored record that violates this is dropped when
+  the rules are read.
 - **Matching priority and fallback**: For fixed-size windows, resolution prefers an
-  exact-size key first; if no exact match is stored, it gracefully falls back to a generic
-  rule without size (if present).
-- The identity is percent-encoded, because `:` and whitespace are delimiters.
-  Realistic identities (WM_CLASS, Flatpak id, reverse-DNS app id) pass through
-  unchanged; only exotic ones are escaped, and parsing decodes them back.
-- `title` and `role` are deliberately *not* part of the key. They change while a window lives
+  exact-size kind first; if no exact match is stored, it gracefully falls back to a generic
+  kind without size (if present).
+- `title` and `role` are deliberately *not* part of the kind. They change while a window lives
   or across locales, so they cannot define a stable structural kind.
 
-The rules live in one settings key, `window-rules` (`a{sa{ss}}`), fingerprint →
-`{state, title}` - the state matching reads, and the display-only sample beside it. The
-old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
-a group plus a named axis has no equivalent in the axis form below. The `resize-band`
-master switch is gone too: the band is the resize axis, reversed per kind like the rest.
+The rules live in one settings key, `window-rules-v2` (`aa{sv}`), an array of records
+each carrying a kind, its state, and the display-only sample title the pick recorded
+beside it. It is a new key rather than a retyped old one: a value of the old type under
+the old name would leave GLib warning on every read. The old `suppress-rules` / `force-rules` pair is gone and its contents are not
+migrated: a group plus a named axis has no equivalent in the axis form below. The
+`resize-band` master switch is gone too: the band is the resize axis, reversed per kind
+like the rest.
 
 ## State grammar: the axes a rule reverses
 
@@ -129,7 +138,7 @@ is merely imperfect. See [decoration-model.md](decoration-model.md).
 
 ## Identity
 
-A rule is only as stable as the identity in its key. Resolution order:
+A rule is only as stable as the identity in its kind. Resolution order:
 
 1. what the window declares — `get_wm_class()` → `get_sandboxed_app_id()` →
    `get_gtk_application_id()`;
@@ -142,10 +151,9 @@ A rule is only as stable as the identity in its key. Resolution order:
 4. `pid-<pid>` as a last resort. It is session-scoped, so a rule keyed on it stops
    matching after a restart.
 
-The identity is stored lowercased, so case is not part of what a key identifies: one
-application can report itself as `WeChat` from one window and `wechat` from the next,
-and those are one kind. Keys written before that was true are lowercased as they are
-read, and the fingerprint has to match exactly.
+The identity is compared case-insensitively, so case is not part of what a kind
+identifies: one application can report itself as `WeChat` from one window and `wechat`
+from the next, and those are one kind. Every other field has to match exactly.
 
 The picker and the runtime must resolve identity through the same path
 (`window.js`), otherwise a rule created for a picked window could never match it at
@@ -176,9 +184,10 @@ name an axis the window would not offer.
 ### What the pick remembers for the row
 
 The pick also records the title of the window it was made on, in the same entry as the rule
-(`window-rules` is a map to `{state, title}`), so a title cannot outlive its rule. It is a
+(`window-rules-v2` stores the kind, its state, and the sample title in one record), so
+a title cannot outlive its rule. It is a
 **sample of the kind**, not its name: the
-rule matches every window with the same fingerprint, and the kind can show a different title
+rule matches every window with the same kind, and the kind can show a different title
 later. The preferences window shows it dimmed beside the app name, and says on
 hover where it came from. Matching never reads it, and only display code does: the rule row, the
 import-conflict dialog, and the clipboard export. Stored titles are folded to one line,
