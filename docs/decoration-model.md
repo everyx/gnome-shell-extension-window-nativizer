@@ -547,8 +547,8 @@ session:
 
 | Part | Where | Size |
 |---|---|---|
-| clip | `clipEffect.js`, on the window actor (surface child on X11) | window size + 3px, ~8.3 MB at 1920x1080 |
-| shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window |
+| clip | `clipEffect.js`, on the window actor (surface child on X11) | window size + 3px, ~8.3 MB at 1920x1080 (also paints inner outline) |
+| shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window (pure Gaussian diffuse shadow) |
 
 The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and a
 window with no shadow never touches a baked buffer. It costs nothing while nothing
@@ -569,7 +569,12 @@ and a one-pixel strip from each edge describe the whole shape and the strips str
 is Mutter's approach as well: `MetaShadow` (`src/x11/meta-shadow-factory.c`) is a
 `CoglTexture` rendered once and painted as a nine-slice. The bake draws the same GLSL the
 generator takes from GTK4, so this stays the upstream shadow, computed once instead of
-every frame.
+every frame. In `clipEffect.js`, the 1px SDF AA ramp is restricted strictly to corner arcs,
+preserving 100% sharp content alpha on straight edges to prevent subpixel dragging blur from
+double-resampling under fractional scaling. Concentric corner alignment and zero-leak clipping are
+guaranteed by `clipEffect.js`'s `SnapRule.ROUND` physical grid phase locking with `shadowActor`,
+and `SAFE_INSET_MARGIN = 1px` (`lib/frame.js`) completely excises Cairo half-pixel stroke residue
+on windows with declared rings without affecting shadow geometry or tiled rings.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds

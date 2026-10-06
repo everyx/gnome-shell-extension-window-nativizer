@@ -215,23 +215,51 @@ than native's ~199). Two factors contributed to this:
    layers via **Alpha-Over** (`1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)`), preventing
    artificial saturation where blur tails overlap.
 
-### Resolution: Hollow Outset Border & Alpha-Over
+### Resolution: Symmetric Device Grid Phase Locking (`SnapRule.ROUND`) & Pure Gaussian Shadow
 
-In `tools/gen-shader.mjs`:
-- Layer 3 is evaluated as a hollow outset band between `d=0` and `d=spread`:
-  ```glsl
-  float inner = clamp(d + 0.5, 0.0, 1.0);
-  float outer = clamp(d - spread + 0.5, 0.0, 1.0);
-  return alpha * max(inner - outer, 0.0);
-  ```
-- Layer alpha is composited using alpha-over:
-  ```glsl
-  float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
-  ```
-- `SNAP_BLEED = 0.8` is retained, guaranteeing zero risk of subpixel white gaps under
-  fractional scaling. Coupled with physical device pixel grid snapping aligned with GTK 4.24,
-  both compositor clipping and shadow 9-slice tiles land on deterministic physical pixel boundaries
-  without phase drift.
+Fractional scaling under window drag revealed a critical limitation: as actor coordinates
+shift across subpixel boundaries (e.g. 1.33x or 1.25x scale), two phenomena emerged:
+1. Bilinear texture filtering across any high-frequency 1px border line baked into the 8-slice
+   texture alternated between landing on a single physical pixel and splitting across two pixels,
+   producing 1px/2px jumping and flickering.
+2. `SnapRule.GROW` in `clipEffect.js` forced `left: FLOOR`, expanding the clip rect outward by up
+   to 0.5 logical pixels. On non-native windows declaring client shadow insets (such as Meld / GTK3
+   CSD), this outward expansion inadvertently captured the obsolete 1px dark border drawn by the
+   client in the outer decoration ring (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`), while
+   `shadowActor`'s slice boxes were snapped using `ROUND`, causing a 1-physical-pixel phase conflict
+   and asymmetric dark borders.
+
+To solve this at the root:
+
+1. **Straight Edge AA Decoupling in Clip Shader**:
+   Applying an SDF anti-aliasing ramp indiscriminately to straight edges generates a 1px semi-transparent
+   slope in the offscreen FBO. When moving windows across subpixel boundaries under fractional scaling
+   (e.g. 1.33x or 1.25x scale), Mutter's stage texture filtering convolves this semi-transparent slope a
+   second time, broadening the edge into a 2px blurry fringe. In `clipEffect.js`, the SDF AA ramp is strictly
+   restricted to corner arcs (`isCorner: q.x > 0.0 && q.y > 0.0`), while straight edges preserve 100% clean
+   content alpha (`straight = mix(1.0, inSquare, uClearRing)`). Single-pass GPU screen-space rasterization keeps
+   the straight edge sharp and jitter-free at all subpixel positions.
+2. **Symmetric Device Grid Phase Locking (`SnapRule.ROUND`)**:
+   `clipEffect.js` aligns the clip frame using `SnapRule.ROUND`, locking phase exactly with `shadowActor`'s
+   `snapSliceBoxesInto` (which also snaps to the physical grid using `SnapDirection.ROUND`). This guarantees:
+   - Zero phase drift between the clip mask and the 8-slice shadow cutout across all monitor DPI scales;
+   - Obsolete client-drawn border rings outside the client frame (`x < insets.left`) are strictly excluded
+     from the clipped body without fractional outward expansion;
+   - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
+3. **Alpha-Over Compositing**: Multi-layer shadows in `ShadowActor` are composited using alpha-over:
+   ```glsl
+   float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
+   ```
+4. **Physical Grid Snapping**: `SNAP_BLEED = 0.8` is retained to prevent subpixel seams, and slice boxes
+   are snapped to the physical grid using GTK 4.24's `gsk_rect_snap_to_grid` rules.
+5. **Safe Inward Inset Margin (`SAFE_INSET_MARGIN = 1px`)**:
+   GTK3 CSD windows (e.g. Meld) render a 1px border stroke (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`).
+   Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), the dark
+   stroke penetrates inward by 0.5px into the client frame, and Mutter's bilinear downsampling under
+   fractional scaling further diffuses this residue. In `WindowDecoration.apply()`, activating
+   `actions.clearRing` applies `safeInsets()` (`SAFE_INSET_MARGIN = 1px`) strictly to the clip effect
+   (`_syncClip`), excising the internal stroke bleed and outer box-shadow residue with 100% four-way symmetry
+   while leaving shadow bounds and tiled rings strictly aligned to `frame_rect`.
 
 ### Golden Baseline at 1.0x Integer Scale
 
