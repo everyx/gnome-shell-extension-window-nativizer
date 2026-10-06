@@ -81,8 +81,6 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
-    {ns: 'Clutter', cls: 'ActorMeta', member: 'set_enabled', params: ['is_enabled']},
-    {ns: 'Clutter', cls: 'ActorMeta', member: 'enabled', property: true},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'get_pipeline', arity: 0},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
