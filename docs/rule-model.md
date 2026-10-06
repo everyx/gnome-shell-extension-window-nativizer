@@ -24,7 +24,7 @@ For example:
   comparison is enough to match.
 - **`has_ring=<bool>` distinguishes standard CSD windows from compact/PiP windows**:
   A standard CSD window reserves a margin ring for its own shadow (`buffer_rect - frame_rect > 0`,
-  evaluated by `declaresOwnShadow()` in the runtime and `hasDeclaredMarginRing()` in the picker / frame layer). In contrast, media players, floating video popups
+  decided at runtime and in the picker / frame layer). In contrast, media players, floating video popups
   (such as Firefox Picture-in-Picture), or borderless utility windows do not declare any shadow margin
   ring (`buffer_rect === frame_rect`). Incorporating `has_ring` separates these two kinds cleanly,
   preventing rules intended for browser main windows from unintentionally clipping or darkening PiP video surfaces.
@@ -41,7 +41,7 @@ For example:
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies
   `has_parent=true`. That is why the prefs sentence can fold both into one phrase
-  (`windowKindSentence()` in `rulePresenter.js`) without losing a case.
+  without losing a case.
 - The **`size=<W>x<H>` specifier is exclusively for fixed-size windows** (`allows_resize=false`):
   One application often creates multiple distinct fixed dialogs or floating bars (e.g. login
   QR code dialog, screenshot toolbar, about box) that share identical window type and parent
@@ -50,7 +50,7 @@ For example:
   height rounded to integers) distinguishes these dialogs without collision.
   Resizable windows (`allows_resize=true`) **must never** have a `size` specifier, as manual
   resizing would immediately invalidate the rule.
-- **Matching priority and fallback**: For fixed-size windows, `resolveRule()` prefers an
+- **Matching priority and fallback**: For fixed-size windows, resolution prefers an
   exact-size key first; if no exact match is stored, it gracefully falls back to a generic
   rule without size (if present).
 - The identity is percent-encoded, because `:` and whitespace are delimiters.
@@ -71,9 +71,8 @@ A rule exists because the automatic decision is wrong for one window kind. Its s
 names the axes to **reverse** — the runtime flips its own reading on each of them — in
 canonical order, e.g. `corners,shadow`. An axis that is not named follows the automatic
 decision, and a state naming nothing is the same as no rule, so it is never stored.
-`parseRuleState()` and `buildRuleState()` in `rules.js` are the only place this grammar
-is spelled out, so the settings layer, the picker and the runtime cannot disagree about
-it.
+`rules.js` is the only place this grammar is spelled out, so the settings layer, the
+picker and the runtime cannot disagree about it.
 
 Single principle: the user's disagreement beats the decision, wherever they disagree.
 Each axis has exactly one decision and one way to overrule it, so a rule can never
@@ -99,7 +98,7 @@ one takeover that borrows the other axis: the corners we round are what let us t
 ring over, and clearing it is the clip's job. So a `corners`-only reversal retracts the taken
 shadow with the corners, while a `shadow`-only reversal leaves the clip following the corner
 decision - at the style radius, not radius 0. A radius-0 clip is attached only where a ring
-has to be cleared without our corners (`clearRing`). The boundaries are listed in
+has to be cleared without our corners. The boundaries are listed in
 [decoration-model.md](decoration-model.md).
 
 ## One rule per window kind
@@ -144,8 +143,8 @@ and those are one kind. Keys written before that was true are lowercased as they
 read, and the fingerprint has to match exactly.
 
 The picker and the runtime must resolve identity through the same path
-(`window.js` + `chooseWindowIdentity`), otherwise a rule created for a picked window
-could never match it at runtime.
+(`window.js`), otherwise a rule created for a picked window could never match it at
+runtime.
 
 ## The pick heuristic
 
@@ -165,7 +164,7 @@ refused rather than stored.
 runtime could not act on (the resize axis of an SSD frame or a fixed-size window, any axis
 of a menu) is left out, because a rule naming it could not take effect.
 
-`ruleAxisCapabilities()` is the one answer to "can this kind be corrected on this axis",
+A single capability check is the one answer to "can this kind be corrected on this axis",
 shared by the picker and by the preferences window's switches, so a suggestion can never
 name an axis the window would not offer.
 
@@ -177,8 +176,8 @@ The pick also records the title of the window it was made on, in the same entry 
 rule matches every window with the same fingerprint, and the kind can show a different title
 later. The preferences window shows it dimmed beside the app name, and says on
 hover where it came from. Matching never reads it, and only display code does: the rule row, the
-import-conflict dialog, and the clipboard export. `sanitizeRuleTitles()` folds it to one line,
-and the row ellipsizes it by width (`title_lines: 1`) - no character cap, which could not know
+import-conflict dialog, and the clipboard export. Stored titles are folded to one line,
+and the row ellipsizes them by width - no character cap, which could not know
 the width. The entry goes when the rule goes.
 
 ### Normalization and safety
@@ -194,11 +193,10 @@ The guess is safe and ergonomic because:
 2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused
    and expanded, and each axis carries a switch that corrects it - deleting the row
    restores the automatic decision.
-3. **Pre-flight verification**: The extension re-evaluates the proposed state via
-   `suggestedRuleWouldChange()` before storing, refusing any rule that would have no physical
-   effect on the target window kind. `suggestedRuleState()` and `suggestedRuleWouldChange()`
-   in `detector.js` are pure and unit-tested; the inspector passes both answers over D-Bus with
-   the picked window's properties (transient state rides along so prefs can toast that the rule
-   applies on restore). A pick with no answer at all - a Shell that has not reloaded since an
+3. **Pre-flight verification**: The extension re-evaluates the proposed state before storing,
+   refusing any rule that would have no physical effect on the target window kind. The
+   suggestion and its pre-flight check are pure and unit-tested; the inspector passes both
+   answers over D-Bus with the picked window's properties (transient state rides along so
+   prefs can toast that the rule applies on restore). A pick with no answer at all - a Shell that has not reloaded since an
    update - is refused too, rather than guessed at.
 
