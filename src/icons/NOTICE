@@ -1,6 +1,6 @@
 The three icons here are for Window Nativizer. They are fill-only paths on the
 GNOME symbolic grid (16x16 viewBox, currentColor), which is what GTK recolors
-to the row's own foreground; see AXIS_ICONS in src/prefs.js.
+to the row's own foreground; see AXIS_ICONS in src/prefs/ruleUi.js.
 
 - winnativizer-corners-symbolic.svg: one rounded window corner. Drawn for this
   project, GPL-2.0-or-later like the rest of the repository.

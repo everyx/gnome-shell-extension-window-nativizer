@@ -35,7 +35,7 @@ rounding them?             the client's own ring is cleared exactly when the rin
      gates excludes it (*Where we deliberately differ from Mutter*). A declared margin
      is read the way Mutter reads it, as the boolean `has_custom_frame_extents`: **any**
      declared margin is a ring, on one axis or both, 1px as much as 40px. That is why
-     `declaresOwnShadow()` is `sideW > 0 || sideH > 0`, and why its reason string
+     `declaresOwnShadow()` is `!hasSsd && (sideW > 0 || sideH > 0)`, and why its reason string
      carries the measured margin and no threshold (`has-csd(4.0x4.0)`). A radius cannot
      answer this question: GTK4 floors a CSD window's margin at 12 logical px
      (`vendor/gtk/gtkwindow.c`: `shadow_width = MAX(css_extents, RESIZE_HANDLE_SIZE)`), so no
@@ -74,7 +74,7 @@ and all of them are visible in the same place:
 |---|---|
 | libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
 
-> **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 — cleared ring + our shadow + 15px four corners — with the expected top 12px vs 15px delta and the other three corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
+> **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 — cleared ring + our shadow + 15px four corners — with the expected top 12px vs 15px delta and the other two corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
 
 > **Qt 6 built-in Adwaita decoration** (`wayland-decoration-client/libadwaita.so`, `qt/qtwayland` `src/plugins/decorations/adwaita/qwaylandadwaitadecoration.cpp`) is **not** a provider: `QWaylandAdwaitaDecoration::paint` (`ceCornerRadius=12`, `arcTo` only on `topLeft`/`topRight`, bottom edge is `lineTo`) and `QWaylandAdwaitaDecoration::margins` (`ceShadowsWidth=10`) show it rounds only the top two corners — bottom two stay square — so it cannot supply four-corner Adwaita look and is nativized the same way (verified against `dev` and `6.8`; cached at `/tmp/qt_qwaylandadwaitadecoration.cpp`).
 
@@ -104,7 +104,7 @@ its toolkit gave it, and the manager runs the decision again when the answer lan
 shadow over a window that has its own, the direction this axis is built to avoid. What it
 costs is a decoration arriving a frame or two late on the *first* window of a process; every
 later window of the same process reads the cache. Queries strictly inspect memory snapshots
-(`processCache`/`inFlight`), while `/proc` I/O is driven exclusively by lifecycle commands
+(`_processCache`/`_inFlight`), while `/proc` I/O is driven exclusively by lifecycle commands
 (`probeAdwaitaLook`). Reading I/O lazily inside queries or predicates (violating Command-Query
 Separation) is prohibited: it creates timing inversions where query evaluation order mutates state
 and triggers transient visual flicker. The manager drives the probe from the window lifecycle and
@@ -138,10 +138,11 @@ the shadow changes owner along with the shape, and the rule is one line:
 makes the shadow ours first, so an ordinary client-decorated window ends up with one
 shadow matching the corners we drew. A rule decides each axis itself, by reversing it:
 where the decision left the shadow with the client, reversing it clears the ring and draws
-ours; where the decision drew ours, reversing it retracts. The clip is attached for a
-shadow reversal too, with radius 0: erasing the ring
-is the clip's job and needs no corner cut. Our shadow is then cast for a square body,
-because a square body is the shape we have.
+ours; where the decision drew ours, reversing it retracts. The clip follows the corners, not
+the shadow: a shadow-only reversal leaves the clip at the style radius (the corners are still
+ours), while a radius-0 clip is attached only where a ring has to be cleared without our
+corners (`clearRing`). Our shadow is then cast for the body the corners decision leaves —
+square when a rule left the corners theirs.
 
 | What the ring holds | Shadow ours? | What happens |
 |---|---|---|
@@ -189,9 +190,10 @@ ring at all.
 - **A snap-tiled window loses the shadow it would get from us** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct the
   neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on
-  its outer edge. This only ever drops *our* shadow: a client that declared its own
-  ring keeps it, because tiling is not the client's shape to answer for. Tiled windows
-  are flat-cornered either way (*Which style applies*).
+  its outer edge. This only ever drops *our* shadow decision; it does not suppress the 1px
+  tiled ring on the shared edge, and whether the client's own ring is cleared follows the
+  ring we draw (`clearRing`), not the tile match. Tiled windows are flat-cornered either way
+  (*Which style applies*).
 - **Corner clipping is skipped under fractional scaling** when the user prefers
   crisp text: the offscreen pass is what blurs text at non-integer scales.
 
@@ -500,7 +502,8 @@ the reading being one-sided; the last is simply not verified yet.
 
 ## The margins, and the scale question
 
-`computeInsets()` reads `buffer_rect - frame_rect`. MetaWindow scales both
+`insetsFromRects()` reads `buffer_rect - frame_rect` per side (with `computeInsets()` as the
+two-sided totals fallback). MetaWindow scales both
 rectangles by the same window geometry scale, so their difference is the margin the
 client declared. That scale is 1 whenever the logical monitor layout is LOGICAL,
 and the native backend always reports that
@@ -535,8 +538,9 @@ libadwaita paints around a decorated window - plus, since a style change is not 
 change, whether that change animates and whether the window is drawing the tiled ring. `styleForWindow`
 in `src/lib/style.js` is what returns it and `tools/gen-style.mjs` is where its fields come from. Fullscreen and maximized windows get neither outline nor
 shadows — they are flush with the screen edge, where a shadow would be a line on it.
-Tiled windows drop the outline and rounded corners (radius 0), retaining only the 1px
-border shadow unless matched with an adjacent tile.
+Tiled windows drop the outline and rounded corners (radius 0); the 1px tiled ring is still
+drawn on every edge, so the client's own ring is cleared for ours to replace. A tile match only
+drops the shadow decision, never the ring we draw.
 High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
 and deepens the outline from 7% to 30%.
 
@@ -550,8 +554,9 @@ session:
 | clip | `clipEffect.js`, on the window actor (surface child on X11) | window size + 3px, ~8.3 MB at 1920x1080 (also paints inner outline) |
 | shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window (pure Gaussian diffuse shadow) |
 
-The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and a
-window with no shadow never touches a baked buffer. It costs nothing while nothing
+The corner-clipping pass is skipped when there is nothing to round (radius 0 and no outline);
+the effect is still attached at radius 0 when a client ring has to be cleared (`clearRing`).
+A window with no shadow never touches a baked buffer. It costs nothing while nothing
 damages the window: it is one framebuffer, re-rendered whole whenever the window paints,
 local damage included. Measured against one 500x350 target (`pnpm run benchmark:perf`):
 no idle CPU difference, about 0.59 ms of shell CPU per frame while dragging a resize (five
@@ -610,14 +615,15 @@ the window shape or focus changes.
 
 Two things that look like shortcuts are not, and it saves time to know why:
 
-- **St has no CSS transitions.** The shell's CSS engine parses no `transition` property,
-  so `transition: box-shadow 200ms ease-out` cannot be written for it; the only
-  `ClutterTransition` in `src/st/` belongs to `st-adjustment.c`, which animates a value
-  from JS. The fade therefore has to be driven from our own code.
+- **St's CSS transitions animate a widget's theme node, not a window's shadow.** The shell's
+  CSS engine parses `transition-duration` and cross-fades an St widget's old and new node paint
+  through `StThemeNodeTransition`, but our shadow is a Cogl actor with no St theme node to
+  animate, so the fade has to be driven from our own code.
 - **St's `box-shadow` is a different blur, and no cheaper.** It is pre-rendered into a
   cached pipeline the way ours is (`_st_create_shadow_pipeline` in
   `st-theme-node-drawing.c`, painted through a `ClutterPipelineNode` in the same file), but
-  the blurring is St's own, not GTK4's, and the shell's own theme never uses the property.
+  the blurring is St's own, not GTK4's, and the shell's own theme uses it only on its own
+  widgets, never for a window shadow.
   Drawing through it would give up the reason the shader was transpiled from GSK. It would
   not be faster either: both approaches blit a baked texture, and ours is baked once per
   *style* rather than per node, so a resize costs nothing at all.
@@ -664,7 +670,7 @@ issue #7903).
 To achieve seamless visual consistency with Libadwaita / native CSD windows in Overview thumbnails, the extension retains rounded corners in the overview by default and eliminates downsampling blur through hardware mipmapping:
 
 - **Visual consistency and anti-aliasing quality**: While a 12–15px corner radius mathematically shrinks to ~2–3 logical pixels at ~0.25x thumbnail scale, unclipped 90° rectangular corners create an immediate visual anomaly when positioned directly adjacent to native GTK4/Libadwaita windows (which consistently render rounded corners in overview). Furthermore, when fewer windows are open or when preview cards occupy substantial viewport space, the absolute on-screen prominence of the corners increases significantly. Historically, disabling the clip effect in overview was chosen not because rounded corners were deemed imperceptible, but because bilinear downsampling of an un-mipmapped FBO degraded the 2–3px curves into noisy, aliased artifacts and blurred text. By solving downsampling aliasing at the root through hardware mipmapping, retaining rounded corners achieves both visual consistency and clean edge antialiasing.
-- The clip effect remains active during overview (`clip.set_enabled(true)`).
+- The clip effect remains attached during overview; `WindowDecoration.setOverviewMode(true)` puts it in mipmapping mode rather than disabling it.
 - When entering overview, `Manager` informs active decorations via `WindowDecoration.setOverviewMode(true)`.
 - Reusing the desktop convention (`outline: null` on tiled/maximized windows), `WindowDecoration` sets `outline: null` during overview. This completely eliminates subpixel edge fringing and strobing on downscaled ~0.25x thumbnails while preserving crisp rounded corners. Upon returning to the desktop, the normal 1px inner outline is restored seamlessly.
 - In `vfunc_paint_target`, `RoundedClipEffect` dynamically sets its Cogl pipeline layer 0 minification filter to `COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR`.
@@ -689,7 +695,7 @@ The reason rounded corners can piggyback on Mutter's native pipeline while shado
 
 - **Window shadows are an *extra-actor* operation**:
   - Non-CSD windows (X11 / Xwayland or Wayland clients without client-side decorations) report zero frame extents (`_GTK_FRAME_EXTENTS = 0`). Their physical buffer boundary ends sharply at the window frame.
-  - A natural drop shadow must extend 30–60 pixels outward in all directions beyond the window edge. To prevent this expanded area from corrupting compositor input picking (which would cause clicks near window edges to be misrouted) and to decouple shadow state from desktop tiling/maximization, shadows cannot be rendered inside the window actor; they must be managed as separate external sibling actors (`ShadowActor` placed in `global.window_group` or `Main.uiGroup`).
+  - A natural drop shadow must extend 30–60 pixels outward in all directions beyond the window edge. To prevent this expanded area from corrupting compositor input picking (which would cause clicks near window edges to be misrouted) and to decouple shadow state from desktop tiling/maximization, shadows cannot be rendered inside the window actor; they must be managed as separate external sibling actors (`ShadowActor` placed in `global.window_group`, not `Main.uiGroup`).
   - GNOME Shell's C layout manager (`ShellWindowPreviewLayout`) strictly manages and clones only `MetaWindowActor`. It has no knowledge of external sibling actors. Consequently, shadows are inherently omitted from native preview cloning.
 
 #### 2. Evaluation of potential low-overhead shadow implementations

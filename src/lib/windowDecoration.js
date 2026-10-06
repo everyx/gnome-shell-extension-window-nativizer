@@ -179,8 +179,8 @@ export class WindowDecoration {
     _syncClip(wantEffect, clearRing = false, clipTarget = null, insets = null, inOverview = false) {
         // Attach/detach is a decision, not a frame measurement: it no longer depends on the
         // actor's current allocation (that is why a resize used to drop the effect for a
-        // frame). The only window that gets no effect is one whose insets is null -
-        // a frame that does not fit inside its buffer at all. A framed X11 window is not
+        // frame). The only window that wants an effect and gets none is one whose insets
+        // is null - a frame that does not fit inside its buffer at all. A framed X11 window is not
         // that case: its buffer is the frame grown by the invisible borders, so it is
         // clipped like any other (measured: the surface child is buffer-sized).
         const wanted = wantEffect && Boolean(insets);

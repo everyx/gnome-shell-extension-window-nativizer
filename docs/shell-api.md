@@ -45,7 +45,8 @@ decision before any geometry is computed.
 ## get_tile_match
 
 `win.get_tile_match()` - the adjacent matching tile, or null. Two tiles that match each other are
-not a maximize, and the rule fingerprint has to know the difference.
+not a maximize, and the decoration decision has to know the difference (it is transient state, so
+it is deliberately not in the rule fingerprint).
 
 ## get_pid
 
@@ -70,7 +71,7 @@ two; it takes none and returns the rectangle.
 
 ## get_monitor
 
-`win.get_monitor()` - the monitor the window is on. The clip radius and the band's bounds are
+`win.get_monitor()` - the monitor the window is on. The clip scale and the band's bounds are
 resolved per monitor, so this is read before either.
 
 ## begin_grab_op
@@ -83,8 +84,9 @@ apart.
 
 ## get_compositor_private
 
-`win.get_compositor_private()` - the window actor. Every decoration added is parented to
-`global.window_group` and pinned to this actor, so this is the first thing a reconcile needs.
+`win.get_compositor_private()` - the window actor. The shadow actor and the resize band are
+parented to `global.window_group` and pinned to this actor, while the clip is attached to it as an
+effect, so this is the first thing a reconcile needs.
 
 ## is_hidden
 
@@ -147,7 +149,7 @@ chaining, and the only place the extension asks for a scale.
 
 ## get_n_monitors
 
-`global.display.get_n_monitors()` - bounds the monitor loop in the snap helpers.
+`global.display.get_n_monitors()` - bounds the monitor-index check in the window scale/bounds helpers (`window.js` `getPhysicalMonitorScale` / `resolveMonitorBounds`).
 
 ## get_tab_list
 
@@ -186,15 +188,17 @@ and size, so their geometry follows a resize without a JS tick.
 
 ## actor_meta_set_enabled
 
-`effect.set_enabled()` - toggles the offscreen pass without detaching the effect. A real method
-(`clutter_actor_meta_set_enabled`), not something GJS derives from the property of the same name;
-the effect inherits it from `Clutter.ActorMeta`.
+`effect.set_enabled()` - the offscreen-pass toggle a `Clutter.ActorMeta` effect exposes. A real
+method (`clutter_actor_meta_set_enabled`), not something GJS derives from the property of the same
+name; the effect inherits it from `Clutter.ActorMeta`. The extension does not call it: `_syncClip()`
+adds and removes the effect instead (`windowDecoration.js`), so the entry records the API and its
+property rather than a call site.
 
 ## actor_meta_enabled
 
 `Clutter.ActorMeta:enabled` - the property behind that method. `clutter-effect.c` points the vfunc
 `clutter_effect_set_enabled` at its setter, which is the symbol an earlier version of this table
-cited as if it were the API.
+cited as if it were the API. The extension reads neither the property nor the method.
 
 ## actor_meta_get_actor
 
@@ -310,20 +314,24 @@ clients this extension decorates.
 
 ## st_settings_get
 
-`St.Settings.get()` - the shell's own settings, read for `high_contrast` (cached, and refreshed on
-`notify::high-contrast`) and for the accent colour the inspector resolves.
+`St.Settings.get()` - the shell's own settings, read for `high_contrast`, `enable_animations` and
+`color_scheme` (each cached and refreshed on its `notify::` signal). The inspector's accent colour
+is the `-st-accent-color` CSS term, resolved by St from `St.Settings:accent-color`, not read here.
 
 ## main_overview
 
-`Main.overview` - the shell's overview object, exported from `js/ui/main.js`. It is null until the
-shell builds it, so every read of it goes through optional chaining.
+`Main.overview` - the shell's overview object, exported from `js/ui/main.js`. `Manager.enable()`
+runs after the shell has built it, so it is read directly: `visible` seeds the manager's overview
+mode, and `showing`/`hidden` flip it.
 
 ## main_ui_group
 
-`Main.uiGroup` - the stage-level container every decoration we add is parented to, so that the
-shadow and the band stack with the window actor rather than with the window's own actor tree.
+`Main.uiGroup` - the stage-level container the inspector's overlay and highlight are added to.
+The shadow and the band are parented to `global.window_group` instead, so they stack with the
+window actor rather than inside the window's own actor tree.
 
 ## overview_visible
 
-`Main.overview.visible` - gates clip effect suspension during the overview, so window previews are
-not rendered through the clip effect.
+`Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
+then switch each clip effect's layer filter to hardware mipmapping (`RoundedClipEffect.setOverviewMode()`),
+so downscaled previews stay filtered; the effect is retained, not suspended.

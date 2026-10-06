@@ -13,7 +13,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`bodyFrame`/`insetsFromRects` (pure) |
 | `lib/nativeLikeCorners.js` | process classification instance (`ProcessClassifier`): asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
-| `lib/pick.js` | the picker's D-Bus contract, rule recommendation evaluation, and property dictionary extraction |
+| `lib/pick.js` | the picker's bus name/path and property dictionary extraction (the `PickWindow` interface is in `inspector.js`; rule recommendation lives in `detector.js`) |
 | `lib/snap.js` | pure grid snapping math: `snapCoordToGrid`, `snapRectToGrid`, actor box snapping, and 8-slice geometry layout (pure) |
 | `lib/style.js` | which decoration parameters a window state gets, and pipeline opacity modulation (pure) |
 | `lib/settings.js` | GSettings IO adapter |
@@ -36,8 +36,9 @@ tested without a session; the processes only gather inputs and apply results.
 
 The picker is the only conversation between them: `inspector.js` implements
 `PickWindow() -> a{ss}`, the prefs window calls it, and it refuses to create a rule
-the extension reports as ineffective. `lib/pick.js` defines that D-Bus contract and
-property serialization so both sides share the same wire format.
+the extension reports as ineffective. `inspector.js` declares the `PickWindow() -> a{ss}` XML, while
+`lib/pick.js` defines the bus name and path and the property serialization, so both sides share
+the same wire format.
 
 For the selection mechanics we followed KDE's KWin
 (`InputRedirection::startInteractiveWindowSelection` with its `clientToVariantMap`)
@@ -48,7 +49,7 @@ Clutter event grab.
 
 When hovering over windows during a pick, `InspectorService` highlights the target:
 - **Target bounding box**: Positioned around the window's frame rect outset by the border stroke width, rather than the window actor's allocation. In Wayland CSD, actor allocation includes invisible client shadow margins (which would leave the highlight floating in empty space, as Looking Glass does). The outset prevents St CSS inward border drawing from eroding into client window content.
-- **Concentric corner radius**: For rounded windows, the highlight's outer border radius maintains concentric curvature ($R_{outer} = R_{inner} + W$) for a uniform stroke width around corners. Square, tiled, maximized, fullscreen, and SSD windows strictly keep square corners.
+- **Concentric corner radius**: For rounded windows, the highlight's outer border radius maintains concentric curvature ($R_{outer} = R_{inner} + W$) for a uniform stroke width around corners. Tiled, maximized, and fullscreen windows strictly keep square corners; an SSD window keeps the radius of the clip it is actually wearing.
 - **Active clip vs. ring clearing**: A window may have a clip effect attached purely to erase a client-painted frame ring at radius 0 (`clearRing`), which must not be confused with active rounded corner clipping.
 - **Styling**: the highlight is generated from the Shell's own pickers - the 2px border from
   the Looking Glass picker, the fill from the screenshot window selector - and
@@ -63,17 +64,18 @@ field, which doubles as the idempotency guard (a second `enable()` returns early
 set).
 
 `Manager.enable()` connects only the global signals a decoration input can change on —
-`window-created`, `grab-op-end`, `restacked`, `notify::focus-window`,
-`notify::high-contrast`, `monitors-changed` — plus `Main.overview`'s `showing` and `hidden`
-signals to toggle clip effect suspension during overview mode, and deliberately no workspace
-signal: no decoration input depends on the workspace, so switching workspaces cannot change any
-window's appearance.
+`window-created`, `grab-op-end`, `restacked`, `notify::focus-window`, St.Settings'
+`notify::high-contrast`, `notify::enable-animations` and `notify::color-scheme`,
+`monitors-changed` — plus `Main.overview`'s `showing` and `hidden` signals to toggle overview
+mode (hardware mipmapping and outline suppression, with rounding retained), and deliberately no
+workspace signal: no decoration input depends on the workspace, so switching workspaces cannot
+change any window's appearance.
 
 `enable()` sets that field before `manager.enable()`, so a failure after that point would
 leave the guard set and make every later `enable()` return early; the catch therefore rolls
 the half-enabled state back through `disable()` (relying on the teardown invariants below).
-`disable()` clears the guard only as its last step, so a teardown that throws midway leaves
-it set as well, and the only recovery is reloading the extension.
+`disable()` drops both references in `finally`, so a teardown that throws midway still clears
+the guard and a later `enable()` re-runs instead of wedging on a stale manager.
 
 ### Lifecycle ownership and invariants
 
@@ -96,8 +98,8 @@ Lifecycles strictly govern session boundaries and per-window teardown:
 
 ## Actors
 
-Every decorated window gets a `ShadowActor` inserted below the window actor in
-`global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowGeometry.js` for the
+A window we draw a shadow or the tiled ring for gets a `ShadowActor` inserted below the window
+actor in `global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowGeometry.js` for the
 slice rects, `effects/shadowTexture.js` for the bake)
 with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is cast by the window
 body (`setShadowInsets()`), not by the actor, which for a client-decorated window also carries the ring
@@ -117,7 +119,9 @@ align to GTK 4.24's physical device pixel grid model:
   for eliminating subpixel shimmering/crawling and hot-path allocations during drags.
 - **Multi-Monitor Cache Isolation**: Because a window actor can be rendered across displays with differing DPI,
   snapped shadow boxes are cached per physical scale factor to prevent cache thrashing.
-- **Outward Clip Boundary**: The clip boundary snaps outward to device pixel edges so client content is never clipped.
+- **Device-Grid Clip Boundary**: The clip boundary snaps to the nearest physical device pixel grid line
+  (`SnapRule.ROUND`), the same rule the shadow cutlines use, so the two share one grid and no subpixel seam
+  appears between them.
   When foreign extensions inject intermediate widgets into the window hierarchy, the clip target resolver bypasses
   them to attach directly to the compatible surface.
 
@@ -154,7 +158,7 @@ still runs and the window content is never dropped. `inSquare = 1 - max(step(bod
 the client-painted ring intact; `uClearRing` blends that mask away when the ring we draw is ours
 (see `decoration-model.md`: ring cleared exactly when the ring we draw is ours).
 
-Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)` — `d < 0` inside body,
+Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, min(uRadius, min(frameHalf.x, frameHalf.y)))` — `d < 0` inside body,
 `d > 0` in removed corners, `d == 0` on boundary. Physical anti-alias: `dPhys = d * uScale`,
 `corner = 1 - clamp(dPhys + 0.5, 0.0, 1.0)`, `keep = min(corner + 1 - inSquare, 1.0)`.
 To eliminate subpixel dragging blur from double-resampling under fractional scaling, the 1px SDF AA
@@ -224,7 +228,7 @@ The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFF
 is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from.
 Both are Cogl's `_clutter_actor_box_enlarge_for_effects`, vendored at
 `vendor/mutter/clutter-actor-box.c` and parsed by `tools/gen-clutter.mjs` into
-`clutterEffectPadding.generated.js`; `shadowTexture.js` and `clipEffect.js` read that one
+`clutterEffectPadding.generated.js`; `shadowGeometry.js` and `clipEffect.js` read that one
 generated source at runtime, while `gen-shader.mjs` and `gen-style.mjs` read it at
 generation time to bake the constants, instead of each writing 2/3 by hand.
 Only the `3px` per-axis total is an upstream literal — it covers up to 1.75px on the
@@ -272,7 +276,7 @@ Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the 
 `bodyFrame(this.width/height, insets)` from the actor's live size on every paint, so
 `cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
 `-PAD` from the window actor, so cast is `body` shifted by zero then grown.
-`shadowSlices(shadowGeometry(radius), cast.w, cast.h)` yields dest boxes and normalized sources;
+`shadowSlices(shadowGeometry(radius), cast.width, cast.height)` yields dest boxes and normalized sources;
 sources never change. On paint, dest boxes are snapped to the physical device pixel grid
 aligned with GTK 4.24 GSK rect snapping, guaranteeing that adjacent slice cutlines share
 identical physical grid lines under fractional scaling with zero subpixel gap or overlap.
@@ -315,9 +319,9 @@ Transition parameters are read from the generated `ADWAITA_STYLE.transition`
 `window-rules` (a map to `{state, title}`) via `lib/settings.js` and calls the extension over
 D-Bus (`PickWindow`). `getWindowRules()` is the only view that hands the state out, so
 matching never reads the title the pick recorded beside it.
-Axis names, axis corrections and type nouns are thunks (`() => _('...')`) because the module
+Axis names and type nouns are thunks (`() => _('...')`) because the module
 loads before the prefs process binds the gettext domain — a plain `_()` would capture the
-untranslated string (`AXIS_NAMES`, `AXIS_CORRECTIONS`, `WINDOW_TYPE_NOUNS`).
+untranslated string (`AXIS_NAMES`, `WINDOW_TYPE_NOUNS`).
 
 Each rule is an `Adw.ExpanderRow`: the header names the app and, for a rule that came from a
 pick, the title that window showed (dimmed, display only - see docs/rule-model.md),
@@ -338,14 +342,15 @@ line.
 `has_ssd`, which cannot both describe a window we read); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
 (Pango markup); `Adw.Toast`/`AlertDialog` and bare `Gtk.Label` take plain text.
 
-The pick button is the group's `header_suffix` - a flat button that names its action and
-wears the add icon, Adwaita's group-with-a-suffix pattern - because it is the only way a
-rule comes into being. Rows are destroyed from within their own signal handlers,
+The pick button and the import/export menu are the group's `header_suffix` - flat buttons that
+name their action and wear their icons, Adwaita's group-with-a-suffix pattern. A pick is the
+primary way a rule comes into being, and importing rules from the clipboard is the other. Rows
+are destroyed from within their own signal handlers,
 so rebuild is deferred to `GLib.PRIORITY_DEFAULT_IDLE`; one pending idle is enough
 because it reads the rules when it runs. The prefs window may be hidden for the
 modal picker and still be closed — `windowAlive` guards the D-Bus reply. An empty
 reply means cancelled/abandoned pick and is silent; a missing suggestion (a Shell that has
 not reloaded since an update) is refused with its own toast, because there is no correction
 to apply. Writes are verified (`hasOwnProperty`) before claiming success.
-Translator note in `windowKindSentence()` explains why the sentence template is the
-translatable unit and fragments are translated separately.
+Translator comments in `windowKindSentence()` describe each fragment and the `%s`
+placeholder order.

@@ -221,24 +221,6 @@ export function emptyBands() {
 }
 
 /**
- * The four rectangles tiling `frame`'s `RESIZE_BAND`-wide outer ring, each clipped to
- * `bounds`. The direction a point resolves to is `edgeForPoint()`; these rectangles only
- * decide where an event is delivered atomically. They are disjoint and cover the ring
- * exactly (half-open, the convention Clutter picks with), so no point is missed or
- * delivered twice.
- *
- * Units are logical px at every scale; a non-positive or non-finite `scale` gets no band,
- * so a caller that cannot say which space it measured in is never silently misread.
- * @param {object} params
- * @param {Rect} params.frame - Window body (`frame_rect`), logical px
- * @param {Rect|null} [params.bounds=null] - Clip rect (`get_monitor_geometry`), logical px
- * @param {number} [params.scale=1] - Monitor scale the frame was read at
- * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null]
- * @param {boolean} [params.maximizedHorizontally=false]
- * @param {boolean} [params.maximizedVertically=false]
- * @returns {Record<string, Rect|null>} One rect per side, null where it is empty
- */
-/**
  * In-place form for the resize hot path: writes the four ring rectangles into `bands` (a
  * persistent object whose regions are rects or null) and reuses each region's own rect, so
  * only the first time a region becomes present allocates. Returns whether anything changed.

@@ -50,7 +50,7 @@ export function computeFadeWeights(progress, outgoingWeight = 1) {
  * @property {object|null} style - Current active/incoming target style
  * @property {{style: object, weight: number}|null} outgoing - Outgoing style and its inherited weight factor
  * @property {number} progress - Interpolated progress [0..1]
- * @property {number} fadeStart - Wall clock start timestamp in milliseconds, or 0 when not fading
+ * @property {number} fadeStart - Clock start timestamp in milliseconds, or 0 when not fading
  * @property {number} durationMs - Configured transition duration in milliseconds
  * @property {readonly [number, number, number, number]} easing - Cubic bezier coordinates
  */
@@ -79,7 +79,7 @@ export function createFadeState(options = {}) {
  * @param {object} nextStyle - Newly requested style
  * @param {object} [options]
  * @param {boolean} [options.animate=false] - Whether to animate the transition
- * @param {number} [options.nowMs=0] - Current wall clock timestamp in milliseconds
+ * @param {number} [options.nowMs=0] - Current clock timestamp in milliseconds
  * @returns {FadeState}
  */
 export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 0} = {}) {
@@ -128,7 +128,7 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
  * Pure state advance: advances the transition clock to nowMs.
  *
  * @param {FadeState} state - Previous fade state
- * @param {number} nowMs - Current wall clock timestamp in milliseconds
+ * @param {number} nowMs - Current clock timestamp in milliseconds
  * @returns {{state: FadeState, running: boolean}}
  */
 export function advanceFadeState(state, nowMs) {

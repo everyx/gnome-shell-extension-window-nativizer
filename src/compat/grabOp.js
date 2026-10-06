@@ -32,8 +32,9 @@ function getPointerDevice() {
     // The seat hangs off the same backend the sprite API does, and this path is only reached on
     // 45-48, where that backend declares get_default_seat and its seat declares get_pointer. Asking
     // the display is not an option: Meta.Display declares no get_default_seat in any of 45-51. Nor
-    // is Clutter.get_default_backend: it is a Clutter global the shell never defines - environment.js
-    // adds only global/_/C_/ngettext/N_ to the global namespace - so reading it resolves nothing.
+    // is the old globalThis.Clutter.get_default_backend() fallback: the shell never puts Clutter on
+    // the JS global namespace - environment.js adds only global/_/C_/ngettext/N_ - so it resolved
+    // nothing (the Clutter namespace function itself exists through 50 and is dropped in 51).
     return resolveBackend()?.get_default_seat?.()?.get_pointer?.() ?? null;
 }
 

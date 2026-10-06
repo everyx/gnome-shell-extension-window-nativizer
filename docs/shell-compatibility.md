@@ -85,10 +85,12 @@ Anything here that stops being true is an upstream compatibility break, not an i
 ## Evolution across GNOME 45–51
 
 Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
-operation signature, the per-actor cursor, and the Mutter typelib naming. The extension bridges each
-through `src/compat/` without platform branching. What changed and what the extension does about it
-is described where each call appears in [shell-api.md](shell-api.md); which versions share which
-shape is in the table above, computed rather than remembered.
+operation signature, the per-actor cursor, and the Mutter typelib naming. The shader base class, the
+grab signature and the per-actor cursor are bridged through `src/compat/`, and the maximize query
+through `detector.isWindowMaximized()`; the typelib name is never spelled, so it binds whatever
+`gi://Meta` ships. What changed and what the extension does about it is described where each call
+appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
+computed rather than remembered.
 
 ## Additional GNOME 51 upstream changes audited
 
@@ -114,7 +116,7 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   (it does not inherit), and `clutter_actor_set_color_state()` requires a non-NULL argument, so the
   write is rejected with a CRITICAL. Both NULL sources are the normal case - a client that does not
   use colour management has no `surface->color_state` either - so it fires on nearly every commit
-  that carries a buffer. Introduced in `63fa79c878` (2024-07-16) and still present in 50.4; the
+  that carries a buffer. Introduced in `63fa79c878` (2024-07-16) and still present in 50.5; the
   rejected call returns immediately and there was nothing to write back, so the line is its whole
   effect.
   **Measured, not assumed**: one window mapped and resized produces one of these with the extension

@@ -489,7 +489,7 @@ export class Manager {
 
     /**
      * Read-only state inspection snapshot for a tracked window decoration.
-     * Serves as the single explicit introspection boundary for E2E tests and debugging.
+     * The introspection boundary for a tracked window's state in E2E tests and debugging.
      * @param {Meta.Window} win
      * @returns {object|null}
      */
