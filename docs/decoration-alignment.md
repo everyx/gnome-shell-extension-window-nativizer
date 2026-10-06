@@ -8,7 +8,7 @@ anywhere in the code.
 ## What is being aligned
 
 libadwaita draws `window.csd` as a rounded rectangle with `box-shadow` and a 1px outline; the
-values are generated into `src/lib/adwaitaStyle.generated.js`. Mutter's own X11 window shadows
+values come from libadwaita's `_window.scss`. Mutter's own X11 window shadows
 are **not** the model (they are cached per focus state and swapped with no transition); they
 are recorded in `decoration-model.md` as a contrast.
 
@@ -16,11 +16,11 @@ Two things are drawn, and they have different mechanisms:
 
 | Part | Where it lives | Notes |
 | --- | --- | --- |
-| Rounded clip + inner outline | `RoundedClipEffect` on the window actor (surface actor on X11) | skipped entirely under some settings, see below |
-| Shadow | `WindowNativizerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
+| Rounded clip + inner outline | a rounded clip effect on the window actor (surface actor on X11) | skipped entirely under some settings, see below |
+| Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
-(`ScreenshotWindow`) can never contain the shadow. Only a full-desktop screenshot shows both.
+can never contain the shadow. Only a full-desktop screenshot shows both.
 
 ## The measurement that works
 
@@ -48,8 +48,8 @@ G         0    0   12   37  200  215  219  223  227
 
 `G=12` at -1 is libadwaita's inner 1px highlight (white over red, about 5%; the generated
 style says 7%). `0` is the anti-aliased body edge. `+1` and beyond is the shadow: the first
-shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.05)`, which the generated style has
-as `shadows: [{blur: 0, spread: 1, alpha: 0.05}]`).
+shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.05)`, a zero-blur 1px spread at
+5% alpha).
 
 ## The band you can grab is narrower than the shadow you can see
 
@@ -93,8 +93,7 @@ already 12px, and 2px on GTK3, so the band keeps to 12px and leaves the outer 13
 ### Who owns the cursor
 
 Outside the window picker, the band is the only place the extension sets a cursor, and it has
-to. (The picker sets a `CROSSHAIR` on `global.stage` for the duration of a pick — see
-`lib/inspector.js`.) Where the band covers
+to. (The picker sets a `CROSSHAIR` on `global.stage` for the duration of a pick.) Where the band covers
 the ring, the pointer focus is cleared - `repick_for_event` reaches
 `meta_wayland_pointer_set_current(window, NULL)` - so our reactive child becomes the only actor
 the pointer is over and whoever else might have owned that cursor no longer does. Leaving the
@@ -117,9 +116,9 @@ resize band's own feel - hover cursor and drag - has not been tried with a real 
 ## The setting that silently disables half of this
 
 `prefer-crisp-text` (default false) plus a fractional-scale monitor means
-`shouldClipWindow()` returns false and **no corner-clipping pass is attached**: square corners,
+**no corner-clipping pass is attached**: square corners,
 no inner outline, and the shadow is baked against a square outline instead. The effect is still
-attached at radius 0 where a client ring has to be cleared (`clearRing`). On the machine
+attached at radius 0 where a client ring has to be cleared. On the machine
 this was developed on the setting is `true` and the monitor is at 1.3333, so every early
 measurement compared a square decoration against a rounded one and produced a phantom "1
 pixel edge offset" that was chased for a long time.
@@ -190,14 +189,14 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   phase (`0.67`), so the rasterizer samples across the boundary between the window body
   and background/shadow, producing an anti-aliasing blend (`G=133`). On the left edge,
   `x=0` is integer-aligned (`G=0`).
-- **Confirmation**: The underlying shader distance `d` is mathematically centered and
+- **Confirmation**: The underlying shader's distance field is mathematically centered and
   four-way symmetric. In native libadwaita, decorations are rendered entirely within the
   client's own Wayland surface via GTK4/GSK; in Window Nativizer, the window content and shadow
   live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
   fractional blitting.
-- **Trade-off & Grid Snapping**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
+- **Trade-off & Grid Snapping**: When `prefer-crisp-text` is enabled, the rounded clip is deliberately omitted
   under fractional scaling to avoid resampling blur on client window content. When the clip runs, its boundary
-  snaps to the physical device pixel grid with `SnapRule.ROUND`, the same rule the shadow cutlines use, so the body
+  snaps to the physical device pixel grid with the same rounding rule the shadow cutlines use, so the body
   is not expanded outward and adjacent 8-slice shadow quads keep their cutlines on identical physical coordinates
   to eliminate subpixel seams.
 
@@ -207,28 +206,28 @@ Originally, Window Nativizer's first shadow pixel measured 185 (about 13-14 grey
 than native's ~199). Two factors contributed to this:
 
 1. **Layer 3 outline mask**: CSS defines the 1px ring as an outset border
-   (`0 0 0 1px rgba(0,0,0,0.05)`). In the shader, `blur < 0.5` was evaluated as a solid
-   disc (`alpha * (1.0 - clamp(d - spread + 0.5, 0.0, 1.0))`). Because `SNAP_BLEED = 0.8`
-   extends the shadow mesh inward under the window to prevent subpixel floating-point seams
-   between the window actor and the shadow actor, a solid disc contributed alpha even under
+   (`0 0 0 1px rgba(0,0,0,0.05)`). The shader used to evaluate a zero-blur ring as a solid
+   disc. Because the shadow mesh is deliberately extended a little inward under the window
+   to prevent subpixel floating-point seams between the window actor and the shadow actor,
+   that solid disc contributed alpha even under
    the window edge and at the first boundary pixel.
 2. **Layer compositing**: Multiple shadow layers were previously combined with linear
-   arithmetic addition (`a = a1 + a2 + a3`). Native GSK render nodes composite overlapping
-   layers via **Alpha-Over** (`1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)`), preventing
+   arithmetic addition. Native GSK render nodes composite overlapping
+   layers via **Alpha-Over** instead, preventing
    artificial saturation where blur tails overlap.
 
-### Resolution: Symmetric Device Grid Phase Locking (`SnapRule.ROUND`) & Pure Gaussian Shadow
+### Resolution: Symmetric Device Grid Phase Locking & Pure Gaussian Shadow
 
 Fractional scaling under window drag revealed a critical limitation: as actor coordinates
 shift across subpixel boundaries (e.g. 1.33x or 1.25x scale), two phenomena emerged:
 1. Bilinear texture filtering across any high-frequency 1px border line baked into the 8-slice
    texture alternated between landing on a single physical pixel and splitting across two pixels,
    producing 1px/2px jumping and flickering.
-2. `SnapRule.GROW` in `clipEffect.js` forced `left: FLOOR`, expanding the clip rect outward by up
+2. The clip effect's outward growth rule expanded the clip rect outward by up
    to 0.5 logical pixels. On non-native windows declaring client shadow insets (such as Meld / GTK3
    CSD), this outward expansion inadvertently captured the obsolete 1px dark border drawn by the
    client in the outer decoration ring (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`), while
-   `shadowActor`'s slice boxes were snapped using `ROUND`, causing a 1-physical-pixel phase conflict
+   the shadow slices were snapped to the physical grid, causing a 1-physical-pixel phase conflict
    and asymmetric dark borders.
 
 To solve this at the root:
@@ -237,33 +236,31 @@ To solve this at the root:
    Applying an SDF anti-aliasing ramp indiscriminately to straight edges generates a 1px semi-transparent
    slope in the offscreen FBO. When moving windows across subpixel boundaries under fractional scaling
    (e.g. 1.33x or 1.25x scale), Mutter's stage texture filtering convolves this semi-transparent slope a
-   second time, broadening the edge into a 2px blurry fringe. In `clipEffect.js`, the SDF AA ramp is strictly
-   restricted to corner arcs (`isCorner: q.x > 0.0 && q.y > 0.0`), while straight edges preserve 100% clean
-   content alpha (`straight = mix(1.0, inSquare, uClearRing)`). Single-pass GPU screen-space rasterization keeps
+   second time, broadening the edge into a 2px blurry fringe. The AA ramp is therefore strictly
+   restricted to the corner arcs, while straight edges preserve 100% clean content alpha. Single-pass
+   GPU screen-space rasterization keeps
    the straight edge sharp and jitter-free at all subpixel positions.
-2. **Symmetric Device Grid Phase Locking (`SnapRule.ROUND`)**:
-   `clipEffect.js` aligns the clip frame using `SnapRule.ROUND`, locking phase exactly with `shadowActor`'s
-   `snapSliceBoxesInto` (which also snaps to the physical grid using `SnapDirection.ROUND`). This guarantees:
+2. **Symmetric Device Grid Phase Locking**:
+   The clip frame snaps to the same physical grid phase as the shadow cutlines, which also snap to
+   the physical grid. This guarantees:
    - Zero phase drift between the clip mask and the 8-slice shadow cutout across all monitor DPI scales;
-   - Obsolete client-drawn border rings outside the client frame (`x < insets.left`) are strictly excluded
+   - Obsolete client-drawn border rings outside the client frame are strictly excluded
      from the clipped body without fractional outward expansion;
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
-3. **Alpha-Over Compositing**: Multi-layer shadows are composited using alpha-over in the shadow bake shader (`shadowShader.generated.js`):
-   ```glsl
-   float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
-   ```
-4. **Physical Grid Snapping**: `SNAP_BLEED = 0.8` is retained to prevent subpixel seams, and slice boxes
+3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
+4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
+   subpixel seams, and slice boxes
    are snapped to the physical grid using GTK 4.24's `gsk_rect_snap_to_grid` rules.
-5. **Safe Inward Inset Margin (`SAFE_INSET_MARGIN = 1px`)**:
+5. **Safe Inward Inset Margin (1px)**:
    GTK3 CSD windows (e.g. Meld) render a 1px border stroke (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`).
    Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), the dark
    stroke penetrates inward by 0.5px into the client frame, and Mutter's bilinear downsampling under
-   fractional scaling further diffuses this residue. In `WindowDecoration.apply()`, activating
-   `actions.clearRing` applies `safeInsets()` (`SAFE_INSET_MARGIN = 1px`) strictly to the clip effect
-   (`_syncClip`), excising the internal stroke bleed and outer box-shadow residue with 100% four-way symmetry
-   while leaving shadow bounds and tiled rings strictly aligned to `frame_rect`.
-6. **Ring layer as a hollow band**: The `blur < 0.5` layer is a hollow outset band
-   (`alpha * max(clamp(d + 0.5) - clamp(d - spread + 0.5), 0.0)`) rather than the filled disc the
+   fractional scaling further diffuses this residue. When a client ring has to be cleared, a 1px safe
+   inset margin is applied strictly to the clip effect, excising the internal stroke bleed and outer
+   box-shadow residue with 100% four-way symmetry
+   while leaving shadow bounds and tiled rings strictly aligned to the frame rectangle.
+6. **Ring layer as a hollow band**: The zero-blur ring layer is a hollow outset band
+   rather than the filled disc the
    old shader evaluated, so it no longer floods alpha under the window edge and the first boundary
    pixel.
 
@@ -331,25 +328,24 @@ What the numbers settle:
 
 - **The client's ring is cleared, not overlaid.** Total darkness over +1..+15 is 171
   with the extension on against 227 for the client's own shadow alone. Extension *on*
-  is lighter everywhere except the single +1 pixel, so `clearRing` does erase the
+  is lighter everywhere except the single +1 pixel, so the ring-clearing pass does erase the
   adw-gtk3 `0 3px 8px 1px rgba(0,0,0,0.3)` ring; there is no 0.3 + 0.08 stack.
 - **The reference is the right one.** Our style for a backdrop window is libadwaita's
-  own `window.csd:backdrop` set (`adwaitaStyle.generated.js`), so a taken-over window
+  own `window.csd:backdrop` set (`_window.scss`), so a taken-over window
   *should* profile like the skipped libadwaita one. ① and ② are the same measurement.
-- **The remaining gap is the shadow's own edge, not a state error.** The style keys are
-  right (`15|14,5,0,0,0,0;10,5,0.08,0,0,0;0,1,0.05,0,0,0` unfocused,
-  `...14,5,0.15,0,0,0;5,2,0.1,0,0,0;0,1,0.05,0,0,0` focused), baked
+- **The remaining gap is the shadow's own edge, not a state error.** The shadow parameters
+  are right (the unfocused and focused tiers select libadwaita's own `window.csd` sets), baked
   at the same 1px/logical-px grid as `decoration-model.md` describes; our profile is a
   few grey levels darker across the first ~5 logical px, closing by the sixth. Column
   ③ (a bare window, so no client ring anywhere) shows the same +2 difference, which
   puts it in our shadow rather than in the ring.
-- **The one-pixel boundary row belongs to the clip.** With the shadow actor's style
-  zeroed and `clearRing` on, the first ring pixel of ② still reads 239 over white
+- **The one-pixel boundary row belongs to the clip.** With the shadow's style
+  zeroed and ring clearing on, the first ring pixel of ② still reads 239 over white
   (255 would be fully erased); ③, whose ring is empty, has nothing there. At scale 1.0
   the offscreen is 1:1 and ② and ③ agree at +1, so the difference is the fractional
   offscreen downsample meeting the clip's anti-aliased body boundary, not the shadow
-  texture: re-baking the same shader into a 2x texture (window, radius and pad all
-  doubled, FBO origin scaled with them) leaves every profile above unchanged.
+  texture: re-baking the same shadow into a 2x texture (window, radius and padding all
+  doubled, offscreen origin scaled with them) leaves every profile above unchanged.
 
 The last two bullets are why the fractional profile is not byte-identical to native.
 The magnitude is a handful of grey levels on the first two physical pixels (about 1.5
@@ -360,11 +356,11 @@ purely from where their edges fall.
 ### The inner outline, which is a shader band
 
 Ours is not drawn by the client: the 1px inner outline is the shader's coverage ramp, and its
-strength is where that ramp sits relative to the pixel grid. `m = clamp(1+d)` centred the
-ring on the body boundary, so the innermost body pixel — the only one whose centre can fall
+strength is where that ramp sits relative to the pixel grid. With the ramp centred on the
+body boundary, the innermost body pixel — the only one whose centre can fall
 inside a ring that is one pixel wide — came out at half coverage: G **9** against native's
 **18**, at every edge and every scale where the boundary lands on a whole pixel. Centring
-the ring half a pixel inside the body (`m = clamp(1.5+d)`, ramp over `d in [-1.5,-0.5]`)
+the ring half a pixel inside the body instead
 puts that pixel centre at full coverage, and the two agree exactly at 1.0.
 
 Measured as in the profile above — innermost body rows per edge, G channel, red body over
