@@ -328,6 +328,38 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.clearRing).toBeTrue();
     });
 
+    it('applies safeInsets on windows with declared rings when clearRing is active', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const actions = {
+            drawClip: true,
+            clearRing: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {radius: 15, outline: null, shadows: []},
+        };
+        const declaredInsets = {left: 26, top: 23, right: 26, bottom: 29};
+        const inputs = {
+            insets: declaredInsets,
+            monitorScale: 1,
+        };
+
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.hasClip).toBeTrue();
+        // Clip insets are securely shifted inward by SAFE_INSET_MARGIN (1px) to eliminate
+        // client Cairo border stroke bleed, while shadow retains exact declared insets matching frame_rect:
+        expect(deco.clipInsets).toEqual({left: 27, top: 24, right: 27, bottom: 30});
+        expect(deco.clip.params.insets).toEqual({left: 27, top: 24, right: 27, bottom: 30});
+        expect(deco.shadow.insets).toEqual(declaredInsets);
+    });
+
     it('performs clean phased teardown in destroy()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
