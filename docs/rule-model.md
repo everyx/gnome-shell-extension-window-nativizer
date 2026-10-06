@@ -41,7 +41,7 @@ For example:
   parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies
   `has_parent=true`. That is why the prefs sentence can fold both into one phrase
-  (`windowKindSentence()` in `prefs.js`) without losing a case.
+  (`windowKindSentence()` in `rulePresenter.js`) without losing a case.
 - The **`size=<W>x<H>` specifier is exclusively for fixed-size windows** (`allows_resize=false`):
   One application often creates multiple distinct fixed dialogs or floating bars (e.g. login
   QR code dialog, screenshot toolbar, about box) that share identical window type and parent
@@ -95,9 +95,12 @@ says so; the title only names the axis.
 A rule reverses only what it names. `corners` leaves the shadow to the decision, which
 still takes it over when the corners it rounds were painted over the client's ring.
 Taking the shadow of a client that declared a ring (`buffer_rect - frame_rect`) is the
-one takeover that borrows the other axis: clearing that ring is the clip's job, so a
-shadow-only reversal still attaches the clip, at radius 0, and leaves the corners as the
-client drew them. The boundaries are listed in [decoration-model.md](decoration-model.md).
+one takeover that borrows the other axis: the corners we round are what let us take that
+ring over, and clearing it is the clip's job. So a `corners`-only reversal retracts the taken
+shadow with the corners, while a `shadow`-only reversal leaves the clip following the corner
+decision - at the style radius, not radius 0. A radius-0 clip is attached only where a ring
+has to be cleared without our corners (`clearRing`). The boundaries are listed in
+[decoration-model.md](decoration-model.md).
 
 ## One rule per window kind
 
@@ -108,8 +111,10 @@ XWayland (with a declared 4px ring), and some of its dialogs are
 self-decorated where others are not. An app-wide rule would have to be wrong for one
 of them, so the picker writes exactly the kind it was pointed at and nothing else.
 
-There is no direction any more, and so no collision to resolve: one kind has one row,
-and that row names the axes to reverse (or follows the decision). A reversal overrides
+There is no direction any more, and so no collision inside the model: one kind has one row,
+and that row names the axes to reverse (or follows the decision). An import can still collide
+with that row for the same kind (same key, different state), which the import-conflict dialog
+resolves. A reversal overrides
 the inferred baseline on its axis and nothing else — never the structural facts (window
 type, maximized/fullscreen), never transient window state (tiled, tile-matched — the
 rule outlives it and applies again on restore), never a user preference, never a policy. The same
@@ -171,9 +176,10 @@ The pick also records the title of the window it was made on, in the same entry 
 **sample of the kind**, not its name: the
 rule matches every window with the same fingerprint, and the kind can show a different title
 later. The preferences window shows it dimmed beside the app name, and says on
-hover where it came from. Nothing but that row reads it: `sanitizeRuleTitles()` folds it to
-one line, and the row ellipsizes it by width (`title_lines: 1`) - no character cap, which
-could not know the width. The entry goes when the rule goes.
+hover where it came from. Matching never reads it, and only display code does: the rule row, the
+import-conflict dialog, and the clipboard export. `sanitizeRuleTitles()` folds it to one line,
+and the row ellipsizes it by width (`title_lines: 1`) - no character cap, which could not know
+the width. The entry goes when the rule goes.
 
 ### Normalization and safety
 

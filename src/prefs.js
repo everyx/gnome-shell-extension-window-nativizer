@@ -96,7 +96,7 @@ function showError(parentWindow, heading, body) {
  * @typedef {object} DisplayRuleRow
  * @property {string} key - Canonical rule key
  * @property {string} state - Active axis state
- * @property {string} title - App name / window sample title
+ * @property {string} title - Picked window's sample title, shown dimmed beside the app name
  * @property {boolean} isRecentlyImported - Whether imported in current session
  * @property {string} appName - Resolved application display name
  * @property {object|null} appInfo - Cached Gio.AppInfo descriptor
