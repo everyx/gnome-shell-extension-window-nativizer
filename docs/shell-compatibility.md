@@ -137,6 +137,10 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   (`is*`, `has*`, `should*`) strictly read in-memory cache/state snapshots without mutating state
   or launching implicit I/O. Asynchronous operations (such as `/proc/<pid>/maps` reads) are
   triggered exclusively by explicit lifecycle commands, preventing timing inversions and flicker.
+  The transitive import graph of the decision entry points carries no `gi://` module, which is what
+  lets the decision answer the same on every Shell version; `tools/check-pure-core.mjs` fails the
+  build if one appears, and `tools/decision-baseline.json` records what the decision answered before
+  a reshape of it (see [development.md](development.md#the-decision-core-and-its-baseline)).
 - **Outside the window picker, only the resize band takes input.** Every actor the extension
   adds is `reactive: false` except the band's four strip children, which exist to start a
   resize grab, and the picker's full-stage overlay, which is reactive and
