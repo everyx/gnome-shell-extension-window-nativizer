@@ -1,356 +1,259 @@
 # Architecture
 
 One extension process that owns the windows, one preferences process that has none,
-and a pure core shared by both. The core is where the decisions live, so they can be
+and a pure core shared by both. The decisions live in the core, so they can be
 tested without a session; the processes only gather inputs and apply results.
 
 ## Modules
 
 | Module | Responsibility |
 |---|---|
-| `lib/clipTarget.js` | clip effect target resolution: selects window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry (pure) |
+| `lib/clipTarget.js` | clip target resolution: window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry |
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
-| `lib/frame.js` | body-inside-actor geometry: `frameFromInsets`/`bodyFrame`/`insetsFromRects` (pure) |
-| `lib/nativeLikeCorners.js` | process classification instance (`ProcessClassifier`): asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
+| `lib/frame.js` | body-inside-actor geometry (pure) |
+| `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
-| `lib/pick.js` | the picker's bus name/path and property dictionary extraction (the `PickWindow` interface is in `inspector.js`; rule recommendation lives in `detector.js`) |
-| `lib/snap.js` | pure grid snapping math: `snapCoordToGrid`, `snapRectToGrid`, actor box snapping, and 8-slice geometry layout (pure) |
-| `lib/style.js` | which decoration parameters a window state gets, and pipeline opacity modulation (pure) |
+| `lib/pick.js` | the picker's bus name/path and property dictionary |
+| `lib/snap.js` | grid snapping math and the 8-slice geometry layout (pure) |
+| `lib/style.js` | which decoration parameters a window state gets (pure) |
 | `lib/settings.js` | GSettings IO adapter |
-| `lib/resizeBand.js` | the window's resize band: four hit strips clipped to the monitor, plus `edgeForPoint()`, GTK's direction order (pure) |
+| `lib/resizeBand.js` | the resize band's hit strips and GTK's direction order (pure) |
 | `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
-| `lib/window.js` | deep module for reading Meta.Window properties, actor discovery, physical monitor scale, and geometry normalization (`readWindow`) |
-| `lib/windowDecoration.js` | single-window decoration lifecycle and tri-axis actors (`RoundedClipEffect`, `ShadowActor`, `ResizeBand`), phased teardown, and read-only state view (`stateView`) |
-| `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, window decoration lifecycle orchestration, and read-only inspection surfaces (`trackedCount`, `hasPendingWindowReconcile`, `stateView`) |
+| `lib/window.js` | reading `Meta.Window` properties, actor discovery, physical monitor scale, and geometry normalization |
+| `lib/windowDecoration.js` | single-window decoration lifecycle: the tri-axis actors, phased teardown, and the read-only state view |
+| `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, decoration lifecycle, and the inspection surfaces |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
-| `effects/shadowFade.js` | pure cubic-bezier transition curves, monotonic clock progression, and interrupted cross-fade state machine (`ShadowFadeStateMachine`) (pure) |
-| `effects/` | rounded clipping (`clipEffect.js`), pure shadow geometry (`shadowGeometry.js`), the shadow actor (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
-| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects incl. `uniformLocation.js`, grab ops, actor cursors) across GNOME 45–51 (pure) |
+| `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
+| `effects/` | rounded clipping, shadow geometry, the shadow actor, and baked GPU shadow textures |
+| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, grab ops, actor cursors) across GNOME 45–51 |
 
 ## The two processes
 
-- The **extension process** owns the windows. `manager.js` reconciles effects against
-  window state; `inspector.js` serves the picker.
+- The **extension process** owns the windows. The manager reconciles effects against
+  window state; the inspector serves the picker.
 - The **preferences process** has no window objects at all. It reads and writes the
   rule store, and asks the extension over D-Bus which window the user clicked.
 
-The picker is the only conversation between them: `inspector.js` implements
-`PickWindow() -> a{ss}`, the prefs window calls it, and it refuses to create a rule
-the extension reports as ineffective. `inspector.js` declares the `PickWindow() -> a{ss}` XML, while
-`lib/pick.js` defines the bus name and path and the property serialization, so both sides share
-the same wire format.
+The picker is the only conversation between them: the extension exposes a `PickWindow`
+method, the prefs window calls it, and it refuses to create a rule the extension reports as
+ineffective. Both sides share one property wire format, so a change to it is a change to
+both.
 
 For the selection mechanics we followed KDE's KWin
 (`InputRedirection::startInteractiveWindowSelection` with its `clientToVariantMap`)
-and GNOME's own equivalent: `Main.pushModal`, `setActorCursor(global.stage, ...)` and a
-Clutter event grab.
+and GNOME's own equivalent: `Main.pushModal`, a stage cursor and a Clutter event grab.
 
 ### Interactive pick & highlight geometry
 
-When hovering over windows during a pick, `InspectorService` highlights the target:
-- **Target bounding box**: Positioned around the window's frame rect outset by the border stroke width, rather than the window actor's allocation. In Wayland CSD, actor allocation includes invisible client shadow margins (which would leave the highlight floating in empty space, as Looking Glass does). The outset prevents St CSS inward border drawing from eroding into client window content.
-- **Concentric corner radius**: For rounded windows, the highlight's outer border radius maintains concentric curvature ($R_{outer} = R_{inner} + W$) for a uniform stroke width around corners. Tiled, maximized, and fullscreen windows strictly keep square corners; an SSD window keeps the radius of the clip it is actually wearing.
-- **Active clip vs. ring clearing**: A window may have a clip effect attached purely to erase a client-painted frame ring at radius 0 (`clearRing`), which must not be confused with active rounded corner clipping.
-- **Styling**: the highlight is generated from the Shell's own pickers - the 2px border from
-  the Looking Glass picker, the fill from the screenshot window selector - and
-  `vendor/gnome-shell/README.md` records which is which and why the border does not follow the
-  selector's 6px.
+When hovering over windows during a pick, the picker highlights the target:
+
+- **Target bounding box**: the window's frame rect, outset by the border stroke width, rather
+  than the actor's allocation. A Wayland CSD actor's allocation includes the invisible client
+  shadow margins, which would leave the highlight floating in empty space (as Looking Glass
+  does); the outset also stops St's inward border drawing from eroding into client content.
+- **Concentric corner radius**: a rounded window's highlight keeps $R_{outer} = R_{inner} + W$ so
+  the stroke stays uniform around the corners. Tiled, maximized and fullscreen windows strictly
+  keep square corners; an SSD window keeps the radius of the clip it is actually wearing.
+- **Active clip vs. ring clearing**: a window may carry a clip effect purely to erase a
+  client-painted frame ring at radius 0, which must not be read as active corner rounding.
+- **Styling**: the highlight's 2px border and fill come from the Shell's own pickers - the
+  Looking Glass picker and the screenshot window selector - and `vendor/gnome-shell/README.md`
+  records which is which and why the border does not follow the selector's 6px.
 
 ## The extension lifecycle
 
-`extension.js` is the entry point. `enable()` builds a `Manager`, calls `manager.enable()`
-and creates the `InspectorService`; `disable()` destroys both and clears the `_manager`
-field, which doubles as the idempotency guard (a second `enable()` returns early while it is
-set).
+`extension.js` is the entry point. Enabling builds the manager and the inspector; disabling
+tears both down. The manager field doubles as the idempotency guard - a second enable returns
+early while it is set - and is dropped in a `finally`, so a teardown that throws midway still
+lets a later enable run rather than wedging on a stale manager.
 
-`Manager.enable()` connects only the global signals a decoration input can change on —
-`window-created`, `grab-op-end`, `restacked`, `notify::focus-window`, St.Settings'
-`notify::high-contrast`, `notify::enable-animations` and `notify::color-scheme`,
-`monitors-changed` — plus `Main.overview`'s `showing` and `hidden` signals to toggle overview
-mode (hardware mipmapping and outline suppression, with rounding retained), and deliberately no
-workspace signal: no decoration input depends on the workspace, so switching workspaces cannot
-change any window's appearance.
+The manager connects only the shell signals a decoration input can change on, plus the
+overview's show/hide transitions (which switch to hardware mipmapping and suppress the inner
+outline, keeping the corners), and deliberately no workspace signal: no decoration input
+depends on the workspace, so switching workspaces cannot change any window's appearance.
 
-`enable()` sets that field before `manager.enable()`, so a failure after that point would
-leave the guard set and make every later `enable()` return early; the catch therefore rolls
-the half-enabled state back through `disable()` (relying on the teardown invariants below).
-`disable()` drops both references in `finally`, so a teardown that throws midway still clears
-the guard and a later `enable()` re-runs instead of wedging on a stale manager.
+The guard is set before the manager starts, so a failure after that point would otherwise wedge
+every later enable; the catch rolls the half-enabled state back through the normal teardown.
 
 ### Lifecycle ownership and invariants
 
 Lifecycles strictly govern session boundaries and per-window teardown:
-- **Session enable**: `Manager.enable()` re-arms sub-modules, resetting baked shadow texture caches
-  and process classification state.
-- **Session disable**: `Manager.disable()` guarantees zero resource leaks across session teardown
-  (also invoked if `enable()` fails midway). Orphaned shadow actors and resize bands are swept
-  from `global.window_group`, active rounded clip effects are removed from window actors, in-flight
-  asynchronous process probes are cancelled (`Gio.Cancellable`), and baked shadow texture resources
-  are destroyed.
-- **Window close (phased teardown)**: When a window is unmanaged (`_forgetWindow`), interactive
-  decorators (`ResizeBand`) are destroyed immediately to avoid blocking clicks, while visual
-  decorators (`ShadowActor` and `RoundedClipEffect`) remain attached to fade alongside the
-  window actor. Once the actor emits `destroy`, `ShadowActor` tears itself down cleanly and
-  `RoundedClipEffect` is released alongside the actor.
-- **Process cache eviction**: When a closing window is the last active window for its process,
-  its cached classification entry is evicted via `forgetProcess(pid)`, keeping memory bounded
-  across long sessions without clearing active sibling state.
+
+- **Session enable** re-arms the sub-modules, resetting the baked shadow caches and the process
+  classification state.
+- **Session disable** guarantees zero resource leaks (it is also the rollback if enable fails
+  midway): orphaned shadow actors and resize bands are swept from the window group, clip effects
+  are detached from their actors, in-flight process probes are cancelled, and the baked shadow
+  resources are destroyed.
+- **Window close** is a phased teardown: interactive decorators (the resize band) are destroyed
+  immediately so they cannot keep taking clicks, while the visual decorators (shadow and clip)
+  stay attached to fade with the closing actor and release themselves when it is destroyed.
+- **Process cache eviction**: when a closing window was the last active window of its process,
+  its classification entry is dropped, keeping memory bounded across long sessions without
+  disturbing live siblings.
 
 ## Actors
 
-A window we draw a shadow or the tiled ring for gets a `ShadowActor` inserted below the window
-actor in `global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowGeometry.js` for the
-slice rects, `effects/shadowTexture.js` for the bake)
-with Clutter property and constraint bindings (`Clutter.BindConstraint`). It is cast by the window
-body (`setShadowInsets()`), not by the actor, which for a client-decorated window also carries the ring
-that client reserved for its own shadow. Both the shadow's cast rect and the clip's body are
-computed from the actor's live size at paint time (`lib/frame.js`), so a resize never shows a
+A window we draw a shadow or the tiled ring for gets a shadow actor inserted below the window
+actor in `global.window_group`, drawing an 8-slice baked texture under Clutter constraints. It
+is cast by the window body, not by the actor - for a client-decorated window the actor also
+carries the ring the client reserved for its own shadow. Both the shadow's cast rect and the
+clip's body are computed from the actor's live size at paint time, so a resize never shows a
 geometry the actor has already left.
 
-To prevent fractional scaling subpixel seams and blurring, both shadow tiles and window clip boundaries
-align to GTK 4.24's physical device pixel grid model:
-- **Physical Scale Resolution**: Mutter's actor resource scale is integer-ceil'd at the C level,
-  incorrectly reporting integer scales on fractional displays. The compositor hierarchy is climbed up to the
-  toplevel window (even when effects are attached to child surface containers under X11 or third-party extensions)
-  to query the true fractional monitor scale.
-- **Actor-Local Snapping Contract**: Snapping is deliberately constrained to the actor-local coordinate space.
-  Actor cutlines remain geometrically invariant during window movement, leaving stage translation entirely to
-  GPU transformation matrices. This engineering trade-off accepts a subpixel phase offset on stage in exchange
+To prevent fractional-scaling subpixel seams and blurring, both the shadow tiles and the clip
+boundary align to GTK 4.24's physical device-pixel grid:
+
+- **Physical scale resolution**: Mutter's actor resource scale is integer-ceil'd at the C level
+  and reports integer scales on fractional displays. The compositor hierarchy is climbed to the
+  toplevel window (even through child surface containers under X11 or third-party extensions) to
+  query the true fractional monitor scale.
+- **Actor-local snapping**: snapping is deliberately confined to the actor-local coordinate
+  space. Cutlines stay geometrically invariant while the window moves, leaving stage translation
+  entirely to the GPU transform. The trade-off is a subpixel phase offset on stage, in exchange
   for eliminating subpixel shimmering/crawling and hot-path allocations during drags.
-- **Multi-Monitor Cache Isolation**: Because a window actor can be rendered across displays with differing DPI,
-  snapped shadow boxes are cached per physical scale factor to prevent cache thrashing.
-- **Device-Grid Clip Boundary**: The clip boundary snaps to the nearest physical device pixel grid line
-  (`SnapRule.ROUND`), the same rule the shadow cutlines use, so the two share one grid and no subpixel seam
-  appears between them.
-  When foreign extensions inject intermediate widgets into the window hierarchy, the clip target resolver bypasses
-  them to attach directly to the compatible surface.
+- **Multi-monitor cache isolation**: a window can be rendered across displays of differing DPI,
+  so snapped shadow boxes are cached per physical scale to prevent cache thrashing.
+- **Device-grid clip boundary**: the clip's body snaps to the same grid the shadow cutlines use,
+  so the two share one grid and no subpixel seam appears between them. When a foreign extension
+  injects an intermediate widget into the window hierarchy, the target resolver bypasses it to
+  attach directly to the compatible surface.
 
-A resizable window that `decideResizeBand()` shows a band for also gets a `ResizeBand`
-(`lib/resizeBandActor.js`), the only actor outside the window picker that takes input: a transparent container with
-four reactive `St.Widget` children, one per side of the 12px ring (the top and bottom span the
-full width, so the outward corners belong to them). The child only says where an event landed;
-the direction is resolved from the pointer by `edgeForPoint()`, GTK's first-match order. The
-container is inserted in `global.window_group` above its own window actor, so it never covers
-another window or shell chrome, and `_restackActors()` re-pins it on `restacked` (the same
-signal the shadow is pinned below its window on). Like the shadow it is bound to the window
-actor (`Clutter.BindConstraint`, grown by 12px per side, the band's depth) and derives its
-regions from the actor's live size in `vfunc_allocate`. The debounced reconcile hands over those decisions
-— the eligibility, and the relative insets — while `WindowDecoration` resolves the monitor rectangle it
-clips to, so a resize cannot leave the band behind. The container follows the
-window actor's `visible` so a minimized window leaves no strip behind. Managed and synchronized by
-`WindowDecoration`; dropped in `WindowDecoration.undecorate()` and, before the close animation, during
-`WindowDecoration.destroy({keepVisualsForClose: true})` — a band that outlived its window would go on taking clicks.
-See `decoration-model.md` § The resize band for why it exists and what it costs.
+A resizable window the band decision draws for also gets a resize band - the only actor outside
+the window picker that takes input: a transparent container with four reactive strips, one per
+side of the 12px ring (the top and bottom span the full width, so the outward corners belong to
+them). A strip only says where an event landed; the direction is resolved from the pointer in
+GTK's first-match order. The container is inserted above its window actor so it never covers
+another window or shell chrome, is re-pinned on restack (the same signal the shadow is pinned
+below its window on), is bound to the window actor and grown by the band's depth, and derives
+its regions from the actor's live size, so a resize cannot leave it behind. It follows the
+window actor's visibility so a minimized window leaves no strip behind, and it is dropped before
+the close animation - a band that outlived its window would go on taking clicks. See
+`decoration-model.md` § The resize band for why it exists and what it costs.
 
-## Effects — RoundedClipEffect (`effects/clipEffect.js`)
+## Effects — the rounded clip
 
-The actor to clip is not the body: a CSD window's actor is body plus the shadow ring the
-client painted (`buffer_rect - frame_rect`). The effect stores the ring as per-side insets and
-computes the body in `vfunc_paint_target` from the actor's live width/height
-(`bodyFrame`), then removes only the four corner caps that lie inside the body's
-square bounds. Geometry is thus read in the paint that uses it, after Clutter has sized the
-offscreen; `setParams` carries the decisions (insets, radius, outline, clearRing, scale)
-and may stay debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width or height
-≤ 0) skips the pass: the shadow comes from the same actor, so there is no visible body to
-leave square. A degenerate *body*, though - insets that outrun the actor for the frame a
-resize passes through - does not: `bodyFrame` falls back to the whole actor, so the pass
-still runs and the window content is never dropped. `inSquare = 1 - max(step(bodyEdge))` keeps
-the client-painted ring intact; `uClearRing` blends that mask away when the ring we draw is ours
-(see `decoration-model.md`: ring cleared exactly when the ring we draw is ours).
+**Clip the body, not the actor.** A CSD actor is the body plus the shadow ring the client
+painted, so the effect stores that ring as per-side insets and computes the body at paint time
+from the actor's live size, removing only the four corner caps that lie inside the body's square
+bounds. Reading the geometry in the paint that uses it - after Clutter has sized the offscreen -
+is what lets a resize never show a geometry the actor has already left; the effect's own
+decisions may stay debounced. A degenerate actor (no width or height) skips the pass, because
+the shadow comes from the same actor and there is no visible body to leave square. A degenerate
+*body*, though - insets that outrun the actor for the frame a resize passes through - does not:
+the body falls back to the whole actor, so window content is never dropped. The client-painted
+ring is kept unless the ring we draw is ours.
 
-Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, min(uRadius, min(frameHalf.x, frameHalf.y)))` — `d < 0` inside body,
-`d > 0` in removed corners, `d == 0` on boundary. Physical anti-alias: `dPhys = d * uScale`,
-`corner = 1 - clamp(dPhys + 0.5, 0.0, 1.0)`, `keep = min(corner + 1 - inSquare, 1.0)`.
-To eliminate subpixel dragging blur from double-resampling under fractional scaling, the 1px SDF AA
-ramp is strictly restricted to corner arcs (`isCorner: q.x > 0.0 && q.y > 0.0`); straight edges
-maintain 100% clean content alpha (`straight = mix(1.0, inSquare, uClearRing)`), producing a sharp 1px
-physical transition without jitter: `isCorner ? mix(keep, corner, uClearRing) : straight`.
-Inner 1px outline: `m = clamp((d + 0.5) * uScale + 1.0, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a`.
-The outline is one physical pixel wide and centered half a physical pixel inside the body.
-`uOutline` is `vec4(r, g, b, a)` where `a == 0` disables the uniform.
+The corner is a distance field. To keep straight edges crisp under fractional scaling, the 1px
+anti-alias ramp is confined strictly to the corner arcs, so straight edges keep full content
+alpha and do not blur when the compositor resamples the offscreen a second time; the model and
+the measurements are in `decoration-alignment.md`. A 1px inner outline is drawn half a physical
+pixel inside the body, and a zero alpha disables it - which is also how overview suppresses it.
 
-Clutter enlarges the offscreen by `FBO_EXTRA` (3px) and offsets the actor by `FBO_OFFSET`
-(2px), generated from Mutter's `_clutter_actor_box_enlarge_for_effects` (`clutter-actor-box.c`).
-`clipEffect.js` aligns the body rect to the physical device pixel grid using `SnapRule.ROUND`,
-locking phase with `shadowActor` (`snapSliceBoxesInto`, also `SnapDirection.ROUND`) to eliminate
-subpixel phase drift across fractional scales. For windows with declared client margin rings
-(`actions.clearRing`), `WindowDecoration` applies `SAFE_INSET_MARGIN = 1px` (`lib/frame.js`) strictly
-to the clip boundary (`_syncClip`). This completely excises GTK3's internal Cairo half-pixel stroke
-bleed (`rgba(0,0,0,0.23)`) and outer box-shadow residue without distorting shadow geometry or tiled rings,
-guaranteeing symmetric Adwaita-style rounded corners without subpixel border leakage.
+Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
+`_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
+by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
+use, so the two stay in phase across fractional scales. When a client ring has to be cleared,
+the clip boundary is inset by a safe margin before rounding, which excises GTK3's internal Cairo
+half-pixel stroke bleed and outer box-shadow residue without distorting the shadow or the tiled
+ring.
 
-Upload cost: `setParams` deduplicates decoration decisions (radius, outline, clearRing) and
-queues a repaint only on change. During paint, live geometry is guarded by dirty checks,
-synchronising only when dimensions, frame insets, or device scale actually shift. Static repaints therefore
-incur no uniform uploads, and dynamic resizing avoids redundant pipeline state changes.
-See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
+Upload cost: the effect deduplicates its decisions and repaints only on change, and the paint
+guards its uniform uploads with dirty checks, so a static repaint uploads nothing and a resize
+changes only the pipeline state that actually moved.
 
-During GNOME Shell overview mode, `RoundedClipEffect` retains active corner rounding while
-dynamically configuring hardware trilinear mipmapping (`LINEAR_MIPMAP_LINEAR`) and suppressing
-the 1px inner outline (`outline: null`) to prevent thumbnail aliasing and moiré artifacts.
-Upon returning to the desktop, standard filtering (`NEAREST`/`LINEAR`) and inner outline are
-restored seamlessly.
+In overview the clip is retained: hardware trilinear mipmapping replaces the standard filtering
+and the inner outline is suppressed, so downscaled previews stay clean; both are restored on
+return to the desktop. During a window's close transition, Clutter property bindings keep the
+shadow actor in step with the window actor until it is destroyed.
 
-During window close transitions, Clutter property bindings (opacity, scale, transform) keep
-`ShadowActor` synchronized with `windowActor` until actor destruction, preventing jarring shadow
-popping mid-transition.
-
-## Effects — Shadow baking and slicing (`effects/shadowGeometry.js`, `effects/shadowTexture.js`)
+## Effects — shadow baking and slicing
 
 Why eight slices describe a shadow, and why the middle stays empty, is the model in
-`decoration-model.md`. One baked `buffer x buffer` texture per style
-is shared by all windows of that style. The bake runs the GLSL from
-`shadowShader.generated.js` (generated by `tools/gen-shader.mjs` from GTK4's
-`gskgpuboxshadow.glsl`), so it stays the upstream shadow, not a second rendering.
+`decoration-model.md`. One baked texture per style is shared by every window of that style, and
+the bake runs the GLSL generated from GTK4's `gskgpuboxshadow.glsl`, so it stays the upstream
+shadow rather than a second rendering.
 
-Canonical bake window: square `2*(pad+radius)` — leaves a straight middle `2*pad` which
-exceeds the blur reach, so a strip from the middle is a settled profile. Geometry
-(`shadowGeometry`):
-`corner = 2*SHADOW_PAD + radius`, `window = 2*(SHADOW_PAD+radius)`, `buffer = 2*corner + BAKE_EXTRA`.
-`SHADOW_PAD` is generated (`ADWAITA_STYLE.shadowPad`, `tools/gen-style.mjs`): the farthest
-Gaussian reach over every shadow set — `3 * 0.5 * blur + spread`, i.e. `3σ` with
-`σ = blur/2`, 26px for the largest layer — plus the 2px Cogl offscreen offset
-(`EFFECT_PADDING_ORIGIN`, see below). All sizes in logical px.
+The canonical bake window is a square with a straight middle that exceeds the blur reach, so a
+strip from the middle is a settled profile. The baked pad is the farthest Gaussian reach over
+every shadow set (`3σ` plus the spread) plus the Cogl offscreen offset - derived, not typed. The
+corner slice is made to reach into the straight edge beyond the geometric arc so that its cutline
+sits where the Gaussian decay has fully settled to the 1D edge profile; that matches Mutter's own
+`inner_border = shape_border + spread` (`meta-shadow-factory.c`) and guarantees $C^0$ continuity
+across the corner and edge slices. A window smaller than the two corners scales them down, which
+is the correct shape when the window is all corner. All sizes are logical px.
 
-Slicing (`shadowSlices`): 8 rects (4 corners 1:1, 4 edges stretched from a 1px strip), no
-middle — the interior is the hollow mask of `decoration-model.md`.
-A window smaller than `2*corner` scales corners down (`c = min(corner, w/2, h/2)`),
-which is the correct shape when the window is all corner. Tex coords are normalized
-(`1/buffer`). The corner slice spans `2*SHADOW_PAD + radius` (reaching `SHADOW_PAD`
-into the straight edge beyond the geometric corner arc), aligning with Mutter's
-`inner_border = shape_border + spread` (`meta-shadow-factory.c`). This ensures the cutline
-sits where the Gaussian decay has fully settled to the 1D edge profile, guaranteeing
-seamless $C^0$ photometric continuity across corner and edge slices without step jumps.
-The edge strip is sampled from the middle of the canonical edge
-(`edge = (BAKE_ORIGIN + SHADOW_PAD + window/2)/buffer`).
+The bake quad's extra size and top/left offset come from the same Cogl padding Mutter uses. Only
+the per-axis total is an upstream literal; the top/left split is derived from it for an
+integer-aligned box, so the split holds only there while the total always does. The runtime
+geometry and the clip import that one generated source, and the generators read it at generation
+time to bake the shader and style constants, instead of each writing the numbers by hand.
 
-The shader quad is `FBO_EXTRA` wider than the padded rect and offset by `FBO_OFFSET`, which
-is where `BAKE_ORIGIN` (`2px` top/left) and `BAKE_EXTRA` (`3px` total per axis) come from.
-Both are Cogl's `_clutter_actor_box_enlarge_for_effects`, vendored at
-`vendor/mutter/clutter-actor-box.c` and parsed by `tools/gen-clutter.mjs` into
-`clutterEffectPadding.generated.js`; `shadowGeometry.js` and `clipEffect.js` read that one
-generated source at runtime, while `gen-shader.mjs` and `gen-style.mjs` read it at
-generation time to bake the constants, instead of each writing 2/3 by hand.
-Only the `3px` per-axis total is an upstream literal — it covers up to 1.75px on the
-bottom/right while leaving >0.75px on the top/left. The `2px` top/left **origin is derived**,
-not a literal: it is what `box->x1 - (ceilf (box->x2 + 0.75f) - width - 3)` yields on an
-integer-aligned box. The 2/1 split therefore only holds when the box is integer-aligned;
-the per-axis total stays 3. `tools/gen-shader.mjs` also carries `SNAP_BLEED`, whose
-measured role in hiding subpixel seams is in `decoration-alignment.md`.
+Pipelines are cached by a style key that joins every layer's parameters - including its colour,
+so a light and a dark bake are different textures. Each window gets its own pipeline sharing the
+baked texture, so a cross-fade can animate per-window opacity without re-baking; scaling the
+pipeline alpha is enough because the pipeline colour stays opaque white under Cogl's
+premultiplied blend. A bake that fails to allocate is not cached, so the next paint retries; the
+cache is sealed on disable and re-armed for a new session.
 
-Caching (`pipelines`): a map from the style key — which joins every layer's
-parameters, so that a layer drawn in a different colour is a different texture — to a baked
-pipeline. A window gets its own
-`Cogl.Pipeline` sharing the baked texture (`shadowPipelineFor`) so cross-fade can
-animate per-window opacity via `setPipelineOpacity`. Scaling alpha is enough because
-the pipeline colour stays opaque white and Cogl's blend is premultiplied: the baked
-shadow's RGB scales with it, so no colour has to change.
-A bake that fails to allocate is not cached, so the next paint retries. `destroy()`
-seals the cache for `disable()`; `reset()` re-arms for a new cycle.
+The bake allocates a texture and an offscreen, compiles the generated shader as a fragment-stage
+tail (the same non-replacing form the shell's own GLSL effect uses), clears to transparent - the
+driver texture is not zeroed, and the hollow mask skips interior writes, so uncleared pixels
+would show through the rounded corners - draws and flushes, then wraps the texture in a drawing
+pipeline. The GJS uniform setter is probed once per session for the two signatures it ships.
 
-Bake steps (`bake()`): allocate `buffer x buffer` texture +
-offscreen, set `opaqueWhite` (pipeline color must stay opaque — shader alpha does
-opacity), add snippet `DECLARATIONS+CODE`, which replaces the fragment stage's tail
-(the same non-replacing form the shell's GLSL effect uses) rather than standing as a
-program of its own, upload the uniforms the generated shader declares,
-use a 1px placeholder layer for `cogl_tex_coord0_in`, orthographic `buffer`,
-`clear4f(CLEAR_COLOR_BUFFER,0,0,0,0)` (driver texture is not zeroed; hollow mask
-skips interior writes, so uncleared pixels would show through rounded corners),
-`draw_textured_rectangle` + `flush`, then wrap texture in a drawing pipeline.
+## Effects — the shadow actor
 
-Cogl uniform setter probes two GJS signatures once per session:
-`set_uniform_float(loc, n, 1, values)` vs `set_uniform_float(loc, n, values)`
-(`uniform()`).
+One shadow actor per drawn shadow, a sibling below the window actor in the window group. Clutter
+constraints and property bindings sync its padded rect and carry the map/close/minimize
+animations with no JS per frame.
 
-## Effects — ShadowActor (`effects/shadowActor.js`)
+The shadow is cast by the body, not the actor: the ring between buffer and frame is stored per
+side (null meaning the whole actor), and the cast rect is computed from the actor's live size on
+every paint, so it tracks a resize frame by frame. The slice destination boxes are snapped to the
+physical grid, guaranteeing that adjacent cutlines share identical physical grid lines under
+fractional scaling with no gap or overlap; the layout reuses pre-allocated boxes per physical
+scale, so the hot path allocates nothing.
 
-One `ShadowActor` per decorated window, sibling below `windowActor` in
-`global.window_group`. Four `Clutter.BindConstraint`s sync the padded rect
-(`x -SHADOW_PAD, y -SHADOW_PAD, w+2*PAD, h+2*PAD`) and seven `bind_property`s
-(`opacity, visible, pivot-point, scale-x/y, translation-x/y` via `GObject.BindingFlags.SYNC_CREATE`)
-carry map/close/minimize animations with no JS per frame. Inserted with
-`container.insert_child_below(shadow, windowActor)`.
+On paint the actor draws its eight textured rectangles and sets the pipeline opacity, modulating
+the style-transition weights and culling early at zero alpha for no overdraw, so close/minimize
+animations fade the shadow with no per-frame timers. The baked style changes only on a decision:
+the style key ignores window size, so a resize never re-bakes and the actor is not rebuilt.
 
-Shadow is cast by the body, not the actor: `setShadowInsets(insets)` stores the ring
-(`buffer_rect - frame_rect`) per side; null insets mean the whole actor. `_castRect()` computes
-`bodyFrame(this.width/height, insets)` from the actor's live size on every paint, so
-`cast = body + PAD on every side` tracks a resize frame by frame; the actor itself sits at
-`-PAD` from the window actor, so cast is `body` shifted by zero then grown.
-`shadowSlices(shadowGeometry(radius), cast.width, cast.height)` yields dest boxes and normalized sources;
-sources never change. On paint, dest boxes are snapped to the physical device pixel grid
-aligned with GTK 4.24 GSK rect snapping, guaranteeing that adjacent slice cutlines share
-identical physical grid lines under fractional scaling with zero subpixel gap or overlap.
-The layout caches pre-allocated boxes per physical scale and mutates them in-place when
-geometry changes, achieving zero hot-path memory allocation.
+A style change cross-fades (the transition and why nothing resizes are the model in
+`decoration-model.md`, *How a style change is drawn*). The fade advances from the paint pass, not
+from a timer: progress is a cubic-bezier curve solved over monotonic time, and a blend still
+running asks for the next frame from inside the paint, so its duration is real time at whatever
+rate the display runs. A mid-fade arrival keeps whichever side is more visible as outgoing and
+carries its weight, so a burst of focus changes reads as one continuous motion rather than a pop.
+The transition parameters come from libadwaita's `$backdrop_transition` (`200ms ease-out`).
 
-Paint (`vfunc_paint_node`): obtains `Cogl.Context` from the framebuffer (only exists
-inside paint), gets `Cogl.Pipeline` via `_pipelineFor` (lazy `shadowPipelineFor`),
-then adds a `Clutter.PipelineNode` with eight `add_texture_rectangle`s. Opacity is
-set via `setPipelineOpacity` (0..1, converted internally to 0-255 alpha), modulating style transition weights via
-`pipelineOpacityFor(weight, this.get_paint_opacity() / 255)` (culled early if `<= 0`
-for zero overdraw, settling any completed outgoing fade first) so window close/minimize
-fade animations (propagated via `bind_property`) smoothly fade the shadow with zero
-per-frame JS timers.
+## Preferences
 
-The style (and therefore the baked texture) still changes only on a decision: `styleKey` ignores
-the window size, so a resize never re-bakes, and the actor is not rebuilt. What runs per frame
-is the offscreen window pass (the clip) plus these eight textured rectangles; this change buys
-correctness and less per-frame JS reconcile, not an order-of-magnitude cheaper redraw.
+The preferences process has no window actors. It reads and writes the rule store through the
+settings adapter and calls the extension over the picker D-Bus method; matching never reads the
+sample title the pick recorded beside a rule. Axis names and type nouns are thunks
+(`() => _('...')`) because the module loads before the prefs process binds the gettext domain, so
+a plain `_()` would capture the untranslated string.
 
-Style change cross-fades (the transition and why nothing resizes are the model in
-`decoration-model.md`, *How a style change is drawn*). The fade progression and interrupted
-animation blending are encapsulated in the pure `ShadowFadeStateMachine` (`effects/shadowFade.js`).
-The fade advances from the paint pass, not from a timer: progress is evaluated via cubic-bezier
-curve solved by Newton iterations over monotonic time, and a blend still running asks for the next
-frame by queueing a redraw from inside the paint, so its duration is real time at whatever rate
-the display runs at. Mid-fade arrival keeps whichever side is more visible (`progress >= 0.5`) as
-outgoing and carries its weight (`keptWeight = progress` or `(1-progress)*outgoing.weight`), so a
-burst of focus changes reads as one continuous motion, never a pop.
+Each rule is an `Adw.ExpanderRow`: the header names the app and, for a picked rule, the dimmed
+sample title; the subtitle is the kind sentence; the suffix is one bundled icon per **corrected**
+axis (drawn on the GNOME symbolic grid, registered on a bare icon-theme search path so
+recolouring works without an `index.theme`, in the row's own foreground). The delete button sits
+left of the expander arrow, spaced from the icon group. The expanded body carries one switch per
+axis, titled with the axis itself - the same word an unavailable axis uses for its reason row -
+and the switch's tooltip says what turning it on does.
 
-Lifecycle: `destroy()` resets the state machine, unbinds, disconnects `windowActor::destroy`,
-clears style/outgoing and removes from container — idempotent for disable/reload.
-Transition parameters are read from the generated `ADWAITA_STYLE.transition`
-(libadwaita `$backdrop_transition` = `200ms ease-out`). See
-`_relayout` for the relayout cache.
+The kind sentence names all seven structural attributes of a rule key, folding the parent
+attributes into one phrase and the two ring attributes into the frame clause;
+`docs/rule-model.md` has the full grammar. Text for markup-aware widgets is escaped, while
+toasts, alerts and plain labels take plain text.
 
-## Preferences (`src/prefs.js`)
-
-`prefs.js` runs in the preferences process with no window actors. It reads/writes
-`window-rules` (a map to `{state, title}`) via `lib/settings.js` and calls the extension over
-D-Bus (`PickWindow`). `getWindowRules()` is the only view that hands the state out, so
-matching never reads the title the pick recorded beside it.
-Axis names and type nouns are thunks (`() => _('...')`) because the module
-loads before the prefs process binds the gettext domain — a plain `_()` would capture the
-untranslated string (`AXIS_NAMES`, `WINDOW_TYPE_NOUNS`).
-
-Each rule is an `Adw.ExpanderRow`: the header names the app and, for a rule that came from a
-pick, the title that window showed (dimmed, display only - see docs/rule-model.md),
-the subtitle the kind
-sentence, the suffix one bundled icon per **corrected** axis (`src/icons/`, drawn on the GNOME
-symbolic grid from one window: its rounded corner, the shadow it casts, the resize cursor's
-arrow; registered on a bare icon-theme search path as `*-symbolic` so recoloring applies
-without an `index.theme`, in the row's own foreground). The delete button is a
-header suffix left of the expander arrow - `ExpanderRow` prepends suffixes to keep its arrow
-last, so siblings are added in reverse visual order - spaced apart from the icon group. The
-expanded body carries one `Adw.SwitchRow` per axis, titled with the axis itself - the same
-word an unavailable axis uses for its reason row, so the two never read as different things
-- and the switch's tooltip says what turning it on does; conditions are not repeated per
-line.
-
-`windowKindSentence` names all seven structural attributes of a rule key (and folds
-`has_parent`/`attached_dialog` into one phrase; the frame clause carries `has_ring` and
-`has_ssd`, which cannot both describe a window we read); see `docs/rule-model.md` for the full grammar. `asMarkup` escapes text for `Adw.PreferencesGroup`/`ActionRow`
-(Pango markup); `Adw.Toast`/`AlertDialog` and bare `Gtk.Label` take plain text.
-
-The pick button and the import/export menu are the group's `header_suffix` - flat buttons that
-name their action and wear their icons, Adwaita's group-with-a-suffix pattern. A pick is the
-primary way a rule comes into being, and importing rules from the clipboard is the other. Rows
-are destroyed from within their own signal handlers,
-so rebuild is deferred to `GLib.PRIORITY_DEFAULT_IDLE`; one pending idle is enough
-because it reads the rules when it runs. The prefs window may be hidden for the
-modal picker and still be closed — `windowAlive` guards the D-Bus reply. An empty
-reply means cancelled/abandoned pick and is silent; a missing suggestion (a Shell that has
-not reloaded since an update) is refused with its own toast, because there is no correction
-to apply. Writes are verified (`hasOwnProperty`) before claiming success.
-Translator comments in `windowKindSentence()` describe each fragment and the `%s`
-placeholder order.
+The pick button and the import/export menu are the group's header suffix (Adwaita's
+group-with-a-suffix pattern): a pick is the primary way a rule comes into being, and importing
+from the clipboard is the other. Rows destroy themselves from inside their own signal handlers,
+so the rebuild is deferred to an idle - one pending idle is enough because it reads the rules
+when it runs. The prefs window may be hidden for the modal picker and still be closed, so a
+liveness guard backs the D-Bus reply; an empty reply is a cancelled pick and is silent, while a
+missing suggestion (a shell that has not reloaded since an update) is refused with its own toast
+because there is no correction to apply. Writes are verified before success is claimed.
