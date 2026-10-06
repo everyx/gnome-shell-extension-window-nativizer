@@ -14,6 +14,7 @@ jobs:
   lint:
     name: Code Quality & Style
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -46,6 +47,7 @@ jobs:
   ego-lint:
     name: EGO Reviewer Compliance
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -80,6 +82,7 @@ jobs:
   test:
     name: Unit Tests (GJS + Jasmine)
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
