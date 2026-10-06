@@ -85,6 +85,33 @@ describe('SnapRule', () => {
         expect(snapped.width).toBe(101);
         expect(snapped.height).toBe(101);
     });
+
+    it('rounds edges symmetrically to nearest grid line', () => {
+        const rect = {x: 10.4, y: 20.6, width: 100.2, height: 100.2};
+        const snapped = snapRectToGrid(rect, 1.0, SnapRule.ROUND);
+        expect(snapped.x).toBe(10);
+        expect(snapped.y).toBe(21);
+        // x2 = 10.4 + 100.2 = 110.6 -> 111. width = 111 - 10 = 101
+        expect(snapped.width).toBe(101);
+        // y2 = 20.6 + 100.2 = 120.8 -> 121. height = 121 - 21 = 100
+        expect(snapped.height).toBe(100);
+    });
+
+    it('locks phase with shadow slice boxes under fractional scale (4/3)', () => {
+        const scale = 4.0 / 3.0;
+        const rect = {x: 26.0, y: 23.0, width: 501.0, height: 400.0};
+        const snapped = snapRectToGrid(rect, scale, SnapRule.ROUND);
+
+        // SnapCoordToGrid(26.0, 4/3, ROUND) = round(34.6667) / (4/3) = 35 / (4/3) = 26.25
+        expect(snapped.x).toBeCloseTo(26.25, 4);
+        expect(snapped.x * scale).toBe(35);
+
+        // Verify shadow box left edge precisely matches snapped.x
+        const boxes = snapSliceBoxes(rect, 32, scale);
+        // Left edge slice is boxes[6]
+        expect(boxes[6].x).toBeCloseTo(snapped.x, 4);
+        expect(boxes[6].x1).toBeCloseTo(snapped.x, 4);
+    });
 });
 
 describe('snapCoordToGrid', () => {
