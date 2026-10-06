@@ -235,6 +235,18 @@ export function isWindowTiled(win, options = {}) {
  */
 
 /**
+ * What `evaluateWindowActions` decides for one window, per axis plus the resolved style.
+ * @typedef {object} WindowActions
+ * @property {boolean} drawShadow
+ * @property {boolean} drawClip
+ * @property {boolean} clearRing
+ * @property {boolean} drawRing
+ * @property {boolean} drawResize
+ * @property {object} style
+ * @property {string} reason
+ */
+
+/**
  * The declared margin, read the two ways the two questions need. The ring is declared per
  * side (`_GTK_FRAME_EXTENTS` LTRB, read as `buffer_rect - frame_rect`), and a two-sided
  * total loses which side it came from, so neither reading is "the" margin:
@@ -339,7 +351,7 @@ function resolveAxisValue(reversedAxes, axis, baseline) {
 
 /**
  * @param {WindowEvaluationParams} params
- * @returns {{drawShadow: boolean, drawClip: boolean, clearRing: boolean, drawRing: boolean, drawResize: boolean, style: object, reason: string}}
+ * @returns {WindowActions}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,

@@ -5,7 +5,7 @@
  * stored here. The body rect used to be snapshotted by the manager's 50ms reconcile, which
  * is why a resize showed square corners for every frame between two reconciles; the actor
  * size cannot lag the actor, so the clip cannot either. `setParams` now carries only the
- * decisions (insets, radius, outline, clearRing), and those may stay debounced.
+ * decisions (insets, radius, outline, clearRing, scale), and those may stay debounced.
  */
 
 import GObject from 'gi://GObject';

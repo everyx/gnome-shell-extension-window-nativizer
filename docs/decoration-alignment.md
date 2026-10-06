@@ -48,8 +48,8 @@ G         0    0   12   37  200  215  219  223  227
 
 `G=12` at -1 is libadwaita's inner 1px highlight (white over red, about 5%; the generated
 style says 7%). `0` is the anti-aliased body edge. `+1` and beyond is the shadow: the first
-shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.15)`, which the generated style has
-as `shadows: [{blur: 0, spread: 1, alpha: 0.15}]`).
+shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.05)`, which the generated style has
+as `shadows: [{blur: 0, spread: 1, alpha: 0.05}]`).
 
 ## The band you can grab is narrower than the shadow you can see
 
@@ -74,8 +74,9 @@ is GTK3's own, and the theme supplies every number in it.
   the resize cursor area"*.
 
 "It looks like the whole shadow can be grabbed and only a strip of it can" is therefore
-**native behaviour**, not something the drawing introduced: we draw the same shadow (aligned to
-within 5/255), and the band we add is 12px from the body - GTK4's width, and the width a GTK4
+**native behaviour**, not something the drawing introduced: we draw the same shadow (average
+deviation under 5/255, worst case 8/255 on the first two pixels), and the band we add is 12px
+from the body - GTK4's width, and the width a GTK4
 client's own input region already has. A GTK4 client that declares at least 12px on every side
 therefore keeps its own handle and gets no band from us; any window we decorate whose own handle is
 narrower gets ours, which brings it up to that width where its own is the theme's (10px with the
@@ -116,8 +117,9 @@ resize band's own feel - hover cursor and drag - has not been tried with a real 
 ## The setting that silently disables half of this
 
 `prefer-crisp-text` (default false) plus a fractional-scale monitor means
-`shouldClipWindow()` returns false and **no clip effect is attached at all**: square corners,
-no inner outline, and the shadow is baked against a square outline instead. On the machine
+`shouldClipWindow()` returns false and **no corner-clipping pass is attached**: square corners,
+no inner outline, and the shadow is baked against a square outline instead. The effect is still
+attached at radius 0 where a client ring has to be cleared (`clearRing`). On the machine
 this was developed on the setting is `true` and the monitor is at 1.3333, so every early
 measurement compared a square decoration against a rounded one and produced a phantom "1
 pixel edge offset" that was chased for a long time.
@@ -194,10 +196,10 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
   fractional blitting.
 - **Trade-off & Grid Snapping**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
-  under fractional scaling to avoid resampling blur on client window content. When enabled, the clip boundary
-  snaps outward to the physical device pixel grid, mirroring GTK4's rounded clip semantics. Outward snapping
-  guarantees valid window client pixels are never clipped away, while adjacent 9-slice shadow quads snap shared
-  cutlines to identical physical coordinates to eliminate subpixel seams.
+  under fractional scaling to avoid resampling blur on client window content. When the clip runs, its boundary
+  snaps to the physical device pixel grid with `SnapRule.ROUND`, the same rule the shadow cutlines use, so the body
+  is not expanded outward and adjacent 8-slice shadow quads keep their cutlines on identical physical coordinates
+  to eliminate subpixel seams.
 
 ### 2. First shadow pixel darkness (185 vs native 198-200)
 
@@ -246,7 +248,7 @@ To solve this at the root:
    - Obsolete client-drawn border rings outside the client frame (`x < insets.left`) are strictly excluded
      from the clipped body without fractional outward expansion;
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
-3. **Alpha-Over Compositing**: Multi-layer shadows in `ShadowActor` are composited using alpha-over:
+3. **Alpha-Over Compositing**: Multi-layer shadows are composited using alpha-over in the shadow bake shader (`shadowShader.generated.js`):
    ```glsl
    float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
    ```
@@ -260,6 +262,10 @@ To solve this at the root:
    `actions.clearRing` applies `safeInsets()` (`SAFE_INSET_MARGIN = 1px`) strictly to the clip effect
    (`_syncClip`), excising the internal stroke bleed and outer box-shadow residue with 100% four-way symmetry
    while leaving shadow bounds and tiled rings strictly aligned to `frame_rect`.
+6. **Ring layer as a hollow band**: The `blur < 0.5` layer is a hollow outset band
+   (`alpha * max(clamp(d + 0.5) - clamp(d - spread + 0.5), 0.0)`) rather than the filled disc the
+   old shader evaluated, so it no longer floods alpha under the window edge and the first boundary
+   pixel.
 
 ### Golden Baseline at 1.0x Integer Scale
 
@@ -331,7 +337,8 @@ What the numbers settle:
   own `window.csd:backdrop` set (`adwaitaStyle.generated.js`), so a taken-over window
   *should* profile like the skipped libadwaita one. ① and ② are the same measurement.
 - **The remaining gap is the shadow's own edge, not a state error.** The style keys are
-  right (`15|14,5,0;10,5,0.08;0,1,0.05` unfocused, `...0.15;5,2,0.1...` focused), baked
+  right (`15|14,5,0,0,0,0;10,5,0.08,0,0,0;0,1,0.05,0,0,0` unfocused,
+  `...14,5,0.15,0,0,0;5,2,0.1,0,0,0;0,1,0.05,0,0,0` focused), baked
   at the same 1px/logical-px grid as `decoration-model.md` describes; our profile is a
   few grey levels darker across the first ~5 logical px, closing by the sixth. Column
   ③ (a bare window, so no client ring anywhere) shows the same +2 difference, which
