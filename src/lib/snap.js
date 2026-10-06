@@ -5,7 +5,7 @@
  * GskRectSnap, GSK_RECT_SNAP_ROUND, and gsk_rect_snap_to_grid.
  *
  * Rationale:
- * Under fractional scaling or floating-point actor positions, adjacent 9-slice
+ * Under fractional scaling or floating-point actor positions, adjacent 8-slice
  * quads and compositor clipping effects suffer from subpixel rasterization
  * jitter (±0.5 physical px phase drift). Snapping rects and cutlines to the
  * physical device pixel grid eliminates seams, overlap artifacts, and edge blur.

@@ -171,11 +171,11 @@ export function resolveMonitorBounds(display, win) {
     return null;
 }
 
-// Declared- and tracker-derived answers are remembered; pid fallback would freeze a
-// session-local rule, and a peer-derived answer is not remembered either: the peer scan is
-// O(actors) but only runs for a window that declares no identity at all, while caching it
-// could not be invalidated correctly for a peer the manager does not track (a popup, a dock).
-// Key includes declared so a late WM_CLASS invalidates the cached answer.
+// Tracker-derived answers are remembered. A declared answer returns before the cache, a pid
+// fallback would freeze a session-local rule, and a peer-derived answer is not remembered
+// either: the peer scan is O(actors) but only runs for a window that declares no identity at
+// all, while caching it could not be invalidated correctly for a peer the manager does not
+// track (a popup, a dock).
 const fallbackIdentities = new WeakMap();
 
 /** @param {object} win @returns {string} stable identity or '' */

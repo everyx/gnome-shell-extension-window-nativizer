@@ -6,7 +6,7 @@
 pnpm install
 ```
 
-Unit tests need `jasmine-gjs` on `PATH`. It is not an npm package:
+Unit tests need `jasmine` (from the `jasmine-gjs` project below) on `PATH`. It is not an npm package:
 
 ```sh
 git clone --depth 1 https://github.com/ptomato/jasmine-gjs.git
@@ -27,7 +27,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
 | `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
-| `pnpm run pack` | builds `dist/<uuid>.zip` |
+| `pnpm run pack` | builds `dist/<uuid>.shell-extension.zip` |
 | `pnpm run shexli` | analyses that zip |
 
 ## What an extensions.gnome.org review rejects
@@ -51,8 +51,9 @@ pixels and nothing else - which is what the ring check in `tools/test-e2e.sh` sa
 ## Upstream API audit
 
 The extension claims a range of GNOME versions, and the facts behind that claim live in
-`tools/shell-api.json`: one declaration per symbol the extension consumes, extracted from a clone at
-a pinned tag rather than typed. Extracted because the hand-written version of the same facts had
+`tools/shell-api.json`: one declaration per symbol in the audited surface (the extension's calls
+and the negatives recorded to pin an absence), extracted from a clone at a pinned tag rather than
+typed. Extracted because the hand-written version of the same facts had
 four wrong rows, and two more were wrong in the negative entries nobody re-checks.
 
 `research/` holds uncommitted clones (see `.gitignore`) kept for exactly this reading, and
@@ -153,8 +154,8 @@ Things about it that cost time to find:
   `global.window_group.show()`, which is not enough: without the GDM activation flow
   nothing below the stage is painted, so an offscreen effect never allocates its
   framebuffer (`get_texture()` comes back null) and actors report a stale allocation
-  instead of their geometry. Walking the stage and calling `show()` on every actor
-  fixes it.
+  instead of their geometry. In a manual `Eval`, walking the stage and calling `show()` on every
+  actor fixes it for that session.
 - **`Eval` escaping rules.** GVariant decodes a `\n` escape sequence into a real
   newline before the shell evals the string, so an unescaped `\n` inside a JS string
   literal fails with `SyntaxError: "" string literal contains an unescaped line break`

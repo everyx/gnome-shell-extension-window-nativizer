@@ -54,10 +54,10 @@ Visual rounding is only half the story — non-native windows often have paper-t
 - **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
 
 ### 🛡️ Smart & Non-Invasive
-- **Leaves native apps alone**: Automatically skips Libadwaita, Libhandy, and Firefox
+- **Leaves native apps alone**: Automatically skips apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); Firefox is nativized like any other GTK3 app
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
 - **Overview-aware**: Retains rounded corners in overview previews using hardware mipmapping to eliminate thumbnail blur and moiré
-- **Clean tile seams**: The edge shared with another tile gets no ring, so no doubled line appears where two tiles meet
+- **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection
 Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
@@ -80,9 +80,9 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 
 ## Corrections
 
-Window Nativizer automatically handles most applications, but you can correct its judgement per window:
+Window Nativizer automatically handles most applications, but you can correct its judgement per window kind:
 
-Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
+Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window kind, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
 
 | Corrected axis | Typical Use Case |
 | :--- | :--- |
