@@ -47,6 +47,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 
 ### ⚡ Smooth GPU Shaders
 - **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
+- **Decoupled straight-edge AA**: Anti-aliasing is confined strictly to corner arcs, keeping straight window edges crisp and blur-free during drag under fractional scaling
 - **Direct pipeline hook**: Corners stay locked to the window during live resize without lag
 - **Transitions that follow focus**: The shadow fades to the backdrop set when focus leaves and snaps back when it returns, the way upstream declares it; the same opacity tracks GNOME Shell's close animation
 - **Follows the animation setting**: With animations off the fade snaps as well

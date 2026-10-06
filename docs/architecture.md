@@ -145,8 +145,8 @@ client painted (`buffer_rect - frame_rect`). The effect stores the ring as per-s
 computes the body in `vfunc_paint_target` from the actor's live width/height
 (`bodyFrame`), then removes only the four corner caps that lie inside the body's
 square bounds. Geometry is thus read in the paint that uses it, after Clutter has sized the
-offscreen; `setParams` carries the decisions (insets, radius, outline, clearRing) and may stay
-debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width or height
+offscreen; `setParams` carries the decisions (insets, radius, outline, clearRing, scale)
+and may stay debounced. Nothing in the paint calls `queue_repaint`. A degenerate actor (width or height
 ≤ 0) skips the pass: the shadow comes from the same actor, so there is no visible body to
 leave square. A degenerate *body*, though - insets that outrun the actor for the frame a
 resize passes through - does not: `bodyFrame` falls back to the whole actor, so the pass
@@ -155,24 +155,29 @@ the client-painted ring intact; `uClearRing` blends that mask away when the ring
 (see `decoration-model.md`: ring cleared exactly when the ring we draw is ours).
 
 Shader SDF: `d = sdRoundedBox(p - frameCenter, frameHalf, uRadius)` — `d < 0` inside body,
-`d > 0` in removed corners, `d == 0` on boundary. Anti-alias: `corner = 1 - clamp(d+0.5)`,
-`keep = min(corner + 1 - inSquare, 1)`, final `mix(keep, corner*inSquare, uClearRing)`.
-Inner 1px outline: `m = clamp(1.5+d)*inSquare*uOutline.a*cogl_color_in.a`. The ring is one
-logical pixel wide and centred half a pixel inside the body (`d in [-1.5,-0.5]`), which is
-where the `d = -0.5` pixel centre of the innermost body pixel sits; `1+d` centred it on the
-boundary instead and rendered that pixel at half strength (measured, with the reasoning, in
-`decoration-alignment.md`).
-`uOutline` is `rgb in [0,1], a in [0,1]`; `a == 0` disables it. Its color is normalized
-from `0..255` to `0..1` on upload. Radius 0 means square body — used when a reversed shadow axis
-clears the ring without rounding.
+`d > 0` in removed corners, `d == 0` on boundary. Physical anti-alias: `dPhys = d * uScale`,
+`corner = 1 - clamp(dPhys + 0.5, 0.0, 1.0)`, `keep = min(corner + 1 - inSquare, 1.0)`.
+To eliminate subpixel dragging blur from double-resampling under fractional scaling, the 1px SDF AA
+ramp is strictly restricted to corner arcs (`isCorner: q.x > 0.0 && q.y > 0.0`); straight edges
+maintain 100% clean content alpha (`straight = mix(1.0, inSquare, uClearRing)`), producing a sharp 1px
+physical transition without jitter: `isCorner ? mix(keep, corner, uClearRing) : straight`.
+Inner 1px outline: `m = clamp((d + 0.5) * uScale + 1.0, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a`.
+The outline is one physical pixel wide and centered half a physical pixel inside the body.
+`uOutline` is `vec4(r, g, b, a)` where `a == 0` disables the uniform.
 
-Clutter enlarges the offscreen by `FBO_OFFSET` and `FBO_EXTRA` (what those pixels are, and
-the measured split, are in `decoration-alignment.md`). The shader computes
-`quadSize = uSize + FBO_EXTRA` and `frameCenter = uFrame.xy + uFrame.zw*0.5 + FBO_OFFSET`.
+Clutter enlarges the offscreen by `FBO_EXTRA` (3px) and offsets the actor by `FBO_OFFSET`
+(2px), generated from Mutter's `_clutter_actor_box_enlarge_for_effects` (`clutter-actor-box.c`).
+`clipEffect.js` aligns the body rect to the physical device pixel grid using `SnapRule.ROUND`,
+locking phase with `shadowActor` (`snapSliceBoxesInto`, also `SnapDirection.ROUND`) to eliminate
+subpixel phase drift across fractional scales. For windows with declared client margin rings
+(`actions.clearRing`), `WindowDecoration` applies `SAFE_INSET_MARGIN = 1px` (`lib/frame.js`) strictly
+to the clip boundary (`_syncClip`). This completely excises GTK3's internal Cairo half-pixel stroke
+bleed (`rgba(0,0,0,0.23)`) and outer box-shadow residue without distorting shadow geometry or tiled rings,
+guaranteeing symmetric Adwaita-style rounded corners without subpixel border leakage.
 
 Upload cost: `setParams` deduplicates decoration decisions (radius, outline, clearRing) and
 queues a repaint only on change. During paint, live geometry is guarded by dirty checks,
-synchronising only when dimensions or frame insets actually shift. Static repaints therefore
+synchronising only when dimensions, frame insets, or device scale actually shift. Static repaints therefore
 incur no uniform uploads, and dynamic resizing avoids redundant pipeline state changes.
 See `FBO_OFFSET`/`FBO_EXTRA` in `DECLARATIONS` for the FBO constants.
 
