@@ -32,6 +32,55 @@ const NOTES_FILE = 'shell-api.md';
 
 const START = '<!-- shell-api-table:start -->';
 const END = '<!-- shell-api-table:end -->';
+const SUPPORT_START = '<!-- shell-support-table:start -->';
+const SUPPORT_END = '<!-- shell-support-table:end -->';
+
+/**
+ * What the extension offers, and the declarations each offer stands on. A feature is available on a
+ * line when every requirement of it is met there; a requirement naming several ids is met by any one
+ * of them, which is the shape the two moved APIs have (the shader base class from Shell to Clutter,
+ * the pointer source from a seat to a sprite).
+ *
+ * This is the answer to "what would a line lose?", computed from the same record the table above
+ * comes from, so it cannot drift from it - and it is what lets a claim be widened one line at a time
+ * rather than all at once. A requirement that a declaration merely *exists* is the common case;
+ * `contains` is for the one where the shape matters.
+ */
+const FEATURES = [
+    {
+        // The clip effect subclasses whichever shader base the line ships.
+        name: 'Rounded corners (the clip)',
+        needs: [{any: ['shell_glsl_effect_h', 'shader_effect_header']}],
+    },
+    {
+        // The painter reads its Cogl context out of the paint vfunc's context argument.
+        name: 'Window shadow',
+        needs: [{id: 'actor_paint_node', contains: 'ClutterPaintContext'}],
+    },
+    {
+        name: 'Resize band (the grab)',
+        needs: [{any: ['begin_grab_op']},
+            {any: ['backend_get_sprite', 'backend_get_pointer_sprite', 'backend_get_default_seat']}],
+    },
+    {
+        // Without per-actor cursors the band still grabs; the pointer keeps the default shape.
+        name: 'Resize cursor',
+        needs: [{any: ['set_cursor_type']}],
+    },
+    {
+        name: 'Tiled ring colour',
+        needs: [{any: ['st_settings_color_scheme', 'st_system_color_scheme']}],
+    },
+    {
+        name: 'Focus / backdrop fade',
+        needs: [{any: ['st_settings_enable_animations']}],
+    },
+    {
+        // /proc/<pid>/maps is kernel and GIO API, so nothing here is versioned at all.
+        name: 'Native-app detection',
+        needs: [],
+    },
+];
 
 const CHECK = process.argv.includes('--check');
 
@@ -101,19 +150,55 @@ function renderTable(record, ids) {
     return {table: rows.join('\n'), missing: dangling};
 }
 
-function splice(document, table) {
-    const start = document.indexOf(START);
-    const end = document.indexOf(END);
-    if (start < 0 || end < 0 || end < start)
-        throw new Error(`[gen-shell-api] ${path.relative(ROOT, DOC)} is missing the ${START} / ${END} markers`);
-    return `${document.slice(0, start + START.length)}\n${table}\n${document.slice(end)}`;
+function splice(document, block, start, end) {
+    const from = document.indexOf(start);
+    const to = document.indexOf(end);
+    if (from < 0 || to < 0 || to < from)
+        throw new Error(`[gen-shell-api] ${path.relative(ROOT, DOC)} is missing the ${start} / ${end} markers`);
+    return `${document.slice(0, from + start.length)}\n${block}\n${document.slice(to)}`;
+}
+
+/**
+ * @param {Map<string, object>} entryById
+ * @param {{id?: string, any?: string[], contains?: string}} requirement
+ * @param {string} major
+ * @returns {boolean}
+ */
+function requirementMet(entryById, requirement, major) {
+    if (requirement.any)
+        return requirement.any.some(id => entryById.get(id)?.decl[major] != null);
+    const decl = entryById.get(requirement.id)?.decl[major];
+    if (decl == null)
+        return false;
+    return !requirement.contains || decl.includes(requirement.contains);
+}
+
+/**
+ * The support matrix: one row per feature, one column per audited line. A cell reads `degraded`
+ * where the feature is missing, which is the difference between "this line loses something" and
+ * "nothing ships this anywhere yet".
+ * @param {object} record
+ * @returns {string}
+ */
+function renderSupportTable(record) {
+    const entryById = new Map(record.surface.map(e => [e.id, e]));
+    const majors = record.majors;
+    const rows = [`| Feature | ${majors.join(' | ')} |`, `|${'---|'.repeat(majors.length + 1)}`];
+
+    for (const feature of FEATURES) {
+        const cells = majors.map(major =>
+            (feature.needs.every(req => requirementMet(entryById, req, major)) ? 'yes' : '**degraded**'));
+        rows.push(`| ${feature.name} | ${cells.join(' | ')} |`);
+    }
+    return rows.join('\n');
 }
 
 const record = JSON.parse(read(RECORD));
 const ids = noteIds();
 const {table, missing} = renderTable(record, ids);
+const supportTable = renderSupportTable(record);
 const document = read(DOC);
-const generated = splice(document, table);
+const generated = splice(splice(document, table, START, END), supportTable, SUPPORT_START, SUPPORT_END);
 
 // Every row links to prose, and prose that no row links to is dead weight a reader will find and
 // trust. Both directions are checked, because both are ways for the two files to disagree.

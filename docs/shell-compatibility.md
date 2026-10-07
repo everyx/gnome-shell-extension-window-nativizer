@@ -91,6 +91,30 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Main.overview.visible` | 45–51 stable | [why](shell-api.md#overview_visible) |
 <!-- shell-api-table:end -->
 
+## What each line offers
+
+The table above says what exists. This one says what the extension actually offers, which is the
+question a `shell-version` claim is about: each row is a feature, and each cell is computed from the
+same declarations - a feature is available on a line when every API it stands on is there for that
+line, where a moved API counts from either end.
+
+<!-- shell-support-table:start -->
+| Feature | 45 | 46 | 47 | 48 | 49 | 50 | 51 |
+|---|---|---|---|---|---|---|---|
+| Rounded corners (the clip) | yes | yes | yes | yes | yes | yes | yes |
+| Window shadow | **degraded** | **degraded** | yes | yes | yes | yes | yes |
+| Resize band (the grab) | yes | yes | yes | yes | yes | yes | yes |
+| Resize cursor | **degraded** | **degraded** | **degraded** | **degraded** | **degraded** | yes | yes |
+| Tiled ring colour | yes | yes | yes | yes | yes | yes | yes |
+| Focus / backdrop fade | yes | yes | yes | yes | yes | yes | yes |
+| Native-app detection | yes | yes | yes | yes | yes | yes | yes |
+<!-- shell-support-table:end -->
+
+Two lines lose something, and both are recorded in full in [shell-api.md](shell-api.md): 45 and 46
+draw no shadow, because their paint vfunc passes no context to read a Cogl context out of, and 45-49
+have no resize cursor, because a per-actor cursor only exists from 50. Nothing else in the table is
+missing on any audited line.
+
 ## Evolution across GNOME 45–51
 
 Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
