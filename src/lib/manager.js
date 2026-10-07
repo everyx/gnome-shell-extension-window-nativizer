@@ -12,7 +12,7 @@ import {
 } from './detector.js';
 import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
-import {readWindow} from './window.js';
+import {isClassificationPending, readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
 import {WindowDecoration} from './windowDecoration.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
@@ -370,14 +370,18 @@ export class Manager {
 
             const pid = win.get_pid?.();
             this._classifier?.probeAdwaitaLook(pid);
-            if (this._classifier?.isAdwaitaLookPending(pid))
-                return;
 
             const inputs = this._decorationInputs(win);
             if (!inputs) {
                 deco.undecorate();
                 return;
             }
+            // The process has not been classified yet: nothing of ours is drawn for these frames,
+            // so the window keeps the decoration its toolkit gave it, and the answer landing a
+            // frame later runs the decision again. Deciding on a default is the guess the tri-state
+            // exists to remove.
+            if (isClassificationPending(inputs))
+                return;
             const actions = evaluateWindowActions(inputs);
 
             deco.apply({
