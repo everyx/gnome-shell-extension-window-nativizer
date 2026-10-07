@@ -167,11 +167,27 @@ if [[ "$MAPPED" -ne 1 ]]; then
     exit 1
 fi
 
-# Allow manager idle_add to complete decoration attachment
-sleep 0.1
+# An actor appears before its window reports a usable geometry, and a line whose first map is slower
+# reaches the check with both rects still all zero - which the extension reads, correctly, as no
+# geometry to place a body in. Wait for the window rather than for its actor.
+echo ">> [test-e2e] Waiting for the window's geometry..."
+GEOM="0x0"
+for i in $(seq 1 50); do
+    GEOM="$(shell_eval '(() => { const w = global.get_window_actors()[0]?.meta_window; if (!w) return "0x0"; const r = w.get_frame_rect(); return r.width + "x" + r.height; })()' 2>/dev/null | grep -oE '[0-9]+x[0-9]+' | head -1 || echo "0x0")"
+    [[ "$GEOM" != "0x0" ]] && break
+    sleep 0.1
+done
+if [[ "$GEOM" == "0x0" ]]; then
+    echo "!! Timeout waiting for the window to report a geometry!"
+    exit 1
+fi
+echo ">> Window geometry is $GEOM."
 
-# 4. Verify scene graph decoration attachment and execute compositor moving
-echo ">> [test-e2e] Verifying shadow and clip effect attachment..."
+# Allow manager idle_add to complete decoration attachment, then give the decision its bounded time:
+# the classification it waits for is an asynchronous /proc read, so "not yet" and "never" have to be
+# told apart by waiting rather than by failing on the first look.
+CHECK_RESULT=""
+for attempt in $(seq 1 20); do
 CHECK_RESULT="$(shell_eval '
 (() => {
     const actors = global.get_window_actors();
@@ -188,6 +204,15 @@ CHECK_RESULT="$(shell_eval '
     // Verify Manager.stateView(win) introspection seam
     const ext = typeof Main !== "undefined" ? Main.extensionManager.lookup("'"$UUID"'")?.stateObj : null;
     const stateView = (ext?._manager && winActor.meta_window) ? ext._manager.stateView(winActor.meta_window) : null;
+
+    // What the decision was made from, so a failure here says which layer said no rather than only
+    // that nothing was attached. A line whose reading, eligibility or classification differs is
+    // otherwise indistinguishable from one where the actors were never created.
+    const win = winActor.meta_window;
+    const pid = win?.get_pid ? win.get_pid() : -1;
+    const classifier = ext?._manager?.classifier ?? null;
+    const b = win?.get_buffer_rect?.();
+    const f = win?.get_frame_rect?.();
     return JSON.stringify({
         hasClip,
         hasShadow,
@@ -196,12 +221,31 @@ CHECK_RESULT="$(shell_eval '
         stateViewClip: stateView?.hasClip ?? false,
         stateViewShadow: stateView?.hasShadow ?? false,
         stateViewBand: stateView?.hasResizeBand ?? false,
-        actorCount: actors.length
+        actorCount: actors.length,
+        facts: {
+            windowType: String(win?.get_window_type?.()),
+            maximized: String(win?.get_maximized ? win.get_maximized() : "n/a"),
+            isMaximizedFn: String(win?.is_maximized ? win.is_maximized() : "n/a"),
+            fullscreen: String(win?.is_fullscreen ? win.is_fullscreen() : "n/a"),
+            allowsResize: String(win?.allows_resize ? win.allows_resize() : "n/a"),
+            decorated: String(win?.decorated),
+            buffer: b ? [b.x, b.y, b.width, b.height] : null,
+            frame: f ? [f.x, f.y, f.width, f.height] : null,
+            pid,
+            adwaitaLook: classifier ? String(classifier.adwaitaLook(pid)) : "no-classifier",
+            gtk4: classifier ? String(classifier.hasGtk4Client(pid)) : "no-classifier"
+        }
     });
 })()
 ')"
 
 echo ">> Attachment check: $CHECK_RESULT"
+if check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand": true, "hasStateView": true, "stateViewClip": true, "stateViewShadow": true, "stateViewBand": true}'; then
+    break
+fi
+sleep 0.1
+done
+
 if ! check_fields "$CHECK_RESULT" '{"hasClip": true, "hasShadow": true, "hasBand": true, "hasStateView": true, "stateViewClip": true, "stateViewShadow": true, "stateViewBand": true}'; then
     echo "!! RoundedClipEffect, WindowNativizerShadowActor or WindowNativizerResizeBand was not attached, or stateView mismatch!"
     exit 1
