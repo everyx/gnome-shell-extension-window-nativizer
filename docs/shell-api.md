@@ -279,6 +279,34 @@ Used when configuring the layer filters for overview thumbnails.
 `effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The whole file goes
 away in 51, which is why the compat class exists at all.
 
+## shell_glsl_add_glsl_snippet
+
+`effect.add_glsl_snippet()` on `Shell.GLSLEffect` - how the clip effect attaches its fragment shader
+on 45-50. The hook argument is typed `ShellSnippetHook` through 47 and `CoglSnippetHook` from 48:
+the same values, renamed upstream once Cogl exported the enum in its 1.0 API (the Shell header's own
+comment calls its copy "a temporary hack ... don't use"). Passing Cogl's value has been the right
+hook on every line.
+
+## shader_effect_header
+
+`Clutter.ShaderEffect` - the base class the clip effect takes on 51, once `Shell.GLSLEffect` is gone.
+Declared throughout; what 51 changed is that it became the bearer of the snippet hook, below.
+
+## shader_effect_static_snippet
+
+`Clutter.ShaderEffect:vfunc_get_static_snippet()` - the 51 replacement for the hand-built pipeline:
+answer a `Cogl.Snippet` instead of calling `add_glsl_snippet`. Absent before 51, which is why the
+compat base class forks on the class rather than on a version.
+
+## cogl_snippet_new
+
+`Cogl.Snippet.new()` - builds that snippet at the fragment hook. Stable across 45-51.
+
+## cogl_snippet_set_replace
+
+`Cogl.Snippet.set_replace()` - the replacing form, for source meant to stand in for the stage rather
+than post-process it. Stable across 45-51.
+
 ## backend_get_sprite
 
 `backend.get_sprite()` - in the same release the grab operation started taking a sprite

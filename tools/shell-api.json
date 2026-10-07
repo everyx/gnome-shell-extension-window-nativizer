@@ -903,6 +903,91 @@
             }
         },
         {
+            "id": "shell_glsl_add_glsl_snippet",
+            "member": "effect.add_glsl_snippet() [Shell.GLSLEffect]",
+            "repo": "gnome-shell",
+            "kind": "fn",
+            "file": "src/shell-glsl-effect.h",
+            "sym": "shell_glsl_effect_add_glsl_snippet",
+            "decl": {
+                "45": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, ShellSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "46": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, ShellSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "47": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, ShellSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "48": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, CoglSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "49": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, CoglSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "50": "void shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect *effect, CoglSnippetHook hook, const char *declarations, const char *code, gboolean is_replace);",
+                "51": null
+            }
+        },
+        {
+            "id": "shader_effect_header",
+            "member": "Clutter.ShaderEffect",
+            "repo": "mutter",
+            "kind": "file",
+            "file": "clutter/clutter/clutter-shader-effect.h",
+            "sym": null,
+            "decl": {
+                "45": "present",
+                "46": "present",
+                "47": "present",
+                "48": "present",
+                "49": "present",
+                "50": "present",
+                "51": "present"
+            }
+        },
+        {
+            "id": "shader_effect_static_snippet",
+            "member": "Clutter.ShaderEffect:vfunc_get_static_snippet()",
+            "repo": "mutter",
+            "kind": "vfunc",
+            "file": "clutter/clutter/clutter-shader-effect.h",
+            "sym": "get_static_snippet",
+            "decl": {
+                "45": null,
+                "46": null,
+                "47": null,
+                "48": null,
+                "49": null,
+                "50": null,
+                "51": "(* get_static_snippet) (ClutterShaderEffect *effect);"
+            }
+        },
+        {
+            "id": "cogl_snippet_new",
+            "member": "Cogl.Snippet.new()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "cogl/cogl/cogl-snippet.h",
+            "sym": "cogl_snippet_new",
+            "decl": {
+                "45": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "46": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "47": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "48": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "49": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "50": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);",
+                "51": "COGL_EXPORT CoglSnippet * cogl_snippet_new (CoglSnippetHook hook, const char *declarations, const char *post);"
+            }
+        },
+        {
+            "id": "cogl_snippet_set_replace",
+            "member": "Cogl.Snippet.set_replace()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "cogl/cogl/cogl-snippet.h",
+            "sym": "cogl_snippet_set_replace",
+            "decl": {
+                "45": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "46": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "47": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "48": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "49": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "50": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);",
+                "51": "COGL_EXPORT void cogl_snippet_set_replace (CoglSnippet *snippet, const char *replace);"
+            }
+        },
+        {
             "id": "backend_get_sprite",
             "member": "backend.get_sprite()",
             "repo": "mutter",

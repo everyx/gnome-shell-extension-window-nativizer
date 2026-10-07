@@ -108,6 +108,13 @@ const SURFACE = [
     {id: 'cogl_pipeline_get_layer_filters', member: 'pipeline.get_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_get_layer_filters'},
     {id: 'cogl_pipeline_filter', member: 'Cogl.PipelineFilter', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'COGL_PIPELINE_FILTER_NEAREST'},
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
+    {id: 'shell_glsl_add_glsl_snippet', member: 'effect.add_glsl_snippet() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_add_glsl_snippet'},
+    // The 51 end of the same bridge: the shader base class moved to Clutter, and its snippet hook
+    // is answered differently (a static snippet rather than a pipeline built by hand).
+    {id: 'shader_effect_header', member: 'Clutter.ShaderEffect', repo: 'mutter', kind: 'file', file: 'clutter/clutter/clutter-shader-effect.h'},
+    {id: 'shader_effect_static_snippet', member: 'Clutter.ShaderEffect:vfunc_get_static_snippet()', repo: 'mutter', kind: 'vfunc', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'get_static_snippet'},
+    {id: 'cogl_snippet_new', member: 'Cogl.Snippet.new()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-snippet.h', sym: 'cogl_snippet_new'},
+    {id: 'cogl_snippet_set_replace', member: 'Cogl.Snippet.set_replace()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-snippet.h', sym: 'cogl_snippet_set_replace'},
     {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
     {id: 'seat_get_pointer', member: 'seat.get_pointer()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-seat.h', sym: 'clutter_seat_get_pointer'},
