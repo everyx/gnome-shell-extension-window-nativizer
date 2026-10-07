@@ -247,7 +247,10 @@ export function resolveWindowIdentity(win) {
  * @property {boolean} hasSsd
  * @property {boolean} isX11
  * @property {string} clientTypeToken
- * @property {boolean} nativeLikeCorners
+ * @property {boolean|null} nativeLikeCorners - Whether the process already draws itself the way we
+ *           would, or null while its `/proc/<pid>/maps` read is still in flight. Null is not a
+ *           decision input: it means "not known yet", and the caller defers rather than decide on
+ *           a default, which is what the probe exists to avoid.
  * @property {boolean} hasGtk4Client
  * @property {number} windowType
  * @property {boolean} hasParent
@@ -314,11 +317,14 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     const declaredWmClass = safeRead(() => readDeclaredIdentity(win), '');
     const wmClass = wmClassOverride || declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
 
-    // Process classification defaults to false when classifier is omitted or throws.
-    const nativeLikeCorners = safeRead(
-        () => Boolean(classifier && typeof classifier.hasNativeLikeCorners === 'function' && classifier.hasNativeLikeCorners(win)),
-        false
-    );
+    // The classification answers null while its read is in flight, and a throwing classifier reads
+    // as the same "not known yet": both are teardown races, and deferring is what the answer
+    // landing a frame later would have done anyway.
+    const nativeLikeCorners = safeRead(() => {
+        if (classifier && typeof classifier.adwaitaLook === 'function')
+            return classifier.adwaitaLook(pid);
+        return false;
+    }, null);
     const hasGtk4 = safeRead(
         () => Boolean(classifier && typeof classifier.hasGtk4Client === 'function' && classifier.hasGtk4Client(pid)),
         false

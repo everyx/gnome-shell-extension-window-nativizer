@@ -158,7 +158,9 @@ export class InspectorService {
             isMaximized: reading.isMaximized,
             isTiled: reading.tiled,
             isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped?.(win)),
-            hasNativeLikeCorners: reading.nativeLikeCorners,
+            // The read may not have landed. The highlight lives for one frame and no decision hangs
+            // on it, so it keeps the answer the probe used to give for an unclassified process.
+            hasNativeLikeCorners: reading.nativeLikeCorners ?? true,
             hasSsd: reading.hasSsd,
             baseRadius: ADWAITA_STYLE.window.radius,
         });

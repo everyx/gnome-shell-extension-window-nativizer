@@ -176,7 +176,7 @@ describe('window inspection (readWindow)', () => {
             get_pid: () => 9876,
         };
         const mockClassifier = {
-            hasNativeLikeCorners: win => win.get_pid() === 9876,
+            adwaitaLook: pid => pid === 9876,
             hasGtk4Client: pid => pid === 9876,
         };
 
@@ -186,6 +186,18 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeTrue();
     });
 
+    it('passes an unclassified process through as null, not as a default', () => {
+        const mockWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_pid: () => 4242,
+        };
+        const reading = readWindow(mockWin, {
+            classifier: {adwaitaLook: () => null, hasGtk4Client: () => false},
+        });
+        expect(reading.nativeLikeCorners).toBeNull();
+    });
+
     it('handles throwing classifier methods gracefully during teardown', () => {
         const mockWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
@@ -193,7 +205,7 @@ describe('window inspection (readWindow)', () => {
             get_pid: () => 1234,
         };
         const throwingClassifier = {
-            hasNativeLikeCorners: () => {
+            adwaitaLook: () => {
                 throw new Error('classifier torn down');
             },
             hasGtk4Client: () => {
@@ -203,7 +215,9 @@ describe('window inspection (readWindow)', () => {
 
         const reading = readWindow(mockWin, {classifier: throwingClassifier});
         expect(reading).not.toBeNull();
-        expect(reading.nativeLikeCorners).toBeFalse();
+        // A throw is the same "not known yet" as a read still in flight, and deferring is what the
+        // answer landing a frame later would have done anyway.
+        expect(reading.nativeLikeCorners).toBeNull();
         expect(reading.hasGtk4Client).toBeFalse();
     });
 

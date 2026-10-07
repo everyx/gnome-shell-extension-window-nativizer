@@ -246,7 +246,9 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [isFullscreen=false]
  * @property {boolean} [hasSsd=false]
  * @property {boolean} [isX11=false]
- * @property {boolean} [nativeLikeCorners=false]
+ * @property {boolean} [nativeLikeCorners=false] - Whether the process maps an Adwaita provider. The
+ *           reading answers null while that is not known yet, and null is not a decision input:
+ *           the caller defers rather than decide on a default.
  * @property {number} [windowType=WindowType.NORMAL]
  * @property {boolean} [hasParent=false]
  * @property {boolean} [isAttachedDialog=false]

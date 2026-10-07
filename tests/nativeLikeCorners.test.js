@@ -97,49 +97,46 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             const readMaps = (pid, done) => { finish = done; };
             classifier.probeAdwaitaLook(838383, {readMaps});
             expect(classifier.hasGtk4Client(838383)).toBeFalse();
-            expect(classifier.hasAdwaitaLook(838383)).toBeTrue();
+            expect(classifier.adwaitaLook(838383)).toBeNull();
             finish(maps('/usr/lib/libadwaita-1.so.0'));
             expect(classifier.hasGtk4Client(838383)).toBeTrue();
         });
     });
 
-    describe('hasAdwaitaLook', () => {
+    describe('adwaitaLook', () => {
         const reader = mapsText => (pid, done) => done(mapsText);
         const failing = (pid, done) => done(null, new Error('EACCES'));
 
         it('returns false for an invalid pid', () => {
-            expect(classifier.hasAdwaitaLook(null)).toBeFalse();
-            expect(classifier.hasAdwaitaLook(0)).toBeFalse();
-            expect(classifier.hasAdwaitaLook(-1)).toBeFalse();
+            expect(classifier.adwaitaLook(null)).toBeFalse();
+            expect(classifier.adwaitaLook(0)).toBeFalse();
+            expect(classifier.adwaitaLook(-1)).toBeFalse();
         });
 
         it('decorates a process whose maps cannot be read, and reads it once', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
             classifier.probeAdwaitaLook(717171, {readMaps});
-            expect(classifier.hasAdwaitaLook(717171)).toBeFalse();
+            expect(classifier.adwaitaLook(717171)).toBeFalse();
             classifier.probeAdwaitaLook(717171, {readMaps}); // idempotent: already cached
-            expect(classifier.hasAdwaitaLook(717171)).toBeFalse();
+            expect(classifier.adwaitaLook(717171)).toBeFalse();
             expect(reads).toBe(1);
         });
 
         it('decorates a process whose reader throws instead of answering', () => {
             const readMaps = () => { throw new Error('boom'); };
             classifier.probeAdwaitaLook(717172, {readMaps});
-            expect(classifier.hasAdwaitaLook(717172)).toBeFalse();
-            expect(classifier.isAdwaitaLookPending(717172)).toBeFalse();
-            expect(classifier.hasAdwaitaLook(717172)).toBeFalse();
+            expect(classifier.adwaitaLook(717172)).toBeFalse();
         });
 
-        it('leaves a window alone while its read is in flight, then answers', () => {
+        it('answers nothing while the read is in flight, then the maps answer', () => {
             let finish;
             const readMaps = (pid, done) => { finish = done; };
 
             classifier.probeAdwaitaLook(313131, {readMaps});
-            expect(classifier.hasAdwaitaLook(313131)).toBeTrue();
-            expect(classifier.hasAdwaitaLook(313131)).toBeTrue();
+            expect(classifier.adwaitaLook(313131)).toBeNull();
             finish(maps('/usr/lib/libgtk-4.so.1'));
-            expect(classifier.hasAdwaitaLook(313131)).toBeFalse();
+            expect(classifier.adwaitaLook(313131)).toBeFalse();
         });
 
         it('reports the pid whose answer landed', () => {
@@ -147,7 +144,7 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             classifier.setOnProcessKnown(pid => known.push(pid));
 
             classifier.probeAdwaitaLook(414141, {readMaps: failing});
-            expect(classifier.hasAdwaitaLook(414141)).toBeFalse();
+            expect(classifier.adwaitaLook(414141)).toBeFalse();
             expect(known).toEqual([414141]);
         });
 
@@ -155,8 +152,8 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(maps('/usr/lib/libc.so.6')); };
             classifier.probeAdwaitaLook(515151, {readMaps});
-            expect(classifier.hasAdwaitaLook(515151)).toBeFalse();
-            expect(classifier.hasAdwaitaLook(515151)).toBeFalse();
+            expect(classifier.adwaitaLook(515151)).toBeFalse();
+            expect(classifier.adwaitaLook(515151)).toBeFalse();
             expect(reads).toBe(1);
         });
 
@@ -164,28 +161,28 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(maps('/usr/lib/libc.so.6')); };
             classifier.probeAdwaitaLook(616161, {readMaps});
-            classifier.hasAdwaitaLook(616161);
+            classifier.adwaitaLook(616161);
             classifier.forgetProcess(616161);
             classifier.probeAdwaitaLook(616161, {readMaps});
-            classifier.hasAdwaitaLook(616161);
+            classifier.adwaitaLook(616161);
             expect(reads).toBe(2);
         });
 
         it('accepts a mapped provider', () => {
             classifier.probeAdwaitaLook(424242, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
-            expect(classifier.hasAdwaitaLook(424242)).toBeTrue();
+            expect(classifier.adwaitaLook(424242)).toBeTrue();
         });
 
         it('rejects a GTK program holding no provider', () => {
             classifier.probeAdwaitaLook(424243, {
                 readMaps: reader(maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libgtk-3.so.0')),
             });
-            expect(classifier.hasAdwaitaLook(424243)).toBeFalse();
+            expect(classifier.adwaitaLook(424243)).toBeFalse();
         });
 
         it('rejects a non-GTK program', () => {
             classifier.probeAdwaitaLook(424245, {readMaps: reader(maps('/usr/lib/libQt6Core.so.6'))});
-            expect(classifier.hasAdwaitaLook(424245)).toBeFalse();
+            expect(classifier.adwaitaLook(424245)).toBeFalse();
         });
 
         it('ignores an answer that lands after the pid was forgotten', () => {
@@ -199,7 +196,7 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
 
             expect(known).toEqual([]);
             classifier.probeAdwaitaLook(515100, {readMaps: reader(maps('/usr/lib/libc.so.6'))});
-            expect(classifier.hasAdwaitaLook(515100)).toBeFalse();
+            expect(classifier.adwaitaLook(515100)).toBeFalse();
         });
 
         it('drops the cache and the callback on destroy()', () => {
@@ -212,77 +209,59 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             finish(maps('/usr/lib/libgtk-4.so.1'));
 
             expect(known).toEqual([]);
-            // A destroyed classifier ignores further probes and defaults to safe values without I/O
+            // A destroyed classifier ignores further probes and answers "not known", starting no I/O
             classifier.probeAdwaitaLook(616100, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
-            expect(classifier.hasAdwaitaLook(616100)).toBeTrue();
+            expect(classifier.adwaitaLook(616100)).toBeNull();
         });
     });
 
-    describe('isAdwaitaLookPending', () => {
-        it('returns false for an invalid pid', () => {
-            expect(classifier.isAdwaitaLookPending(null)).toBeFalse();
-            expect(classifier.isAdwaitaLookPending(0)).toBeFalse();
-            expect(classifier.isAdwaitaLookPending(-1)).toBeFalse();
-        });
-
-        it('is false before probing, true while probe is in flight, and false once it lands', () => {
+    describe('adwaitaLook when there is no answer', () => {
+        it('is null until the answer lands, and then the maps answer', () => {
             let finish;
             const readMaps = (pid, done) => { finish = done; };
 
-            expect(classifier.isAdwaitaLookPending(272727)).toBeFalse();
             classifier.probeAdwaitaLook(272727, {readMaps});
-            expect(classifier.isAdwaitaLookPending(272727)).toBeTrue();
+            expect(classifier.adwaitaLook(272727)).toBeNull();
             finish(maps('/usr/lib/libc.so.6'));
-            expect(classifier.isAdwaitaLookPending(272727)).toBeFalse();
+            expect(classifier.adwaitaLook(272727)).toBeFalse();
         });
 
-        it('returns false immediately when probe resolves synchronously', () => {
+        it('answers in the same call when the probe resolves synchronously', () => {
             const readMaps = (pid, done) => done(maps('/usr/lib/libc.so.6'));
             classifier.probeAdwaitaLook(282828, {readMaps});
-            expect(classifier.isAdwaitaLookPending(282828)).toBeFalse();
+            expect(classifier.adwaitaLook(282828)).toBeFalse();
         });
 
-        it('is false once the pid is forgotten or the instance is destroyed', () => {
+        it('is null once the pid is forgotten or the instance is destroyed', () => {
             classifier.probeAdwaitaLook(373737, {readMaps: () => {}});
-            expect(classifier.isAdwaitaLookPending(373737)).toBeTrue();
+            expect(classifier.adwaitaLook(373737)).toBeNull();
             classifier.forgetProcess(373737);
-            expect(classifier.isAdwaitaLookPending(373737)).toBeFalse();
+            expect(classifier.adwaitaLook(373737)).toBeNull();
 
             classifier.probeAdwaitaLook(383838, {readMaps: () => {}});
-            expect(classifier.isAdwaitaLookPending(383838)).toBeTrue();
+            expect(classifier.adwaitaLook(383838)).toBeNull();
             classifier.destroy();
-            expect(classifier.isAdwaitaLookPending(383838)).toBeFalse();
+            expect(classifier.adwaitaLook(383838)).toBeNull();
 
             let readAttempted = false;
             classifier.probeAdwaitaLook(393939, {readMaps: () => { readAttempted = true; }});
-            expect(classifier.isAdwaitaLookPending(393939)).toBeFalse();
+            expect(classifier.adwaitaLook(393939)).toBeNull();
             expect(readAttempted).toBeFalse();
-        });
-    });
-
-    describe('hasNativeLikeCorners', () => {
-        it('reads the pid the window reports from the process cache', () => {
-            classifier.probeAdwaitaLook(9999999, {readMaps: (pid, done) => done(maps('/usr/lib/libadwaita-1.so.0'))});
-            expect(classifier.hasNativeLikeCorners({get_pid: () => 9999999})).toBeTrue();
-        });
-
-        it('returns false for a window without a usable pid', () => {
-            expect(classifier.hasNativeLikeCorners({get_pid: () => 0})).toBeFalse();
-            expect(classifier.hasNativeLikeCorners({})).toBeFalse();
-        });
-
-        it('safely handles null and undefined', () => {
-            expect(classifier.hasNativeLikeCorners(null)).toBeFalse();
-            expect(classifier.hasNativeLikeCorners(undefined)).toBeFalse();
         });
     });
 
     describe('query purity', () => {
         it('never starts a read from a query, however often it is called', () => {
-            expect(classifier.hasAdwaitaLook(700001)).toBeTrue();
+            let reads = 0;
+            const readMaps = (pid, done) => { reads++; done(maps('/usr/lib/libc.so.6')); };
+
+            expect(classifier.adwaitaLook(700001)).toBeNull();
             expect(classifier.hasGtk4Client(700001)).toBeFalse();
-            expect(classifier.hasNativeLikeCorners({get_pid: () => 700001})).toBeTrue();
-            expect(classifier.isAdwaitaLookPending(700001)).toBeFalse();
+            expect(reads).toBe(0);
+
+            classifier.probeAdwaitaLook(700001, {readMaps});
+            expect(reads).toBe(1);
+            expect(classifier.adwaitaLook(700001)).toBeFalse();
         });
     });
 
@@ -307,7 +286,7 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             // c2 can probe independently
             c2.probeAdwaitaLook(pid, {readMaps: (p, done) => done(maps('/usr/lib/libhandy-1.so.0'))});
             expect(c2.hasGtk4Client(pid)).toBeFalse();
-            expect(c2.hasAdwaitaLook(pid)).toBeTrue();
+            expect(c2.adwaitaLook(pid)).toBeTrue();
 
             c2.destroy();
             expect(c2.isDestroyed).toBeTrue();

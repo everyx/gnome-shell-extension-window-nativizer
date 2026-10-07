@@ -125,15 +125,18 @@ export class ProcessClassifier {
     }
 
     /**
-     * Whether a process has the Adwaita look.
+     * What the process's maps say: true for an Adwaita provider, false for a process that maps
+     * none, and null while the read is still in flight. Null is an answer rather than a default:
+     * the caller is the one that knows whether to wait or to guess, and a default here would have
+     * to be undone by every caller that forgot to wait.
      * @param {number} pid
-     * @returns {boolean} Whether the process has the Adwaita look (from the cache; unknown reads as true)
+     * @returns {boolean|null}
      */
-    hasAdwaitaLook(pid) {
+    adwaitaLook(pid) {
         if (!isValidPid(pid))
             return false;
 
-        return this._processCache.get(pid)?.adwaitaLook ?? true;
+        return this._processCache.get(pid)?.adwaitaLook ?? null;
     }
 
     /**
@@ -148,28 +151,6 @@ export class ProcessClassifier {
         // Unlike `hasAdwaitaLook()`, an unknown answer is not a yes: only a landed answer may
         // take a band away from a window.
         return this._processCache.get(pid)?.gtk4 ?? false;
-    }
-
-    /**
-     * Whether an asynchronous answer is currently in flight for a pid.
-     * @param {number} pid
-     * @returns {boolean}
-     */
-    isAdwaitaLookPending(pid) {
-        if (this._destroyed || !isValidPid(pid))
-            return false;
-        return this._inFlight.has(pid);
-    }
-
-    /**
-     * Whether window's own process already rounds corners.
-     * @param {object} win - Meta.Window
-     * @returns {boolean} Whether window's own process already rounds corners.
-     */
-    hasNativeLikeCorners(win) {
-        if (!win)
-            return false;
-        return this.hasAdwaitaLook(win.get_pid?.());
     }
 
     /**

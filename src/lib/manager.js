@@ -370,14 +370,17 @@ export class Manager {
 
             const pid = win.get_pid?.();
             this._classifier?.probeAdwaitaLook(pid);
-            if (this._classifier?.isAdwaitaLookPending(pid))
-                return;
 
             const inputs = this._decorationInputs(win);
             if (!inputs) {
                 deco.undecorate();
                 return;
             }
+            // The process has not been classified yet: nothing of ours is drawn for these frames,
+            // so the window keeps the decoration its toolkit gave it, and the answer landing a
+            // frame later runs the decision again.
+            if (inputs.nativeLikeCorners === null)
+                return;
             const actions = evaluateWindowActions(inputs);
 
             deco.apply({
