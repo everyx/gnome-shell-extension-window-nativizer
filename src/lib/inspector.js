@@ -7,7 +7,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {setActorCursor} from '../compat/index.js';
+import {CursorShape, setActorCursor} from '../compat/index.js';
 
 import {
     INSPECTOR_DBUS_NAME,
@@ -255,7 +255,7 @@ export class InspectorService {
             return;
         }
         try {
-            setActorCursor(global.stage, Clutter.CursorType.CROSSHAIR);
+            setActorCursor(global.stage, CursorShape.CROSSHAIR);
         } catch {
             // stage may be unmanaging
         }
@@ -333,7 +333,7 @@ export class InspectorService {
         }
 
         try {
-            setActorCursor(global.stage, Clutter.CursorType.DEFAULT);
+            setActorCursor(global.stage, CursorShape.DEFAULT);
         } catch {
             // stage may be unmanaging
         }
