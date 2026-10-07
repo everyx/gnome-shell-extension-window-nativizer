@@ -1,0 +1,36 @@
+# One image per audited GNOME line: the distribution release that ships it, plus what
+# tools/verify-line.sh needs to run a tier inside it. Building this once is what makes a line cost
+# seconds - an ephemeral container spends about two minutes reinstalling the shell on every run.
+#
+# Nothing from the repository is copied in. verify-line.sh mounts the working tree read-only and the
+# container copies the few directories the suite reads into its own filesystem, so a run cannot write
+# to the tree under test.
+#
+# Build: podman build -f tools/Containerfile --build-arg BASE=<release image> -t <tag> .
+
+ARG BASE
+FROM ${BASE}
+
+# gnome-shell  - the shell itself, its typelibs and gnome-extensions
+# gjs          - runs tools/gjs-surface.js
+# glib2        - gsettings, gdbus, glib-compile-schemas (deploy_ext compiles the schema)
+# dbus-daemon  - run the whole thing on a private session bus, as tools/dev.sh does
+# python3-pillow - the ring pixel check in tools/test-e2e.sh (Fedora spells Pillow's Python 3 package
+#                 python3-pillow, not python3-pil as Debian does)
+# python3-gobject, gtk4, libadwaita - tools/e2e-client.py, and the native window the fidelity tier
+#                                     compares against
+# python3-dbusmock - stands in for logind on the system bus (see verify-line.sh)
+# gnome-calculator - the libadwaita client the suite checks we leave alone
+# Xwayland     - the X11 client tools/test-e2e.sh exercises
+# mesa-*       - Mutter's headless backend still needs EGL; software rendering on a machine with no GPU
+RUN set -eux; \
+    PACKAGES="gnome-shell gjs glib2 dbus-daemon python3 python3-pillow python3-gobject python3-dbusmock \
+        gtk4 libadwaita gnome-calculator xorg-x11-server-Xwayland procps-ng \
+        mesa-dri-drivers mesa-libEGL mesa-libGL libglvnd-egl"; \
+    if ! dnf -y --setopt=install_weak_deps=False install $PACKAGES; then \
+        sed -i -e 's|^metalink=|#metalink=|g' \
+               -e 's|^#baseurl=http://download.example/pub/fedora/linux|baseurl=https://dl.fedoraproject.org/pub/archive/fedora/linux|g' \
+               /etc/yum.repos.d/fedora*.repo; \
+        dnf -y --setopt=install_weak_deps=False install $PACKAGES; \
+    fi; \
+    dnf clean all

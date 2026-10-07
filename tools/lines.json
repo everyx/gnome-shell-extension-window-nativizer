@@ -1,12 +1,12 @@
 {
-    "_comment": "The GNOME lines this project audits, and the container each one can be opened in. Fedora ships one GNOME line per release, so a release image is a line. `expects` is the prefix the container's `gnome-shell --version` must start with, checked before anything is measured: a tag that has been moved or repointed must fail loudly rather than quietly verify a different line. A release whose repositories have left the live mirrors is handled by the runner, which retries against the release archive.",
+    "_comment": "The GNOME lines this project audits, and the container each one can be opened in. Fedora ships one GNOME line per release, so a release image is a line. `base` is what tools/Containerfile builds from and `image` is the built tag verify-line.sh runs; `expects` is the prefix the container's `gnome-shell --version` must start with, checked before anything is measured, so a tag that has been moved or repointed fails loudly rather than quietly verifying a different line.",
     "lines": {
-        "45": {"image": "registry.fedoraproject.org/fedora:39", "expects": "GNOME Shell 45"},
-        "46": {"image": "registry.fedoraproject.org/fedora:40", "expects": "GNOME Shell 46"},
-        "47": {"image": "registry.fedoraproject.org/fedora:41", "expects": "GNOME Shell 47"},
-        "48": {"image": "registry.fedoraproject.org/fedora:42", "expects": "GNOME Shell 48"},
-        "49": {"image": "registry.fedoraproject.org/fedora:43", "expects": "GNOME Shell 49"},
-        "50": {"image": "registry.fedoraproject.org/fedora:44", "expects": "GNOME Shell 50"},
-        "51": {"image": "registry.fedoraproject.org/fedora:45", "expects": "GNOME Shell 51"}
+        "45": {"base": "registry.fedoraproject.org/fedora:39", "image": "localhost/wn-line:45", "expects": "GNOME Shell 45"},
+        "46": {"base": "registry.fedoraproject.org/fedora:40", "image": "localhost/wn-line:46", "expects": "GNOME Shell 46"},
+        "47": {"base": "registry.fedoraproject.org/fedora:41", "image": "localhost/wn-line:47", "expects": "GNOME Shell 47"},
+        "48": {"base": "registry.fedoraproject.org/fedora:42", "image": "localhost/wn-line:48", "expects": "GNOME Shell 48"},
+        "49": {"base": "registry.fedoraproject.org/fedora:43", "image": "localhost/wn-line:49", "expects": "GNOME Shell 49"},
+        "50": {"base": "registry.fedoraproject.org/fedora:44", "image": "localhost/wn-line:50", "expects": "GNOME Shell 50"},
+        "51": {"base": "registry.fedoraproject.org/fedora:45", "image": "localhost/wn-line:51", "expects": "GNOME Shell 51"}
     }
 }

@@ -1,0 +1,9 @@
+# Keep the build context to the Containerfile: nothing is copied into the image, and the research
+# clones in here are hundreds of megabytes.
+research/
+vendor/
+node_modules/
+dist/
+po/
+assets/
+.git/
