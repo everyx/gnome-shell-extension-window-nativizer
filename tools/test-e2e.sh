@@ -298,6 +298,15 @@ BLEND_RESULT="$(shell_eval "
     const alive = w => global.get_window_actors().some(a => a.meta_window === w);
     const settledNow = () => targetShadow.isSettled;
 
+    // These assertions are about what happens with animations on, so ask for that rather than assume
+    // it: a bare container's session has no value for the key, and a line whose default is off would
+    // otherwise be told that its snapping - which is upstream's own behaviour with animations off -
+    // is a defect.
+    const animationsSetting = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    animationsSetting.set_boolean('enable-animations', true);
+    for (let i = 0; i < 40 && !St.Settings.get().enable_animations; i++)
+        await sleep(25);
+
     // Start from the focused state, or the first activation below changes nothing.
     if (alive(target))
         target.activate(global.get_current_time());
