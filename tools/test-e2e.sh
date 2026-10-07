@@ -675,7 +675,11 @@ echo ">> Vertically maximized (tiled) resize band verified: constrained strips c
 RING_BUS="$(get_dbus_bus)"
 RING_PIXEL="$(shell_eval '
 (() => {
-    const w = global.get_window_actors()[0].meta_window;
+    // The window this asserts about is the one the previous step tiled, not whichever window happens
+    // to be bottom-most now: the actor list is not frozen between the two Evals, and a ring sampled
+    // off a window nothing tiled is a failure the harness invented.
+    const windows = global.get_window_actors().map(a => a.meta_window).filter(Boolean);
+    const w = windows.find(x => x.maximized_vertically && !x.maximized_horizontally) ?? windows[0];
     const f = w.get_frame_rect();
     // The screenshot is in physical pixels and frame rects are in logical ones, so scale.
     const s = global.display.get_monitor_scale(w.get_monitor());

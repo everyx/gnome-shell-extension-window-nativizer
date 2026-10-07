@@ -57,7 +57,8 @@ const FEATURES = [
         // over from 47, and on 45-46 the backend answers for it instead (see compat/coglContext.js).
         name: 'Window shadow',
         needs: [{any: ['actor_paint_node', 'pipeline_node_new']},
-            {any: ['backend_get_cogl_context']}],
+            {any: ['backend_get_cogl_context']},
+            {id: 'cogl_texture_2d_new_with_size', notContains: '(skip)'}],
     },
     {
         name: 'Resize band (the grab)',
@@ -172,7 +173,13 @@ function requirementMet(entryById, requirement, major) {
     const decl = entryById.get(requirement.id)?.decl[major];
     if (decl == null)
         return false;
-    return !requirement.contains || decl.includes(requirement.contains);
+    if (requirement.contains && !decl.includes(requirement.contains))
+        return false;
+    // `notContains` is how a GIR skip is expressed: the declaration is there and introspection does
+    // not carry it, which no table of declarations can say on its own.
+    if (requirement.notContains && decl.includes(requirement.notContains))
+        return false;
+    return true;
 }
 
 /**

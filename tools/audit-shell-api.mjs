@@ -107,6 +107,9 @@ const SURFACE = [
     {id: 'cogl_pipeline_set_layer_filters', member: 'pipeline.set_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_set_layer_filters'},
     {id: 'cogl_pipeline_get_layer_filters', member: 'pipeline.get_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_get_layer_filters'},
     {id: 'cogl_pipeline_filter', member: 'Cogl.PipelineFilter', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'COGL_PIPELINE_FILTER_NEAREST'},
+    // The bake allocates its shadow texture with this. GIR skipped it on 45 and stopped skipping it on
+    // 46, so 45 is the one line where the shadow cannot be built at all (see docs/shell-api.md).
+    {id: 'cogl_texture_2d_new_with_size', member: 'Cogl.Texture2D.new_with_size()', repo: 'mutter', kind: 'giDoc', file: 'cogl/cogl/cogl-texture-2d.h', sym: 'cogl_texture_2d_new_with_size'},
     // The cursor enum the resize band's directions resolve to. It arrives in 50 with
     // set_cursor_type, and it is recorded because of how it is read: a module-level table of its
     // members is what kept the extension from loading on 45-49 (see compat/actorCursor.js).
@@ -236,6 +239,14 @@ function declaration(text, kind, sym) {
         // An enumerator, with or without an explicit value: which one is recorded does not matter,
         // only that the member is declared, and ClutterCursorType numbers its members implicitly.
         const m = new RegExp(`^\\s*${sym}\\w*\\s*(?:=[^,]*)?,?\\s*$`, 'm').exec(text ?? '');
+        return m ? m[0].trim() : null;
+    }
+    case 'giDoc': {
+        // Whether GIR skips the symbol is written on its doc-comment line, not on its declaration.
+        // GJS reaches a function through introspection, so `(skip)` is exactly the difference between
+        // a declaration that exists and one this shell can call - and ClutterCursorType's sibling
+        // lesson is that the header alone cannot tell them apart.
+        const m = new RegExp(`^\\s*\\*\\s*${sym}:.*$`, 'm').exec(text ?? '');
         return m ? m[0].trim() : null;
     }
     case 'const': {

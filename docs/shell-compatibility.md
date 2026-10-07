@@ -68,6 +68,7 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `pipeline.set_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_layer_filters) |
 | `pipeline.get_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_get_layer_filters) |
 | `Cogl.PipelineFilter` | 45–51 stable | [why](shell-api.md#cogl_pipeline_filter) |
+| `Cogl.Texture2D.new_with_size()` | 45 / 46–51 | [why](shell-api.md#cogl_texture_2d_new_with_size) |
 | `Clutter.CursorType` | 45–49 absent / 50–51 | [why](shell-api.md#clutter_cursor_type) |
 | `effect.set_uniform_float() [Shell.GLSLEffect]` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
 | `effect.add_glsl_snippet() [Shell.GLSLEffect]` | 45–47 / 48–50 / 51 absent | [why](shell-api.md#shell_glsl_add_glsl_snippet) |
@@ -105,7 +106,7 @@ line, where a moved API counts from either end.
 | Feature | 45 | 46 | 47 | 48 | 49 | 50 | 51 |
 |---|---|---|---|---|---|---|---|
 | Rounded corners (the clip) | yes | yes | yes | yes | yes | yes | yes |
-| Window shadow | yes | yes | yes | yes | yes | yes | yes |
+| Window shadow | **degraded** | yes | yes | yes | yes | yes | yes |
 | Resize band (the grab) | yes | yes | yes | yes | yes | yes | yes |
 | Resize cursor | **degraded** | **degraded** | **degraded** | **degraded** | **degraded** | yes | yes |
 | Tiled ring colour | yes | yes | yes | yes | yes | yes | yes |
@@ -113,8 +114,11 @@ line, where a moved API counts from either end.
 | Native-app detection | yes | yes | yes | yes | yes | yes | yes |
 <!-- shell-support-table:end -->
 
-One line range loses something, and it is recorded in full in [shell-api.md](shell-api.md): 45-49
-have no resize cursor, because a per-actor cursor only exists from 50. The older half of that
+Two lines lose something, both recorded in full in [shell-api.md](shell-api.md). **45 loses the
+shadow**, and with it the tiled ring: GIR skips `Cogl.Texture2D.new_with_size` there, so the bake that
+draws both cannot be built at all. That is not a gap to bridge but the bake's own architecture, so 45
+is a line this extension does not claim. 45-49 also have no resize cursor, because a per-actor cursor
+only exists from 50. The older half of that
 watershed is not a drop-in translation - `global.display.set_cursor()` is display-wide rather than
 per actor, so bridging it means owning the reset as well - and no line that has the API also has a
 shell here to try it on: on 50 the enum and the method are both gone, and the runtime check in

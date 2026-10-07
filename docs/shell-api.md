@@ -279,6 +279,15 @@ while the extension was being loaded, so the shell reported the whole extension 
 behind a capability check in `compat/actorCursor.js`, and a line without the enum gets no cursor
 instead of no extension.
 
+## cogl_texture_2d_new_with_size
+
+`Cogl.Texture2D.new_with_size()` - the texture the shadow bake allocates. It is recorded through its
+doc-comment line rather than its declaration, because the two do not agree: GIR annotates the function
+`(skip)` on 45 and stops at 46, so the declaration is present on every line while only 46-51 can call
+it. That is the one fact in this surface that decides whether the shadow exists on a line at all - on
+45 the bake throws every frame and the window gets no shadow and no tiled ring - and it is why the
+support matrix reads "degraded" for the shadow there, and why 45 is not a line this extension claims.
+
 ## cogl_pipeline_filter
 
 `Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).

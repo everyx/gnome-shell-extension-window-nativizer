@@ -119,6 +119,8 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', arity: 1, optional: true},
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
+    // The shadow bake's texture. GIR skipped this on 45, where the bake therefore cannot run at all.
+    {ns: 'Cogl', cls: 'Texture2D', member: 'new_with_size', params: ['ctx', 'width', 'height'], optional: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_layer_filters', params: ['layer_index', 'min_filter', 'mag_filter']},
     // The C prototype takes two out-pointers (min_filter, mag_filter); GJS folds them into an

@@ -886,6 +886,23 @@
             }
         },
         {
+            "id": "cogl_texture_2d_new_with_size",
+            "member": "Cogl.Texture2D.new_with_size()",
+            "repo": "mutter",
+            "kind": "giDoc",
+            "file": "cogl/cogl/cogl-texture-2d.h",
+            "sym": "cogl_texture_2d_new_with_size",
+            "decl": {
+                "45": "* cogl_texture_2d_new_with_size: (skip)",
+                "46": "* cogl_texture_2d_new_with_size:",
+                "47": "* cogl_texture_2d_new_with_size:",
+                "48": "* cogl_texture_2d_new_with_size:",
+                "49": "* cogl_texture_2d_new_with_size:",
+                "50": "* cogl_texture_2d_new_with_size:",
+                "51": "* cogl_texture_2d_new_with_size:"
+            }
+        },
+        {
             "id": "clutter_cursor_type",
             "member": "Clutter.CursorType",
             "repo": "mutter",
