@@ -82,6 +82,12 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
+    // The shadow actor's paint path: the vfunc it overrides, the node type it emits, and the two
+    // calls that build the tree under it.
+    {ns: 'Clutter', cls: 'Actor', member: 'vfunc_paint_node', vfunc: true},
+    {ns: 'Clutter', cls: 'PipelineNode', class: true},
+    {ns: 'Clutter', cls: 'PaintNode', member: 'add_child', params: ['child']},
+    {ns: 'Clutter', cls: 'PaintNode', member: 'add_texture_rectangle', params: ['rect', 'x_1', 'y_1', 'x_2', 'y_2']},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'get_pipeline', arity: 0},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
@@ -250,13 +256,26 @@ for (const entry of SURFACE) {
         continue;
     }
     const holder = entry.static || entry.namespace ? target : target.prototype;
-    const value = holder[entry.member];
+
     if (entry.vfunc) {
-        // A vfunc becomes a prototype slot only once a JS subclass overrides it; what can be
-        // asserted here is that the hook is reachable through the class at all.
-        report(what, 'vfunc slot');
+        // A vfunc becomes a JS prototype slot only once a subclass overrides it, so reading the slot
+        // is not the assertion. GJS installs a getter that throws "Virtual function not implemented:
+        // ... <name>" for a hook the class does not implement itself - which is the knowledge being
+        // checked - while a property that is simply absent is a hook that is gone.
+        let known;
+        try {
+            known = holder[entry.member];
+        } catch (e) {
+            known = /Virtual function not implemented/.test(e.message) ? 'declared' : null;
+        }
+        if (known === undefined || known === null)
+            fail(what, 'the hook is not on the class at all');
+        else
+            report(what, typeof known === 'function' ? 'vfunc slot' : 'vfunc declared');
         continue;
     }
+
+    const value = holder[entry.member];
     if (entry.property) {
         if (hasAccessor(holder, entry.member))
             report(what, 'property accessor');
