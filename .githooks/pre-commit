@@ -1,8 +1,10 @@
 #!/bin/sh
 #
 # The checks that belong to a commit: the code lints, the generated files and catalogues match
-# their sources, and the unit tests pass. Each guards something the commit itself can break, so
-# catching it here is what keeps the commit that broke it the commit that fixes it.
+# their sources, the unit tests pass, and the decoration still renders the way libadwaita renders one.
+# Each guards something the commit itself can break, so catching it here is what keeps the commit that
+# broke it the commit that fixes it - and the rendering is one of those: a shadow or a clip change that
+# misses libadwaita by a level is exactly the kind of thing the unit tests cannot see.
 #
 # The whole-tree checks - ego-lint, and packing the extension the way a user receives it - belong to
 # the push instead: see pre-push. Each check has one hook, and this one does not repeat that one's.
@@ -13,4 +15,4 @@ set -e
 
 . "$(dirname "$0")/run-checks"
 
-run_checks pre-commit lint check-style test
+run_checks pre-commit lint check-style test benchmark:check

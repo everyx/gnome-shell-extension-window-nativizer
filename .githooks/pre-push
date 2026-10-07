@@ -1,8 +1,14 @@
 #!/bin/sh
 #
 # The checks that belong to what leaves the machine rather than to the commits that make it up:
-# ego-lint reviews the extension as a whole, and pack builds the zip a user installs. Neither guards
-# a single commit, so neither runs at commit time.
+# ego-lint reviews the extension as a whole, pack builds the zip a user installs, and shexli reads that
+# zip the way extensions.gnome.org will. None of them guards a single commit, so none runs at commit
+# time.
+#
+# test:e2e is here rather than in the commit hook for a different reason: it does guard what a commit
+# can break - a lifecycle or a resize band - but it drives a whole nested session for two minutes, and
+# a commit hook slow enough to be bypassed is worth less than a push hook nobody minds. Pushes are
+# rare; commits are not.
 #
 # A commit made with --no-verify therefore reaches CI with its style and behaviour unchecked; CI is
 # the backstop for that, which is cheaper than running the commit checks twice on every push.
@@ -19,5 +25,11 @@ if command -v gnome-extensions >/dev/null 2>&1; then
 else
     echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
 fi
+if command -v uvx >/dev/null 2>&1 || command -v shexli >/dev/null 2>&1; then
+    set -- "$@" shexli
+else
+    echo "pre-push: no shexli or uvx, skipping the package analysis" >&2
+fi
+set -- "$@" test:e2e
 
 run_checks pre-push "$@"
