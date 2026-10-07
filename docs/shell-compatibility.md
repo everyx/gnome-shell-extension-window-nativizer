@@ -58,6 +58,10 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Clutter.ActorMeta:enabled` | 45 / 46–51 | [why](shell-api.md#actor_meta_enabled) |
 | `effect.get_actor()` | 45–51 stable | [why](shell-api.md#actor_meta_get_actor) |
 | `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
+| `Clutter.Actor:vfunc_paint_node()` | 45–46 / 47–51 | [why](shell-api.md#actor_paint_node) |
+| `Clutter.PipelineNode` | 45–51 stable | [why](shell-api.md#pipeline_node_new) |
+| `Clutter.PaintNode.add_child()` | 45–51 stable | [why](shell-api.md#paint_node_add_child) |
+| `Clutter.PaintNode.add_texture_rectangle()` | 45–51 stable | [why](shell-api.md#paint_node_add_texture_rectangle) |
 | `effect.set_uniform_float()` | 45–50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
 | `pipeline.set_uniform_float()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
 | `effect.get_pipeline()` | 45–51 stable | [why](shell-api.md#offscreen_effect_get_pipeline) |
@@ -88,7 +92,13 @@ Five upstream watersheds fall in this range - the shader base class, the maximiz
 operation signature, the per-actor cursor, and the Mutter typelib naming. The shader base class, the
 grab signature and the per-actor cursor are bridged through compatibility shims, and the maximize query
 through a capability probe; the typelib name is never spelled, so it binds whatever
-`gi://Meta` ships. What changed and what the extension does about it is described where each call
+`gi://Meta` ships. A sixth is the paint-node context, and it is the only one not bridged: 
+`Clutter.Actor::paint_node` gained its `ClutterPaintContext` argument in 47, and the shadow painter
+reads a Cogl context out of it, so 45-46 draws no shadow at all. That is the open item
+[shell-api.md](shell-api.md#actor_paint_node) records, and it is why a 45 or 46 claim needs a shell
+to verify the fix against before it is worth making.
+
+What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
 computed rather than remembered.
 

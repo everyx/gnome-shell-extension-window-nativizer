@@ -94,6 +94,13 @@ const SURFACE = [
     {id: 'actor_meta_enabled', member: 'Clutter.ActorMeta:enabled', repo: 'mutter', kind: 'prop', file: 'clutter/clutter/clutter-actor-meta.c', sym: 'enabled'},
     {id: 'actor_meta_get_actor', member: 'effect.get_actor()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor-meta.h', sym: 'clutter_actor_meta_get_actor'},
     {id: 'offscreen_effect_paint_target', member: 'Clutter.OffscreenEffect:vfunc_paint_target()', repo: 'mutter', kind: 'vfunc', file: 'clutter/clutter/clutter-offscreen-effect.h', sym: 'paint_target'},
+    // The shadow actor's paint path: it overrides the vfunc and emits one pipeline node per slice.
+    // Nothing else in the extension touches this family, and the e2e run only sees it on the one
+    // line it runs, so a row per declaration is what covers it on every audited line.
+    {id: 'actor_paint_node', member: 'Clutter.Actor:vfunc_paint_node()', repo: 'mutter', kind: 'vfunc', file: 'clutter/clutter/clutter-actor.h', sym: 'paint_node'},
+    {id: 'pipeline_node_new', member: 'Clutter.PipelineNode', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-paint-nodes.h', sym: 'clutter_pipeline_node_new'},
+    {id: 'paint_node_add_child', member: 'Clutter.PaintNode.add_child()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-paint-node.h', sym: 'clutter_paint_node_add_child'},
+    {id: 'paint_node_add_texture_rectangle', member: 'Clutter.PaintNode.add_texture_rectangle()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-paint-node.h', sym: 'clutter_paint_node_add_texture_rectangle'},
     {id: 'clutter_set_uniform_float', member: 'effect.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'clutter_shader_effect_set_uniform_float'},
     {id: 'cogl_pipeline_set_uniform_float', member: 'pipeline.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-state.h', sym: 'cogl_pipeline_set_uniform_float'},
     {id: 'offscreen_effect_get_pipeline', member: 'effect.get_pipeline()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-offscreen-effect.h', sym: 'clutter_offscreen_effect_get_pipeline'},

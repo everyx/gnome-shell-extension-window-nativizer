@@ -716,6 +716,74 @@
             }
         },
         {
+            "id": "actor_paint_node",
+            "member": "Clutter.Actor:vfunc_paint_node()",
+            "repo": "mutter",
+            "kind": "vfunc",
+            "file": "clutter/clutter/clutter-actor.h",
+            "sym": "paint_node",
+            "decl": {
+                "45": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root);",
+                "46": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root);",
+                "47": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root, ClutterPaintContext *paint_context);",
+                "48": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root, ClutterPaintContext *paint_context);",
+                "49": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root, ClutterPaintContext *paint_context);",
+                "50": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root, ClutterPaintContext *paint_context);",
+                "51": "(* paint_node) (ClutterActor *self, ClutterPaintNode *root, ClutterPaintContext *paint_context);"
+            }
+        },
+        {
+            "id": "pipeline_node_new",
+            "member": "Clutter.PipelineNode",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-paint-nodes.h",
+            "sym": "clutter_pipeline_node_new",
+            "decl": {
+                "45": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "46": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "47": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "48": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "49": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "50": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);",
+                "51": "CLUTTER_EXPORT ClutterPaintNode * clutter_pipeline_node_new (CoglPipeline *pipeline);"
+            }
+        },
+        {
+            "id": "paint_node_add_child",
+            "member": "Clutter.PaintNode.add_child()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-paint-node.h",
+            "sym": "clutter_paint_node_add_child",
+            "decl": {
+                "45": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "46": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "47": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "48": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "49": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "50": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);",
+                "51": "CLUTTER_EXPORT void clutter_paint_node_add_child (ClutterPaintNode *node, ClutterPaintNode *child);"
+            }
+        },
+        {
+            "id": "paint_node_add_texture_rectangle",
+            "member": "Clutter.PaintNode.add_texture_rectangle()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-paint-node.h",
+            "sym": "clutter_paint_node_add_texture_rectangle",
+            "decl": {
+                "45": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "46": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "47": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "48": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "49": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "50": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);",
+                "51": "CLUTTER_EXPORT void clutter_paint_node_add_texture_rectangle (ClutterPaintNode *node, const ClutterActorBox *rect, float x_1, float y_1, float x_2, float y_2);"
+            }
+        },
+        {
             "id": "clutter_set_uniform_float",
             "member": "effect.set_uniform_float()",
             "repo": "mutter",

@@ -211,6 +211,36 @@ cited as if it were the API. The extension reads neither the property nor the me
 size in. It inherits the slot through `Shell.GLSLEffect` (45-50) or `Clutter.ShaderEffect` (51),
 both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the same hook.
 
+## actor_paint_node
+
+`Clutter.Actor:vfunc_paint_node()` - the hook the shadow actor paints its eight slices through. It
+is the only place the extension builds geometry rather than setting a parameter.
+
+The vfunc gained its `ClutterPaintContext` argument in 47: on 45-46 it is called with the paint
+root alone. The shadow painter reads a Cogl context out of that argument, so on those two lines it
+receives `undefined` and cannot build a pipeline - the record's only difference in this surface
+with a live consequence. Upstream does offer the context another way there
+(`clutter_backend_get_cogl_context`, 45-50), so the fix is small, but it is a change to the paint
+path and it is only reachable on lines this project has no shell for: it is recorded here as an
+open item rather than guessed at.
+
+## pipeline_node_new
+
+`Clutter.PipelineNode` - the node the eight slices are emitted as: one node per drawn style, with a
+textured rectangle per slice. Declared in Clutter's paint-node header, alongside the vfunc it is
+used from.
+
+## paint_node_add_child
+
+`Clutter.PaintNode.add_child()` - how a node joins the tree being painted. The shadow actor adds its
+pipeline node to the root the vfunc is handed, and the slices hang off that.
+
+## paint_node_add_texture_rectangle
+
+`Clutter.PaintNode.add_texture_rectangle()` - one slice: a destination box in actor coordinates and
+the source rectangle in the baked texture. This is what makes the slice layout a paint-node tree
+rather than eight actors.
+
 ## clutter_set_uniform_float
 
 `effect.set_uniform_float()` - the extension inherits
