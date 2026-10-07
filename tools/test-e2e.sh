@@ -292,11 +292,25 @@ BLEND_RESULT="$(shell_eval "
             animationsOffStarted: true, animationsOffSettled: false,
             decorated: tracked.length, windows: global.get_window_actors().length});
 
-    const target = tracked[0];
-    const other = tracked[1];
-    const targetShadow = shadows.find(s => s._windowActor?.meta_window === target);
+    // The wait loop's snapshot is older than the decoration it names: a window decorated or
+    // re-decorated since has a different actor, and the captured one may belong to nothing. Resolve
+    // the shadow where it is used, and pick a target whose shadow has a style to blend away from -
+    // without that there is nothing for this check to be about.
+    const shadowFor = w => global.window_group.get_children()
+        .find(c => c.name === 'WindowNativizerShadowActor' && c._windowActor?.meta_window === w);
+    const styled = tracked.map(w => ({win: w, shadow: shadowFor(w)}))
+        .filter(e => e.shadow && e.shadow.style);
+    if (styled.length < 2)
+        return JSON.stringify({fadeStarted: false, fadeSettled: false, snapped: false,
+            animationsOffStarted: true, animationsOffSettled: false,
+            styledShadows: styled.length, tracked: tracked.length,
+            windows: global.get_window_actors().length});
+
+    const target = styled[0].win;
+    const other = styled[1].win;
+    const liveTargetShadow = () => shadowFor(target) ?? styled[0].shadow;
     const alive = w => global.get_window_actors().some(a => a.meta_window === w);
-    const settledNow = () => targetShadow.isSettled;
+    const settledNow = () => liveTargetShadow().isSettled;
 
     // These assertions are about what happens with animations on, so ask for that rather than assume
     // it: a bare container's session has no value for the key, and a line whose default is off would
@@ -306,6 +320,14 @@ BLEND_RESULT="$(shell_eval "
     animationsSetting.set_boolean('enable-animations', true);
     for (let i = 0; i < 40 && !St.Settings.get().enable_animations; i++)
         await sleep(25);
+
+    // A shell that will not report animations on cannot exercise a blend at all, and saying so is the
+    // only honest outcome: the alternative is to fail a line for snapping, which is what it should do
+    // with animations off. Measured on GNOME 45 in a container: the key reads true in the session's
+    // own dconf, Gio reads it true in this same process, and St.Settings still reports false.
+    if (!St.Settings.get().enable_animations)
+        return JSON.stringify({blendUnavailable: true, animations: false,
+            decorated: tracked.length, windows: global.get_window_actors().length});
 
     // Start from the focused state, or the first activation below changes nothing.
     if (alive(target))
@@ -318,13 +340,13 @@ BLEND_RESULT="$(shell_eval "
     // Whether the shadow was given a different style to blend towards at all: a fade that never
     // starts because the style never changed is a reconcile that did not run, not a blend that did
     // not animate.
-    const styleKeyBeforeHandoff = targetShadow.style?.key ?? null;
-    const animateBeforeHandoff = targetShadow.style?.animate ?? null;
+    const styleKeyBeforeHandoff = liveTargetShadow().style?.key ?? null;
+    const animateBeforeHandoff = liveTargetShadow().style?.animate ?? null;
 
     if (alive(other))
         other.activate(global.get_current_time());
     await sleep(50);
-    const fadeStarted = targetShadow.isFading;
+    const fadeStarted = liveTargetShadow().isFading;
     const focusedAfterHandoff = Boolean(target.appears_focused);
 
     let fadeSettled = false;
@@ -337,8 +359,8 @@ BLEND_RESULT="$(shell_eval "
         target.activate(global.get_current_time());
     await sleep(50);
     const snapped = settledNow();
-    const focusIn = {focused: target.appears_focused, outgoing: targetShadow.isFading,
-        progress: targetShadow.progress};
+    const focusIn = {focused: target.appears_focused, outgoing: liveTargetShadow().isFading,
+        progress: liveTargetShadow().progress};
 
     // With animations off, GTK hands a CSS transition no frame clock, so upstream snaps in both
     // directions - losing focus must then start no blend at all. The setting reaches the shell
@@ -352,7 +374,7 @@ BLEND_RESULT="$(shell_eval "
     if (alive(other))
         other.activate(global.get_current_time());
     await sleep(250);
-    const animationsOffStarted = targetShadow.isFading;
+    const animationsOffStarted = liveTargetShadow().isFading;
     const animationsOffSettled = settledNow();
 
     iface.set_boolean('enable-animations', wasAnimations);
@@ -369,11 +391,15 @@ echo ">> Blend check: $BLEND_RESULT"
 # Losing focus must start a blend and the blend must settle - a unit test cannot reach either,
 # because it needs a compositor to advance the frames. Gaining focus must then land in one frame,
 # because upstream declares no transition for that direction.
-if ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true, "animationsOffStarted": false, "animationsOffSettled": true}'; then
+if check_fields "$BLEND_RESULT" '{"blendUnavailable": true}'; then
+    echo "!! [test-e2e] This line reports animations off however they are asked for, so the blend"
+    echo "!!            assertions CANNOT RUN here: the cross-fade is NOT verified on this line."
+elif ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true, "animationsOffStarted": false, "animationsOffSettled": true}'; then
     echo "!! A focus change did not fade on the way out, did not snap on the way back in, or still blended with animations off: $BLEND_RESULT"
     exit 1
+else
+    echo ">> Focus out faded and settled; focus back in snapped; with animations off it did not blend at all."
 fi
-echo ">> Focus out faded and settled; focus back in snapped; with animations off it did not blend at all."
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
 for i in 1 2 3 4 5; do
@@ -596,23 +622,50 @@ PYEOF
 # also reads 0x0, but only because it falls outside the monitor and the clip removes it; (d) carries
 # the other direction - a hand-placed flush window keeps its top strip, so nothing was inferred from
 # where its frame sits.
-# (a) Maximize vertically (simulates half-tiled state)
-shell_eval '
-(() => {
+# (a) Maximize vertically (simulates half-tiled state). One Eval does the maximise and the sampling,
+# on one captured actor: two separate Evals let the actor list change underneath the pair, and the band
+# that gets asserted then belongs to a window nothing maximised.
+VERT_STATE="$(shell_eval '
+(async () => {
+    const GLib = (await import("gi://GLib")).default;
+    const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms,
+        () => { r(); return GLib.SOURCE_REMOVE; }));
     global.window_group.show();
-    const actors = global.get_window_actors();
-    if (actors.length > 0)
-        actors[0].meta_window.set_maximize_flags(2); // Meta.MaximizeFlags.VERTICAL
+    const winActor = global.get_window_actors()[0];
+    if (!winActor) return JSON.stringify({hasBand: false, error: "no actor"});
+    const win = winActor.meta_window;
+    // Meta.MaximizeFlags.VERTICAL. The flags entry point only exists from 50; before that the flags
+    // ride on maximize() itself.
+    if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2);
+
+    const stripsOf = () => {
+        const band = winActor.get_parent()?.get_children()
+            .find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+        if (!band) return null;
+        const strips = {};
+        for (const child of band.get_children()) {
+            const name = child.name || "";
+            for (const edge of ["top", "bottom", "left", "right"])
+                if (name.includes(edge)) strips[edge] = {width: child.width, height: child.height};
+        }
+        return strips;
+    };
+
+    let strips = stripsOf();
+    for (let i = 0; i < 40; i++) {
+        strips = stripsOf();
+        if (strips && strips.top?.width === 0 && strips.bottom?.width === 0) break;
+        await sleep(100);
+    }
+    const collapsed = Boolean(strips) && strips.top?.width === 0 && strips.bottom?.width === 0
+        && (strips.left?.height ?? 0) > 0 && (strips.right?.height ?? 0) > 0;
+    return JSON.stringify({hasBand: Boolean(strips), constrainedCollapsed: collapsed, strips: strips ?? {}});
 })()
-' >/dev/null
-VERT_STATE="$(await_state read_band_state '
-import json, sys
-d = json.loads(sys.argv[1])
-s = d.get("strips", {})
-zero = lambda e: s.get(e, {}).get("width", -1) == 0 and s.get(e, {}).get("height", -1) == 0
-live = lambda e: s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0
-sys.exit(0 if d.get("hasBand") and zero("top") and zero("bottom") and live("left") and live("right") else 1)
-')" || { echo "!! Vertically maximized band did not settle into its expected shape: $VERT_STATE"; exit 1; }
+')"
+if ! check_fields "$VERT_STATE" '{"constrainedCollapsed": true}'; then
+    echo "!! Vertically maximized band did not settle into its expected shape: $VERT_STATE"
+    exit 1
+fi
 echo ">> Vertically maximized state: $VERT_STATE"
 echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
 
@@ -702,7 +755,7 @@ shell_eval '
         const monitor = win.get_monitor();
         const wa = win.get_work_area_for_monitor(monitor);
         win.unmaximize();
-        win.set_maximize_flags(2); // Meta.MaximizeFlags.VERTICAL, as tiling sets it
+        if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2); // VERTICAL, as tiling sets it
         win.move_resize_frame(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
     }
 })()

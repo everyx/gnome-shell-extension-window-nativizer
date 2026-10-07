@@ -20,6 +20,13 @@ if ! gsettings set org.gnome.shell enabled-extensions "['$UUID']"; then
     exit 1
 fi
 
+# And the animation setting, for the same reason and with a sharper edge: a developer's desktop has it
+# on, a container's session has no value for it, and a line that reads it off is told its snapping -
+# which is upstream's own behaviour with animations off - is a defect. Set before the shell starts,
+# because that is when it reads it.
+gsettings set org.gnome.desktop.interface enable-animations true \
+    || echo "!! Could not pre-populate enable-animations; the fade assertions may not mean anything here" >&2
+
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
     --virtual-monitor 1920x1080 --unsafe-mode &
 echo $! > "$PIDFILE"
