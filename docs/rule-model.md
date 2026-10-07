@@ -23,11 +23,16 @@ For example:
 - Field **order is part of the format**: `rules.js` renders it canonically, so string
   comparison is enough to match.
 - **`has_ring=<bool>` distinguishes standard CSD windows from compact/PiP windows**:
-  A standard CSD window reserves a margin ring for its own shadow (`buffer_rect - frame_rect > 0`,
-  decided at runtime and in the picker / frame layer). In contrast, media players, floating video popups
-  (such as Firefox Picture-in-Picture), or borderless utility windows do not declare any shadow margin
-  ring (`buffer_rect === frame_rect`). Incorporating `has_ring` separates these two kinds cleanly,
-  preventing rules intended for browser main windows from unintentionally clipping or darkening PiP video surfaces.
+  A standard CSD window reserves a margin ring for its own shadow (`buffer_rect - frame_rect > 0`).
+  In contrast, media players, floating video popups (such as Firefox Picture-in-Picture), or borderless
+  utility windows do not declare any shadow margin ring (`buffer_rect === frame_rect`). Incorporating
+  `has_ring` separates these two kinds cleanly, preventing rules intended for browser main windows
+  from unintentionally clipping or darkening PiP video surfaces.
+  It is one reading, shared by the picker and the runtime: a declared ring is a positive margin on
+  either side of either axis, measured from the two-sided buffer/frame totals. The two used to read
+  the fact separately and disagreed - one refused to answer when the frame did not fit inside its
+  buffer, the other fell back to the totals and answered anyway - so a window in that state had a
+  rule written under one key and looked up under the other, and the rule could never match.
 - **Backward compatibility**: none. The key and the state grammar are the current
   shape only — an older key or an older state is dropped rather than migrated, which is
   what an unreleased model may do.

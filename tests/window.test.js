@@ -6,6 +6,10 @@ import {
     safeRead,
     isWindowReading,
 } from '../src/lib/window.js';
+
+import {evaluateWindowActions} from '../src/lib/detector.js';
+import {buildRuleKeyFromProperties} from '../src/lib/rules.js';
+import {extractWindowProperties} from '../src/lib/pick.js';
 import {WindowType, WindowClientType} from '../src/lib/mutterRules.generated.js';
 
 describe('window inspection (readWindow)', () => {
@@ -407,5 +411,31 @@ describe('isWindowReading', () => {
         expect(isWindowReading({})).toBeFalse();
         expect(isWindowReading({get_frame_rect: () => ({})})).toBeFalse();
         expect(isWindowReading({clientTypeToken: 123})).toBeFalse();
+    });
+});
+
+describe('the ring a pick records is the ring the runtime looks up', () => {
+    // A window whose frame does not fit inside its buffer is where the two readings used to part: the
+    // picker's key answered has_ring=false while the decision fell back to the two-sided totals and
+    // read true, so the rule a pick wrote was stored under a key the runtime never asked for. The
+    // end-to-end statement of the fix is that such a rule applies.
+    const divergent = () => ({
+        get_buffer_rect: () => ({x: 0, y: 0, width: 200, height: 500}),
+        get_frame_rect: () => ({x: -10, y: 0, width: 180, height: 500}),
+        get_pid: () => 4242,
+        get_wm_class: () => 'demo',
+        allows_resize: () => true,
+        get_window_type: () => 0,
+        get_client_type: () => 0,
+    });
+
+    it('applies a rule picked on the kind where the two readings used to differ', () => {
+        const reading = readWindow(divergent());
+        const key = buildRuleKeyFromProperties(extractWindowProperties(reading, 'demo'));
+        expect(key).not.toBe('');
+
+        const actions = evaluateWindowActions({...reading, focused: true, rules: {[key]: 'corners'}});
+
+        expect(actions.reason).toContain('rule-applied');
     });
 });
