@@ -32,7 +32,7 @@ echo "================================================================"
 echo ">> [test-e2e] Verifying extension state..."
 EXT_INFO="$("$DEV" ext info "$UUID")"
 echo "$EXT_INFO"
-if ! echo "$EXT_INFO" | grep -q "State: ACTIVE"; then
+if ! echo "$EXT_INFO" | grep -qE "State: (ACTIVE|ENABLED)"; then
     echo "!! Extension failed to activate in headless shell!"
     exit 1
 fi

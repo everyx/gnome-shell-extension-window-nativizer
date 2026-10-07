@@ -79,7 +79,7 @@ fi
 ENABLED=0
 for _ in $(seq 1 20); do
     gnome-extensions enable "$UUID" >/dev/null 2>&1 || true
-    if gnome-extensions info "$UUID" 2>/dev/null | grep -q "State: ACTIVE"; then
+    if gnome-extensions info "$UUID" 2>/dev/null | grep -qE "State: (ACTIVE|ENABLED)"; then
         ENABLED=1
         break
     fi
