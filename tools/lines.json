@@ -1,0 +1,12 @@
+{
+    "_comment": "The GNOME lines this project audits, and the container each one can be opened in. Fedora ships one GNOME line per release, so a release image is a line. `expects` is the prefix the container's `gnome-shell --version` must start with, checked before anything is measured: a tag that has been moved or repointed must fail loudly rather than quietly verify a different line. A release whose repositories have left the live mirrors is handled by the runner, which retries against the release archive.",
+    "lines": {
+        "45": {"image": "registry.fedoraproject.org/fedora:39", "expects": "GNOME Shell 45"},
+        "46": {"image": "registry.fedoraproject.org/fedora:40", "expects": "GNOME Shell 46"},
+        "47": {"image": "registry.fedoraproject.org/fedora:41", "expects": "GNOME Shell 47"},
+        "48": {"image": "registry.fedoraproject.org/fedora:42", "expects": "GNOME Shell 48"},
+        "49": {"image": "registry.fedoraproject.org/fedora:43", "expects": "GNOME Shell 49"},
+        "50": {"image": "registry.fedoraproject.org/fedora:44", "expects": "GNOME Shell 50"},
+        "51": {"image": "registry.fedoraproject.org/fedora:45", "expects": "GNOME Shell 51"}
+    }
+}

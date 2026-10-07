@@ -262,11 +262,12 @@ texture layer. Used to set `LINEAR_MIPMAP_LINEAR` during overview mode.
 
 ## cogl_pipeline_get_layer_filters
 
-`pipeline.get_layer_filters()` - queries the active minification and magnification filters on a Cogl pipeline
-texture layer. The C prototype takes two `(out)` parameters (`CoglPipelineFilter *min_filter, *mag_filter`);
-GJS folds these out-arguments into a two-element return array `[min_filter, mag_filter]` rather than accepting
-pointers. Used in E2E integration test assertions to verify that hardware mipmapping is actually applied
-to the pipeline layer during overview mode and restored upon returning to desktop.
+`pipeline.get_layer_filters()` - the getter for the layer filters `set_layer_filters` writes. The pair is
+recorded together, and only the setter has a call site: nothing in the extension or the harness reads
+this one today, which is why the runtime surface check does not name it. What it is kept for is the
+trap in its shape. The C prototype takes two `(out)` pointers, and whether GJS folds them into a
+returned `[min_filter, mag_filter]` depends on the annotation - present from 46, absent on 45 - so 45
+shows `(layer_index, min_filter, mag_filter)` where 46-51 show `(layer_index)`.
 
 ## cogl_pipeline_filter
 

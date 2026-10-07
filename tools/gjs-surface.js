@@ -17,8 +17,9 @@
  *
  * The assertion boundary is the boundary of what the code assumes. Existence is asserted for
  * everything the extension calls, because it is the cheapest check with the widest reach; arity
- * and parameter names are asserted only where the code depends on them - a parameter that changed
- * from `device` to `sprite` keeps its arity, and arity is exactly what the grab-op dispatch reads.
+ * and parameter names are asserted only where the code depends on them - and where a shape moves
+ * across the audited lines, the entry lists every shape the code is written to handle, so the check
+ * follows the dispatch rather than one line's spelling of it.
  * Everything else is printed, not asserted: an assertion needs a hand-written expectation, and a
  * hand-written expectation is what this whole audit exists to stop trusting.
  *
@@ -58,7 +59,15 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'get_buffer_rect', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'allows_resize', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_monitor', arity: 0},
-    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op', params: ['op', 'sprite', 'timestamp', 'pos_hint']},
+    // Three shapes across the audited lines: 45 has no pointer hint, 46-48 add it beside the device,
+    // and 49-51 replace the device with a sprite. compat/grabOp.js dispatches between them, so all
+    // three are shapes this code handles and the check accepts any of them - pinning one line's shape
+    // here is what that dispatch exists to avoid.
+    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op', params: [
+        ['op', 'device', 'sequence', 'timestamp'],
+        ['op', 'device', 'sequence', 'timestamp', 'pos_hint'],
+        ['op', 'sprite', 'timestamp', 'pos_hint'],
+    ]},
     {ns: 'Meta', cls: 'Window', member: 'get_compositor_private', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_hidden', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_attached_dialog', arity: 0},
@@ -109,7 +118,8 @@ const SURFACE = [
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_layer_filters', params: ['layer_index', 'min_filter', 'mag_filter']},
     // The C prototype takes two out-pointers (min_filter, mag_filter); GJS folds them into an
     // out-argument return array [min_filter, mag_filter], matching get_buffer_rect's out-arg pattern.
-    {ns: 'Cogl', cls: 'Pipeline', member: 'get_layer_filters', params: ['layer_index']},
+    // The out-argument pair is read only through set_layer_filters; this getter has no call site in the
+    // extension, which is why it is recorded as context and not asserted at runtime.
     {ns: 'Cogl', cls: 'PipelineFilter', enum: true, members: ['LINEAR_MIPMAP_LINEAR', 'LINEAR', 'NEAREST']},
     // gnome-shell, only reachable from inside the shell
     {ns: 'Shell', cls: 'GLSLEffect', class: true, optional: true},
@@ -301,12 +311,16 @@ for (const entry of SURFACE) {
     const signature = names === null ? 'signature unreadable' : `(${names.join(', ')})`;
     print(`  ${what}${signature}`);
     if (entry.params) {
+        // The code depends on this shape, so it is asserted - against every shape the code is written to
+        // handle, not against one line's spelling of it.
+        const accepted = Array.isArray(entry.params[0]) ? entry.params : [entry.params];
         if (names === null) {
             fail(what, 'the wrapper source could not be read for its parameter names');
             continue;
         }
-        if (names.join(',') !== entry.params.join(',')) {
-            fail(what, `GJS shows (${names.join(', ')}), the code assumes (${entry.params.join(', ')})`);
+        if (!accepted.some(shape => shape.join(',') === names.join(','))) {
+            const shapes = accepted.map(shape => `(${shape.join(', ')})`).join(' or ');
+            fail(what, `GJS shows (${names.join(', ')}), the code assumes ${shapes}`);
             continue;
         }
         report(what, `params ${signature}`);
