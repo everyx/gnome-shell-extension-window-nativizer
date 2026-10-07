@@ -3,13 +3,29 @@
 # Shared by both hooks: run the named checks, one line each, and on failure print the output of the
 # one that failed. Sourced rather than executed, so each hook keeps its own preconditions.
 
+# A check may declare a precondition, so that a machine which cannot run it at all skips it loudly
+# instead of blocking every commit and push there. What they need is something to run in: a GNOME
+# session, to render the decoration and to drive a window through a lifecycle. On a machine that has
+# one they run, and they fail on a wrong decoration or a wrong behaviour like any other check - the
+# precondition is about the machine, not about the change.
+check_precondition() {
+    case "$1" in
+        benchmark:check|test:e2e) command -v gnome-shell >/dev/null 2>&1 ;;
+        *) return 0 ;;
+    esac
+}
+
 run_checks() {
     hook=$1
     shift
     log=$(mktemp)
     trap 'rm -f "$log"' EXIT INT TERM
     for check in "$@"; do
-        printf '%-12s' "$check"
+        printf '%-16s' "$check"
+        if ! check_precondition "$check"; then
+            printf 'skipped (this machine cannot run it)\n'
+            continue
+        fi
         if pnpm run --silent "$check" >"$log" 2>&1; then
             printf 'ok\n'
         else
