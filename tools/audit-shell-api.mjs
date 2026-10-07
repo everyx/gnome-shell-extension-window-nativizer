@@ -100,6 +100,10 @@ const SURFACE = [
     {id: 'cogl_pipeline_set_layer_filters', member: 'pipeline.set_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_set_layer_filters'},
     {id: 'cogl_pipeline_get_layer_filters', member: 'pipeline.get_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_get_layer_filters'},
     {id: 'cogl_pipeline_filter', member: 'Cogl.PipelineFilter', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'COGL_PIPELINE_FILTER_NEAREST'},
+    // The cursor enum the resize band's directions resolve to. It arrives in 50 with
+    // set_cursor_type, and it is recorded because of how it is read: a module-level table of its
+    // members is what kept the extension from loading on 45-49 (see compat/actorCursor.js).
+    {id: 'clutter_cursor_type', member: 'Clutter.CursorType', repo: 'mutter', kind: 'enum', file: 'clutter/clutter/clutter-enums.h', sym: 'CLUTTER_CURSOR_DEFAULT'},
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
     {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
@@ -210,7 +214,9 @@ function declaration(text, kind, sym) {
         return m ? m[0].trim() : null;
     }
     case 'enum': {
-        const m = new RegExp(`^\\s*${sym}\\w*\\s*=.*$`, 'm').exec(text ?? '');
+        // An enumerator, with or without an explicit value: which one is recorded does not matter,
+        // only that the member is declared, and ClutterCursorType numbers its members implicitly.
+        const m = new RegExp(`^\\s*${sym}\\w*\\s*(?:=[^,]*)?,?\\s*$`, 'm').exec(text ?? '');
         return m ? m[0].trim() : null;
     }
     case 'const': {
