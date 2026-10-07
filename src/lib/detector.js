@@ -245,13 +245,16 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [isFullscreen=false]
  * @property {boolean} [hasSsd=false]
  * @property {boolean} [isX11=false]
- * @property {boolean} [nativeLikeCorners=false]
+ * @property {boolean} [nativeLikeCorners=false] - Whether the process maps an Adwaita provider. The
+ *           reading answers null while that is not known yet, and null is not a decision input:
+ *           the caller defers rather than decide on a default.
  * @property {number} [windowType=WindowType.NORMAL]
  * @property {boolean} [hasParent=false]
  * @property {boolean} [isAttachedDialog=false]
  * @property {boolean} [allowsResize=true]
  * @property {boolean} [hasGtk4Client=false] - Whether the client is GTK4, whose own handle
- *        the declared margins can prove
+ *        the declared margins can prove. The reading answers null while that is not known yet,
+ *        and the caller defers on it like `nativeLikeCorners`.
  * @property {boolean} [hasTileMatch=false]
  * @property {boolean} [focused=false]
  * @property {boolean} [tiled=false]
