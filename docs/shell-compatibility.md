@@ -113,8 +113,12 @@ line, where a moved API counts from either end.
 <!-- shell-support-table:end -->
 
 One line range loses something, and it is recorded in full in [shell-api.md](shell-api.md): 45-49
-have no resize cursor, because a per-actor cursor only exists from 50. Every other feature in the
-table is available on every audited line.
+have no resize cursor, because a per-actor cursor only exists from 50. The older half of that
+watershed is not a drop-in translation - `global.display.set_cursor()` is display-wide rather than
+per actor, so bridging it means owning the reset as well - and no line that has the API also has a
+shell here to try it on: on 50 the enum and the method are both gone, and the runtime check in
+`test-e2e` can mark a symbol it cannot reach only as skipped. The gap is left with its reason rather
+than written blind, and taken up where it can be run.
 
 ## Evolution across GNOME 45–51
 
