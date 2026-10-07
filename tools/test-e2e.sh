@@ -303,10 +303,21 @@ BLEND_RESULT="$(shell_eval "
         target.activate(global.get_current_time());
     await sleep(150);
 
+    // Whether the target was focused to begin with: a shell that did not take the activation has
+    // nothing to fade when focus is handed on, and that is not the shadow's failure.
+    const focusedBeforeHandoff = Boolean(target.appears_focused);
+    // Whether the shadow was given a different style to blend towards at all: a fade that never
+    // starts because the style never changed is a reconcile that did not run, not a blend that did
+    // not animate.
+    const styleKeyBeforeHandoff = targetShadow.style?.key ?? null;
+    const animateBeforeHandoff = targetShadow.style?.animate ?? null;
+
     if (alive(other))
         other.activate(global.get_current_time());
     await sleep(50);
     const fadeStarted = targetShadow.isFading;
+    const focusedAfterHandoff = Boolean(target.appears_focused);
+
     let fadeSettled = false;
     for (let i = 0; i < 60 && !fadeSettled; i++) {
         await sleep(25);
@@ -337,7 +348,8 @@ BLEND_RESULT="$(shell_eval "
 
     iface.set_boolean('enable-animations', wasAnimations);
 
-    return JSON.stringify({fadeStarted, fadeSettled, snapped, focusIn,
+    return JSON.stringify({fadeStarted, fadeSettled, snapped, focusIn, focusedBeforeHandoff,
+        styleKeyBeforeHandoff, animateBeforeHandoff, focusedAfterHandoff,
         animationsOffStarted, animationsOffSettled,
         decorated: tracked.length, windows: global.get_window_actors().length});
 })()
