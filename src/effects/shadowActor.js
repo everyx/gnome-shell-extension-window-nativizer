@@ -11,6 +11,7 @@ import {pipelineOpacityFor} from '../lib/style.js';
 import {shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
+import {coglContextForBake} from '../compat/coglContext.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
@@ -136,7 +137,9 @@ export const ShadowActor = GObject.registerClass({
         if (paintOpacity <= 0)
             return;
 
-        const context = paintContext.get_framebuffer().get_context();
+        const context = coglContextForBake(paintContext);
+        if (!context)
+            return;
 
         const pipeline = this._pipelineFor(context, currentStyle);
         if (!pipeline)

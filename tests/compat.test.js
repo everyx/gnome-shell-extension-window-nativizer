@@ -6,8 +6,28 @@
 import {CursorShape, setActorCursor, cursorTypeFor} from '../src/compat/actorCursor.js';
 import {beginWindowGrabOp, getPointerSprite} from '../src/compat/grabOp.js';
 import {resolveUniformLocation} from '../src/compat/uniformLocation.js';
+import {backendCoglContext, coglContextForBake} from '../src/compat/coglContext.js';
 
 describe('compat', () => {
+    describe('coglContextForBake', () => {
+        it('takes the context the paint pass handed over', () => {
+            const context = {};
+            const paintContext = {get_framebuffer: () => ({get_context: () => context})};
+            expect(coglContextForBake(paintContext)).toBe(context);
+        });
+
+        it('reads the backend when the paint pass handed none over', () => {
+            const context = {};
+            expect(backendCoglContext({get_cogl_context: () => context})).toBe(context);
+        });
+
+        it('answers null for a backend that cannot produce one', () => {
+            expect(backendCoglContext(null)).toBeNull();
+            expect(backendCoglContext({})).toBeNull();
+            expect(backendCoglContext({get_cogl_context: () => null})).toBeNull();
+        });
+    });
+
     describe('cursorTypeFor', () => {
         it('resolves a name against the enum this line has', () => {
             expect(cursorTypeFor(CursorShape.NORTH, {N_RESIZE: 10, DEFAULT: 0})).toBe(10);
