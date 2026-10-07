@@ -394,13 +394,35 @@ What the numbers say:
   38 before, against the 7% tier's 18 — the two tiers keep their 30/7 ratio, and both are still
   one pixel.
 
-### Automated Benchmark Tool
+### Automated benchmark tool
 
-To measure the current decoration against this baseline and prevent visual regressions:
+The profile is checked against **libadwaita's own, measured in the same session**, because that is
+the claim: our decoration is libadwaita's decoration.
 
 ```bash
-pnpm run benchmark          # Print full comparison report against golden baseline
-pnpm run benchmark:check    # exit 1 if deviation > 1 grey level
+pnpm run benchmark          # print both profiles
+pnpm run benchmark:check    # exit 1 unless ours matches libadwaita's
 ```
 
 Source: `tools/benchmark-decoration.py`.
+
+Three things are asserted, and the split matters when one fails:
+
+- **fidelity** - our profile against the live libadwaita window's, within 2 grey levels (the two
+  differ by one step of the ramp where rounding lands, and nowhere else);
+- **symmetry** - our four sides are identical, and so are libadwaita's;
+- **the environment** - the live libadwaita window against the profile recorded from upstream, within
+  1 grey level. A failure here is the machine having moved, not the code, and it says so rather than
+  letting the fidelity number above it be read as a verdict.
+
+The tool used to gate on a stored copy of *our own* earlier profile. That can only ever say "we
+changed": when the shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the
+run failed for a week without anyone running it, and the failure said nothing about whether the new
+output was right - it was, to within a grey level of libadwaita, while the stored profile sat 9 grey
+levels away from it. A reference of our own past numbers is blind in the other direction too: it
+cannot notice that we never matched libadwaita to begin with. Upstream's recorded profile stays in the
+file, as the environment witness above.
+
+**This check needs a session, so nothing runs it automatically yet.** That is why it rotted
+undetected; wiring it into a hook or a CI job belongs with the per-line verification work recorded in
+[shell-compatibility.md](shell-compatibility.md).

@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """
-benchmark-decoration.py - Measures Window Nativizer window decoration profile and
-verifies the attenuation gradient against the 1.0x golden baseline.
+benchmark-decoration.py - Measures Window Nativizer's decoration profile and checks it against
+libadwaita's own, measured in the same session.
+
+The claim this guards is "our decoration is libadwaita's decoration", so the reference is a live
+libadwaita window (`probe-window.js --native`), not a stored copy of what we ourselves produced. It
+used to be the latter, and a check against our own past can only ever say "we changed": when the
+shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the run failed, and it
+kept failing for a reason that had nothing to do with the code being wrong - while a stored profile
+of our own numbers cannot notice that we never matched libadwaita to begin with.
+
+A profile recorded from upstream is still kept, as an environment witness rather than a gate: if the
+live libadwaita window stops reproducing it, the machine moved and the difference is not ours to
+explain.
 
 Usage:
-  python3 tools/benchmark-decoration.py            # Run benchmark and print comparison
-  python3 tools/benchmark-decoration.py --check    # Exit 1 if deviation from baseline > 1 level
-  python3 tools/benchmark-decoration.py --native   # Also measure live native Libadwaita
+  python3 tools/benchmark-decoration.py            # Print both profiles
+  python3 tools/benchmark-decoration.py --check    # Exit 1 unless ours matches libadwaita
+  python3 tools/benchmark-decoration.py --native   # Measure the live native profile too
 """
 
 import sys
@@ -21,14 +32,26 @@ STATE_DIR = "/tmp/window-nativizer-dev"
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 
-# Golden Baseline (1.0x Integer Scale, Offsets 0..22)
-# Offset 0 is inner outline (G channel), 1..N is shadow attenuation into 255 (white backdrop)
+# Recorded as evidence, not as the gate.
+#
+# BASELINE_CSD is what our own shadow produced at 1.0x when this tool was written, before the October
+# 2026 shadow corrections; it is history, printed for comparison.
+# BASELINE_NATIVE is upstream's, and a live libadwaita window still reproduces it exactly - which is
+# what makes it usable as an environment witness (see ENVIRONMENT_TOLERANCE below).
+# Offset 0 is the inner outline (G channel), 1..N the shadow attenuation into the 255 white backdrop.
 BASELINE_CSD = [
     18, 191, 208, 218, 227, 233, 238, 242, 246, 249, 251, 253, 254, 254, 255
 ]
 BASELINE_NATIVE = [
     18, 199, 216, 221, 227, 231, 235, 238, 241, 243, 245, 247, 248, 250, 251, 252, 252, 253, 254, 254, 254, 254, 255
 ]
+
+# Our profile against libadwaita's, in gray levels. The two differ by one step of the ramp where
+# rounding lands, and nowhere else.
+FIDELITY_TOLERANCE = 2
+# The live libadwaita window against the recorded one. A failure here is the machine having moved,
+# not the code: it says the measurement below it cannot be trusted to mean anything.
+ENVIRONMENT_TOLERANCE = 1
 
 def ensure_session():
     if not os.path.exists(PID_FILE):
@@ -180,16 +203,31 @@ def main():
         is_symmetric = (csd["bottom"] == csd["top"] == csd["left"] == csd["right"])
         measured_profile = csd["bottom"]
 
-        print("\n" + "=" * 76)
+        # The reference is a live libadwaita window, so there has to be one: --native asks for it for
+        # the report, and --check needs it to have anything to compare against at all.
+        nat = None
+        nat_symmetric = None
+        if args.native or args.check:
+            print(">> Measuring live native Libadwaita decoration profile...")
+            nat = measure_target(True, env)
+            nat_symmetric = (nat["bottom"] == nat["top"] == nat["left"] == nat["right"])
+
+        def profile_delta(a, b, rows=18):
+            return max(abs(a[off] - b[off]) for off in range(rows))
+
+        print("\n" + "=" * 84)
         print("                WINDOW NATIVIZER DECORATION BENCHMARK REPORT")
-        print("=" * 76)
+        print("=" * 84)
         print(f"Window Geometry : {csd['width']}x{csd['height']} (expected 440x280)")
         print(f"Symmetry Status : {'PASS (100% 4-way symmetric)' if is_symmetric else 'FAIL (edges diverge)'}")
-        print("-" * 76)
+        if nat is not None:
+            print(f"Native Symmetry : {'PASS (100% 4-way symmetric)' if nat_symmetric else 'FAIL (edges diverge)'}")
+        print("-" * 84)
 
-        header = f"{'Offset':<7} | {'Current CSD':<12} | {'Baseline CSD':<13} | {'Baseline Native':<15} | {'CSD Delta':<9}"
+        header = (f"{'Offset':<7} | {'Ours':<5} | {'Live native':<12} | {'Recorded CSD':<13} | "
+                  f"{'Recorded native':<16} | {'Ours vs native':<15}")
         print(header)
-        print("-" * 76)
+        print("-" * 84)
 
         max_rows = 18
         max_dev = 0
@@ -200,27 +238,44 @@ def main():
             delta = cur - base_csd
             if abs(delta) > max_dev:
                 max_dev = abs(delta)
-            delta_str = f"{delta:+d}" if delta != 0 else "0"
-            print(f"{off:<7d} | {cur:<12d} | {base_csd:<13d} | {base_nat:<15d} | {delta_str:<9}")
+            live = f"{nat['bottom'][off]:<12d}" if nat is not None else f"{'-':<12}"
+            fid = f"{cur - nat['bottom'][off]:+d}" if nat is not None else f"{'-':<15}"
+            print(f"{off:<7d} | {cur:<5d} | {live} | {base_csd:<13d} | {base_nat:<16d} | {fid:<15}")
 
-        print("-" * 76)
-        print(f"Max Deviation from CSD Baseline: {max_dev} gray level(s)")
-
-        if args.native:
-            print("\n>> Measuring live Native Libadwaita decoration profile...")
-            nat = measure_target(True, env)
-            nat_symmetric = (nat["bottom"] == nat["top"] == nat["left"] == nat["right"])
-            print(f"Native Symmetry : {'PASS (100% 4-way symmetric)' if nat_symmetric else 'FAIL'}")
-            print(f"Native Profile  : {nat['bottom'][:18]}")
+        print("-" * 84)
+        print(f"Against the profile recorded from our own shadow at 1.0x, before the October 2026")
+        print(f"corrections: {max_dev} gray level(s). History, not a gate - see the module docstring.")
 
         if args.check:
+            failures = []
             if not is_symmetric:
-                print("\n[FAIL] Four-side symmetry check failed!")
+                failures.append("our profile is not 4-way symmetric")
+
+            # Name which of the two moved before blaming either: a machine whose libadwaita no
+            # longer reproduces upstream's profile cannot say anything about our code.
+            env_dev = profile_delta(nat["bottom"], BASELINE_NATIVE)
+            print(f"\nEnvironment witness (live libadwaita vs recorded): {env_dev} gray level(s), "
+                  f"tolerance {ENVIRONMENT_TOLERANCE}")
+            if env_dev > ENVIRONMENT_TOLERANCE:
+                failures.append(
+                    f"the recorded libadwaita profile no longer reproduces ({env_dev} > "
+                    f"{ENVIRONMENT_TOLERANCE}): the machine moved, and the comparison below it "
+                    f"means nothing")
+
+            fid_dev = profile_delta(csd["bottom"], nat["bottom"])
+            print(f"Fidelity (ours vs live libadwaita): {fid_dev} gray level(s), "
+                  f"tolerance {FIDELITY_TOLERANCE}")
+            if fid_dev > FIDELITY_TOLERANCE:
+                failures.append(
+                    f"our profile is {fid_dev} gray levels from libadwaita's "
+                    f"(tolerance {FIDELITY_TOLERANCE})")
+
+            if failures:
+                print("")
+                for failure in failures:
+                    print(f"[FAIL] {failure}")
                 sys.exit(1)
-            if max_dev > 1:
-                print(f"\n[FAIL] Max deviation ({max_dev}) exceeded tolerance (<= 1)!")
-                sys.exit(1)
-            print("\n[OK] Benchmark verification passed: zero regression.")
+            print("\n[OK] Our decoration is libadwaita's decoration, in this session.")
     finally:
         subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

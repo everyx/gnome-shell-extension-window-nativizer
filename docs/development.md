@@ -20,8 +20,8 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, X11 (Xwayland) and multi-window cases, and a zero-warning audit of the log |
-| `pnpm run benchmark` | visual decoration attenuation benchmark against 1.0x golden baseline |
-| `pnpm run benchmark:check` | zero visual regression guard (exits 1 if attenuation profile or symmetry drifts) |
+| `pnpm run benchmark` | prints our decoration profile beside a live libadwaita window's and beside the profiles recorded from upstream |
+| `pnpm run benchmark:check` | fidelity guard: exits 1 unless our profile matches libadwaita's within 2 grey levels, both profiles are 4-way symmetric, and the live libadwaita window still reproduces the profile recorded from upstream - which is what says whether the machine, rather than the code, moved |
 | `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
 | `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
