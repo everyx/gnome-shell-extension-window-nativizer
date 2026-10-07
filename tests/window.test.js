@@ -5,9 +5,11 @@ import {
     readWindowString,
     safeRead,
     isWindowReading,
+    isClassificationPending,
 } from '../src/lib/window.js';
 
 import {evaluateWindowActions} from '../src/lib/detector.js';
+import {ProcessClassifier} from '../src/lib/nativeLikeCorners.js';
 import {buildRuleKeyFromProperties} from '../src/lib/rules.js';
 import {extractWindowProperties} from '../src/lib/pick.js';
 import {WindowType, WindowClientType} from '../src/lib/mutterRules.generated.js';
@@ -180,7 +182,7 @@ describe('window inspection (readWindow)', () => {
             get_pid: () => 9876,
         };
         const mockClassifier = {
-            hasNativeLikeCorners: win => win.get_pid() === 9876,
+            adwaitaLook: pid => pid === 9876,
             hasGtk4Client: pid => pid === 9876,
         };
 
@@ -190,6 +192,71 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeTrue();
     });
 
+    it('passes an unclassified process through as null, not as a default', () => {
+        const mockWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_pid: () => 4242,
+        };
+        const reading = readWindow(mockWin, {
+            classifier: {adwaitaLook: () => null, hasGtk4Client: () => null},
+        });
+        expect(reading.nativeLikeCorners).toBeNull();
+        expect(reading.hasGtk4Client).toBeNull();
+    });
+
+    it('carries null while the read is in flight and a boolean once it lands', () => {
+        const classifier = new ProcessClassifier();
+        try {
+            let finish;
+            classifier.probeAdwaitaLook(7070, {readMaps: (pid, done) => { finish = done; }});
+            const mockWin = {
+                get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+                get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+                get_pid: () => 7070,
+            };
+
+            const pending = readWindow(mockWin, {classifier});
+            expect(pending.nativeLikeCorners).toBeNull();
+            expect(pending.hasGtk4Client).toBeNull();
+
+            finish('7f00000-7f01000 r-xp 00000000 00:00 0 /usr/lib/libadwaita-1.so.0\n');
+            const landed = readWindow(mockWin, {classifier});
+            expect(landed.nativeLikeCorners).toBeTrue();
+            expect(landed.hasGtk4Client).toBeTrue();
+        } finally {
+            classifier.destroy();
+        }
+    });
+
+    it('defers while the classification has not landed, and the decisions it separates differ', () => {
+        const mockWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_pid: () => 6060,
+            get_wm_class: () => 'defer-app',
+            decorated: false,
+        };
+        const readingFor = answer => readWindow(mockWin, {
+            classifier: {adwaitaLook: () => answer, hasGtk4Client: () => answer},
+        });
+
+        const pending = readingFor(null);
+        const nativeLike = readingFor(true);
+        const plain = readingFor(false);
+
+        expect(isClassificationPending(pending)).toBeTrue();
+        expect(isClassificationPending(nativeLike)).toBeFalse();
+        expect(isClassificationPending(plain)).toBeFalse();
+
+        // The manager returns on the pending reading instead of running this; the two landed answers
+        // decide differently, so a null folded into either boolean would dress the window the answer
+        // had not chosen.
+        const nativeActions = evaluateWindowActions({...nativeLike, rules: {}});
+        const plainActions = evaluateWindowActions({...plain, rules: {}});
+        expect(nativeActions.drawClip).not.toBe(plainActions.drawClip);
+    });
+
     it('handles throwing classifier methods gracefully during teardown', () => {
         const mockWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
@@ -197,7 +264,7 @@ describe('window inspection (readWindow)', () => {
             get_pid: () => 1234,
         };
         const throwingClassifier = {
-            hasNativeLikeCorners: () => {
+            adwaitaLook: () => {
                 throw new Error('classifier torn down');
             },
             hasGtk4Client: () => {
@@ -207,8 +274,10 @@ describe('window inspection (readWindow)', () => {
 
         const reading = readWindow(mockWin, {classifier: throwingClassifier});
         expect(reading).not.toBeNull();
-        expect(reading.nativeLikeCorners).toBeFalse();
-        expect(reading.hasGtk4Client).toBeFalse();
+        // A throw is the same "not known yet" as a read still in flight, and deferring is what the
+        // answer landing a frame later would have done anyway.
+        expect(reading.nativeLikeCorners).toBeNull();
+        expect(reading.hasGtk4Client).toBeNull();
     });
 
     it('handles throwing identity resolvers while respecting wmClassOverride chaining', () => {

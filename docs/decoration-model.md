@@ -98,8 +98,9 @@ need not costs one offscreen pass and comes out identical.
 
 **The probe is asynchronous.** Reading `/proc` synchronously in shell code is what
 EGO-X-004 flags, and it blocks the compositor, so the maps go through GIO's async API and
-the answer lands a frame or two later. A window whose process is still being read is not
-decided at all: nothing of ours is drawn for those frames, so the window keeps the decoration
+the answer lands a frame or two later. The reading reports the classification as unknown until
+then, and a window whose classification is unknown is not decided at all: nothing of ours is drawn
+for those frames, so the window keeps the decoration
 its toolkit gave it, and the manager runs the decision again when the answer lands. Drawing first and taking it back would flash our corners and a second
 shadow over a window that has its own, the direction this axis is built to avoid. What it
 costs is a decoration arriving a frame or two late on the *first* window of a process; every
@@ -108,8 +109,8 @@ snapshots (a process cache and the set of reads in flight), while `/proc` I/O is
 exclusively by lifecycle commands (the probe). Reading I/O lazily inside queries or predicates (violating Command-Query
 Separation) is prohibited: it creates timing inversions where query evaluation order mutates state
 and triggers transient visual flicker. The manager drives the probe from the window lifecycle and
-the inspector from its hit-test and its pick request; a query handed an unprobed pid answers with
-its conservative default and never starts the read itself.
+the inspector from its hit-test and its pick request; a query handed an unprobed pid answers that it
+does not know yet, and never starts the read itself.
 
 ## Which rectangle the clip lands on
 

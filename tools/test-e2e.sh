@@ -234,7 +234,7 @@ CHECK_RESULT="$(shell_eval '
             buffer: b ? [b.x, b.y, b.width, b.height] : null,
             frame: f ? [f.x, f.y, f.width, f.height] : null,
             pid,
-            adwaitaLook: classifier ? String(classifier.hasAdwaitaLook(pid)) : "no-classifier",
+            adwaitaLook: classifier ? String(classifier.adwaitaLook(pid)) : "no-classifier",
             gtk4: classifier ? String(classifier.hasGtk4Client(pid)) : "no-classifier"
         }
     });
