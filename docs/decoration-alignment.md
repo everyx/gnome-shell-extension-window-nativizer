@@ -394,13 +394,73 @@ What the numbers say:
   38 before, against the 7% tier's 18 — the two tiers keep their 30/7 ratio, and both are still
   one pixel.
 
-### Automated Benchmark Tool
+### Automated benchmark tool
 
-To measure the current decoration against this baseline and prevent visual regressions:
+The decoration is measured against **libadwaita's own, on one frame**, because that is the claim: a
+window we decorate is decorated the way libadwaita decorates one.
 
 ```bash
-pnpm run benchmark          # Print full comparison report against golden baseline
-pnpm run benchmark:check    # exit 1 if deviation > 1 grey level
+pnpm run benchmark          # measure and print every profile
+pnpm run benchmark:check    # exit 1 unless both decorated windows match the reference
 ```
 
 Source: `tools/benchmark-decoration.py`.
+
+Three windows are on screen at once, all unfocused, over one maximized white backdrop, and one
+screenshot is compared:
+
+| Subject | What it is | Why |
+|---|---|---|
+| `native` | an `Adw.ApplicationWindow`, decorated by libadwaita | the reference |
+| `declared` | a GTK4 client with its own decoration left on, so it **declares a shadow margin ring** | the extension clears that ring and takes the shadow over |
+| `bare` | a GTK4 client with no decoration at all | the extension draws corners and a shadow where the client reserved nothing |
+
+Because the reference is in the same screenshot, nothing about the machine - colour management, scale,
+backdrop colour, animation phase - has to be assumed stable: none of it differs between the two sides
+of the comparison. And nothing is stored: a stored copy of our own earlier output can only say that we
+changed, and a stored copy of upstream's still has to be trusted as a description of this machine.
+
+Samples are anchored to the compositor's `frame_rect` - the window's visible rectangle - which is the
+same definition for a client that paints its own shadow inside its buffer and for one that has none.
+Finding the rectangle in the pixels instead lands on whatever each client happens to paint, and the
+three profiles then start at different places and cannot be compared.
+
+The profiles are compared from **offset 1 outward**, the shadow proper. Offset 0 is the boundary pixel,
+and what sits on it is the client's own edge - libadwaita's headerbar border on the reference, and on a
+taken-over window the 1px of the client's ring that the clip's safe inset deliberately keeps outside
+the body. Measured here, that pixel differs by 9 grey levels on the taken-over window and by nothing on
+the bare one, while the shadow beyond it is **identical, 0 grey levels, on both**.
+
+Two windows cannot both be focused, so the focused half of the claim is read by **alternating which
+window has the focus**: one frame per subject, sharing the backdrop and the layout, and the same
+unfocused window appears in all of them - which is what makes the alternating comparison mean anything
+without a stored profile. The standards are fixed from that measurement, and each has a reason:
+
+| Comparison | Standard | Why |
+|---|---|---|
+| unfocused, same frame | **0** | the two decorations are identical here, on both paths, so nothing has to be allowed |
+| focused, alternating frames | **1** | one extra 8-bit quantisation, and the architecture is why: libadwaita paints the shadow into the window's own buffer, while this extension bakes it into a texture and slices that - the same curve (the bake runs the GLSL generated from GTK4's own `gskgpuboxshadow.glsl`) through one more quantisation. It shows on the focused set, whose three layers accumulate to about 0.30 near the edge, and not on the backdrop set, whose largest layer is transparent. It is not an unsettled fade: that would lighten the whole curve rather than move one step up and two steps down |
+| environment witness | **0** | it is a control, not a claim: the same window in the same state read from two frames. Any difference at all means the frames do not describe the same machine, and every alternating comparison built on them is void |
+
+Reading the same window focused twice gives the same profile here, which is what says the focused
+level is systematic rather than the frame it was taken in.
+
+Three things are asserted, and the split matters when one fails:
+
+- **fidelity** - our profile against the live libadwaita window's, within 2 grey levels (the two
+  differ by one step of the ramp where rounding lands, and nowhere else);
+- **symmetry** - our four sides are identical, and so are libadwaita's;
+- **the environment** - the live libadwaita window against the profile recorded from upstream, within
+  1 grey level. A failure here is the machine having moved, not the code, and it says so rather than
+  letting the fidelity number above it be read as a verdict.
+
+The tool used to gate on a stored copy of *our own* earlier profile. That can only ever say "we
+changed": when the shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the
+run failed for a week without anyone running it, and the failure said nothing about whether the new
+output was right - it was, to within a grey level of libadwaita, while the stored profile sat 9 grey
+levels away from it. A reference of our own past numbers is blind in the other direction too: it
+cannot notice that we never matched libadwaita to begin with. Upstream's recorded profile stays in the
+file, as the environment witness above.
+
+**This check needs a session, so nothing runs it automatically yet**, which is how it went a week
+without anyone noticing it had been failing. Wiring it into a hook or a CI job is open work.
