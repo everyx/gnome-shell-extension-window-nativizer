@@ -146,6 +146,33 @@ export function inferDecorationBaseline({
 }
 
 /**
+ * The ring the client declared, read the one way both the decision and the picker's reading need
+ * it. Two readings of this fact used to live apart: `readWindow` asked `hasDeclaredMarginRing` (the
+ * per-side rectangles, refusing to answer when the frame does not fit inside its buffer) while the
+ * decision asked `declaresOwnShadow` over the two-sided totals, which stay positive there. A window
+ * in that state therefore carried `has_ring=false` in the key a pick wrote and `has_ring=true` in
+ * the lookup the runtime made, so the rule could never match. One function, so they cannot disagree
+ * again.
+ * @param {object} [params={}]
+ * @param {boolean} [params.hasSsd=false]
+ * @param {import('./frame.js').Insets|null} [params.insets=null]
+ * @param {number} [params.bufferWidth=0]
+ * @param {number} [params.bufferHeight=0]
+ * @param {number} [params.frameWidth=0]
+ * @param {number} [params.frameHeight=0]
+ * @returns {boolean}
+ */
+export function clientDeclaredRing({
+    hasSsd = false,
+    insets = null,
+    bufferWidth = 0, bufferHeight = 0,
+    frameWidth = 0, frameHeight = 0,
+} = {}) {
+    const {declaringSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
+    return declaresOwnShadow({hasSsd, sideW: declaringSides.sideW, sideH: declaringSides.sideH});
+}
+
+/**
  * @param {number|null|undefined} scale
  * @returns {boolean}
  */
@@ -388,11 +415,10 @@ export function evaluateWindowActions({
         isX11, sideW, sideH, hasSsd, nativeLikeCorners,
     });
 
-    // Semantics vs strategy: declaresOwnShadow answers "did the client declare a ring?"
-    // (SSD's ring is frame-drawn ⇒ false). The strategy "SSD ring is ours to clear when
-    // we clip" is separate and handled here so the predicate can stay pure without
-    // changing observable behavior (inferDecorationBaseline already handles hasSsd first).
-    const clientOwnRing = declaresOwnShadow({hasSsd, sideW, sideH});
+    // Semantics vs strategy: `clientDeclaredRing` answers "did the client declare a ring?" (an SSD
+    // frame's ring is frame-drawn, so no). The strategy "the SSD ring is ours to clear when we
+    // clip" is separate and handled here, so the predicate can stay pure.
+    const clientOwnRing = clientDeclaredRing({hasSsd, insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
 
     const rule = resolveRule(wmClass, rules, {
         clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
