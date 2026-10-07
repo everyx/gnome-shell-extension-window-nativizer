@@ -818,6 +818,23 @@
             }
         },
         {
+            "id": "clutter_cursor_type",
+            "member": "Clutter.CursorType",
+            "repo": "mutter",
+            "kind": "enum",
+            "file": "clutter/clutter/clutter-enums.h",
+            "sym": "CLUTTER_CURSOR_DEFAULT",
+            "decl": {
+                "45": null,
+                "46": null,
+                "47": null,
+                "48": null,
+                "49": null,
+                "50": "CLUTTER_CURSOR_DEFAULT,",
+                "51": "CLUTTER_CURSOR_DEFAULT,"
+            }
+        },
+        {
             "id": "shell_glsl_set_uniform_float",
             "member": "effect.set_uniform_float() [Shell.GLSLEffect]",
             "repo": "gnome-shell",

@@ -3,13 +3,35 @@
  * Run: pnpm test
  */
 
-import {setActorCursor} from '../src/compat/actorCursor.js';
+import {CursorShape, setActorCursor, cursorTypeFor} from '../src/compat/actorCursor.js';
 import {beginWindowGrabOp, getPointerSprite} from '../src/compat/grabOp.js';
 import {resolveUniformLocation} from '../src/compat/uniformLocation.js';
 
 describe('compat', () => {
+    describe('cursorTypeFor', () => {
+        it('resolves a name against the enum this line has', () => {
+            expect(cursorTypeFor(CursorShape.NORTH, {N_RESIZE: 10, DEFAULT: 0})).toBe(10);
+            expect(cursorTypeFor(CursorShape.DEFAULT, {N_RESIZE: 10, DEFAULT: 0})).toBe(0);
+        });
+
+        it('answers null where the enum does not exist (Clutter < 50)', () => {
+            expect(cursorTypeFor(CursorShape.NORTH, null)).toBeNull();
+            expect(cursorTypeFor(CursorShape.NORTH, {})).toBeNull();
+        });
+
+        it('refuses a shape it does not know, rather than leaving the pointer alone', () => {
+            // A misspelt string used to resolve to nothing, which is the same outcome as a line that
+            // has no enum at all - two different things, so they are told apart here.
+            expect(() => cursorTypeFor('sideways', {N_RESIZE: 10})).toThrowError(/unknown cursor shape/);
+        });
+
+        it('answers null for a shape this line has no member for', () => {
+            expect(cursorTypeFor(CursorShape.NORTH, {DEFAULT: 0})).toBeNull();
+        });
+    });
+
     describe('setActorCursor', () => {
-        it('calls set_cursor_type when supported by actor', () => {
+        it('calls set_cursor_type when the actor and the enum are both there', () => {
             let receivedCursor = null;
             const actor = {
                 set_cursor_type(cursor) {
@@ -17,18 +39,19 @@ describe('compat', () => {
                 },
             };
 
-            setActorCursor(actor, 42);
-            expect(receivedCursor).toBe(42);
+            expect(setActorCursor(actor, CursorShape.DEFAULT, {DEFAULT: 0})).toBeTrue();
+            expect(receivedCursor).toBe(0);
         });
 
-        it('gracefully no-ops when actor does not support set_cursor_type (Clutter < 50)', () => {
+        it('gracefully no-ops where the cursor API does not exist (Clutter < 50)', () => {
             const actor = {};
-            expect(() => setActorCursor(actor, 42)).not.toThrow();
+            expect(() => setActorCursor(actor, CursorShape.DEFAULT)).not.toThrow();
+            expect(setActorCursor(actor, CursorShape.DEFAULT, null)).toBeFalse();
         });
 
         it('gracefully handles null or undefined actor', () => {
-            expect(() => setActorCursor(null, 42)).not.toThrow();
-            expect(() => setActorCursor(undefined, 42)).not.toThrow();
+            expect(() => setActorCursor(null, CursorShape.DEFAULT)).not.toThrow();
+            expect(() => setActorCursor(undefined, CursorShape.DEFAULT)).not.toThrow();
         });
     });
 

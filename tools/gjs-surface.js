@@ -78,6 +78,11 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Backend', member: 'get_monitor_manager', arity: 0},
     // Clutter
     {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', params: ['cursor_type'], optional: true},
+    // The enum that call takes. It arrives in the same release, and the code reads it behind a
+    // capability check - 45-49 have neither, and reading it while a module was evaluated is what
+    // stopped the extension loading there.
+    {ns: 'Clutter', cls: 'CursorType', enum: true, optional: true,
+        members: ['DEFAULT', 'CROSSHAIR', 'N_RESIZE', 'NW_RESIZE']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
@@ -224,7 +229,12 @@ for (const entry of SURFACE) {
     }
     if (entry.enum) {
         // GJS exposes an enum as a plain object of its values, not as a class, so being an object
-        // is not enough: the members the code reads by name have to be there.
+        // is not enough: the members the code reads by name have to be there. An enum the code only
+        // reads behind a capability check may be absent, and then absence is the answer.
+        if ((target === null || target === undefined) && entry.optional) {
+            report(what, 'absent, and the code degrades without it');
+            continue;
+        }
         const missing = (entry.members ?? []).filter(m => target?.[m] === undefined);
         if (target === null || typeof target !== 'object')
             fail(what, `not an enum object (typeof ${typeof target})`);
