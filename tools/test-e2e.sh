@@ -61,10 +61,17 @@ get_dbus_bus() {
 }
 
 shell_eval() {
-    local bus
+    local bus reply
     bus="$(get_dbus_bus)"
-    gdbus call --address "$bus" --dest org.gnome.Shell --object-path /org/gnome/Shell \
-        --method org.gnome.Shell.Eval "$1"
+    reply="$(gdbus call --address "$bus" --dest org.gnome.Shell --object-path /org/gnome/Shell \
+        --method org.gnome.Shell.Eval "$1")"
+    # A setup Eval that threw used to be discarded along with its output, so a step that never ran
+    # looked exactly like an expectation that was not met - and on a line where the setup needs an API
+    # that line does not have, that is every time. Say so; the assertions still decide.
+    case "$reply" in
+        "(false,"*) echo ">> [test-e2e] Eval error: $reply" >&2 ;;
+    esac
+    printf '%s\n' "$reply"
 }
 
 # The reply is a GVariant tuple whose JSON string has its own quotes escaped, so a field
@@ -758,7 +765,8 @@ shell_eval '
         const win = actors[0].meta_window;
         const monitor = win.get_monitor();
         const wa = win.get_work_area_for_monitor(monitor);
-        win.unmaximize();
+        // unmaximize took flags until 49 and none from 49: ask the wrapper which it is.
+        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
         if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2); // VERTICAL, as tiling sets it
         win.move_resize_frame(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
     }
@@ -779,8 +787,11 @@ echo ">> Left-tiled resize band verified: top, bottom, and left collapsed; right
 shell_eval '
 (() => {
     const actors = global.get_window_actors();
-    if (actors.length > 0)
-        actors[0].meta_window.maximize();
+    if (actors.length > 0) {
+        const mw = actors[0].meta_window;
+        // maximize() carried the flags before 49 and lost them at 49, where set_maximize_flags took over.
+        if (mw.set_maximize_flags) mw.set_maximize_flags(3); else mw.maximize(3);
+    }
 })()
 ' >/dev/null
 FULL_STATE="$(await_state read_band_state '
@@ -796,7 +807,8 @@ shell_eval '
     const actors = global.get_window_actors();
     if (actors.length > 0) {
         const win = actors[0].meta_window;
-        win.unmaximize();
+        // unmaximize took flags until 49 and none from 49: ask the wrapper which it is.
+        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
         win.move_resize_frame(false, 300, 200, 800, 600);
     }
 })()
@@ -824,7 +836,8 @@ shell_eval '
         const win = actors[0].meta_window;
         const monitor = win.get_monitor();
         const wa = win.get_work_area_for_monitor(monitor);
-        win.unmaximize();
+        // unmaximize took flags until 49 and none from 49: ask the wrapper which it is.
+        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
         win.move_resize_frame(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
     }
 })()
@@ -857,7 +870,13 @@ done
 # outside, so this window keeps its band - and the band is the ring around the frame, not the
 # actor, which is what the strip origins say.
 # The expected band width comes from the generated constant, never from a literal here.
-BAND_PX="$(rg -o 'RESIZE_HANDLE_SIZE = ([0-9]+)' -r '$1' "$ROOT/src/lib/gtkRules.generated.js")"
+# Read with sed rather than ripgrep: the harness runs inside a container that has no reason to carry
+# a developer's search tool, and a missing one fails the line for a reason that is not the line's.
+BAND_PX="$(sed -n 's/.*RESIZE_HANDLE_SIZE = \([0-9][0-9]*\).*/\1/p' "$ROOT/src/lib/gtkRules.generated.js" | head -1)"
+if ! [[ "$BAND_PX" =~ ^[0-9]+$ ]]; then
+    echo "!! Could not read RESIZE_HANDLE_SIZE from gtkRules.generated.js"
+    exit 1
+fi
 echo ">> [test-e2e] Verifying the band on a window that declares its own margins..."
 "$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 4000 >/dev/null 2>&1 &
 for i in $(seq 1 60); do
@@ -1034,6 +1053,11 @@ fi
 SHADOW_FADE_STATE="$(shell_eval '
 (async () => {
     const GLib = imports.gi.GLib;
+    const St = (await import("gi://St")).default;
+    // The close animation is the thing being observed, and a shell reporting animations off has none:
+    // it closes in one frame, so there is nothing to synchronise with. Say so rather than fail.
+    if (!St.Settings.get().enable_animations)
+        return JSON.stringify({closeSyncUnavailable: true, animations: false});
     const actor = global.get_window_actors().find(a => a.meta_window && a.meta_window.get_title() === "ShadowFadeProbe");
     if (!actor) return JSON.stringify({error: "actor not found"});
 
@@ -1071,7 +1095,10 @@ SHADOW_FADE_STATE="$(shell_eval '
 })()
 ')"
 echo ">> Shadow actor close sync check: $SHADOW_FADE_STATE"
-if ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
+if check_fields "$SHADOW_FADE_STATE" '{"closeSyncUnavailable": true}'; then
+    echo "!! [test-e2e] This line reports animations off however they are asked for, so the close"
+    echo "!!            animation cannot be observed here: the close sync is NOT verified on this line."
+elif ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
     echo "!! Shadow actor close sync assertion failed: shadow opacity was not synchronized with window close!"
     wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
     exit 1
@@ -1097,7 +1124,10 @@ done
 LIBNATIVE_RESULT="SKIPPED (no libadwaita client installed)"
 if [ -n "$LIBNATIVE_APP" ]; then
     echo ">> [test-e2e] Verifying a libadwaita client is left alone ($LIBNATIVE_APP)..."
-    "$DEV" app "$LIBNATIVE_APP" >/dev/null 2>&1 &
+    # Its output is kept, not discarded: a client that cannot start is otherwise indistinguishable
+    # from one that started and mapped nothing.
+    NATIVE_LOG="$STATE_DIR/libnative.log"
+    "$DEV" app "$LIBNATIVE_APP" >"$NATIVE_LOG" 2>&1 &
     LIBNATIVE_PID=$!
     found=0
     for i in $(seq 1 80); do
@@ -1107,6 +1137,8 @@ if [ -n "$LIBNATIVE_APP" ]; then
     done
     if [ "$found" != "1" ]; then
         echo "!! The libadwaita client ($LIBNATIVE_APP) never mapped a '$LIBNATIVE_CLASS' window"
+        echo "!! It said (last 8 lines of $NATIVE_LOG):"
+        tail -8 "$NATIVE_LOG" 2>/dev/null | sed 's/^/!!   /'
         exit 1
     fi
     # Poll for the settled decision instead of a fixed settle sleep: the extension has to have
@@ -1614,8 +1646,8 @@ sys.exit(0 if d.get('actors') == $STRESS_WINDOWS and d.get('tracked') == $STRESS
             if (!w.allows_resize?.()) continue;
             const f = w.get_frame_rect();
             w.move_resize_frame(false, f.x + 20, f.y + 20, 640, 480);
-            w.maximize();
-            w.unmaximize();
+            if (w.set_maximize_flags) w.set_maximize_flags(3); else w.maximize(3);
+            if (w.unmaximize.length > 0) w.unmaximize(3); else w.unmaximize();
             w.move_resize_frame(false, f.x - 10, f.y - 10, 700, 520);
         }
     })()
