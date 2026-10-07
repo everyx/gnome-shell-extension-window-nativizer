@@ -102,12 +102,20 @@ owns only the manifest's `$.version-name` (`release-please-config.json`).
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
 both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs lint, `check-style` and the unit tests. Each guards something the commit
-  itself can break, so the commit that breaks one is the commit that fixes it, and every commit
-  stays valid on its own;
-- **every push** runs ego-lint, which reviews the extension as a whole, and packs it the way a user
-  installs it - the two checks that describe what leaves the machine rather than a commit. Neither
-  is repeated from the commit hook.
+- **every commit** runs lint, `check-style`, the unit tests and `benchmark:check`. Each guards
+  something the commit itself can break, so the commit that breaks one is the commit that fixes it,
+  and every commit stays valid on its own. The rendering is one of those things: the unit tests see
+  the decisions, not the pixels, so a shadow or a clip change that misses libadwaita by a level is
+  exactly what they cannot catch. That check needs a GNOME session to render in, so a machine without
+  one skips it and says so rather than blocking every commit there - on a machine that has one it
+  runs, and it took the place of a stored baseline that was found to have been failing unnoticed for
+  a week;
+- **every push** runs ego-lint, which reviews the extension as a whole; packs it the way a user
+  installs it; runs shexli over that package, which reads it the way extensions.gnome.org will; and
+  drives `test:e2e` through a nested session. The first three describe what leaves the machine; the
+  fourth guards what a commit can break and is here because it takes two minutes, and a commit hook
+  slow enough to be bypassed is worth less than a push hook nobody minds. Pushes are rare; commits are
+  not.
 
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
 the same checks twice on every push. Either hook can be skipped the same way when that is what you
