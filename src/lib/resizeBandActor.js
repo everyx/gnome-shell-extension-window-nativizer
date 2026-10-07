@@ -34,20 +34,11 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // larger than the window actor by that much, or the regions would be clipped out of it.
 const OUTER = RESIZE_BAND;
 
-// The eight-way cursor and the matching compositor grab op, keyed by the direction
-// `edgeForPoint()` resolves. A corner never resolves to a straight edge unless GTK's own
-// order says so there.
-const DIRECTION_CURSOR = {
-    n: Clutter.CursorType.N_RESIZE,
-    ne: Clutter.CursorType.NE_RESIZE,
-    e: Clutter.CursorType.E_RESIZE,
-    se: Clutter.CursorType.SE_RESIZE,
-    s: Clutter.CursorType.S_RESIZE,
-    sw: Clutter.CursorType.SW_RESIZE,
-    w: Clutter.CursorType.W_RESIZE,
-    nw: Clutter.CursorType.NW_RESIZE,
-};
-
+// The matching compositor grab op, keyed by the direction `edgeForPoint()` resolves. A corner never
+// resolves to a straight edge unless GTK's own order says so there. The cursor for a direction is
+// asked for by the same key through compat/actorCursor.js, which resolves it against the line's own
+// enum - it is not a table here, because on 45-49 that enum does not exist and reading it while this
+// module was evaluated is what stopped the extension loading there.
 const DIRECTION_GRAB_OP = {
     n: Meta.GrabOp.RESIZING_N,
     ne: Meta.GrabOp.RESIZING_NE,
@@ -261,7 +252,7 @@ export const ResizeBand = GObject.registerClass({
     resetCursor() {
         this._hover = null;
         for (const child of this._regions.values())
-            setActorCursor(child, Clutter.CursorType.DEFAULT);
+            setActorCursor(child, 'default');
     }
 
     destroy() {
@@ -317,9 +308,7 @@ export const ResizeBand = GObject.registerClass({
         if (this._hover?.region === region && this._hover.direction === direction)
             return Clutter.EVENT_PROPAGATE;
         this._hover = direction ? {region, direction} : null;
-        setActorCursor(this._regions.get(region), direction
-            ? DIRECTION_CURSOR[direction]
-            : Clutter.CursorType.DEFAULT);
+        setActorCursor(this._regions.get(region), direction ?? 'default');
         return Clutter.EVENT_PROPAGATE;
     }
 
@@ -330,7 +319,7 @@ export const ResizeBand = GObject.registerClass({
     _clearCursor(region) {
         if (this._hover?.region === region) {
             this._hover = null;
-            setActorCursor(this._regions.get(region), Clutter.CursorType.DEFAULT);
+            setActorCursor(this._regions.get(region), 'default');
         }
         return Clutter.EVENT_PROPAGATE;
     }

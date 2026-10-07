@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {setActorCursor} from '../src/compat/actorCursor.js';
+import {setActorCursor, cursorTypeFor} from '../src/compat/actorCursor.js';
 import {beginWindowGrabOp, getPointerSprite} from '../src/compat/grabOp.js';
 import {resolveUniformLocation} from '../src/compat/uniformLocation.js';
 import {backendCoglContext, coglContextForBake} from '../src/compat/coglContext.js';
@@ -28,8 +28,25 @@ describe('compat', () => {
         });
     });
 
+    describe('cursorTypeFor', () => {
+        it('resolves a name against the enum this line has', () => {
+            expect(cursorTypeFor('n', {N_RESIZE: 10, DEFAULT: 0})).toBe(10);
+            expect(cursorTypeFor('default', {N_RESIZE: 10, DEFAULT: 0})).toBe(0);
+        });
+
+        it('answers null where the enum does not exist (Clutter < 50)', () => {
+            expect(cursorTypeFor('n', null)).toBeNull();
+            expect(cursorTypeFor('n', {})).toBeNull();
+        });
+
+        it('answers null for a name the enum has no member for', () => {
+            expect(cursorTypeFor('sideways', {N_RESIZE: 10})).toBeNull();
+            expect(cursorTypeFor('n', {DEFAULT: 0})).toBeNull();
+        });
+    });
+
     describe('setActorCursor', () => {
-        it('calls set_cursor_type when supported by actor', () => {
+        it('calls set_cursor_type when the actor and the enum are both there', () => {
             let receivedCursor = null;
             const actor = {
                 set_cursor_type(cursor) {
@@ -37,18 +54,19 @@ describe('compat', () => {
                 },
             };
 
-            setActorCursor(actor, 42);
-            expect(receivedCursor).toBe(42);
+            expect(setActorCursor(actor, 'default', {DEFAULT: 0})).toBeTrue();
+            expect(receivedCursor).toBe(0);
         });
 
-        it('gracefully no-ops when actor does not support set_cursor_type (Clutter < 50)', () => {
+        it('gracefully no-ops where the cursor API does not exist (Clutter < 50)', () => {
             const actor = {};
-            expect(() => setActorCursor(actor, 42)).not.toThrow();
+            expect(() => setActorCursor(actor, 'default')).not.toThrow();
+            expect(setActorCursor(actor, 'default', null)).toBeFalse();
         });
 
         it('gracefully handles null or undefined actor', () => {
-            expect(() => setActorCursor(null, 42)).not.toThrow();
-            expect(() => setActorCursor(undefined, 42)).not.toThrow();
+            expect(() => setActorCursor(null, 'default')).not.toThrow();
+            expect(() => setActorCursor(undefined, 'default')).not.toThrow();
         });
     });
 

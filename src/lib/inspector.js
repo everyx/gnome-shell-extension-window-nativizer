@@ -257,7 +257,7 @@ export class InspectorService {
             return;
         }
         try {
-            setActorCursor(global.stage, Clutter.CursorType.CROSSHAIR);
+            setActorCursor(global.stage, 'crosshair');
         } catch {
             // stage may be unmanaging
         }
@@ -335,7 +335,7 @@ export class InspectorService {
         }
 
         try {
-            setActorCursor(global.stage, Clutter.CursorType.DEFAULT);
+            setActorCursor(global.stage, 'default');
         } catch {
             // stage may be unmanaging
         }

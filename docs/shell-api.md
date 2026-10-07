@@ -269,6 +269,16 @@ trap in its shape. The C prototype takes two `(out)` pointers, and whether GJS f
 returned `[min_filter, mag_filter]` depends on the annotation - present from 46, absent on 45 - so 45
 shows `(layer_index, min_filter, mag_filter)` where 46-51 show `(layer_index)`.
 
+## clutter_cursor_type
+
+`Clutter.CursorType` - the cursor `Clutter.Actor.set_cursor_type` takes, and the reason this row exists
+is where it is read rather than what it does. It arrives in 50 with the method, and the resize band's
+directions used to be resolved into a **module-level table** of its members: on 45-49 the table threw
+while the extension was being loaded, so the shell reported the whole extension as failed
+(`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
+behind a capability check in `compat/actorCursor.js`, and a line without the enum gets no cursor
+instead of no extension.
+
 ## cogl_pipeline_filter
 
 `Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
