@@ -1056,6 +1056,40 @@
             }
         },
         {
+            "id": "backend_get_default",
+            "member": "Clutter.get_default_backend()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-backend.h",
+            "sym": "clutter_get_default_backend",
+            "decl": {
+                "45": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "46": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "47": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "48": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "49": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "50": "CLUTTER_EXPORT ClutterBackend * clutter_get_default_backend (void);",
+                "51": null
+            }
+        },
+        {
+            "id": "backend_get_cogl_context",
+            "member": "backend.get_cogl_context()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-backend.h",
+            "sym": "clutter_backend_get_cogl_context",
+            "decl": {
+                "45": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "46": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "47": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "48": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "49": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "50": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);",
+                "51": "CLUTTER_EXPORT CoglContext * clutter_backend_get_cogl_context (ClutterBackend *backend);"
+            }
+        },
+        {
             "id": "mutter_api_version",
             "member": "Meta-<api> / Shell-<api> typelibs",
             "repo": "mutter",

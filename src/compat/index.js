@@ -5,3 +5,4 @@
 export {ShaderEffect} from './shaderEffect.js';
 export {beginWindowGrabOp, getPointerSprite} from './grabOp.js';
 export {setActorCursor} from './actorCursor.js';
+export {coglContextForBake} from './coglContext.js';

@@ -78,6 +78,8 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `backend.get_pointer_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_pointer_sprite) |
 | `seat.get_pointer()` | 45–48 / 49–51 absent | [why](shell-api.md#seat_get_pointer) |
 | `backend.get_default_seat()` | 45–51 stable | [why](shell-api.md#backend_get_default_seat) |
+| `Clutter.get_default_backend()` | 45–50 / 51 absent | [why](shell-api.md#backend_get_default) |
+| `backend.get_cogl_context()` | 45–51 stable | [why](shell-api.md#backend_get_cogl_context) |
 | `Meta-<api> / Shell-<api> typelibs` | 45 / 46 / 47 / 48 / 49 / 50 / 51 | [why](shell-api.md#mutter_api_version) |
 | `Shell.GLSLEffect` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
 | `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |
@@ -102,7 +104,7 @@ line, where a moved API counts from either end.
 | Feature | 45 | 46 | 47 | 48 | 49 | 50 | 51 |
 |---|---|---|---|---|---|---|---|
 | Rounded corners (the clip) | yes | yes | yes | yes | yes | yes | yes |
-| Window shadow | **degraded** | **degraded** | yes | yes | yes | yes | yes |
+| Window shadow | yes | yes | yes | yes | yes | yes | yes |
 | Resize band (the grab) | yes | yes | yes | yes | yes | yes | yes |
 | Resize cursor | **degraded** | **degraded** | **degraded** | **degraded** | **degraded** | yes | yes |
 | Tiled ring colour | yes | yes | yes | yes | yes | yes | yes |
@@ -110,10 +112,9 @@ line, where a moved API counts from either end.
 | Native-app detection | yes | yes | yes | yes | yes | yes | yes |
 <!-- shell-support-table:end -->
 
-Two lines lose something, and both are recorded in full in [shell-api.md](shell-api.md): 45 and 46
-draw no shadow, because their paint vfunc passes no context to read a Cogl context out of, and 45-49
-have no resize cursor, because a per-actor cursor only exists from 50. Nothing else in the table is
-missing on any audited line.
+One line range loses something, and it is recorded in full in [shell-api.md](shell-api.md): 45-49
+have no resize cursor, because a per-actor cursor only exists from 50. Every other feature in the
+table is available on every audited line.
 
 ## Evolution across GNOME 45–51
 
@@ -121,11 +122,11 @@ Five upstream watersheds fall in this range - the shader base class, the maximiz
 operation signature, the per-actor cursor, and the Mutter typelib naming. The shader base class, the
 grab signature and the per-actor cursor are bridged through compatibility shims, and the maximize query
 through a capability probe; the typelib name is never spelled, so it binds whatever
-`gi://Meta` ships. A sixth is the paint-node context, and it is the only one not bridged: 
-`Clutter.Actor::paint_node` gained its `ClutterPaintContext` argument in 47, and the shadow painter
-reads a Cogl context out of it, so 45-46 draws no shadow at all. That is the open item
-[shell-api.md](shell-api.md#actor_paint_node) records, and it is why a 45 or 46 claim needs a shell
-to verify the fix against before it is worth making.
+`gi://Meta` ships. A sixth is the paint-node context, and it is the only watershed bridged by a
+*different call* rather than a different shape: `Clutter.Actor::paint_node` gained its
+`ClutterPaintContext` argument in 47, and the lines before it take the Cogl context the shadow bake
+needs from the backend instead. What each line passes is recorded above; how the other path was
+verified is in [shell-api.md](shell-api.md#actor_paint_node).
 
 What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,

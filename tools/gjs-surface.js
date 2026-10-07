@@ -92,6 +92,12 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
+    // The shadow bake's context on the lines whose paint pass does not hand one over (45-46). The
+    // namespace function is 45-50; the method is everywhere, but the object GJS hands back as
+    // `global.backend` does not answer it, so the code asks through the namespace. This asserts that
+    // path exists - it does not call it, because outside a shell `get_default_backend()` aborts.
+    {ns: 'Clutter', member: 'get_default_backend', namespace: true, arity: 0, optional: true},
+    {ns: 'Clutter', cls: 'Backend', member: 'get_cogl_context', arity: 0},
     {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', arity: 0, optional: true},
     // What compat/grabOp.js dispatches on: 45 and 49-51 both declare four parameters, and this
     // pair is what tells them apart. The code reads these two, not a version number.

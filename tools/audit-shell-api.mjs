@@ -119,6 +119,11 @@ const SURFACE = [
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
     {id: 'seat_get_pointer', member: 'seat.get_pointer()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-seat.h', sym: 'clutter_seat_get_pointer'},
     {id: 'backend_get_default_seat', member: 'backend.get_default_seat()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_default_seat'},
+    // The shadow bake's context where the paint pass does not hand one over: the namespace function
+    // is 45-50 and the accessor is everywhere. compat/coglContext.js records why the ask goes through
+    // the namespace rather than the object GJS hands back as global.backend.
+    {id: 'backend_get_default', member: 'Clutter.get_default_backend()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_get_default_backend'},
+    {id: 'backend_get_cogl_context', member: 'backend.get_cogl_context()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_cogl_context'},
     // Build-time facts the typelib naming depends on
     {id: 'mutter_api_version', member: 'Meta-<api> / Shell-<api> typelibs', repo: 'mutter', kind: 'const', file: 'meson.build', sym: 'libmutter_api_version'},
     // gnome-shell

@@ -53,9 +53,11 @@ const FEATURES = [
         needs: [{any: ['shell_glsl_effect_h', 'shader_effect_header']}],
     },
     {
-        // The painter reads its Cogl context out of the paint vfunc's context argument.
+        // The vfunc to paint through, and a Cogl context to paint with: the paint pass hands one
+        // over from 47, and on 45-46 the backend answers for it instead (see compat/coglContext.js).
         name: 'Window shadow',
-        needs: [{id: 'actor_paint_node', contains: 'ClutterPaintContext'}],
+        needs: [{any: ['actor_paint_node', 'pipeline_node_new']},
+            {any: ['backend_get_cogl_context']}],
     },
     {
         name: 'Resize band (the grab)',

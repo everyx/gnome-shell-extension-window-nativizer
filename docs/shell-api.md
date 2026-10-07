@@ -216,13 +216,12 @@ both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the
 `Clutter.Actor:vfunc_paint_node()` - the hook the shadow actor paints its eight slices through. It
 is the only place the extension builds geometry rather than setting a parameter.
 
-The vfunc gained its `ClutterPaintContext` argument in 47: on 45-46 it is called with the paint
-root alone. The shadow painter reads a Cogl context out of that argument, so on those two lines it
-receives `undefined` and cannot build a pipeline - the record's only difference in this surface
-with a live consequence. Upstream does offer the context another way there
-(`clutter_backend_get_cogl_context`, 45-50), so the fix is small, but it is a change to the paint
-path and it is only reachable on lines this project has no shell for: it is recorded here as an
-open item rather than guessed at.
+The vfunc gained its `ClutterPaintContext` argument in 47, and the painter reads a Cogl context out
+of that argument, so on 45-46 it is called with the paint root alone. Those two lines take the
+context from the backend instead (`Clutter.get_default_backend().get_cogl_context()`, 45-50); the
+fallback is never reached on 51, where the argument is always there. Forcing that path on 50.5 and
+running the full e2e is what verified it - the run samples the tiled ring's pixels, and the ring is
+drawn by this actor - while the argument list each line passes is what the table above records.
 
 ## pipeline_node_new
 
@@ -327,6 +326,18 @@ the device the legacy grab signature takes.
 
 `backend.get_default_seat()` - resolves the pointer device on 45-48. The backend is reached the same
 way the sprite API's is, through the stage's context.
+
+## backend_get_default
+
+`Clutter.get_default_backend()` - how the shadow bake reaches a Cogl context on the lines whose paint
+pass does not hand one over, which is 45-46 (`actor_paint_node`). Gone in 51, where the paint context
+is always there, so the call is written to degrade. It is spelled through the `Clutter` namespace on
+purpose: the same backend object, reached as `global.backend`, does not answer `get_cogl_context`.
+
+## backend_get_cogl_context
+
+`backend.get_cogl_context()` - the context the bake builds its pipelines in. Present on every audited
+line; only 45-46 have to reach it through the backend rather than through the paint context.
 
 ## shell_glsl_effect_h
 
