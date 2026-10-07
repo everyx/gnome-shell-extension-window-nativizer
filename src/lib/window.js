@@ -12,8 +12,8 @@ import {
     CLIENT_TYPE_TOKEN_X11,
     chooseWindowIdentity,
 } from './rules.js';
-import {insetsFromRects, hasDeclaredMarginRing} from './frame.js';
-import {isWindowMaximized, isWindowTiled} from './detector.js';
+import {insetsFromRects} from './frame.js';
+import {clientDeclaredRing, isWindowMaximized, isWindowTiled} from './detector.js';
 
 function listWindowActors() {
     return global.get_window_actors?.() ?? [];
@@ -298,7 +298,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         if (typeof win.hasRing === 'boolean')
             return win.hasRing;
         if (hasValidGeometry)
-            return hasDeclaredMarginRing({buffer: b, frame: f, hasSsd});
+            return clientDeclaredRing({hasSsd, insets, bufferWidth: b.width, bufferHeight: b.height, frameWidth: f.width, frameHeight: f.height});
         return false;
     }, false);
 
