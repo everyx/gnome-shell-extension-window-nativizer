@@ -64,6 +64,7 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `pipeline.set_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_layer_filters) |
 | `pipeline.get_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_get_layer_filters) |
 | `Cogl.PipelineFilter` | 45–51 stable | [why](shell-api.md#cogl_pipeline_filter) |
+| `Clutter.CursorType` | 45–49 absent / 50–51 | [why](shell-api.md#clutter_cursor_type) |
 | `effect.set_uniform_float() [Shell.GLSLEffect]` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
 | `backend.get_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_sprite) |
 | `backend.get_pointer_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_pointer_sprite) |

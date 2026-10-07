@@ -239,6 +239,16 @@ GJS folds these out-arguments into a two-element return array `[min_filter, mag_
 pointers. Used in E2E integration test assertions to verify that hardware mipmapping is actually applied
 to the pipeline layer during overview mode and restored upon returning to desktop.
 
+## clutter_cursor_type
+
+`Clutter.CursorType` - the cursor `Clutter.Actor.set_cursor_type` takes, and the reason this row exists
+is where it is read rather than what it does. It arrives in 50 with the method, and the resize band's
+directions used to be resolved into a **module-level table** of its members: on 45-49 the table threw
+while the extension was being loaded, so the shell reported the whole extension as failed
+(`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
+behind a capability check in `compat/actorCursor.js`, and a line without the enum gets no cursor
+instead of no extension.
+
 ## cogl_pipeline_filter
 
 `Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
