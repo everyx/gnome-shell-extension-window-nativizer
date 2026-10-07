@@ -104,6 +104,8 @@ export class WindowDecoration {
             hasResizeBand: this.hasResizeBand,
             firstFrameDone: this.firstFrameDone,
             isPendingReconcile: Boolean(this.reconcileTimeout),
+            reason: this._reason ?? '',
+            focused: this._focused ?? null,
         };
     }
 
@@ -152,6 +154,10 @@ export class WindowDecoration {
         this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
 
         this._syncResizeBand(actions.drawResize, inputs, insets, winActor);
+
+        // Kept for the inspection seam below: what the last decision was, and what it was made from.
+        this._reason = actions.reason;
+        this._focused = Boolean(inputs.focused);
 
         if (this.clip || this.shadow)
             this._applyStyle(actions.style, insets, actions.drawClip, scale);

@@ -222,6 +222,10 @@ export class Manager {
         } catch (e) {
             if (!safe)
                 throw e;
+            // A signal this line does not have is expected at the window and actor level. One that
+            // fails for another reason would take a behaviour away without saying so, so it is
+            // reported; whether it is noise is for the run's own log to decide.
+            console.debug(`[window-nativizer] ${signal} is not connectable on ${obj?.constructor?.name ?? 'object'}: ${e.message}`);
         }
     }
 

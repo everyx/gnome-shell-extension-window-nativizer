@@ -132,6 +132,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasResizeBand: false,
             firstFrameDone: false,
             isPendingReconcile: false,
+            reason: '',
+            focused: null,
         });
     });
 
@@ -449,6 +451,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasResizeBand: false,
             firstFrameDone: false,
             isPendingReconcile: false,
+            reason: '',
+            focused: null,
         });
     });
 
