@@ -1,16 +1,39 @@
 #!/usr/bin/env python3
 """
-benchmark-decoration.py - Measures Window Nativizer window decoration profile and
-verifies the attenuation gradient against the 1.0x golden baseline.
+benchmark-decoration.py - Measures this extension's decoration against libadwaita's own, on one frame.
+
+The claim is "a window we decorate is decorated the way libadwaita decorates one", so the reference is
+a live libadwaita window - and it is measured in the *same screenshot* as the windows under test, with
+all of them in the same focus state, on the same uniform backdrop. Nothing about the machine (colour
+management, scale, backdrop colour, animation phase) has to be assumed stable, because none of it
+differs between the two sides of the comparison, and no profile is stored for later: a stored copy of
+our own earlier output can only ever say that we changed, and a stored copy of upstream's still has to
+be trusted as a description of this machine.
+
+Three windows are measured at once, because "we decorate it" is two different jobs with two different
+paths through the code:
+
+    native     an Adw.ApplicationWindow, decorated by libadwaita   - the reference
+    declared   a GTK4 client whose own decoration is left on, so it declares a shadow margin ring,
+               and the extension clears that ring and takes the shadow over
+    bare       a GTK4 client with no decoration at all, so the extension draws corners and a shadow
+               around a body that reserved nothing
+
+The backdrop is a maximized white window, and it also holds the focus: libadwaita has a focused shadow
+and a backdrop one, and two windows cannot both be focused, so the only state three windows can share
+is unfocused. The focused half of the claim needs a second run and is not what this measures.
 
 Usage:
-  python3 tools/benchmark-decoration.py            # Run benchmark and print comparison
-  python3 tools/benchmark-decoration.py --check    # Exit 1 if deviation from baseline > 1 level
-  python3 tools/benchmark-decoration.py --native   # Also measure live native Libadwaita
+  python3 tools/benchmark-decoration.py            # Measure and print all three profiles
+  python3 tools/benchmark-decoration.py --check    # Exit 1 unless both decorated windows match the
+                                                   # reference within the tolerance below
+  python3 tools/benchmark-decoration.py --keep     # Leave the windows up afterwards, to look at
 """
 
 import sys
 import os
+import re
+import json
 import time
 import subprocess
 import argparse
@@ -21,14 +44,37 @@ STATE_DIR = "/tmp/window-nativizer-dev"
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 
-# Golden Baseline (1.0x Integer Scale, Offsets 0..22)
-# Offset 0 is inner outline (G channel), 1..N is shadow attenuation into 255 (white backdrop)
-BASELINE_CSD = [
-    18, 191, 208, 218, 227, 233, 238, 242, 246, 249, 251, 253, 254, 254, 255
-]
-BASELINE_NATIVE = [
-    18, 199, 216, 221, 227, 231, 235, 238, 241, 243, 245, 247, 248, 250, 251, 252, 252, 253, 254, 254, 254, 254, 255
-]
+# The standard is what this measurement supports, in gray levels, and not a number carried over from
+# the tool it replaced - that one compared against a stored profile and needed a tolerance wide enough
+# to absorb two measurements' worth of rounding, which is not what this compares.
+#
+# Measured here: on one frame the two decorations are identical, both on the bare path and on the
+# taken-over one, so the same-frame standard is zero.
+#
+# The focused reading is one level wide, and it is one level for a reason rather than by observation:
+# libadwaita paints the shadow into the window's own buffer, while this extension bakes it into a
+# texture first and slices that, so the same curve - the bake runs the GLSL generated from GTK4's own
+# gskgpuboxshadow.glsl - passes through one more 8-bit quantisation. It shows on the focused set,
+# whose three layers accumulate to about 0.30 near the edge, and not on the backdrop set, whose
+# largest layer is transparent; and it is not a fade that had not settled, because that would lighten
+# the whole curve instead of moving one step up and two steps down, and because reading the same
+# window focused twice gives the same profile (see the focused witness).
+SAME_FRAME_TOLERANCE = 0
+ALTERNATING_FRAME_TOLERANCE = 1
+# The witness is a control, not a claim: the same window in the same state, read from two frames. Any
+# difference at all means the two frames are not describing the same machine, and every alternating
+# comparison built on them is void.
+WITNESS_TOLERANCE = 0
+
+# Where the three subjects sit, in logical px. 400 wide and 80 apart, so that neither the shadows
+# (which reach ~28px) nor the windows themselves touch a neighbour's.
+SUBJECT_WIDTH = 400
+SUBJECT_HEIGHT = 300
+SUBJECT_Y = 320
+SUBJECT_X = {"native": 80, "declared": 560, "bare": 1040}
+
+PROFILE_ROWS = 18
+
 
 def ensure_session():
     if not os.path.exists(PID_FILE):
@@ -40,16 +86,19 @@ def ensure_session():
     bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
     return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
 
+
 def eval_js(code, env):
     cmd = ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
            "--object-path", "/org/gnome/Shell", "--method", "org.gnome.Shell.Eval", code]
     return subprocess.check_output(cmd, env=env).decode()
+
 
 def hide_overview(env):
     cmd = ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
            "--object-path", "/org/gnome/Shell", "--method", "org.freedesktop.DBus.Properties.Set",
            "org.gnome.Shell", "OverviewActive", "<false>"]
     subprocess.call(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 def shoot(target_path, env):
     if os.path.exists(target_path):
@@ -72,157 +121,288 @@ def shoot(target_path, env):
         time.sleep(0.2)
     time.sleep(0.4)
 
-def measure_target(is_native, env):
-    # Ensure clean state
+
+def launch(env, name, extra_env, size=(SUBJECT_WIDTH, SUBJECT_HEIGHT)):
+    """One window, with its own application id so several can run at once."""
+    command = [os.path.join(ROOT, "tools", "dev.sh"), "app", "env",
+               f"WINDOW_NATIVIZER_APP_ID=dev.windownativizer.{name}",
+               f"WINDOW_NATIVIZER_SIZE={size[0]}x{size[1]}"]
+    command += extra_env + ["gjs", os.path.join(ROOT, "tools", "probe-window.js")]
+    subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+FOCUS_HOLDER = {"x": 20, "y": 20, "width": 120, "height": 80}
+
+
+def place_subjects(env):
+    """Puts the subjects where the layout says, leaves the focus on the holder, and reports where each
+    subject's frame rect ended up - that rectangle is what the profiles are anchored to.
+
+    The backdrop cannot hold the focus: activating a window raises it, and a raised backdrop is in
+    front of the windows whose shadows it is supposed to be behind. A small window in a corner takes
+    the focus instead - above the backdrop, and too far from the subjects to be in any profile.
+    """
+    entries = [{"name": name, "x": SUBJECT_X[name], "y": SUBJECT_Y,
+                "width": SUBJECT_WIDTH, "height": SUBJECT_HEIGHT}
+               for name in SUBJECT_X]
+    entries.append({**FOCUS_HOLDER, "name": "focus"})
+    placement = ", ".join(
+        '{{id: "dev.windownativizer.{name}", x: {x}, y: {y}, w: {width}, h: {height}}}'.format(**e)
+        for e in entries
+    )
+    js = f"""
+    (() => {{
+        const layout = [{placement}];
+        const windows = global.get_window_actors().map(a => a.meta_window).filter(Boolean);
+        const byId = id => windows.find(x => (x.get_gtk_application_id?.() ?? "") === id);
+        for (const entry of layout) {{
+            const w = byId(entry.id);
+            if (w)
+                w.move_resize_frame(false, entry.x, entry.y, entry.w, entry.h);
+        }}
+        const holder = byId("dev.windownativizer.focus");
+        if (holder)
+            holder.activate(global.get_current_time());
+        const rects = {{}};
+        for (const name of ["native", "declared", "bare"]) {{
+            const w = byId("dev.windownativizer." + name);
+            if (w) {{
+                const f = w.get_frame_rect();
+                rects[name] = {{ x: f.x, y: f.y, width: f.width, height: f.height,
+                                 scale: global.display.get_monitor_scale(w.get_monitor()) }};
+            }}
+        }}
+        return JSON.stringify(rects);
+    }})()
+    """
+    return eval_js(js, env)
+
+
+def wait_for_decoration(env):
+    """Our two subjects have to be decorated before the frame means anything.
+
+    Counted by application id, not by a total: the focus holder is a small bare window too, and the
+    extension decorates it as well.
+    """
+    js = """
+    (() => {
+        const ours = ["dev.windownativizer.declared", "dev.windownativizer.bare"];
+        const shadows = global.window_group.get_children()
+            .filter(c => c.name === "WindowNativizerShadowActor")
+            .map(c => c._windowActor?.meta_window)
+            .filter(Boolean);
+        const decorated = shadows.filter(w => ours.includes(w.get_gtk_application_id?.() ?? ""));
+        return JSON.stringify({ decorated: decorated.length });
+    })()
+    """
+    count = None
+    for _ in range(40):
+        # The reply is a GVariant string with its own quotes escaped, so the number is read out of it
+        # rather than matched against JSON text.
+        match = re.search(r"decorated[\\\"':]+\s*(\d+)", eval_js(js, env))
+        count = int(match.group(1)) if match else None
+        if count == 2:
+            return True
+        time.sleep(0.25)
+    raise RuntimeError(f"expected both subjects decorated, the shell reports {count} of 2")
+
+
+def profile_from(image, rect, side):
+    """Outward from one edge of the frame rect, into whatever the shadow falls on.
+
+    The origin is the compositor's `frame_rect` - the window's visible rectangle - which is the same
+    definition for a client that paints its own shadow inside its buffer and for one that has none.
+    Trying to find it in the pixels instead lands on whatever each client happens to paint.
+    """
+    px = image.load()
+    width, height = image.size
+    scale = rect["scale"]
+    left = round(rect["x"] * scale)
+    top = round(rect["y"] * scale)
+    right = round((rect["x"] + rect["width"] - 1) * scale)
+    bottom = round((rect["y"] + rect["height"] - 1) * scale)
+    mid_x = (left + right) // 2
+    mid_y = (top + bottom) // 2
+
+    values = []
+    for offset in range(PROFILE_ROWS):
+        if side == "top":
+            x, y = mid_x, top - offset
+        elif side == "bottom":
+            x, y = mid_x, bottom + offset
+        elif side == "left":
+            x, y = left - offset, mid_y
+        else:
+            x, y = right + offset, mid_y
+        values.append(px[x, y][1] if 0 <= x < width and 0 <= y < height else 255)
+    return values
+
+
+SIDES = ("top", "bottom", "left", "right")
+# The frames, and which subject each one focuses: one frame cannot hold two focused windows, so the
+# focused half of the claim is measured by alternating which window has the focus. `D` repeats `B`, so
+# the same window can be read focused twice and the difference between them is what says whether a
+# focused reading is a fact about the decoration or about the frame it was taken in.
+FRAMES = (("A", "native"), ("B", "declared"), ("C", "bare"), ("D", "declared"))
+FOCUS_ORDER = ("native", "declared", "bare")
+
+
+def focus_subject(env, name):
+    """Focus one subject, and report every subject's frame rect in that moment."""
+    js = f"""
+    (() => {{
+        const windows = global.get_window_actors().map(a => a.meta_window).filter(Boolean);
+        const byId = id => windows.find(x => (x.get_gtk_application_id?.() ?? "") === id);
+        const rects = {{}};
+        for (const n of ["native", "declared", "bare"]) {{
+            const w = byId("dev.windownativizer." + n);
+            if (w) {{
+                const f = w.get_frame_rect();
+                rects[n] = {{ x: f.x, y: f.y, width: f.width, height: f.height,
+                              scale: global.display.get_monitor_scale(w.get_monitor()) }};
+            }}
+        }}
+        const target = byId("dev.windownativizer.{name}");
+        if (target)
+            target.activate(global.get_current_time());
+        return JSON.stringify(rects);
+    }})()
+    """
+    reply = eval_js(js, env)
+    rects = json.loads(re.search(r"\{.*\}", reply.replace("\\", ""), re.S).group(0))
+    if len(rects) != 3:
+        raise RuntimeError(f"expected three subjects on screen, the shell reports {sorted(rects)}")
+    return rects
+
+
+def measure(env):
     subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.5)
 
-    # Launch white backdrop
-    subprocess.Popen([
-        os.path.join(ROOT, "tools", "dev.sh"), "app", "env", "WINDOW_NATIVIZER_BACKDROP=1",
-        "gjs", os.path.join(ROOT, "tools", "probe-window.js")
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    launch(env, "backdrop", ["WINDOW_NATIVIZER_BACKDROP=1"])
     time.sleep(1.5)
+    launch(env, "focus", [], size=(FOCUS_HOLDER["width"], FOCUS_HOLDER["height"]))
+    launch(env, "native", ["WINDOW_NATIVIZER_MODE=native"])
+    launch(env, "declared", ["WINDOW_NATIVIZER_DECORATED=1"])
+    launch(env, "bare", [])
+    time.sleep(2.0)
 
-    # Launch test target
-    extra_env = ["WINDOW_NATIVIZER_MODE=native"] if is_native else []
-    subprocess.Popen([
-        os.path.join(ROOT, "tools", "dev.sh"), "app", "env"
-    ] + extra_env + [
-        "WINDOW_NATIVIZER_BODY=#ff0000", "WINDOW_NATIVIZER_SIZE=440x280",
-        "gjs", os.path.join(ROOT, "tools", "probe-window.js")
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.5)
+    print(">> Placing the subjects:", place_subjects(env).strip())
+    time.sleep(1.0)
+    wait_for_decoration(env)
 
-    title_needle = "native" if is_native else "probe"
-    eval_js(f"""
-    const win = global.display.get_tab_list(0, null).find(w => w.get_title().includes('{title_needle}'));
-    if (win) {{ win.activate(global.get_current_time()); }}
-    """, env)
-    time.sleep(0.8)
+    # One frame per focus, because a frame cannot hold two focused windows. The backdrop transition is
+    # libadwaita's 200ms, so each frame is taken well after the focus has settled.
+    shots = {}
+    for frame, focused in FRAMES:
+        rects = focus_subject(env, focused)
+        time.sleep(0.8)
+        path = f"{SHOT_PATH}.{frame}"
+        shoot(path, env)
+        image = Image.open(path).convert("RGB")
+        shots[frame] = {
+            subject: {side: profile_from(image, rects[subject], side) for side in SIDES}
+            for subject in FOCUS_ORDER
+        }
+    return shots
 
-    shoot(SHOT_PATH, env)
-    subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    im = Image.open(SHOT_PATH).convert("RGB")
-    w, h = im.size
-    px = im.load()
+def delta(a, b, start=1):
+    """Worst difference over one profile, from `start` on: offset 0 is the boundary pixel, which is the
+    client's own content rather than the cast."""
+    return max(abs(x - y) for x, y in zip(a[start:], b[start:]))
 
-    # Find red window
-    min_x, max_x = w, 0
-    min_y, max_y = h, 0
-    found = False
-    for y in range(0, h, 2):
-        for x in range(0, w, 2):
-            r, g, b = px[x, y]
-            if r > 200 and g < 50 and b < 50:
-                min_x = min(min_x, x)
-                max_x = max(max_x, x)
-                min_y = min(min_y, y)
-                max_y = max(max_y, y)
-                found = True
 
-    if not found:
-        raise RuntimeError("Could not find red test window in screenshot")
+def worst_delta(shots, frame, subject, reference_frame, reference):
+    return max(delta(shots[frame][subject][side], shots[reference_frame][reference][side]) for side in SIDES)
 
-    mid_x = (min_x + max_x) // 2
-    mid_y = (min_y + max_y) // 2
 
-    # Refine boundaries
-    top_y, bottom_y = min_y, max_y
-    left_x, right_x = min_x, max_x
+# state, subject, the frame it is read from, the reference, the frame the reference is read from, and
+# the standard that comparison is held to.
+COMPARISONS = (
+    ("unfocused (same frame)", "bare", "B", "native", "B", SAME_FRAME_TOLERANCE),
+    ("unfocused (same frame)", "declared", "C", "native", "C", SAME_FRAME_TOLERANCE),
+    ("focused (alternating frames)", "declared", "B", "native", "A", ALTERNATING_FRAME_TOLERANCE),
+    ("focused (alternating frames)", "bare", "C", "native", "A", ALTERNATING_FRAME_TOLERANCE),
+)
 
-    for y in range(min_y - 15, min_y + 15):
-        if 0 <= y < h and px[mid_x, y][0] > 150 and px[mid_x, y][0] > px[mid_x, y][1] + 50:
-            top_y = y
-            break
-    for y in range(max_y + 15, max_y - 15, -1):
-        if 0 <= y < h and px[mid_x, y][0] > 150 and px[mid_x, y][0] > px[mid_x, y][1] + 50:
-            bottom_y = y
-            break
-    for x in range(min_x - 15, min_x + 15):
-        if 0 <= x < w and px[x, mid_y][0] > 150 and px[x, mid_y][0] > px[x, mid_y][1] + 50:
-            left_x = x
-            break
-    for x in range(max_x + 15, max_x - 15, -1):
-        if 0 <= x < w and px[x, mid_y][0] > 150 and px[x, mid_y][0] > px[x, mid_y][1] + 50:
-            right_x = x
-            break
-
-    max_len = 25
-    bottom = [px[mid_x, bottom_y + off][1] if bottom_y + off < h else 255 for off in range(max_len)]
-    top = [px[mid_x, top_y - off][1] if top_y - off >= 0 else 255 for off in range(max_len)]
-    left = [px[left_x - off, mid_y][1] if left_x - off >= 0 else 255 for off in range(max_len)]
-    right = [px[right_x + off, mid_y][1] if right_x + off < w else 255 for off in range(max_len)]
-
-    return {
-        "bottom": bottom,
-        "top": top,
-        "left": left,
-        "right": right,
-        "width": right_x - left_x + 1,
-        "height": bottom_y - top_y + 1,
-    }
 
 def main():
-    parser = argparse.ArgumentParser(description="Window Nativizer Decoration Benchmark Tool")
-    parser.add_argument("--check", action="store_true", help="Verify Window Nativizer against baseline with zero regression")
-    parser.add_argument("--native", action="store_true", help="Also run live measurement of native Libadwaita")
+    parser = argparse.ArgumentParser(description="Window Nativizer decoration benchmark")
+    parser.add_argument("--check", action="store_true",
+                        help="Exit 1 unless both decorated windows match the live libadwaita one, "
+                             "focused and unfocused")
+    parser.add_argument("--keep", action="store_true", help="Leave the windows up, to look at")
     args = parser.parse_args()
 
     env = ensure_session()
-
     try:
-        print(">> Measuring Window Nativizer decoration profile...")
-        csd = measure_target(False, env)
+        print(">> Measuring three windows, one frame per focus state...")
+        shots = measure(env)
 
-        # Check symmetry
-        is_symmetric = (csd["bottom"] == csd["top"] == csd["left"] == csd["right"])
-        measured_profile = csd["bottom"]
+        print()
+        print("=" * 84)
+        print("        WINDOW NATIVIZER DECORATION BENCHMARK (alternating focus, shared backdrop)")
+        print("=" * 84)
+        for frame, focused in FRAMES:
+            states = ", ".join(f"{s} {'focused' if s == focused else 'backdrop'}" for s in FOCUS_ORDER)
+            print(f"frame {frame} focused on {focused:<9} {states}")
+        print("-" * 84)
 
-        print("\n" + "=" * 76)
-        print("                WINDOW NATIVIZER DECORATION BENCHMARK REPORT")
-        print("=" * 76)
-        print(f"Window Geometry : {csd['width']}x{csd['height']} (expected 440x280)")
-        print(f"Symmetry Status : {'PASS (100% 4-way symmetric)' if is_symmetric else 'FAIL (edges diverge)'}")
-        print("-" * 76)
+        for state, subject, frame, reference, reference_frame, tolerance in COMPARISONS:
+            worst = worst_delta(shots, frame, subject, reference_frame, reference)
+            print(f"{state:<28} {subject:<9} vs native: {worst} gray level(s), standard {tolerance}")
+            # Where the difference sits, so a number that is not zero can be explained rather than
+            # tolerated: the top side of each reading, with the reference's.
+            print(f"  top reference {shots[reference_frame][reference]['top']}")
+            print(f"  top {subject:<9} {shots[frame][subject]['top']}")
+            print(f"  top delta     {[a - b for a, b in zip(shots[frame][subject]['top'], shots[reference_frame][reference]['top'])]}")
+        print("-" * 84)
 
-        header = f"{'Offset':<7} | {'Current CSD':<12} | {'Baseline CSD':<13} | {'Baseline Native':<15} | {'CSD Delta':<9}"
-        print(header)
-        print("-" * 76)
+        # Same window, same state, two frames: if the machine moved between them, this is where it
+        # shows - and it needs no stored profile to say so.
+        witnesses = [
+            ("native unfocused", "native", "B", "native", "C"),
+            ("declared unfocused", "declared", "A", "declared", "C"),
+            ("bare unfocused", "bare", "A", "bare", "B"),
+            ("declared focused", "declared", "B", "declared", "D"),
+        ]
+        for label, subject, frame_a, _, frame_b in witnesses:
+            worst = worst_delta(shots, frame_a, subject, frame_b, subject)
+            print(f"environment witness         {label:<19} between two frames: {worst} gray level(s), "
+                  f"standard {WITNESS_TOLERANCE}")
+        print("-" * 84)
 
-        max_rows = 18
-        max_dev = 0
-        for off in range(max_rows):
-            cur = measured_profile[off]
-            base_csd = BASELINE_CSD[off] if off < len(BASELINE_CSD) else 255
-            base_nat = BASELINE_NATIVE[off] if off < len(BASELINE_NATIVE) else 255
-            delta = cur - base_csd
-            if abs(delta) > max_dev:
-                max_dev = abs(delta)
-            delta_str = f"{delta:+d}" if delta != 0 else "0"
-            print(f"{off:<7d} | {cur:<12d} | {base_csd:<13d} | {base_nat:<15d} | {delta_str:<9}")
+        failures = []
+        for frame, focused in FRAMES:
+            for subject in FOCUS_ORDER:
+                profiles = shots[frame][subject]
+                if not all(profiles[side][1:] == profiles["top"][1:] for side in ("bottom", "left", "right")):
+                    failures.append(f"the {subject} window's four sides diverge in frame {frame} "
+                                    f"(focused on {focused})")
 
-        print("-" * 76)
-        print(f"Max Deviation from CSD Baseline: {max_dev} gray level(s)")
+        for state, subject, frame, reference, reference_frame, tolerance in COMPARISONS:
+            worst = worst_delta(shots, frame, subject, reference_frame, reference)
+            if worst > tolerance:
+                failures.append(f"the {subject} window {state} is {worst} gray levels from libadwaita's "
+                                f"(standard {tolerance})")
 
-        if args.native:
-            print("\n>> Measuring live Native Libadwaita decoration profile...")
-            nat = measure_target(True, env)
-            nat_symmetric = (nat["bottom"] == nat["top"] == nat["left"] == nat["right"])
-            print(f"Native Symmetry : {'PASS (100% 4-way symmetric)' if nat_symmetric else 'FAIL'}")
-            print(f"Native Profile  : {nat['bottom'][:18]}")
+        witness_worst = max(worst_delta(shots, a, s, b, s) for _, s, a, _, b in witnesses)
+        if witness_worst > WITNESS_TOLERANCE:
+            failures.append(f"the same window reads {witness_worst} gray levels apart between two frames, "
+                            f"so the machine moved and the focused comparison above means nothing")
 
         if args.check:
-            if not is_symmetric:
-                print("\n[FAIL] Four-side symmetry check failed!")
+            if failures:
+                print()
+                for failure in failures:
+                    print(f"[FAIL] {failure}")
                 sys.exit(1)
-            if max_dev > 1:
-                print(f"\n[FAIL] Max deviation ({max_dev}) exceeded tolerance (<= 1)!")
-                sys.exit(1)
-            print("\n[OK] Benchmark verification passed: zero regression.")
+            print("\n[OK] Both decorated windows wear libadwaita's decoration, focused and unfocused.")
     finally:
-        subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not args.keep:
+            subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 if __name__ == "__main__":
     main()
