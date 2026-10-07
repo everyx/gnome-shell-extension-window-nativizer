@@ -247,8 +247,12 @@ export function resolveWindowIdentity(win) {
  * @property {boolean} hasSsd
  * @property {boolean} isX11
  * @property {string} clientTypeToken
- * @property {boolean} nativeLikeCorners
- * @property {boolean} hasGtk4Client
+ * @property {boolean|null} nativeLikeCorners - Whether the process already draws itself the way we
+ *           would, or null while its `/proc/<pid>/maps` read is still in flight. Null is not a
+ *           decision input: it means "not known yet", and the caller defers rather than decide on
+ *           a default.
+ * @property {boolean|null} hasGtk4Client - Whether the client is GTK4, or null while the same read
+ *           is still in flight.
  * @property {number} windowType
  * @property {boolean} hasParent
  * @property {boolean} isAttachedDialog
@@ -314,15 +318,19 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     const declaredWmClass = safeRead(() => readDeclaredIdentity(win), '');
     const wmClass = wmClassOverride || declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
 
-    // Process classification defaults to false when classifier is omitted or throws.
-    const nativeLikeCorners = safeRead(
-        () => Boolean(classifier && typeof classifier.hasNativeLikeCorners === 'function' && classifier.hasNativeLikeCorners(win)),
-        false
-    );
-    const hasGtk4 = safeRead(
-        () => Boolean(classifier && typeof classifier.hasGtk4Client === 'function' && classifier.hasGtk4Client(pid)),
-        false
-    );
+    // The classification answers null while its read is in flight, and a throwing classifier reads
+    // as the same "not known yet": both are teardown races, and deferring is what the answer
+    // landing a frame later would have done anyway.
+    const nativeLikeCorners = safeRead(() => {
+        if (classifier && typeof classifier.adwaitaLook === 'function')
+            return classifier.adwaitaLook(pid);
+        return false;
+    }, null);
+    const hasGtk4 = safeRead(() => {
+        if (classifier && typeof classifier.hasGtk4Client === 'function')
+            return classifier.hasGtk4Client(pid);
+        return false;
+    }, null);
     const tiled = safeRead(() => isWindowTiled(win, {isMaximized, hasTileMatch}), false);
 
     return {
@@ -373,4 +381,15 @@ export function isWindowReading(value) {
         typeof value.clientTypeToken === 'string' &&
         'frameRect' in value
     );
+}
+
+/**
+ * Whether a reading's process classification has not landed yet, so the decision must defer for the
+ * frame. Deciding on the null instead would either decorate a window that rounds its own corners or
+ * leave a plain one bare, and the answer landing a frame later would contradict it.
+ * @param {{nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}} reading
+ * @returns {boolean}
+ */
+export function isClassificationPending(reading) {
+    return reading?.nativeLikeCorners === null || reading?.hasGtk4Client === null;
 }
