@@ -32,7 +32,7 @@ describe('extractWindowProperties', () => {
         expect(extractWindowProperties(mockWin)).toEqual({
             wmClass: 'com.tencent.wechat',
             clientType: 'wayland',
-            windowType: '0',
+            windowType: String(WindowType.NORMAL),
             hasParent: 'true',
             allowsResize: 'false',
             isAttachedDialog: 'false',
@@ -151,7 +151,7 @@ describe('extractWindowProperties', () => {
         expect(extractWindowProperties(win)).toEqual({
             wmClass: 'org.example.Wechat',
             clientType: 'x11',
-            windowType: '0',
+            windowType: String(WindowType.NORMAL),
             hasParent: 'false',
             allowsResize: 'true',
             isAttachedDialog: 'false',

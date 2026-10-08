@@ -306,17 +306,20 @@ describe('getPhysicalMonitorScale', () => {
             get_resource_scale: () => 2.0, // Ceil'd integer
         };
 
+        // The display is the source the code reads, so the expectation comes from it too, not from a
+        // second copy of the number.
+        const displayScale = mon => (mon === 1 ? 1.25 : 1.0);
         const hadGlobal = 'global' in globalThis;
         const oldGlobal = globalThis.global;
         try {
             globalThis.global = {
                 display: {
-                    get_monitor_scale: (mon) => (mon === 1 ? 1.25 : 1.0),
+                    get_monitor_scale: displayScale,
                 },
             };
 
             // Must return true fractional monitor scale (1.25), not ceil'd resource scale (2.0)
-            expect(getPhysicalMonitorScale(fakeActor)).toBe(1.25);
+            expect(getPhysicalMonitorScale(fakeActor)).toBe(displayScale(1));
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;
@@ -356,17 +359,18 @@ describe('getPhysicalMonitorScale', () => {
             get_parent: () => surfaceContainer,
         };
 
+        const displayScale = mon => (mon === 2 ? 1.5 : 1.0);
         const hadGlobal = 'global' in globalThis;
         const oldGlobal = globalThis.global;
         try {
             globalThis.global = {
                 display: {
-                    get_monitor_scale: (mon) => (mon === 2 ? 1.5 : 1.0),
+                    get_monitor_scale: displayScale,
                 },
             };
 
             // Climbing from surfaceActor should find windowActor and return true fractional scale (1.5)
-            expect(getPhysicalMonitorScale(surfaceActor)).toBe(1.5);
+            expect(getPhysicalMonitorScale(surfaceActor)).toBe(displayScale(2));
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;
