@@ -172,17 +172,10 @@ float evalShadowLayer(vec4 s, vec2 p, vec2 winOrigin, vec2 winSize, float radius
 `;
 
 /**
- * Subpixel conservative overlap margin aligned with GTK4 GSK_RECT_SNAP_GROW (in logical px).
- *
- * Physical rationale:
- * Under fractional scaling (e.g. 1.25x / 1.5x / 1.75x), window actor and shadow actor
- * undergo independent matrix transformations, creating up to 1 physical pixel phase difference
- * between GPU rasterization tests and Shader UV interpolation.
- * Injecting a 0.8px overlap ensures shadow cutout extends inward beneath the window frame,
- * absorbing subpixel rounding jitter and eliminating 1px bright gaps during window drag.
+ * Complementary coverage partition matching GTK4 gskgpuboxshadow.glsl:
+ * Shadow coverage evaluates to zero beneath the window frame to prevent dark under-shadow
+ * bleed-through under fractional scaling when moving actors undergo subpixel bilinear resampling.
  */
-const SNAP_BLEED = 0.8;
-
 const code = `
     // Early discard if actor is fully transparent (e.g. at open/close animation bounds)
     if (cogl_color_in.a <= 0.0) {
@@ -197,9 +190,9 @@ const code = `
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
     float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // Aligned with GTK4 GSK_RECT_SNAP_GROW philosophy: conservative overlap (SNAP_BLEED = ${SNAP_BLEED.toFixed(1)})
-    // Extends shadow under window base to eliminate 1px bright gaps under fractional scaling.
-    float clipAlpha = clamp(d + 0.5 + ${SNAP_BLEED.toFixed(1)}, 0.0, 1.0);
+    // Complementary coverage partition matching GTK4 gskgpuboxshadow.glsl:
+    // Shadow coverage is strictly exterior to the window frame (zero bleed inside body).
+    float clipAlpha = clamp(d + 0.5, 0.0, 1.0);
     if (clipAlpha <= 0.0) {
         cogl_color_out = vec4(0.0);
         return;

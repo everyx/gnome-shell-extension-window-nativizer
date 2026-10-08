@@ -83,6 +83,19 @@ describe('shadowCastRect', () => {
             height: smallActor.height,
         });
     });
+
+    it('snaps cast rect symmetrically across physical fractional scales', () => {
+        const declared = ring(25, 25, 25, 25);
+        const scale = 1.3333333;
+        const cast1x = shadowCastRect(actorSize, declared, 1.0);
+        const cast133x = shadowCastRect(actorSize, declared, scale);
+        expect(cast1x.width - SHADOW_PAD * 2).toBe(buffer.width - 50);
+
+        // Hollow width matches physical integer margin subtraction divided by scale:
+        const expectedPhysWidth = Math.round(buffer.width * scale) - 2 * Math.round(25 * scale);
+        const actualPhysWidth = Math.round((cast133x.width - SHADOW_PAD * 2) * scale);
+        expect(actualPhysWidth).toBe(expectedPhysWidth);
+    });
 });
 
 describe('shadowSlices', () => {
