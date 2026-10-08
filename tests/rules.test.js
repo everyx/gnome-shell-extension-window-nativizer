@@ -8,7 +8,8 @@ import {
 } from '../src/lib/mutterRules.generated.js';
 import {
     RuleAxis, RULE_AXES, parseRuleState, buildRuleState,
-    resolveRule, parseRuleKey, buildRuleKey,
+    resolveRule, parseRuleKey, buildRuleKey, buildRuleKeyFromProperties,
+    FINGERPRINT_FIELDS,
     sanitizeWindowRules, sanitizeRuleTitles, withRule,
 } from '../src/lib/rules.js';
 
@@ -53,6 +54,13 @@ describe('rule state vocabulary', () => {
             const canonical = buildRuleState(parseRuleState(state));
             expect(buildRuleState(parseRuleState(canonical))).toBe(canonical);
         }
+    });
+
+    it('round-trips an axis set with no separate normalisation: empty and multiple axes', () => {
+        expect(buildRuleState([])).toBe('');
+        expect(buildRuleState(new Set(['resize', 'corners']))).toBe('corners,resize');
+        expect([...parseRuleState('corners,shadow,resize')]).toEqual(['corners', 'shadow', 'resize']);
+        expect([...parseRuleState(buildRuleState(['shadow']))]).toEqual(['shadow']);
     });
 
     it('the three axes are the whole grammar, in canonical order', () => {
@@ -349,13 +357,32 @@ describe('rule key contract & round-trip', () => {
         }
     });
 
-    it('escapes identities the key grammar would otherwise split or drop', () => {
-        const colonKey = buildRuleKey('window:5');
-        expect(colonKey.startsWith('window%3A5:')).toBeTrue();
-        expect(parseRuleKey(colonKey).baseWmClass).toBe('window:5');
+    it('keeps every identity verbatim, splitting at the last colon', () => {
+        const spec = 'client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false';
+        const identities = [
+            'wechat',
+            'window:1234',
+            'a::b',
+            'trailing:',
+            '%3A',
+            '应用',
+            'my app',
+            'comma,name',
+            'equals=sign',
+            'a:b=c,d:e',
+        ];
+        for (const identity of identities) {
+            const lower = identity.toLowerCase();
+            const key = buildRuleKey(identity);
+            expect(key).toBe(`${lower}:${spec}`);
+            expect(parseRuleKey(key).baseWmClass).toBe(lower);
+        }
+    });
 
-        const spacedKey = buildRuleKey('my app');
-        expect(parseRuleKey(spacedKey).baseWmClass).toBe('my app');
+    it('renders a non-ASCII identity as text, never percent-escaped', () => {
+        const key = buildRuleKey('应用');
+        expect(key.startsWith('应用:')).toBeTrue();
+        expect(key).not.toContain('%');
     });
 
     it('lowercases an identity but changes nothing else about it', () => {
@@ -372,6 +399,82 @@ describe('rule key contract & round-trip', () => {
             .toBe('corners,shadow');
         expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
         expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
+    });
+});
+
+describe('rule key invariant', () => {
+    it('every value the field table renders is colon-free', () => {
+        const fields = {
+            clientType: 'wayland',
+            windowType: 0,
+            hasParent: false,
+            allowsResize: true,
+            isAttachedDialog: false,
+            hasRing: false,
+            hasSsd: false,
+        };
+        for (const field of FINGERPRINT_FIELDS)
+            expect(String(field.render(fields))).not.toContain(':');
+    });
+
+    it('refuses a specifier carrying a colon rather than mis-splitting it', () => {
+        expect(() => buildRuleKey('app', {clientType: 'wayland:x11'})).toThrow();
+    });
+});
+
+describe('rule key casing and order', () => {
+    it('lowercases with toLowerCase, never a locale variant', () => {
+        const dottedI = '\u0130'; // İ: toLowerCase gives 'i' + U+0307, Turkish toLocaleLowerCase gives 'i'.
+        expect(dottedI.toLowerCase()).toBe('i\u0307');
+        const turkish = dottedI.toLocaleLowerCase('tr');
+        expect(turkish).not.toBe(dottedI.toLowerCase());
+
+        const original = String.prototype.toLocaleLowerCase;
+        String.prototype.toLocaleLowerCase = () => {
+            throw new Error('a rule key must not lowercase through the locale');
+        };
+        try {
+            const key = buildRuleKey(dottedI);
+            expect(key.startsWith(`${dottedI.toLowerCase()}:`)).toBeTrue();
+            expect(key).not.toBe(buildRuleKey(turkish));
+        } finally {
+            String.prototype.toLocaleLowerCase = original;
+        }
+    });
+
+    it('sorts by code point with the identity first, never by locale collation', () => {
+        const a = buildRuleKey('Ärger'); // 'Ä' = U+00C4
+        const z = buildRuleKey('Zulu');  // 'Z' = U+005A
+        expect(z < a).toBeTrue();
+        expect([a, z].sort()).toEqual([z, a]);
+        // German collation puts 'Ä' with 'A', before 'Z' - the opposite order. The key's order
+        // is the code-point one, so nothing in the chain may use localeCompare.
+        expect(a.localeCompare(z, 'de')).toBeLessThan(0);
+    });
+});
+
+describe('one canonical key per kind', () => {
+    it('picker, prefs and import agree, and sanitising is idempotent', () => {
+        const props = {
+            wmClass: 'WeChat',
+            clientType: 'wayland',
+            windowType: '0',
+            hasParent: 'false',
+            allowsResize: 'false',
+            isAttachedDialog: 'false',
+            hasRing: 'false',
+            hasSsd: 'false',
+            width: '360',
+            height: '420',
+        };
+        const expected = buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420});
+        expect(buildRuleKeyFromProperties(props)).toBe(expected);
+
+        const sep = expected.lastIndexOf(':');
+        const handSpelled = `${expected.slice(0, sep).toUpperCase()}:${expected.slice(sep + 1)}`;
+        const sanitized = sanitizeWindowRules({[handSpelled]: 'corners'});
+        expect(sanitized).toEqual({[expected]: 'corners'});
+        expect(sanitizeWindowRules(sanitized)).toEqual(sanitized);
     });
 });
 
@@ -400,11 +503,17 @@ describe('sanitizeWindowRules', () => {
             'wechat:title=Exit': 'corners',
             'wechat:has_parent=true,allows_resize=false': 'corners',
             'invalid:key:too:many:colons': 'corners',
-            'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false': 'corners',
             'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false': 'corners',
             [buildRuleKey('valid_app')]: 123,
         };
         expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'corners'});
+    });
+
+    it('keeps identities the old grammar escaped, verbatim', () => {
+        const spaced = buildRuleKey('my app');
+        const colon = buildRuleKey('window:5');
+        expect(sanitizeWindowRules({[spaced]: 'corners', [colon]: 'shadow'}))
+            .toEqual({[spaced]: 'corners', [colon]: 'shadow'});
     });
 
     it('drops entries naming an invalid state, including "nothing reversed"', () => {

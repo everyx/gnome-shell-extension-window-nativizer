@@ -296,12 +296,11 @@ describe('property: rules', () => {
             const key = buildRuleKey(wmClass, props);
             expect(key).not.toBe('');
 
-            // parseRuleKey returns the *decoded* identity, so the round-trip is: parse, then
-            // rebuild with buildRuleKey - not string concatenation, which would drop the
-            // escaping (e.g. 'window:5' -> 'window%3A5').
+            // parseRuleKey returns the verbatim identity, so the round-trip is: parse, then
+            // rebuild with buildRuleKey.
             const parsed = parseRuleKey(key);
             expect(parsed).not.toBeNull();
-            expect(parsed.baseWmClass).toBe(wmClass.trim().toLowerCase());
+            expect(parsed.baseWmClass).toBe(wmClass.toLowerCase());
 
             const p = parsed.properties;
             const rebuilt = buildRuleKey(parsed.baseWmClass, {
