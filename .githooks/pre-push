@@ -19,14 +19,14 @@ set -e
 
 . "$(dirname "$0")/run-checks"
 
-set -- ego-lint
+set -- lint:ego
 if command -v gnome-extensions >/dev/null 2>&1; then
-    set -- "$@" pack
+    set -- "$@" build
 else
     echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
 fi
 if command -v uvx >/dev/null 2>&1 || command -v shexli >/dev/null 2>&1; then
-    set -- "$@" shexli
+    set -- "$@" lint:zip
 else
     echo "pre-push: no shexli or uvx, skipping the package analysis" >&2
 fi

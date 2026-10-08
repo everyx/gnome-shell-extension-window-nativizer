@@ -10,7 +10,7 @@
 # precondition is about the machine, not about the change.
 check_precondition() {
     case "$1" in
-        benchmark:check|test:e2e) command -v gnome-shell >/dev/null 2>&1 ;;
+        check:bench|benchmark:check|test:e2e) command -v gnome-shell >/dev/null 2>&1 ;;
         *) return 0 ;;
     esac
 }

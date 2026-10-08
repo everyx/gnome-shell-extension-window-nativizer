@@ -400,8 +400,8 @@ The decoration is measured against **libadwaita's own, on one frame**, because t
 window we decorate is decorated the way libadwaita decorates one.
 
 ```bash
-pnpm run benchmark          # measure and print every profile
-pnpm run benchmark:check    # exit 1 unless both decorated windows match the reference
+pnpm run test:bench          # measure and print every profile
+pnpm run check:bench         # exit 1 unless both decorated windows match the reference
 ```
 
 Source: `tools/benchmark-decoration.py`.

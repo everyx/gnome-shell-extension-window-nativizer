@@ -15,4 +15,4 @@ set -e
 
 . "$(dirname "$0")/run-checks"
 
-run_checks pre-commit lint check-style test benchmark:check
+run_checks pre-commit lint check:style test check:bench
