@@ -147,9 +147,9 @@ export const CODE = `
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
     float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // Aligned with GTK4 GSK_RECT_SNAP_GROW philosophy: conservative overlap (SNAP_BLEED = 0.8)
-    // Extends shadow under window base to eliminate 1px bright gaps under fractional scaling.
-    float clipAlpha = clamp(d + 0.5 + 0.8, 0.0, 1.0);
+    // Complementary coverage partition matching GTK4 gskgpuboxshadow.glsl:
+    // Shadow coverage is strictly exterior to the window frame (zero bleed inside body).
+    float clipAlpha = clamp(d + 0.5, 0.0, 1.0);
     if (clipAlpha <= 0.0) {
         cogl_color_out = vec4(0.0);
         return;
