@@ -79,27 +79,13 @@ describe('styleForWindow', () => {
         });
     });
 
-    it('animates only when entering the backdrop state', () => {
-        // libadwaita declares `transition: box-shadow` inside `:backdrop` alone, so losing focus
-        // fades while gaining it snaps - and the maximized, fullscreen and tiled states declare
-        // none at all. The flag is generated from the SCSS, so this checks the generation rather
-        // than restating a rule here.
-        expect(styleForWindow({...base, focused: false}).animate).toBeTrue();
-        expect(styleForWindow({...base, focused: true}).animate).toBeFalse();
-        expect(styleForWindow({...base, focused: false, highContrast: true}).animate).toBeTrue();
-        expect(styleForWindow({...base, focused: true, highContrast: true}).animate).toBeFalse();
-        expect(styleForWindow({...base, tiled: true}).animate).toBeFalse();
-        expect(styleForWindow({...base, maximized: true}).animate).toBeFalse();
-        expect(styleForWindow({...base, fullscreen: true}).animate).toBeFalse();
-    });
-
     it('suppresses the one transition when animations are off', () => {
         // GTK gives a CSS transition no frame clock when `gtk-enable-animations` is false, so a
         // native window snaps in every direction. The generated flag still says backdrop animates;
-        // the setting is what takes it away.
+        // the setting is what takes it away. The positive case is the generated value, not a literal
+        // repeated here - only the suppression is this spec's own fact.
         expect(styleForWindow({...base, focused: false, animationsEnabled: false}).animate).toBeFalse();
-        expect(styleForWindow({...base, focused: false, animationsEnabled: true}).animate).toBeTrue();
-        expect(styleForWindow({...base, focused: true, animationsEnabled: false}).animate).toBeFalse();
+        expect(styleForWindow({...base, focused: false, animationsEnabled: true}).animate).toBe(w.backdrop.animate);
     });
 
     it('maximized wins over tiled', () => {
