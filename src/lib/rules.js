@@ -60,26 +60,28 @@ export function boolString(value) {
     return value ? 'true' : 'false';
 }
 
-/** Tolerates keys that were never encoded. */
-function decodeIdentity(token) {
-    try {
-        return decodeURIComponent(token);
-    } catch {
-        return token;
-    }
+/**
+ * Identity and specifier, split at the last ':'. The identity is verbatim, so it may itself
+ * hold ':' (the shell's own `window:<n>` placeholder does); the specifier is colon-free by
+ * construction, which is what lets its leading ':' be the last one in the key.
+ * Callers validate with VALID_RULE_KEY_PATTERN first, so a key without ':' never reaches here.
+ * @param {string} key
+ * @returns {{identity: string, specifier: string}}
+ */
+function splitRuleKey(key) {
+    const sep = key.lastIndexOf(':');
+    return {identity: key.slice(0, sep), specifier: key.slice(sep + 1)};
 }
 
-// Lowercased so 'WeChat'/'wechat' are the same kind.
-function encodeIdentity(identity) {
-    return encodeURIComponent(identity.toLowerCase());
-}
-
-/** Lowercases the identity part so old keys canonicalise on read. */
-function normalizeRuleKey(key) {
-    const colonIdx = key.indexOf(':');
-    if (colonIdx < 0)
-        return key;
-    return `${encodeIdentity(decodeIdentity(key.slice(0, colonIdx)))}:${key.slice(colonIdx + 1)}`;
+/**
+ * The identity lowercased, so 'WeChat'/'wechat' are one kind. Plain toLowerCase, never the
+ * locale variant: Turkish maps 'I' to a dotless 'ı', giving one window two keys.
+ * @param {string} key
+ * @returns {string}
+ */
+function canonicalRuleKey(key) {
+    const {identity, specifier} = splitRuleKey(key);
+    return `${identity.toLowerCase()}:${specifier}`;
 }
 
 /** Shell's per-window placeholder for unattributed windows. */
@@ -114,7 +116,7 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
 
 const BOOL_FIELD = '(?:true|false)';
 
-const FINGERPRINT_FIELDS = [
+export const FINGERPRINT_FIELDS = [
     {
         name: 'client_type',
         render: o => o.clientType,
@@ -134,8 +136,10 @@ const FINGERPRINT_MAP = Object.freeze(
 
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
 // to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
+// The identity is opaque - it may hold ':' and spaces - so this pins only the specifier and
+// requires a nonempty identity ahead of the last ':'. The specifier has no ':' of its own.
 const VALID_RULE_KEY_PATTERN = new RegExp(
-    '^[^\\s:]+:(?:' +
+    '^[\\s\\S]+:(?:' +
     `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
     `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}` +
     ')$'
@@ -154,6 +158,7 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
  * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
  * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
  * @returns {string} Canonical key or '' when wmClass is missing
+ * @throws {Error} When the rendered specifier is not colon-free (a field the table cannot own)
  */
 export function buildRuleKey(wmClass, {
     clientType = CLIENT_TYPE_TOKEN_WAYLAND,
@@ -179,8 +184,12 @@ export function buildRuleKey(wmClass, {
     if (!allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
         specifier += `,size=${Math.round(w)}x${Math.round(h)}`;
 
-    // ':'/whitespace delimit the grammar, so the identity is encoded.
-    return `${encodeIdentity(wmClass)}:${specifier}`;
+    // Nothing escapes the identity, so a ':' in the specifier would move the last-':' separator.
+    // Fail loudly here rather than let resolveRule look the kind up under a different key.
+    if (specifier.includes(':'))
+        throw new Error(`[window-nativizer] rule specifier is not colon-free: ${specifier}`);
+
+    return `${wmClass.toLowerCase()}:${specifier}`;
 }
 
 /**
@@ -203,7 +212,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
             continue;
         // Same canonicalisation as the states, or a mixed-case stored key would land under
         // its lowercased state key and lose its title on the next write.
-        const canonicalKey = normalizeRuleKey(key);
+        const canonicalKey = canonicalRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             console.warn(`[window-nativizer] Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
             continue;
@@ -242,7 +251,7 @@ export function sanitizeWindowRules(rawRules = {}) {
         if (!canonical)
             continue;
 
-        const canonicalKey = normalizeRuleKey(key);
+        const canonicalKey = canonicalRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             const existingKey = seenKeys.get(canonicalKey);
             console.warn(`[window-nativizer] Dropping case-colliding rule key "${key}" (conflicts with "${existingKey}")`);
@@ -285,9 +294,7 @@ export function parseRuleKey(key) {
     if (!key || typeof key !== 'string' || !VALID_RULE_KEY_PATTERN.test(key))
         return {baseWmClass: '', specifier: null, properties: null};
 
-    const colonIdx = key.indexOf(':');
-    const baseWmClass = decodeIdentity(key.slice(0, colonIdx));
-    const specifier = key.slice(colonIdx + 1);
+    const {identity: baseWmClass, specifier} = splitRuleKey(key);
 
     const properties = {};
     for (const pair of specifier.split(',')) {

@@ -58,9 +58,11 @@ For example:
 - **Matching priority and fallback**: For fixed-size windows, resolution prefers an
   exact-size key first; if no exact match is stored, it gracefully falls back to a generic
   rule without size (if present).
-- The identity is percent-encoded, because `:` and whitespace are delimiters.
-  Realistic identities (WM_CLASS, Flatpak id, reverse-DNS app id) pass through
-  unchanged; only exotic ones are escaped, and parsing decodes them back.
+- The key is `<identity>:<specifier>`, split at the **last** `:`. The identity is verbatim -
+  never escaped or encoded, so `应用` stays `应用` and the shell's `window:1234` placeholder
+  stays itself. The specifier cannot contain a `:`, because its field names, booleans, sizes
+  and enum names are our own vocabulary; `rules.js` throws if a rendered specifier ever does,
+  which is what makes the last `:` the separator.
 - `title` and `role` are deliberately *not* part of the key. They change while a window lives
   or across locales, so they cannot define a stable structural kind.
 
