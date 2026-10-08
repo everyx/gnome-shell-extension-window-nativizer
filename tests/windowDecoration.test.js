@@ -1,4 +1,5 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
+import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 
 describe('WindowDecoration (lifecycle and orchestration)', () => {
     let mockWin;
@@ -96,7 +97,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         mockWin = {
             get_compositor_private: () => mockActor,
-            get_client_type: () => 1, // Wayland
+            get_client_type: () => WindowClientType.X11,
         };
 
         mockContainer = {
