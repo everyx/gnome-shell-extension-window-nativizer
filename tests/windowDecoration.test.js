@@ -328,6 +328,38 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.clearRing).toBeTrue();
     });
 
+    it('keeps the clip body on the declared frame so it matches the shadow body', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const actions = {
+            drawClip: true,
+            clearRing: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {radius: 15, outline: null, shadows: []},
+        };
+        const declaredInsets = {left: 26, top: 23, right: 26, bottom: 29};
+        const inputs = {
+            insets: declaredInsets,
+            monitorScale: 1,
+        };
+
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.hasClip).toBeTrue();
+        // The clip body and the shadow body are the same rect: any inward offset puts our shadow
+        // where libadwaita puts the window's own edge pixel, and exposes the shader's inward bleed.
+        expect(deco.clipInsets).toEqual(declaredInsets);
+        expect(deco.clip.params.insets).toEqual(declaredInsets);
+        expect(deco.shadow.insets).toEqual(declaredInsets);
+    });
+
     it('performs clean phased teardown in destroy()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,

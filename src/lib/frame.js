@@ -92,4 +92,3 @@ export function hasDeclaredMarginRing({buffer = null, frame = null, hasSsd = fal
         return false;
     return hasPositiveInsets(insetsFromRects(buffer, frame));
 }
-
