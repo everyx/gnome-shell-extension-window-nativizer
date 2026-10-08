@@ -235,7 +235,7 @@ resolved from the pointer, not from which strip was entered.
 `RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
 the body is as far as a band can reach, and as far as a pointer is delivered at all. Both it
 and `RESIZE_HANDLE_CORNER_SIZE` are generated from `vendor/gtk/gtkwindow.c`
-(`tools/gen-gtk.mjs`), so upstream drift fails `pnpm run check-style`; `research/gtk` is only
+(`tools/gen-gtk.mjs`), so upstream drift fails `pnpm run check:style`; `research/gtk` is only
 an uncommitted clone for reading.
 
 **How a point becomes a direction.** The resolver follows GTK's own
@@ -318,7 +318,7 @@ itself placeable, see below - and a 1×1 helper is not a window.
 
 **What it costs.** Measured by reversing the resize axis against the heuristic on the same window
 in a nested session
-(`pnpm run benchmark:perf`'s band phase; the shell's CPU read from schedstat nanoseconds): no idle
+(`pnpm run test:perf`'s band phase; the shell's CPU read from schedstat nanoseconds): no idle
 CPU at all, because a window that does not move neither re-allocates nor gets picked; 6.4 KB
 resident per window; and about 34 us of shell CPU per resize step per window, measured over ten
 windows at once since one window's share sits inside that comparison's noise. Pointer motion adds
@@ -545,9 +545,9 @@ The corner-clipping pass is skipped when there is nothing to round (radius 0 and
 the effect is still attached at radius 0 when a client ring has to be cleared.
 A window with no shadow never touches a baked buffer. It costs nothing while nothing
 damages the window: it is one framebuffer, re-rendered whole whenever the window paints,
-local damage included. Measured against one 500x350 target (`pnpm run benchmark:perf`):
+local damage included. Measured against one 500x350 target (`pnpm run test:perf`):
 no idle CPU difference, about 0.59 ms of shell CPU per frame while dragging a resize (five
-counterbalanced rounds of `pnpm run benchmark:perf`, the shell's CPU read from schedstat
+counterbalanced rounds of `pnpm run test:perf`, the shell's CPU read from schedstat
 nanoseconds; the 0.9 ms recorded earlier came from a jiffy clock that cannot resolve it), and the
 framebuffer's size in the shell's memory. The harness' budget for that is 120 ms per 150 frames,
 which the measured 88 ms leaves about a third of.

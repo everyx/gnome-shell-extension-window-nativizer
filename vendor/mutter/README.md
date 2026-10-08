@@ -17,5 +17,5 @@ Authoritative source for window management and shadow decorations, vendored from
   committed source of truth, at the COMMIT above.
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
-  2. Run `node tools/gen-mutter.mjs` and `node tools/gen-clutter.mjs` (or `pnpm run gen-style`)
+  2. Run `node tools/gen-mutter.mjs` and `node tools/gen-clutter.mjs` (or `pnpm run gen:code`)
   3. Verify that the generated diff matches expectations

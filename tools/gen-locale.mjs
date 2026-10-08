@@ -147,7 +147,7 @@ if (isCheck) {
     if (normalizePot(diskPot) !== normalizePot(freshPot)) {
         console.error(`[gen-locale] --check failed: ${path.basename(potFile)} is out of sync with source code.`);
         console.error('[gen-locale] Strings in source files have been changed, added, or removed.');
-        console.error('[gen-locale] Please run "pnpm run update-po" and commit the updated translation files.');
+        console.error('[gen-locale] Please run "pnpm run gen:extract" and commit the updated translation files.');
         process.exit(1);
     }
 
@@ -163,7 +163,7 @@ if (isCheck) {
             assertCatalogComplete(poFile);
         } catch (e) {
             console.error(`[gen-locale] --check failed: ${e.message}`);
-            console.error('[gen-locale] Please complete translations and run "pnpm run compile-locales".');
+            console.error('[gen-locale] Please complete translations and run "pnpm run gen:locale".');
             process.exit(1);
         }
     }

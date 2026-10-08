@@ -127,7 +127,7 @@ gnome-extensions install --force window-nativizer@everyx.github.io.shell-extensi
 git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
 cd gnome-shell-extension-window-nativizer
 pnpm install
-pnpm run install-ext
+pnpm run install:ext
 ```
 
 ### Enable
