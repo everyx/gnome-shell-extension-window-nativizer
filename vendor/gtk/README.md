@@ -19,5 +19,5 @@ from upstream GTK.
   source of truth, at the COMMIT above.
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
-  2. Run `pnpm run gen-style` (or `node tools/gen-shader.mjs` / `node tools/gen-gtk.mjs`)
+  2. Run `pnpm run gen:code` (or `node tools/gen-shader.mjs` / `node tools/gen-gtk.mjs`)
   3. Verify that the generated diff matches expectations

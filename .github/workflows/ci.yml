@@ -41,7 +41,7 @@ jobs:
 
       - name: Check upstream code generation consistency
         run: |
-          pnpm run check-style
+          pnpm run check:style
           git diff --exit-code
 
   ego-lint:
@@ -144,10 +144,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Pack extension
-        run: pnpm run pack
+        run: pnpm run build
 
       - name: Verify package with Shexli (EGO analyzer)
-        run: pnpm run shexli
+        run: pnpm run lint:zip
 
       - name: Upload extension zip artifact
         uses: actions/upload-artifact@v7

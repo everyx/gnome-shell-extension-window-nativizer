@@ -17,18 +17,20 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
+| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `test`, and `check:bench` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
-| `pnpm test` | unit tests, run under gjs |
+| `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, X11 (Xwayland) and multi-window cases, and a zero-warning audit of the log |
-| `pnpm run benchmark` | measures three windows on one frame - a live libadwaita one, one whose client declared its own shadow ring, and a bare one - and prints all their profiles |
-| `pnpm run benchmark:check` | fidelity guard: exits 1 unless both decorated windows' shadows match the live libadwaita window's within 2 grey levels and each is 4-way symmetric |
-| `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
-| `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
-| `pnpm run preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
-| `pnpm run check-style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
-| `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
-| `pnpm run pack` | builds `dist/<uuid>.shell-extension.zip` |
-| `pnpm run shexli` | analyses that zip |
+| `pnpm run test:bench` | measures three windows on one frame - a live libadwaita one, one whose client declared its own shadow ring, and a bare one - and prints all their profiles |
+| `pnpm run check:bench` | fidelity guard: exits 1 unless both decorated windows' shadows match the live libadwaita window's within 2 grey levels and each is 4-way symmetric |
+| `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
+| `pnpm run check:perf` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
+| `pnpm run check:style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
+| `pnpm run lint:ego` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
+| `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
+| `pnpm run lint:zip` | analyses that zip with shexli |
+| `pnpm run gen:code` | regenerates all transpiled shaders, styling constants, and upstream bindings |
+| `pnpm run gen:preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
 
 ## What an extensions.gnome.org review rejects
 
@@ -68,7 +70,7 @@ four wrong rows, and two more were wrong in the negative entries nobody re-check
 Adding a GNOME line: fetch the tag, `--diff` it against the newest line already recorded, decide
 whether what changed matters, then `--update`. That stays a human act - it needs the migration guide
 and a judgement about what a change means - so it is not a CI job. What CI enforces is that the docs
-agree with the record: `tools/gen-shell-api.mjs --check` runs inside `check-style` and fails if the
+agree with the record: `tools/gen-shell-api.mjs --check` runs inside `check:style` and fails if the
 table in `docs/shell-compatibility.md` does not match `tools/shell-api.json`, or if a row links to
 prose that does not exist.
 
@@ -85,7 +87,7 @@ are what reading the migration guide during an audit is for.
 
 **Where the mechanical part stops.** Declaration compatibility is checked across every recorded line,
 and the manifest may only claim a line the record holds: `tools/check-shell-version.mjs`, inside
-`check-style`, fails if `src/metadata.json` claims a major `tools/shell-api.json` has not audited.
+`check:style`, fails if `src/metadata.json` claims a major `tools/shell-api.json` has not audited.
 Behaviour is not checked that way - it is verified by hand, through `test:e2e` and the eye, on the one
 line the maintainer runs. There is deliberately no per-version build or runtime matrix: the extension
 branches on what the shell offers at runtime (backend capability checks, arity dispatch,
@@ -102,7 +104,7 @@ owns only the manifest's `$.version-name` (`release-please-config.json`).
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
 both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs lint, `check-style`, the unit tests and `benchmark:check`. Each guards
+- **every commit** runs `lint`, `check:style`, the unit tests and `check:bench` (or all via `check`). Each guards
   something the commit itself can break, so the commit that breaks one is the commit that fixes it,
   and every commit stays valid on its own. The rendering is one of those things: the unit tests see
   the decisions, not the pixels, so a shadow or a clip change that misses libadwaita by a level is
@@ -110,8 +112,8 @@ both would only make the second run slow, so the split follows what a check guar
   one skips it and says so rather than blocking every commit there - on a machine that has one it
   runs, and it took the place of a stored baseline that was found to have been failing unnoticed for
   a week;
-- **every push** runs ego-lint, which reviews the extension as a whole; packs it the way a user
-  installs it; runs shexli over that package, which reads it the way extensions.gnome.org will; and
+- **every push** runs `lint:ego`, which reviews the extension as a whole; builds it (`build`) the way a user
+  installs it; runs `lint:zip` (`shexli`) over that package, which reads it the way extensions.gnome.org will; and
   drives `test:e2e` through a nested session. The first three describe what leaves the machine; the
   fourth guards what a commit can break and is here because it takes two minutes, and a commit hook
   slow enough to be bypassed is worth less than a push hook nobody minds. Pushes are rare; commits are
