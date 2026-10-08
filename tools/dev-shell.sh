@@ -76,10 +76,12 @@ if [[ "$SETTLED" -ne 1 ]]; then
 fi
 
 # Enable extension and verify active status (via nested session's own D-Bus)
+# The state's spelling is the line's own (45 says ENABLED, 50 says ACTIVE); accept the shell's
+# answer instead of matching one word for it.
 ENABLED=0
 for _ in $(seq 1 20); do
     gnome-extensions enable "$UUID" >/dev/null 2>&1 || true
-    if gnome-extensions info "$UUID" 2>/dev/null | grep -q "State: ACTIVE"; then
+    if gnome-extensions info "$UUID" 2>/dev/null | grep -qE "State: (ACTIVE|ENABLED)"; then
         ENABLED=1
         break
     fi

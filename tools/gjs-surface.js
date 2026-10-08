@@ -16,9 +16,11 @@
  *     declares no get_default_seat in any of 45-51, and the prototype agrees: undefined.
  *
  * The assertion boundary is the boundary of what the code assumes. Existence is asserted for
- * everything the extension calls, because it is the cheapest check with the widest reach; arity
- * and parameter names are asserted only where the code depends on them - a parameter that changed
- * from `device` to `sprite` keeps its arity, and arity is exactly what the grab-op dispatch reads.
+ * everything the extension calls, because it is the cheapest check with the widest reach. Shape is
+ * not restated here for a member whose declaration moves across the audited lines: that member is
+ * owned by a seam in src/compat/, and the seam is asked what it selected below. Pinning one line's
+ * arity here is what produced a false failure on GNOME 51, where the code was right and the
+ * constant was stale.
  * Everything else is printed, not asserted: an assertion needs a hand-written expectation, and a
  * hand-written expectation is what this whole audit exists to stop trusting.
  *
@@ -58,7 +60,9 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'get_buffer_rect', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'allows_resize', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_monitor', arity: 0},
-    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op', params: ['op', 'sprite', 'timestamp', 'pos_hint']},
+    // The shape is compat/grabOp.js's: 45 takes a device and a sequence, 46-48 add pos_hint, 49-51
+    // take a sprite. Asserting one of them here is the mistake this entry used to make.
+    {ns: 'Meta', cls: 'Window', member: 'begin_grab_op'},
     {ns: 'Meta', cls: 'Window', member: 'get_compositor_private', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_hidden', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_attached_dialog', arity: 0},
@@ -77,7 +81,8 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Display', member: 'get_tab_list', params: ['type', 'workspace']},
     {ns: 'Meta', cls: 'Backend', member: 'get_monitor_manager', arity: 0},
     // Clutter
-    {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', params: ['cursor_type'], optional: true},
+    // The cursor call and its enum are compat/actorCursor.js's: both arrive in 50.
+    {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', optional: true},
     // The enum that call takes. It arrives in the same release, and the code reads it behind a
     // capability check - 45-49 have neither, and reading it while a module was evaluated is what
     // stopped the extension loading there.
@@ -89,13 +94,12 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'get_pipeline', arity: 0},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
-    {ns: 'Clutter', cls: 'ShaderEffect', member: 'set_uniform_float', arity: 4, optional: true},
-    {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', arity: 0, optional: true},
-    {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', arity: 0, optional: true},
-    // What compat/grabOp.js dispatches on: 45 and 49-51 both declare four parameters, and this
-    // pair is what tells them apart. The code reads these two, not a version number.
-    {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', arity: 2, optional: true},
-    {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', arity: 1, optional: true},
+    {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', optional: true},
+    {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', optional: true},
+    // What compat/grabOp.js dispatches on: 49-51 have the sprite pair, 45-48 reach the pointer
+    // through the seat. Either way the dispatch picks the shape, so only existence is asserted.
+    {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', optional: true},
+    {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', optional: true},
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
@@ -105,10 +109,10 @@ const SURFACE = [
     {ns: 'Cogl', cls: 'Pipeline', member: 'get_layer_filters', params: ['layer_index']},
     {ns: 'Cogl', cls: 'PipelineFilter', enum: true, members: ['LINEAR_MIPMAP_LINEAR', 'LINEAR', 'NEAREST']},
     // gnome-shell, only reachable from inside the shell
+    // compat/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
+    // Clutter.ShaderEffect in 51. The uniform upload is the seam's, so no shape is pinned here -
+    // the group below only requires that one of the two paths exists.
     {ns: 'Shell', cls: 'GLSLEffect', class: true, optional: true},
-    // The C prototype has five parameters; GJS shows three, because g-ir-scanner folds the
-    // array-length parameter into the array. Same class of surprise as get_buffer_rect's out-arg.
-    {ns: 'Shell', cls: 'GLSLEffect', member: 'set_uniform_float', params: ['uniform', 'n_components', 'value'], optional: true},
     {ns: 'Shell', cls: 'WindowTracker', member: 'get_default', static: true, arity: 0},
     {ns: 'St', cls: 'Settings', member: 'get', static: true, arity: 0},
     {ns: 'St', cls: 'Settings', member: 'enable_animations', property: true},
@@ -321,6 +325,34 @@ for (const group of GROUPS) {
         fail(group.name, `none of ${group.members.map(m => m.join('.')).join(' / ')} is callable`);
     else
         report(group.name, present.map(m => m.join('.')).join(' / '));
+}
+
+// A member whose declaration moves across the audited lines is the compat layer's to pick, not
+// this file's to pin. Ask each seam what it selected and assert the selection is callable on the
+// typelibs this shell is running - that is the runtime half of the ownership rule, and it is what
+// the deleted per-member arity and parameter tables used to stand in for.
+const COMPAT = GLib.build_filenamev([ROOT, 'src', 'compat', 'index.js']);
+let compat = null;
+try {
+    compat = await import(GLib.filename_to_uri(COMPAT, null));
+} catch (e) {
+    fail('src/compat', `the seam module did not load: ${e.message}`);
+}
+if (compat) {
+    const seam = (what, value) => {
+        if (typeof value === 'function')
+            report(`compat ${what}`, 'callable');
+        else
+            fail(`compat ${what}`, `the seam selected ${value === undefined ? 'nothing' : typeof value}, which is not callable`);
+    };
+    seam('ShaderEffect', compat.ShaderEffect);
+    // The selected base class may define the upload itself (Shell.GLSLEffect, 45-50) or inherit
+    // Mutter's native one (Clutter.ShaderEffect, 51), so this reaches through the chain either way.
+    seam('ShaderEffect.set_uniform_float', compat.ShaderEffect?.prototype?.set_uniform_float);
+    seam('beginWindowGrabOp', compat.beginWindowGrabOp);
+    seam('getPointerSprite', compat.getPointerSprite);
+    seam('setActorCursor', compat.setActorCursor);
+    seam('coglContextForBake', compat.coglContextForBake);
 }
 
 // The typelibs are found by version-numbered directory, and a GNOME line whose typelibs we never
