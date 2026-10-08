@@ -565,8 +565,9 @@ every frame. In `clipEffect.js`, the 1px SDF AA ramp is restricted strictly to c
 preserving 100% sharp content alpha on straight edges to prevent subpixel dragging blur from
 double-resampling under fractional scaling. Concentric corner alignment and zero-leak clipping are
 guaranteed by `clipEffect.js`'s snapping rule locking the physical pixel grid with the shadow
-actor, and a 1px safe inset (`lib/frame.js`) completely excises Cairo half-pixel stroke residue
-on windows whose ring is cleared, without affecting shadow geometry or tiled rings.
+actor, and symmetric physical margin snapping (`snapActorBodyFrame` in `lib/snap.js`)
+locks identical per-side cuts onto the device grid, completely excising Cairo half-pixel stroke residue
+under fractional scaling while keeping clip body and shadow body strictly unified.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
