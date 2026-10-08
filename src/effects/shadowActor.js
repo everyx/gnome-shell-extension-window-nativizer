@@ -6,9 +6,9 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
+import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../compat/coglContext.js';
@@ -178,14 +178,14 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    // Padded body: actor sits at -PAD, so cast starts at body.xy and grows by PAD each side.
-    // `this.width/height` is this actor's live size (the window actor plus `2*PAD`) and the
-    // body follows from the stored insets, so the cast tracks a resize every frame
-    // instead of waiting for the manager's 50ms reconcile. No insets = the body is the
-    // whole actor, which is what a bare toplevel is. Same fallback as the clip: insets that
-    // outrun the actor leave no body, and the whole actor is the cast then.
+    // The cast comes from the buffer this actor is bound to, not from the padded size: the ring
+    // is subtracted there and the pad given back, so the body the slices leave hollow is the
+    // frame the clip draws. `this.width/height` is the live allocation, so a resize is tracked
+    // every frame instead of waiting for the manager's 50ms reconcile. No insets = the body is
+    // the whole actor, which is what a bare toplevel is; the same fallback as the clip means the
+    // two cannot disagree when a debounced ring outruns the actor for one frame.
     _castRect() {
-        return bodyFrame({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
+        return shadowCastRect({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
     }
 
     // Cache slices per cast rect, and pre-allocated boxes per physical scale.
