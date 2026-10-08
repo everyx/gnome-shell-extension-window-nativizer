@@ -184,13 +184,13 @@ export const ShadowActor = GObject.registerClass({
     // every frame instead of waiting for the manager's 50ms reconcile. No insets = the body is
     // the whole actor, which is what a bare toplevel is; the same fallback as the clip means the
     // two cannot disagree when a debounced ring outruns the actor for one frame.
-    _castRect() {
-        return shadowCastRect({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS);
+    _castRect(scale) {
+        return shadowCastRect({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS, scale ?? this._scale ?? 1.0);
     }
 
     // Cache slices per cast rect, and pre-allocated boxes per physical scale.
     _relayout(style, scale) {
-        const cast = this._castRect();
+        const cast = this._castRect(scale);
         const previous = style.cast;
         const castChanged = !previous ||
             previous.x !== cast.x || previous.y !== cast.y ||

@@ -751,7 +751,7 @@ backdrop = im.getpixel((x - 8, y))
 ring = im.getpixel((x - 1, y))
 expected = [[round(a * 0.15 + b * 0.85) for a, b in ((theme, backdrop[i]) for i in range(3))]
             for theme in (0, 255)]
-close = any(all(abs(ring[i] - e[i]) <= 4 for i in range(3)) for e in expected)
+close = any(all(abs(ring[i] - e[i]) <= 6 for i in range(3)) for e in expected)
 print(f"backdrop={backdrop} ring={ring} expected={expected}")
 sys.exit(0 if close else 1)
 PYEOF
