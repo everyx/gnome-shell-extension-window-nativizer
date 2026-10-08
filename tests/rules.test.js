@@ -11,6 +11,7 @@ import {
     resolveRule, parseRuleKey, buildRuleKey, buildRuleKeyFromProperties,
     FINGERPRINT_FIELDS,
     sanitizeWindowRules, sanitizeRuleTitles, withRule,
+    CLIENT_TYPE_TOKEN_WAYLAND, CLIENT_TYPE_TOKEN_X11,
 } from '../src/lib/rules.js';
 
 /** Comparable shape for a resolveRule() result: canonical stored form. */
@@ -95,7 +96,7 @@ describe('resolveRule', () => {
 
         expect(resolveRule('wechat', rules)).toBeNull();
         expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: true})).toBeNull();
-        expect(resolveRule('wechat', rules, {clientType: 'x11', hasParent: true, allowsResize: false})).toBeNull();
+        expect(resolveRule('wechat', rules, {clientType: CLIENT_TYPE_TOKEN_X11, hasParent: true, allowsResize: false})).toBeNull();
         expect(resolveRule('wechat', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false})).toBeNull();
     });
 
@@ -168,13 +169,13 @@ describe('resolveRule', () => {
 
     it('every fingerprint field participates in matching', () => {
         const base = buildRuleKey('app', {
-            clientType: 'wayland', windowType: WindowType.NORMAL,
+            clientType: CLIENT_TYPE_TOKEN_WAYLAND, windowType: WindowType.NORMAL,
             hasParent: true, allowsResize: false, isAttachedDialog: false, hasSsd: false,
         });
         const rules = {[base]: 'corners'};
 
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).not.toBeNull();
-        expect(resolveRule('app', rules, {clientType: 'x11', windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
+        expect(resolveRule('app', rules, {clientType: CLIENT_TYPE_TOKEN_X11, windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: true, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: false, isAttachedDialog: true})).toBeNull();
@@ -186,24 +187,24 @@ describe('resolveRule', () => {
 describe('buildRuleKey', () => {
     it('always emits the full window-kind fingerprint', () => {
         expect(buildRuleKey('wechat')).toBe(
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
+            `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`);
     });
 
     it('encodes every structural field', () => {
         expect(buildRuleKey('wechat', {
-            clientType: 'x11',
-            windowType: 3,
+            clientType: CLIENT_TYPE_TOKEN_X11,
+            windowType: WindowType.DIALOG,
             hasParent: true,
             allowsResize: false,
             isAttachedDialog: true,
             hasRing: true,
             hasSsd: true,
-        })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true,has_ring=true,has_ssd=true');
+        })).toBe(`wechat:client_type=${CLIENT_TYPE_TOKEN_X11},window_type=${WindowType.DIALOG},has_parent=true,allows_resize=false,attached_dialog=true,has_ring=true,has_ssd=true`);
     });
 
     it('orders has_ring and has_ssd before size in the canonical key', () => {
         const key = buildRuleKey('wechat', {
-            clientType: 'wayland',
+            clientType: CLIENT_TYPE_TOKEN_WAYLAND,
             windowType: WindowType.NORMAL,
             hasParent: false,
             allowsResize: false,
@@ -214,7 +215,7 @@ describe('buildRuleKey', () => {
             height: 420,
         });
         expect(key).toBe(
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=true,has_ssd=false,size=360x420'
+            `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=false,attached_dialog=false,has_ring=true,has_ssd=false,size=360x420`
         );
         expect(key.indexOf('has_ring=true')).toBeLessThan(key.indexOf('has_ssd=false'));
         expect(key.indexOf('has_ssd=false')).toBeLessThan(key.indexOf('size=360x420'));
@@ -225,9 +226,9 @@ describe('buildRuleKey', () => {
         const firefoxPip = buildRuleKey('firefox', {hasRing: false});
 
         expect(firefoxMain).toBe(
-            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false');
+            `firefox:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=true,has_ssd=false`);
         expect(firefoxPip).toBe(
-            'firefox:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
+            `firefox:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`);
         expect(firefoxMain).not.toBe(firefoxPip);
 
         const userRules = {[firefoxMain]: 'corners,shadow'};
@@ -240,9 +241,9 @@ describe('buildRuleKey', () => {
         const ssd = buildRuleKey('wps', {hasSsd: true});
 
         expect(bare).toBe(
-            'wps:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
+            `wps:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`);
         expect(ssd).toBe(
-            'wps:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=true');
+            `wps:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=true`);
         expect(bare).not.toBe(ssd);
     });
 
@@ -251,21 +252,21 @@ describe('buildRuleKey', () => {
             allowsResize: false,
             width: 360,
             height: 420,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420');
+        })).toBe(`wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420`);
 
         // Resizable windows never encode size
         expect(buildRuleKey('wechat', {
             allowsResize: true,
             width: 800,
             height: 600,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false');
+        })).toBe(`wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`);
 
         // Rounds fractional sizes to integers
         expect(buildRuleKey('wechat', {
             allowsResize: false,
             width: 359.8,
             height: 420.2,
-        })).toBe('wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420');
+        })).toBe(`wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420`);
     });
 
     it('never collapses to a bare application key', () => {
@@ -282,15 +283,15 @@ describe('buildRuleKey', () => {
 });
 
 describe('parseRuleKey', () => {
-    const key = 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false';
+    const key = `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false`;
 
     it('parses base wmClass, specifier and typed properties', () => {
         expect(parseRuleKey(key)).toEqual({
             baseWmClass: 'wechat',
-            specifier: 'client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false',
+            specifier: `client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=true,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false`,
             properties: {
-                client_type: 'wayland',
-                window_type: 0,
+                client_type: CLIENT_TYPE_TOKEN_WAYLAND,
+                window_type: WindowType.NORMAL,
                 has_parent: true,
                 allows_resize: false,
                 attached_dialog: false,
@@ -301,13 +302,13 @@ describe('parseRuleKey', () => {
     });
 
     it('parses fixed-size key with dimensions', () => {
-        const sizedKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420';
+        const sizedKey = `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420`;
         expect(parseRuleKey(sizedKey)).toEqual({
             baseWmClass: 'wechat',
-            specifier: 'client_type=wayland,window_type=0,has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420',
+            specifier: `client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=360x420`,
             properties: {
-                client_type: 'wayland',
-                window_type: 0,
+                client_type: CLIENT_TYPE_TOKEN_WAYLAND,
+                window_type: WindowType.NORMAL,
                 has_parent: false,
                 allows_resize: false,
                 attached_dialog: false,
@@ -333,10 +334,10 @@ describe('parseRuleKey', () => {
             'wechat:has_parent=true,allows_resize=false',
             'wechat:foo=bar',
             // A 6-field key from before has_ssd is no longer a kind.
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false',
-            'wechat:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false',
+            `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false`,
+            `wechat:client_type=macos,window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`,
             // Resizable window MUST NOT have size
-            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false,size=800x600',
+            `wechat:client_type=${CLIENT_TYPE_TOKEN_WAYLAND},window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false,size=800x600`,
         ];
         for (const bad of invalid)
             expect(parseRuleKey(bad)).toEqual({baseWmClass: '', specifier: null, properties: null});
@@ -349,7 +350,7 @@ describe('rule key contract & round-trip', () => {
             buildRuleKey('wechat'),
             buildRuleKey('wechat', {hasParent: true, allowsResize: false}),
             buildRuleKey('wechat', {allowsResize: false, width: 360, height: 420}),
-            buildRuleKey('steam', {clientType: 'x11', windowType: WindowType.MODAL_DIALOG, isAttachedDialog: true, hasSsd: true}),
+            buildRuleKey('steam', {clientType: CLIENT_TYPE_TOKEN_X11, windowType: WindowType.MODAL_DIALOG, isAttachedDialog: true, hasSsd: true}),
         ];
         for (const key of keys) {
             const parsed = parseRuleKey(key);
@@ -503,7 +504,9 @@ describe('sanitizeWindowRules', () => {
             'wechat:title=Exit': 'corners',
             'wechat:has_parent=true,allows_resize=false': 'corners',
             'invalid:key:too:many:colons': 'corners',
-            'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false': 'corners',
+            // #99: an identity with a space is no longer a reason to drop a key, so that entry is
+            // gone from this input; the derived window_type below is #100's change.
+            [`bad:client_type=macos,window_type=${WindowType.NORMAL},has_parent=false,allows_resize=true,attached_dialog=false,has_ring=false,has_ssd=false`]: 'corners',
             [buildRuleKey('valid_app')]: 123,
         };
         expect(sanitizeWindowRules(input)).toEqual({[mainKey]: 'corners'});

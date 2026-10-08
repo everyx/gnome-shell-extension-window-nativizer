@@ -494,8 +494,8 @@ describe('the ring a pick records is the ring the runtime looks up', () => {
         get_pid: () => 4242,
         get_wm_class: () => 'demo',
         allows_resize: () => true,
-        get_window_type: () => 0,
-        get_client_type: () => 0,
+        get_window_type: () => WindowType.NORMAL,
+        get_client_type: () => WindowClientType.WAYLAND,
     });
 
     it('applies a rule picked on the kind where the two readings used to differ', () => {

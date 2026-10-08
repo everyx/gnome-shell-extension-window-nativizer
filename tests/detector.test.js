@@ -20,6 +20,13 @@ import {
     buildRuleKeyFromProperties,
 } from '../src/lib/pick.js';
 
+/**
+ * Meta's maximize bit flags, mirroring vendor/mutter/window.h. The unit suite runs without GI
+ * typelibs so Meta.MaximizeFlags is not reachable here, and a bare 1/2/3 in a spec says nothing
+ * about which flag it means.
+ */
+const MaximizeFlags = Object.freeze({NONE: 0, HORIZONTAL: 1, VERTICAL: 2, BOTH: 3});
+
 /** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
 function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
@@ -950,22 +957,22 @@ describe('isWindowMaximized', () => {
 
     it('falls back to win.get_maximized() on GNOME 45–48', () => {
         const win45Both = {
-            get_maximized: () => 3, // MetaMaximizeFlags.BOTH
+            get_maximized: () => MaximizeFlags.BOTH,
         };
         expect(isWindowMaximized(win45Both)).toBeTrue();
 
         const win45Horiz = {
-            get_maximized: () => 1, // MetaMaximizeFlags.HORIZONTAL (partially tiled)
+            get_maximized: () => MaximizeFlags.HORIZONTAL, // partially tiled
         };
         expect(isWindowMaximized(win45Horiz)).toBeFalse();
 
         const win45Vert = {
-            get_maximized: () => 2, // MetaMaximizeFlags.VERTICAL (partially tiled)
+            get_maximized: () => MaximizeFlags.VERTICAL, // partially tiled
         };
         expect(isWindowMaximized(win45Vert)).toBeFalse();
 
         const win45None = {
-            get_maximized: () => 0,
+            get_maximized: () => MaximizeFlags.NONE,
         };
         expect(isWindowMaximized(win45None)).toBeFalse();
     });
@@ -1236,7 +1243,7 @@ describe('the pick heuristic', () => {
             expect(highlightBoundingBox(undefined)).toEqual({x: 0, y: 0, width: 0, height: 0});
         });
 
-        it('outsets the bounding box by the specified border width (default 3px)', () => {
+        it('outsets the bounding box by the specified border width', () => {
             const frame = {x: 100, y: 100, width: 600, height: 400};
             expect(highlightBoundingBox(frame)).toEqual({
                 x: 100 - HIGHLIGHT_BORDER_WIDTH,
@@ -1244,11 +1251,12 @@ describe('the pick heuristic', () => {
                 width: 600 + HIGHLIGHT_BORDER_WIDTH * 2,
                 height: 400 + HIGHLIGHT_BORDER_WIDTH * 2,
             });
-            expect(highlightBoundingBox(frame, 3)).toEqual({
-                x: 97,
-                y: 97,
-                width: 606,
-                height: 406,
+            const explicit = HIGHLIGHT_BORDER_WIDTH + 1;
+            expect(highlightBoundingBox(frame, explicit)).toEqual({
+                x: 100 - explicit,
+                y: 100 - explicit,
+                width: 600 + explicit * 2,
+                height: 400 + explicit * 2,
             });
         });
 

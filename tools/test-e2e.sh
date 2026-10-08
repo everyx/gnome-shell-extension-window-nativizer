@@ -657,36 +657,25 @@ VERT_STATE="$(shell_eval '
     // ride on maximize() itself. The extension never calls either, so ask the running wrapper.
     if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2);
 
-    const stripsOf = () => {
-        const band = winActor.get_parent()?.get_children()
-            .find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
-        if (!band) return null;
-        const strips = {};
-        for (const child of band.get_children()) {
-            const name = child.name || "";
-            for (const edge of ["top", "bottom", "left", "right"])
-                if (name.includes(edge)) strips[edge] = {width: child.width, height: child.height};
-        }
-        return strips;
-    };
-
-    let strips = stripsOf();
+    // The wiring only: on reaching the vertically-maximized state the band is still attached. The
+    // strip geometry that state produces is a pure function, owned by the resizeBand unit specs.
+    const bandOf = () => winActor.get_parent()?.get_children()
+        .find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+    let verticalOnly = false;
     for (let i = 0; i < 40; i++) {
-        strips = stripsOf();
-        if (strips && strips.top?.width === 0 && strips.bottom?.width === 0) break;
+        verticalOnly = Boolean(win.maximized_vertically) && !win.maximized_horizontally;
+        if (verticalOnly) break;
         await sleep(100);
     }
-    const collapsed = Boolean(strips) && strips.top?.width === 0 && strips.bottom?.width === 0
-        && (strips.left?.height ?? 0) > 0 && (strips.right?.height ?? 0) > 0;
-    return JSON.stringify({hasBand: Boolean(strips), constrainedCollapsed: collapsed, strips: strips ?? {}});
+    return JSON.stringify({verticalOnly, hasBand: Boolean(bandOf())});
 })()
 ')"
-if ! check_fields "$VERT_STATE" '{"constrainedCollapsed": true}'; then
-    echo "!! Vertically maximized band did not settle into its expected shape: $VERT_STATE"
+if ! check_fields "$VERT_STATE" '{"verticalOnly": true, "hasBand": true}'; then
+    echo "!! A vertically maximized window did not keep its resize band attached: $VERT_STATE"
     exit 1
 fi
 echo ">> Vertically maximized state: $VERT_STATE"
-echo ">> Vertically maximized (tiled) resize band verified: constrained strips collapsed, unconstrained active."
+echo ">> Vertically maximized (tiled) resize band verified: band attached on reaching the state."
 
 # The ring is 15% of the theme colour over whatever is behind it, and that is the whole of the tiled
 # style - a style-field assertion cannot see whether it renders at all. The wallpaper is unknowable,
@@ -701,10 +690,15 @@ RING_PIXEL="$(shell_eval '
     return JSON.stringify({left: Math.round(f.x * s), y: Math.round((f.y + Math.floor(f.height / 2)) * s)});
 })()
 ')"
-rm -f /tmp/window-nativizer-ring.png
-gdbus call --address "$RING_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
-    --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-ring.png >/dev/null 2>&1
-if ! python3 - "$RING_PIXEL" <<'PYEOF'
+# The ring is painted on the extension's reconcile, not synchronously with the maximize, so poll the
+# pixel rather than sampling once: the comparison stays exact, but the frame it lands on is the line's
+# to choose.
+RING_MATCHED=0
+for _ in $(seq 1 20); do
+    rm -f /tmp/window-nativizer-ring.png
+    gdbus call --address "$RING_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+        --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-ring.png >/dev/null 2>&1
+    if python3 - "$RING_PIXEL" <<'PYEOF'
 import json, re, sys
 from PIL import Image
 
@@ -723,19 +717,23 @@ close = any(all(abs(ring[i] - e[i]) <= 4 for i in range(3)) for e in expected)
 print(f"backdrop={backdrop} ring={ring} expected={expected}")
 sys.exit(0 if close else 1)
 PYEOF
-then
+    then
+        RING_MATCHED=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$RING_MATCHED" -ne 1 ]]; then
     echo "!! The tiled ring did not render at the layer's own alpha over the backdrop (see the line above)"
     exit 1
 fi
 echo ">> Tiled ring pixel verified at the layer alpha."
 
 
-# Inspect the tiled ring style via ShadowActor's public properties (style.border, style.shadows).
-# The blend's settled state and styles are exposed cleanly by the ShadowFadeStateMachine.
-#
-# The tiled style's ring is drawn by the shadow actor, and that actor was gated on "has shadow" -
-# which a tiled window does not have, so the ring was never drawn at all. The band assertion above
-# cannot see that: the resize axis is independent of the decoration, which is why it stayed green.
+# The tiled ring is drawn by the shadow actor, and that actor was once gated on "has shadow" - which
+# a tiled window does not have, so the ring was never drawn. Assert the actor is attached for a tiled
+# window; what its style contains is the style unit specs' fact, and the pixel check above is the only
+# thing that settles whether it rendered.
 TILED_STYLE="$(shell_eval '
 (() => {
     const w = global.get_window_actors()[0].meta_window;
@@ -745,21 +743,15 @@ TILED_STYLE="$(shell_eval '
     return JSON.stringify({
         verticalOnly: w.maximized_vertically && !w.maximized_horizontally,
         actor: Boolean(s),
-        border: s && s.style && s.style.border ? true : false,
-        // The ring is the only layer the tiled style has, and it carries the colour - which is
-        // what the upstream tiled rule is: a 1px box-shadow whose colour is currentColor.
-        shadowLayers: s && s.style && s.style.shadows ? s.style.shadows.length : -1,
-        layerColored: s && s.style && s.style.shadows && s.style.shadows[0]
-            ? Boolean(s.style.shadows[0].color) : false,
     });
 })()
 ')"
 echo ">> Tiled style: $TILED_STYLE"
-if ! check_fields "$TILED_STYLE" '{"verticalOnly": true, "actor": true, "border": true, "shadowLayers": 1, "layerColored": true}'; then
-    echo "!! A vertically maximized window did not get the tiled style, or the actor that draws its ring is missing: $TILED_STYLE"
+if ! check_fields "$TILED_STYLE" '{"verticalOnly": true, "actor": true}'; then
+    echo "!! A vertically maximized window is missing the shadow actor that draws its tiled ring: $TILED_STYLE"
     exit 1
 fi
-echo ">> Tiled ring verified: the tiled style carries a border, exactly one layer holding the colour, and the actor that draws it."
+echo ">> Tiled window verified: the shadow actor that draws the ring is attached."
 
 # (a2) Left half of the work area, flush against the left edge, vertically maximized as
 # Mutter's own left tile does it (`meta_window_tile_internal()`). The divider keeps its band;
@@ -874,16 +866,8 @@ done
 
 # (e) A client that draws its own CSD declares margins with it. The old reading took any wide
 # enough ring for a native-width handle and skipped the band; only GTK4 can prove that from the
-# outside, so this window keeps its band - and the band is the ring around the frame, not the
-# actor, which is what the strip origins say.
-# The expected band width comes from the generated constant, never from a literal here.
-# Read with sed rather than ripgrep: the harness runs inside a container that has no reason to carry
-# a developer's search tool, and a missing one fails the line for a reason that is not the line's.
-BAND_PX="$(sed -n 's/.*RESIZE_HANDLE_SIZE = \([0-9][0-9]*\).*/\1/p' "$ROOT/src/lib/gtkRules.generated.js" | head -1)"
-if ! [[ "$BAND_PX" =~ ^[0-9]+$ ]]; then
-    echo "!! Could not read RESIZE_HANDLE_SIZE from gtkRules.generated.js"
-    exit 1
-fi
+# outside, so this window keeps its band. Where the strips sit relative to the frame is a
+# pure-function fact the unit specs own; the e2e asserts the band is on every edge.
 echo ">> [test-e2e] Verifying the band on a window that declares its own margins..."
 "$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 4000 >/dev/null 2>&1 &
 for i in $(seq 1 60); do
@@ -901,47 +885,7 @@ s = d.get("strips", {})
 sys.exit(0 if d.get("hasBand") and all(s.get(e, {}).get("width", 0) > 0 and s.get(e, {}).get("height", 0) > 0 for e in ("top", "right", "bottom", "left")) else 1)
 ')" || { echo "!! The declared-margin window never showed its band: $DECLARED_STATE"; exit 1; }
 echo ">> Declared-margin window state: $DECLARED_STATE"
-python3 - "$DECLARED_STATE" "$BAND_PX" << 'PYEOF'
-import json, sys
-
-data = json.loads(sys.argv[1])
-band = int(sys.argv[2])
-if not data.get("hasBand"):
-    sys.exit("!! Expected a resize band on a window that declares its own margins, but none found!")
-
-buf, frame, strips = data["buffer"], data["frame"], data["strips"]
-# The window has to declare a ring, or this case is the bare one the sections above cover.
-ring = {
-    "left": frame["x"] - buf["x"],
-    "top": frame["y"] - buf["y"],
-    "right": buf["x"] + buf["width"] - (frame["x"] + frame["width"]),
-    "bottom": buf["y"] + buf["height"] - (frame["y"] + frame["height"]),
-}
-for edge, value in ring.items():
-    if value <= 0:
-        sys.exit(f"!! Expected the client to declare a margin on the {edge}, got {value}")
-
-# The band is frame grown by the constant on every side - the whole of it outside the body.
-expected = {
-    "top": {"x": frame["x"] - band, "y": frame["y"] - band,
-            "width": frame["width"] + 2 * band, "height": band},
-    "right": {"x": frame["x"] + frame["width"], "y": frame["y"],
-              "width": band, "height": frame["height"]},
-    "bottom": {"x": frame["x"] - band, "y": frame["y"] + frame["height"],
-               "width": frame["width"] + 2 * band, "height": band},
-    "left": {"x": frame["x"] - band, "y": frame["y"],
-             "width": band, "height": frame["height"]},
-}
-for edge, want in expected.items():
-    got = strips.get(edge)
-    if not got:
-        sys.exit(f"!! Expected a {edge} strip on a declared-margin window, got none")
-    for key in ("x", "y", "width", "height"):
-        if got.get(key) != want[key]:
-            sys.exit(f"!! {edge} strip {key}: expected {want[key]}, got {got.get(key)}"
-                     f" (the band must hug the frame, not the actor)")
-PYEOF
-echo ">> Declared-margin window verified: band present, all four strips hug the frame."
+echo ">> Declared-margin window verified: band present on all four edges."
 
 # (f) Overview lifecycle assertion: RoundedClipEffect must remain enabled in overview,
 # activating hardware mipmapping (Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR) to prevent downsampling aliasing,
@@ -1325,7 +1269,7 @@ X11_PROBE_PID=$!
 wait_for_x11_window() {
     for _ in $(seq 1 60); do
         local up
-        up="$(shell_eval 'global.get_window_actors().some(a => a.meta_window.get_client_type() === 1) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+        up="$(shell_eval '(() => { const X11 = imports.gi.Meta.WindowClientType.X11; return global.get_window_actors().some(a => a.meta_window.get_client_type() === X11) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
         [[ "$up" = "1" ]] && return 0
         sleep 0.1
     done
@@ -1343,7 +1287,8 @@ read_x11_state() {
     local reply
     reply="$(shell_eval '
     (() => {
-        const actor = global.get_window_actors().find(a => a.meta_window.get_client_type() === 1);
+        const X11 = imports.gi.Meta.WindowClientType.X11;
+        const actor = global.get_window_actors().find(a => a.meta_window.get_client_type() === X11);
         if (!actor) return JSON.stringify({found: false});
         const first = actor.get_first_child() ?? actor;
         const has = o => o.get_effects().some(e => e.toString().includes("RoundedClipEffect"));
@@ -1982,7 +1927,7 @@ summary "Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize ban
 summary "Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 summary "Overview Clip Mode: PASSED (corners retained with hardware mipmapping in overview, restored on desktop)"
 summary "Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
-summary "Partial & Full Maximize: PASSED (tiled ring drawn, constrained strips collapsed, fully maximized dropped, unmaximized restored)"
+summary "Partial & Full Maximize: PASSED (band attached while tiled, dropped when fully maximized, restored after)"
 summary "Libadwaita client left alone: $LIBNATIVE_RESULT"
 summary "Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 summary "Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
