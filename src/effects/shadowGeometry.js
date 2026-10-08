@@ -7,6 +7,7 @@
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
+import {bodyFrame} from '../lib/frame.js';
 
 // px; derived by tools/gen-style.mjs from the farthest Gaussian reach over every shadow
 // layer (blur 14: 3 sigma = 21, + spread 5) plus the Cogl offscreen offset below.
@@ -32,6 +33,30 @@ export function shadowGeometry(radius) {
         corner,
         window,
         buffer: 2 * corner + BAKE_EXTRA,
+    };
+}
+
+/**
+ * The rect the eight slices are laid out over. The shadow actor is bound to the window actor
+ * `2*SHADOW_PAD` larger, so the buffer under its live size is that size less the pad; the body is
+ * the frame inside the buffer - the same `bodyFrame` the clip reads - and the cast is that body
+ * grown back by the pad. One rect, so the hollow middle the slices leave is the frame the clip
+ * draws: a declared ring of any width moves the shadow with the body, never off it.
+ *
+ * @param {{width: number, height: number}} actorSize - Shadow actor's live size in px
+ * @param {import('../lib/frame.js').Insets} [insets] - Ring the client declared, per side
+ * @returns {{x:number,y:number,width:number,height:number}} Cast rect in actor coords
+ */
+export function shadowCastRect(actorSize, insets) {
+    const body = bodyFrame({
+        width: actorSize.width - SHADOW_PAD * 2,
+        height: actorSize.height - SHADOW_PAD * 2,
+    }, insets);
+    return {
+        x: body.x,
+        y: body.y,
+        width: body.width + SHADOW_PAD * 2,
+        height: body.height + SHADOW_PAD * 2,
     };
 }
 
