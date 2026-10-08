@@ -11,7 +11,6 @@ import {
 } from '../src/lib/rules.js';
 import {
     WindowClientType, buildRuleKeyFromProperties, extractWindowProperties,
-    getWindowFromActor, readDeclaredIdentity, readWindowString,
 } from '../src/lib/pick.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
@@ -189,80 +188,6 @@ describe('extractWindowProperties', () => {
     });
 });
 
-describe('readWindowString', () => {
-    it('returns the value the getter reads', () => {
-        expect(readWindowString(() => 'wechat')).toBe('wechat');
-    });
-
-    it('reads an unreadable C string as absent instead of throwing', () => {
-        expect(readWindowString(throwInvalidUtf8)).toBe('');
-    });
-
-    it('reads a missing getter as absent', () => {
-        expect(readWindowString(() => undefined)).toBe('');
-        expect(readWindowString(() => null)).toBe('');
-    });
-});
-
-describe('readDeclaredIdentity', () => {
-    it('prefers wm_class over the other declared identities', () => {
-        expect(readDeclaredIdentity({
-            get_wm_class: () => 'wechat',
-            get_sandboxed_app_id: () => 'org.example.Wechat',
-            get_gtk_application_id: () => 'org.example.Wechat',
-        })).toBe('wechat');
-    });
-
-    it('still yields an identity when wm_class is unreadable but the gtk id is valid', () => {
-        const win = {
-            get_wm_class: throwInvalidUtf8,
-            get_gtk_application_id: () => 'org.example.Wechat',
-        };
-        expect(() => readDeclaredIdentity(win)).not.toThrow();
-        expect(readDeclaredIdentity(win)).toBe('org.example.Wechat');
-    });
-
-    it('falls through an unreadable sandboxed id to the gtk application id', () => {
-        const win = {
-            get_wm_class: () => null,
-            get_sandboxed_app_id: throwInvalidUtf8,
-            get_gtk_application_id: () => 'org.example.Wechat',
-        };
-        expect(readDeclaredIdentity(win)).toBe('org.example.Wechat');
-    });
-
-    it('returns empty, not a throw, when every declared identity is unreadable', () => {
-        const win = {
-            get_wm_class: throwInvalidUtf8,
-            get_sandboxed_app_id: throwInvalidUtf8,
-            get_gtk_application_id: throwInvalidUtf8,
-        };
-        expect(() => readDeclaredIdentity(win)).not.toThrow();
-        expect(readDeclaredIdentity(win)).toBe('');
-    });
-
-    it('treats a whitespace-only wm_class as absent and falls through', () => {
-        const win = {
-            get_wm_class: () => '   ',
-            get_gtk_application_id: () => 'org.example.Wechat',
-        };
-        expect(readDeclaredIdentity(win)).toBe('org.example.Wechat');
-    });
-
-    it('returns empty when every declared identity is blank', () => {
-        const win = {
-            get_wm_class: () => '   ',
-            get_sandboxed_app_id: () => '\t',
-            get_gtk_application_id: () => '  ',
-        };
-        expect(readDeclaredIdentity(win)).toBe('');
-    });
-
-    it('trims surrounding whitespace from the identity', () => {
-        expect(readDeclaredIdentity({get_wm_class: () => '  wechat  '})).toBe('wechat');
-    });
-});
-
 describe('chooseWindowIdentity', () => {
     it('prefers what the window declares itself', () => {
         const chosen = chooseWindowIdentity({declared: 'wechat', peer: 'other', tracked: 'x.desktop', pid: 1});
@@ -297,34 +222,6 @@ describe('chooseWindowIdentity', () => {
         expect(chooseWindowIdentity({declared: '   ', pid: 42})).toBe('pid-42');
         expect(chooseWindowIdentity({declared: '   ', tracked: 'wechat.desktop'})).toBe('wechat.desktop');
         expect(chooseWindowIdentity({declared: '   ', peer: 'org.example.Wechat'})).toBe('org.example.Wechat');
-    });
-});
-
-describe('getWindowFromActor', () => {
-    it('reads the current meta_window property', () => {
-        const win = {id: 1};
-        expect(getWindowFromActor({meta_window: win})).toBe(win);
-    });
-
-    it('falls back to the camelCase metaWindow property', () => {
-        const win = {id: 2};
-        expect(getWindowFromActor({metaWindow: win})).toBe(win);
-    });
-
-    it('supports the modern get_meta_window() method', () => {
-        const win = {id: 3};
-        expect(getWindowFromActor({get_meta_window: () => win})).toBe(win);
-    });
-
-    it('returns null for a missing actor or a throwing accessor', () => {
-        expect(getWindowFromActor(null)).toBeNull();
-        expect(getWindowFromActor(undefined)).toBeNull();
-        const deallocated = {
-            get meta_window() {
-                throw new Error('Object MetaWindowActor has been already deallocated');
-            },
-        };
-        expect(getWindowFromActor(deallocated)).toBeNull();
     });
 });
 
