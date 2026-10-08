@@ -3,7 +3,8 @@
  * Run: pnpm test
  */
 
-import {shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
+import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
+import {bodyFrame} from '../src/lib/frame.js';
 
 describe('shadowGeometry', () => {
     it('sizes the bake buffer from pad, radius and the Cogl offscreen padding', () => {
@@ -27,6 +28,60 @@ describe('shadowGeometry', () => {
         expect(slices[2].t1).toBeCloseTo(slices[6].t1, 6);
         expect(slices[1].t2).toBeCloseTo(slices[7].t1, 6);
         expect(slices[3].t1).toBeCloseTo(slices[7].t1, 6);
+    });
+});
+
+describe('shadowCastRect', () => {
+    const buffer = {width: 400, height: 300};
+    // The shadow actor is bound to the buffer 2*PAD larger, so this is its live size.
+    const actorSize = {width: buffer.width + SHADOW_PAD * 2, height: buffer.height + SHADOW_PAD * 2};
+    const ring = (left, top, right, bottom) => ({left, top, right, bottom});
+
+    it('leaves a hollow middle exactly the frame, for any declared ring', () => {
+        const rings = [
+            ring(0, 0, 0, 0),
+            ring(25, 25, 25, 25),
+            ring(SHADOW_PAD, SHADOW_PAD, SHADOW_PAD, SHADOW_PAD),
+            ring(115, 115, 115, 115),
+            ring(0, 24, 0, 24),
+        ];
+        for (const declared of rings) {
+            const cast = shadowCastRect(actorSize, declared);
+            // The eight slices leave the body hollow SHADOW_PAD in from every cast edge.
+            const hollow = {
+                x: cast.x + SHADOW_PAD,
+                y: cast.y + SHADOW_PAD,
+                width: cast.width - SHADOW_PAD * 2,
+                height: cast.height - SHADOW_PAD * 2,
+            };
+            // The body the clip draws, moved into the shadow actor's coordinates: the actor is
+            // bound to the window actor SHADOW_PAD out, so the body sits SHADOW_PAD in from zero.
+            const body = bodyFrame(buffer, declared);
+            const frameInActor = {
+                x: body.x + SHADOW_PAD,
+                y: body.y + SHADOW_PAD,
+                width: body.width,
+                height: body.height,
+            };
+            expect(hollow).withContext(`ring ${JSON.stringify(declared)}`).toEqual(frameInActor);
+        }
+    });
+
+    it('falls back to the whole actor, exactly like the clip, when the ring outruns the buffer', () => {
+        // The inset is debounced and the actor is not, so a shrinking window can carry a ring its
+        // buffer no longer holds. The clip falls back to the whole buffer there; the cast has to
+        // fall back to the whole padded actor, or the shadow would hug a body the clip does not
+        // draw - the one case where deriving the two from different rects still shows.
+        const small = {width: 20, height: 100};
+        const smallActor = {width: small.width + SHADOW_PAD * 2, height: small.height + SHADOW_PAD * 2};
+        const declared = ring(30, 30, 30, 30);
+        const body = bodyFrame(small, declared);
+        expect(body).toEqual({x: 0, y: 0, width: small.width, height: small.height});
+        expect(shadowCastRect(smallActor, declared)).toEqual({
+            x: 0, y: 0,
+            width: smallActor.width,
+            height: smallActor.height,
+        });
     });
 });
 
