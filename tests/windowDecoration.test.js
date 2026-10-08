@@ -329,7 +329,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.clearRing).toBeTrue();
     });
 
-    it('applies safeInsets on windows with declared rings when clearRing is active', () => {
+    it('keeps the clip body on the declared frame so it matches the shadow body', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
             display: mockDisplay,
@@ -354,10 +354,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.hasClip).toBeTrue();
-        // Clip insets are securely shifted inward by SAFE_INSET_MARGIN (1px) to eliminate
-        // client Cairo border stroke bleed, while shadow retains exact declared insets matching frame_rect:
-        expect(deco.clipInsets).toEqual({left: 27, top: 24, right: 27, bottom: 30});
-        expect(deco.clip.params.insets).toEqual({left: 27, top: 24, right: 27, bottom: 30});
+        // The clip body and the shadow body are the same rect: any inward offset puts our shadow
+        // where libadwaita puts the window's own edge pixel, and exposes the shader's inward bleed.
+        expect(deco.clipInsets).toEqual(declaredInsets);
+        expect(deco.clip.params.insets).toEqual(declaredInsets);
         expect(deco.shadow.insets).toEqual(declaredInsets);
     });
 

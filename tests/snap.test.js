@@ -5,6 +5,7 @@
 import {
     SnapDirection,
     SnapRule,
+    snapActorBodyFrame,
     snapCoordToGrid,
     snapRectToGrid,
     snapSliceBoxesInto,
@@ -525,5 +526,57 @@ describe('resolveMonitorBounds', () => {
         const display = {get_n_monitors: () => 1, get_monitor_geometry: () => ({})};
         expect(resolveMonitorBounds(display, {})).toBeNull();
         expect(resolveMonitorBounds(null, {get_monitor: () => 0})).toBeNull();
+    });
+});
+
+describe('snapActorBodyFrame', () => {
+    it('preserves exact declared body at scale 1.0', () => {
+        const buffer = {width: 652, height: 502};
+        const insets = {left: 26, top: 23, right: 26, bottom: 29};
+        const frame = snapActorBodyFrame(buffer, insets, 1.0);
+        expect(frame).toEqual({
+            x: 26,
+            y: 23,
+            width: 600,
+            height: 450,
+        });
+    });
+
+    it('guarantees identical physical margin cuts on symmetric insets under fractional scales', () => {
+        const buffer = {width: 652, height: 502};
+        const insets = {left: 26, top: 23, right: 26, bottom: 29};
+        const scale = 4 / 3; // 1.3333333333
+        const frame = snapActorBodyFrame(buffer, insets, scale);
+
+        // Physical buffer width: round(652 * 4/3) = 869
+        // Physical left cut: round(26 * 4/3) = 35
+        // Physical right cut: round(26 * 4/3) = 35
+        // Physical body: width = 869 - 35 - 35 = 799
+        const physLeft = Math.round(frame.x * scale);
+        const physRightCut = Math.round(buffer.width * scale) - Math.round((frame.x + frame.width) * scale);
+        const physBodyW = Math.round(frame.width * scale);
+
+        expect(physLeft).toBe(35);
+        expect(physRightCut).toBe(35);
+        expect(physBodyW).toBe(799);
+    });
+
+    it('handles zero insets and null insets gracefully', () => {
+        const buffer = {width: 400, height: 300};
+        const frameZero = snapActorBodyFrame(buffer, {left: 0, top: 0, right: 0, bottom: 0}, 1.25);
+        expect(frameZero.x).toBe(0);
+        expect(frameZero.y).toBe(0);
+        expect(Math.round(frameZero.width * 1.25)).toBe(500);
+        expect(Math.round(frameZero.height * 1.25)).toBe(375);
+
+        const frameNull = snapActorBodyFrame(buffer, null, 1.0);
+        expect(frameNull).toEqual({x: 0, y: 0, width: 400, height: 300});
+    });
+
+    it('falls back to whole actor when insets exceed buffer', () => {
+        const tinyBuffer = {width: 30, height: 30};
+        const largeInsets = {left: 20, top: 20, right: 20, bottom: 20};
+        const frame = snapActorBodyFrame(tinyBuffer, largeInsets, 1.0);
+        expect(frame).toEqual({x: 0, y: 0, width: 30, height: 30});
     });
 });

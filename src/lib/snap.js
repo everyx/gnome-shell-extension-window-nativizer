@@ -113,6 +113,67 @@ export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
     };
 }
 
+/**
+ * Snaps a buffer actor's body frame to the physical device grid by symmetrically
+ * snapping the outer insets margins per side.
+ *
+ * Rationale:
+ * Snapping absolute rect coordinates `x` and `x + width` independently under
+ * fractional scaling suffers from parity drift: when bufferWidth and insets
+ * have non-matching fractional parts, `round(w * s) - round((w - r) * s)` can
+ * differ from `round(r * s)` by 1 physical pixel, breaking 4-way symmetry and
+ * leaving subpixel client border stroke residue on one side.
+ * Snapping margins symmetrically guarantees that equal declared insets yield
+ * identical physical margin cuts on both sides across all fractional scales.
+ *
+ * @param {{width: number, height: number}} bufferSize - Buffer size in logical px
+ * @param {import('./frame.js').Insets|null} [insets] - Ring margins per side
+ * @param {number} scale - Physical device scale
+ * @returns {{x: number, y: number, width: number, height: number}}
+ */
+export function snapActorBodyFrame(bufferSize, insets, scale) {
+    const leftMargin = insets?.left ?? 0;
+    const topMargin = insets?.top ?? 0;
+    const rightMargin = insets?.right ?? 0;
+    const bottomMargin = insets?.bottom ?? 0;
+
+    if (!(scale > 0) || !Number.isFinite(scale)) {
+        const w = bufferSize?.width ?? 0;
+        const h = bufferSize?.height ?? 0;
+        const bodyW = w - leftMargin - rightMargin;
+        const bodyH = h - topMargin - bottomMargin;
+        if (bodyW > 0 && bodyH > 0)
+            return {x: leftMargin, y: topMargin, width: bodyW, height: bodyH};
+        return {x: 0, y: 0, width: Math.max(0, w), height: Math.max(0, h)};
+    }
+
+    const physW = Math.round(bufferSize.width * scale);
+    const physH = Math.round(bufferSize.height * scale);
+
+    const mLeft = Math.round(leftMargin * scale);
+    const mTop = Math.round(topMargin * scale);
+    const mRight = Math.round(rightMargin * scale);
+    const mBottom = Math.round(bottomMargin * scale);
+
+    const left = mLeft / scale;
+    const top = mTop / scale;
+    const right = Math.max(mLeft, physW - mRight) / scale;
+    const bottom = Math.max(mTop, physH - mBottom) / scale;
+
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+
+    if (width > 0 && height > 0)
+        return {x: left, y: top, width, height};
+
+    return {
+        x: 0,
+        y: 0,
+        width: Math.max(0, bufferSize?.width ?? 0),
+        height: Math.max(0, bufferSize?.height ?? 0),
+    };
+}
+
 
 /**
  * Writes a Clutter.ActorBox in place. Prefers `init()` (the real box API) and falls

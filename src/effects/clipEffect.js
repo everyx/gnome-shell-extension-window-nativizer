@@ -12,8 +12,8 @@ import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../compat/index.js';
 
-import {bodyFrame, ZERO_INSETS} from '../lib/frame.js';
-import {snapRectToGrid, SnapRule} from '../lib/snap.js';
+import {ZERO_INSETS} from '../lib/frame.js';
+import {snapActorBodyFrame} from '../lib/snap.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -213,9 +213,8 @@ export const RoundedClipEffect = GObject.registerClass({
         // The ring can outrun the actor for the frame a resize passes through (insets are
         // debounced, the actor is not). `bodyFrame` then returns the whole actor, so the pass
         // still runs: a body with no area is not the same as a frame with nothing to draw.
-        const rawFrame = bodyFrame({width, height}, this._insets);
         const scale = this._scale ?? 1.0;
-        const frame = snapRectToGrid(rawFrame, scale, SnapRule.ROUND);
+        const frame = snapActorBodyFrame({width, height}, this._insets, scale);
 
         if (this._lastScale !== scale) {
             this._scaleVec[0] = scale;

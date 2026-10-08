@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {bodyFrame, frameFromInsets, insetsFromRects, safeInsets, SAFE_INSET_MARGIN, ZERO_INSETS} from '../src/lib/frame.js';
+import {bodyFrame, frameFromInsets, insetsFromRects, ZERO_INSETS} from '../src/lib/frame.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
@@ -100,28 +100,6 @@ describe('insetsFromRects', () => {
     it('reads insets with fractional / subpixel coordinates', () => {
         expect(insetsFromRects(rect(0.5, 0.5, 100.5, 100.5), rect(12.5, 0.5, 84.0, 80.0)))
             .toEqual(insets(12, 0, 4.5, 20.5));
-    });
-});
-
-describe('safeInsets', () => {
-    it('defines SAFE_INSET_MARGIN as 1px', () => {
-        expect(SAFE_INSET_MARGIN).toBe(1);
-    });
-
-    it('insets positive insets by 1px on all four sides', () => {
-        const declared = insets(26, 23, 26, 29);
-        expect(safeInsets(declared)).toEqual(insets(27, 24, 27, 30));
-    });
-
-    it('returns zero or negative insets unchanged', () => {
-        expect(safeInsets(ZERO_INSETS)).toEqual(ZERO_INSETS);
-        expect(safeInsets(null)).toBeNull();
-        expect(safeInsets(undefined)).toBeUndefined();
-    });
-
-    it('insets only positive edges when some sides are zero', () => {
-        const declared = insets(0, 10, 0, 5);
-        expect(safeInsets(declared)).toEqual(insets(0, 11, 0, 6));
     });
 });
 

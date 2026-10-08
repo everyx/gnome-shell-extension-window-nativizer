@@ -78,30 +78,3 @@ export function hasPositiveInsets(insets) {
     return Boolean(insets && (insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0));
 }
 
-/**
- * Safe inward inset margin (px) for client-decorated windows with declared rings.
- * GTK3 CSD windows render a 1px border stroke with Cairo half-pixel stroke
- * centering (0.5px outside, 0.5px inside) and a CSS outline ring. Inwardly
- * insetting the clip boundary by 1px completely excises the client's internal
- * stroke bleed and outer box-shadow residue, guaranteeing clean, symmetric
- * Adwaita-style rounded corners without subpixel border leakage.
- */
-export const SAFE_INSET_MARGIN = 1;
-
-/**
- * Applies a 1px safe inward margin to positive insets to completely clear
- * Cairo half-pixel border strokes and outer shadow rings.
- * @param {Insets|null} insets
- * @returns {Insets|null}
- */
-export function safeInsets(insets) {
-    if (!hasPositiveInsets(insets))
-        return insets;
-    return {
-        left: insets.left > 0 ? insets.left + SAFE_INSET_MARGIN : 0,
-        top: insets.top > 0 ? insets.top + SAFE_INSET_MARGIN : 0,
-        right: insets.right > 0 ? insets.right + SAFE_INSET_MARGIN : 0,
-        bottom: insets.bottom > 0 ? insets.bottom + SAFE_INSET_MARGIN : 0,
-    };
-}
-

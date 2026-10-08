@@ -11,7 +11,7 @@
 import GLib from 'gi://GLib';
 
 import {resolveClipTarget} from './clipTarget.js';
-import {hasPositiveInsets, safeInsets} from './frame.js';
+import {hasPositiveInsets} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
 
@@ -140,10 +140,9 @@ export class WindowDecoration {
 
         const clipTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
         const insets = inputs.insets;
-        const clipInsets = actions.clearRing ? safeInsets(insets) : insets;
         const scale = inputs?.monitorScale ?? 1.0;
 
-        this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, clipInsets, inOverview);
+        this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, insets, inOverview);
 
         // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
         // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring.
