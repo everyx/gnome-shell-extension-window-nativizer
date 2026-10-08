@@ -251,14 +251,14 @@ To solve this at the root:
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes
    are snapped to the physical grid using GTK 4.24's `gsk_rect_snap_to_grid` rules.
-5. **Safe Inward Inset Margin (1px)**:
+5. **Symmetric Physical Margin Snapping**:
    GTK3 CSD windows (e.g. Meld) render a 1px border stroke (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`).
-   Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), the dark
-   stroke penetrates inward by 0.5px into the client frame, and Mutter's bilinear downsampling under
-   fractional scaling further diffuses this residue. When a client ring has to be cleared, a 1px safe
-   inset margin is applied strictly to the clip effect, excising the internal stroke bleed and outer
-   box-shadow residue with 100% four-way symmetry
-   while leaving shadow bounds and tiled rings strictly aligned to the frame rectangle.
+   Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), independent
+   absolute coordinate rounding under fractional scaling suffered from parity drift (35px vs 34px), leaving
+   stroke residue on one side. `snapActorBodyFrame` symmetrically snaps declared margins per-side to the
+   device grid (`round(margin * scale)`). Equal declared margins guarantee identical physical margin cuts
+   on all sides across all fractional scales, cleanly excising stroke residue while keeping the clip body
+   and shadow body strictly unified on the true frame.
 6. **Ring layer as a hollow band**: The zero-blur ring layer is a hollow outset band
    rather than the filled disc the
    old shader evaluated, so it no longer floods alpha under the window edge and the first boundary
@@ -425,11 +425,10 @@ same definition for a client that paints its own shadow inside its buffer and fo
 Finding the rectangle in the pixels instead lands on whatever each client happens to paint, and the
 three profiles then start at different places and cannot be compared.
 
-The profiles are compared from **offset 1 outward**, the shadow proper. Offset 0 is the boundary pixel,
-and what sits on it is the client's own edge - libadwaita's headerbar border on the reference, and on a
-taken-over window the 1px of the client's ring that the clip's safe inset deliberately keeps outside
-the body. Measured here, that pixel differs by 9 grey levels on the taken-over window and by nothing on
-the bare one, while the shadow beyond it is **identical, 0 grey levels, on both**.
+The profiles are compared outward from the boundary pixel (offset 0), where the client's own edge
+sits, into the shadow proper. Offset 0 is compared as the departure from the window's own body
+(a clean step vs a shadow leak dip), and four inward body rows are verified flat.
+Measured here, the shadow cast and edge transition match libadwaita with **0 grey levels unfocused, 1 focused**.
 
 Two windows cannot both be focused, so the focused half of the claim is read by **alternating which
 window has the focus**: one frame per subject, sharing the backdrop and the layout, and the same
