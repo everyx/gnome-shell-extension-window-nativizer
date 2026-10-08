@@ -78,11 +78,33 @@ get_dbus_bus() {
     tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true
 }
 
+# The single owner of "what this line's window API looks like". Shell.Eval runs each string in its
+# own module, so a helper defined in one call is gone by the next; shell_eval prepends this block so
+# every call site uses the same probes instead of restating them.
+E2E_PRELUDE="$(cat <<'JSEOF'
+function x11ClientType() {
+    return imports.gi.Meta.WindowClientType.X11;
+}
+function maximizeWindow(win, flags) {
+    // set_maximize_flags exists from 50; before that maximize() carries the flags.
+    return win.set_maximize_flags ? win.set_maximize_flags(flags) : win.maximize(flags);
+}
+function unmaximizeWindow(win) {
+    // unmaximize took flags until 49 and none from 49; the extension never calls it, so ask.
+    return win.unmaximize.length > 0 ? win.unmaximize(3) : win.unmaximize();
+}
+function moveResizeFrame(win, ...args) {
+    return win.move_resize_frame?.(false, ...args);
+}
+JSEOF
+)"
+
 shell_eval() {
     local bus
     bus="$(get_dbus_bus)"
     gdbus call --address "$bus" --dest org.gnome.Shell --object-path /org/gnome/Shell \
-        --method org.gnome.Shell.Eval "$1"
+        --method org.gnome.Shell.Eval "$E2E_PRELUDE
+$1"
 }
 
 # The reply is a GVariant tuple whose JSON string has its own quotes escaped, so a field
@@ -653,9 +675,7 @@ VERT_STATE="$(shell_eval '
     const winActor = global.get_window_actors()[0];
     if (!winActor) return JSON.stringify({hasBand: false, error: "no actor"});
     const win = winActor.meta_window;
-    // Meta.MaximizeFlags.VERTICAL. The flags entry point only exists from 50; before that the flags
-    // ride on maximize() itself. The extension never calls either, so ask the running wrapper.
-    if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2);
+    maximizeWindow(win, 2); // Meta.MaximizeFlags.VERTICAL
 
     // The wiring only: on reaching the vertically-maximized state the band is still attached. The
     // strip geometry that state produces is a pure function, owned by the resizeBand unit specs.
@@ -765,11 +785,9 @@ shell_eval '
         const win = actors[0].meta_window;
         const monitor = win.get_monitor();
         const wa = win.get_work_area_for_monitor(monitor);
-        // unmaximize took flags until 49 and none from 49; the extension never calls it, so ask.
-        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
-        // Meta.MaximizeFlags.VERTICAL, as tiling sets it.
-        if (win.set_maximize_flags) win.set_maximize_flags(2); else win.maximize(2);
-        win.move_resize_frame?.(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
+        unmaximizeWindow(win);
+        maximizeWindow(win, 2); // Meta.MaximizeFlags.VERTICAL, as tiling sets it
+        moveResizeFrame(win, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
     }
 })()
 ' >/dev/null
@@ -790,8 +808,7 @@ shell_eval '
     const actors = global.get_window_actors();
     if (actors.length > 0) {
         const w = actors[0].meta_window;
-        // Meta.MaximizeFlags.BOTH where the flags entry point exists; maximize() carries them before 50.
-        if (w.set_maximize_flags) w.set_maximize_flags(3); else w.maximize(3);
+        maximizeWindow(w, 3); // Meta.MaximizeFlags.BOTH
     }
 })()
 ' >/dev/null
@@ -808,8 +825,8 @@ shell_eval '
     const actors = global.get_window_actors();
     if (actors.length > 0) {
         const win = actors[0].meta_window;
-        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
-        win.move_resize_frame?.(false, 300, 200, 800, 600);
+        unmaximizeWindow(win);
+        moveResizeFrame(win, 300, 200, 800, 600);
     }
 })()
 ' >/dev/null
@@ -836,8 +853,8 @@ shell_eval '
         const win = actors[0].meta_window;
         const monitor = win.get_monitor();
         const wa = win.get_work_area_for_monitor(monitor);
-        if (win.unmaximize.length > 0) win.unmaximize(3); else win.unmaximize();
-        win.move_resize_frame?.(false, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
+        unmaximizeWindow(win);
+        moveResizeFrame(win, wa.x, wa.y, Math.floor(wa.width / 2), wa.height);
     }
 })()
 ' >/dev/null
@@ -1269,7 +1286,7 @@ X11_PROBE_PID=$!
 wait_for_x11_window() {
     for _ in $(seq 1 60); do
         local up
-        up="$(shell_eval '(() => { const X11 = imports.gi.Meta.WindowClientType.X11; return global.get_window_actors().some(a => a.meta_window.get_client_type() === X11) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
+        up="$(shell_eval '(() => { const X11 = x11ClientType(); return global.get_window_actors().some(a => a.meta_window.get_client_type() === X11) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
         [[ "$up" = "1" ]] && return 0
         sleep 0.1
     done
@@ -1287,7 +1304,7 @@ read_x11_state() {
     local reply
     reply="$(shell_eval '
     (() => {
-        const X11 = imports.gi.Meta.WindowClientType.X11;
+        const X11 = x11ClientType();
         const actor = global.get_window_actors().find(a => a.meta_window.get_client_type() === X11);
         if (!actor) return JSON.stringify({found: false});
         const first = actor.get_first_child() ?? actor;
@@ -1593,10 +1610,10 @@ sys.exit(0 if d.get('actors') == $STRESS_WINDOWS and d.get('tracked') == $STRESS
             const w = a.meta_window;
             if (!w.allows_resize?.()) continue;
             const f = w.get_frame_rect();
-            w.move_resize_frame?.(false, f.x + 20, f.y + 20, 640, 480);
-            if (w.set_maximize_flags) w.set_maximize_flags(3); else w.maximize(3);
-            if (w.unmaximize.length > 0) w.unmaximize(3); else w.unmaximize();
-            w.move_resize_frame?.(false, f.x - 10, f.y - 10, 700, 520);
+            moveResizeFrame(w, f.x + 20, f.y + 20, 640, 480);
+            maximizeWindow(w, 3); // Meta.MaximizeFlags.BOTH
+            unmaximizeWindow(w);
+            moveResizeFrame(w, f.x - 10, f.y - 10, 700, 520);
         }
     })()
     ' >/dev/null
