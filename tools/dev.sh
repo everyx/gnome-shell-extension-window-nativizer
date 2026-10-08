@@ -37,9 +37,10 @@ cmd_shell() {
     rm -rf "$PIDFILE" "$LOG" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"   # Clear old logs to avoid mixing session outputs
     mkdir -p "$XDG_CONFIG_HOME"
 
-    echo ">> Starting headless nested shell (background, log: $LOG)"
+    local scale="${1:-${WINDOW_NATIVIZER_SCALE:-1.0}}"
+    echo ">> Starting headless nested shell (background, log: $LOG, scale: $scale)"
     chmod +x "$ROOT/tools/dev-shell.sh"
-    WINDOW_NATIVIZER_UUID="$UUID" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
+    WINDOW_NATIVIZER_UUID="$UUID" WINDOW_NATIVIZER_SCALE="$scale" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
     local session_pid=$!
     disown
     # Wait until ready
@@ -152,7 +153,7 @@ cmd_stop() {
 }
 
 case "${1:-}" in
-    shell) cmd_shell ;;
+    shell) shift; cmd_shell "$@" ;;
     log) cmd_log ;;
     app) shift; cmd_app "$@" ;;
     xapp) shift; cmd_xapp "$@" ;;

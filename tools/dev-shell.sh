@@ -20,6 +20,11 @@ if ! gsettings set org.gnome.shell enabled-extensions "['$UUID']"; then
     exit 1
 fi
 
+SCALE="${WINDOW_NATIVIZER_SCALE:-1.0}"
+if [[ "$SCALE" != "1.0" && "$SCALE" != "1" ]]; then
+    gsettings set org.gnome.mutter experimental-features "['scale-monitor-framebuffer']" 2>/dev/null || true
+fi
+
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
     --virtual-monitor 1920x1080 --unsafe-mode &
 echo $! > "$PIDFILE"
@@ -92,6 +97,33 @@ if [[ "$ENABLED" -ne 1 ]]; then
     exit 1
 fi
 gnome-extensions info "$UUID" || true
+
+if [[ "$SCALE" != "1.0" && "$SCALE" != "1" ]]; then
+    BUS_ADDR="$(tr '\0' '\n' < /proc/$!/environ 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)"
+    if [[ -n "$BUS_ADDR" ]]; then
+        python3 - "$BUS_ADDR" "$SCALE" << 'PYEOF'
+import sys, subprocess, time
+bus_addr, scale_str = sys.argv[1], sys.argv[2]
+scale = float(scale_str)
+if abs(scale - 1.33) < 0.01:
+    scale = 4.0 / 3.0
+cmd_state = ["gdbus", "call", "--address", bus_addr, "--dest", "org.gnome.Mutter.DisplayConfig",
+             "--object-path", "/org/gnome/Mutter/DisplayConfig",
+             "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"]
+res = subprocess.check_output(cmd_state).decode()
+serial = res.split("(", 1)[1].split(",", 1)[0].replace("uint32", "").strip()
+cmd_apply = [
+    "gdbus", "call", "--address", bus_addr, "--dest", "org.gnome.Mutter.DisplayConfig",
+    "--object-path", "/org/gnome/Mutter/DisplayConfig",
+    "--method", "org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig",
+    str(serial), "1", f'[(0, 0, {scale}, uint32 0, true, [("Meta-0", "1920x1080@60.000", @a{{sv}} {{}})])]', "@a{sv} {}"
+]
+subprocess.check_call(cmd_apply)
+time.sleep(0.5)
+PYEOF
+    fi
+fi
+
 touch "$STATE_DIR/ready"
 
 wait
