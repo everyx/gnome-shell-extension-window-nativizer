@@ -13,6 +13,22 @@ PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
 PICK_REPLY="$STATE_DIR/pick-reply.txt"
 
+# If invoked without an explicit scale argument or WINDOW_NATIVIZER_SCALE override,
+# run the full matrix: both 1.0 and 1.33 fractional scale sessions must pass all checks.
+if [[ $# -eq 0 && -z "${WINDOW_NATIVIZER_SCALE:-}" ]]; then
+    echo "================================================================"
+    echo " Starting E2E Matrix for $UUID across scales (1.0, 1.33)"
+    echo "================================================================"
+    "$0" 1.0
+    echo ""
+    "$0" 1.33
+    echo ""
+    echo "================================================================"
+    echo ">> [test-e2e] Matrix PASSED: All checks passed at 1.0x and 1.33x!"
+    echo "================================================================"
+    exit 0
+fi
+
 # Checks that cannot run here (an absent libadwaita client, no Xwayland, a line that reports
 # animations off) are counted and reported rather than failed: the alternative is a red suite for a
 # line behaving correctly, which is indistinguishable from a real defect.
@@ -36,13 +52,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+SCALE="${1:-${WINDOW_NATIVIZER_SCALE:-1.0}}"
+
 echo "================================================================"
-echo " Starting Headless E2E Test for $UUID"
+echo " Starting Headless E2E Test for $UUID (scale: $SCALE)"
 echo "================================================================"
 
 # 1. Start fresh headless shell
 "$DEV" stop >/dev/null 2>&1 || true
-"$DEV" shell
+"$DEV" shell "$SCALE"
 
 # 2. Verify the extension is enabled. The state's spelling is the line's own: 45 says ENABLED where
 # 50 says ACTIVE, and matching one spelling read a correct activation as a failure on 45. Accept the
