@@ -75,6 +75,24 @@ SUBJECT_X = {"native": 80, "declared": 560, "bare": 1040}
 
 PROFILE_ROWS = 18
 
+# Outward rows run from the frame edge (offset 0) into the cast. The boundary row is where the
+# client's own edge and this extension's cast meet, and it is ours on the declared path: the
+# shadow shader bleeds ~1.3px inside the frame (SNAP_BLEED in tools/gen-shader.mjs), so any
+# inward offset of the clip body turns that row into shadow instead of body. It is compared, not
+# exempted - the run that motivated this file compared only offset 1 onward and so read a
+# shadow-covered edge as a matching one. Its raw value belongs to the client (see shape()), so it
+# enters the comparison as its departure from the window's own body.
+#
+# Inward rows are the client's own body, which this extension does not paint, so their colour is
+# not compared with the reference's (two clients need not paint the same body). They are read to
+# tell a step from a ramp: a clean edge steps to a flat body, while a leak from the cast keeps
+# darkening the rows next to the edge. INWARD_ROWS is how far the ramp could reach before the body
+# is flat.
+INWARD_ROWS = 4
+
+# A body is one colour next to the edge; the cast must not be painting a gradient there.
+BODY_FLAT_TOLERANCE = 0
+
 
 def ensure_session():
     if not os.path.exists(PID_FILE):
@@ -238,6 +256,36 @@ def profile_from(image, rect, side):
     return values
 
 
+def body_from(image, rect, side):
+    """Inward from the frame edge: the client's own body, nearest row first.
+
+    A clean body is flat here; a cast that leaked past the clip boundary darkens the rows next to
+    the edge and shows as a ramp toward the interior.
+    """
+    px = image.load()
+    width, height = image.size
+    scale = rect["scale"]
+    left = round(rect["x"] * scale)
+    top = round(rect["y"] * scale)
+    right = round((rect["x"] + rect["width"] - 1) * scale)
+    bottom = round((rect["y"] + rect["height"] - 1) * scale)
+    mid_x = (left + right) // 2
+    mid_y = (top + bottom) // 2
+
+    values = []
+    for offset in range(1, INWARD_ROWS + 1):
+        if side == "top":
+            x, y = mid_x, top + offset
+        elif side == "bottom":
+            x, y = mid_x, bottom - offset
+        elif side == "left":
+            x, y = left + offset, mid_y
+        else:
+            x, y = right - offset, mid_y
+        values.append(px[x, y][1] if 0 <= x < width and 0 <= y < height else 255)
+    return values
+
+
 SIDES = ("top", "bottom", "left", "right")
 # The frames, and which subject each one focuses: one frame cannot hold two focused windows, so the
 # focused half of the claim is measured by alternating which window has the focus. `D` repeats `B`, so
@@ -301,20 +349,43 @@ def measure(env):
         shoot(path, env)
         image = Image.open(path).convert("RGB")
         shots[frame] = {
-            subject: {side: profile_from(image, rects[subject], side) for side in SIDES}
+            subject: {
+                side: {"profile": profile_from(image, rects[subject], side),
+                       "body": body_from(image, rects[subject], side)}
+                for side in SIDES
+            }
             for subject in FOCUS_ORDER
         }
     return shots
 
 
-def delta(a, b, start=1):
-    """Worst difference over one profile, from `start` on: offset 0 is the boundary pixel, which is the
-    client's own content rather than the cast."""
-    return max(abs(x - y) for x, y in zip(a[start:], b[start:]))
+def body_delta(body):
+    """Worst spread over the rows inside the edge: a flat body, not a shadow ramp."""
+    return max(body) - min(body)
+
+
+def shape(reading):
+    """What this extension is accountable for, one entry per profile offset.
+
+    Entry 0 is the frame-edge pixel *relative to the window's own body*. That pixel is the client's
+    content - a GTK4 client paints its own headerbar there, and the reference paints its body - so
+    its raw value is not comparable between two clients, but its departure from the body is: our
+    own white 0.07-alpha outline is invisible at 8-bit, so a clean edge is a step (excess 0) and a
+    cast that leaked past the clip boundary is a dip. Entries 1.. are the cast, which lands on the
+    same backdrop for every window and so is compared raw. Offset 0 is in the comparison, not
+    exempted; only its client-content part is cancelled.
+    """
+    return [reading["profile"][0] - reading["body"][0]] + reading["profile"][1:]
+
+
+def delta(a, b):
+    """Worst difference over one shape."""
+    return max(abs(x - y) for x, y in zip(a, b))
 
 
 def worst_delta(shots, frame, subject, reference_frame, reference):
-    return max(delta(shots[frame][subject][side], shots[reference_frame][reference][side]) for side in SIDES)
+    return max(delta(shape(shots[frame][subject][side]), shape(shots[reference_frame][reference][side]))
+               for side in SIDES)
 
 
 # state, subject, the frame it is read from, the reference, the frame the reference is read from, and
@@ -353,10 +424,15 @@ def main():
             worst = worst_delta(shots, frame, subject, reference_frame, reference)
             print(f"{state:<28} {subject:<9} vs native: {worst} gray level(s), standard {tolerance}")
             # Where the difference sits, so a number that is not zero can be explained rather than
-            # tolerated: the top side of each reading, with the reference's.
-            print(f"  top reference {shots[reference_frame][reference]['top']}")
-            print(f"  top {subject:<9} {shots[frame][subject]['top']}")
-            print(f"  top delta     {[a - b for a, b in zip(shots[frame][subject]['top'], shots[reference_frame][reference]['top'])]}")
+            # tolerated: the top side of each reading, with the reference's, and the body rows on
+            # both. The edge row's raw values differ because the clients paint different bodies;
+            # the shape delta is what cancels that and compares the edge and the cast.
+            ref_top = shots[reference_frame][reference]["top"]
+            sub_top = shots[frame][subject]["top"]
+            print(f"  top reference {ref_top['profile']}")
+            print(f"  top {subject:<9} {sub_top['profile']}")
+            print(f"  top delta     {[a - b for a, b in zip(shape(sub_top), shape(ref_top))]}")
+            print(f"  top body      {sub_top['body']}  (reference {ref_top['body']})")
         print("-" * 84)
 
         # Same window, same state, two frames: if the machine moved between them, this is where it
@@ -376,10 +452,21 @@ def main():
         failures = []
         for frame, focused in FRAMES:
             for subject in FOCUS_ORDER:
-                profiles = shots[frame][subject]
-                if not all(profiles[side][1:] == profiles["top"][1:] for side in ("bottom", "left", "right")):
+                sides = shots[frame][subject]
+                if not all(shape(sides[side]) == shape(sides["top"])
+                           for side in ("bottom", "left", "right")):
                     failures.append(f"the {subject} window's four sides diverge in frame {frame} "
                                     f"(focused on {focused})")
+                # A clean edge steps to a flat body; a cast leaking past the clip boundary keeps
+                # the rows next to the edge dark and the spread is what catches it.
+                for side in SIDES:
+                    body = sides[side]["body"]
+                    spread = body_delta(body)
+                    if spread > BODY_FLAT_TOLERANCE:
+                        failures.append(f"the {subject} window's {side} body ramps inward "
+                                        f"{body} (spread {spread} gray level(s), "
+                                        f"standard {BODY_FLAT_TOLERANCE}) in frame {frame} "
+                                        f"(focused on {focused})")
 
         for state, subject, frame, reference, reference_frame, tolerance in COMPARISONS:
             worst = worst_delta(shots, frame, subject, reference_frame, reference)
