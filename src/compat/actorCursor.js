@@ -1,6 +1,5 @@
 /**
- * Resolves per-actor pointer cursors across GNOME Shell versions.
- * Supports Clutter.Actor.set_cursor_type on GNOME 50+, safely degrading on earlier shells.
+ * Resolves per-actor pointer cursors on GNOME 50+ (Clutter.Actor.set_cursor_type).
  */
 
 /**
