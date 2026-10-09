@@ -6,7 +6,7 @@
 
 import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
-import {ShaderEffect} from '../compat/index.js';
+import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {snapActorBodyFrame} from '../lib/snap.js';

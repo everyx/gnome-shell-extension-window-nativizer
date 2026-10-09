@@ -14,6 +14,7 @@ import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
+import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 
 // 2× the libadwaita radius: below it the two corner arcs overlap, so no rounded rect fits (helper surface, e.g. wl-clipboard 1×1).
 const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
@@ -194,37 +195,7 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     return !isFractionalScale(scale);
 }
 
-/**
- * @param {object} win - Meta.Window instance
- * @returns {boolean}
- */
-export function isWindowMaximized(win) {
-    return Boolean(win?.is_maximized?.());
-}
-
-/**
- * @param {object} win - Meta.Window instance
- * @param {object} [options={}]
- * @param {boolean} [options.isMaximized]
- * @param {boolean} [options.hasTileMatch]
- * @returns {boolean}
- */
-export function isWindowTiled(win, options = {}) {
-    if (!win)
-        return false;
-    const isMax = options.isMaximized ?? isWindowMaximized(win);
-    if (isMax)
-        return false;
-    const hasMatch = options.hasTileMatch ?? Boolean(win.get_tile_match?.());
-    const hMax = Boolean(win.maximized_horizontally);
-    const vMax = Boolean(win.maximized_vertically);
-    // Mutter's tile modes land here: `meta_window_tile_internal()` gives every mode but
-    // META_TILE_MAXIMIZED `META_MAXIMIZE_VERTICAL` - so one flag alone is a half tile - a
-    // pair of tiles matches each other, and a full maximize is both flags, the case that is
-    // not tiled. Read from these rather than from where the frame sits: a window the user
-    // merely placed flush against the work area is not tiled.
-    return (hMax !== vMax) || hasMatch;
-}
+export {isWindowMaximized, isWindowTiled};
 
 /**
  * @typedef {object} WindowEvaluationParams
