@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 00:02+0800\n"
+"POT-Creation-Date: 2026-10-09 14:11+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -173,11 +173,11 @@ msgid "Replace existing rules with imported rules for all conflicts"
 msgstr "所有衝突均替換為匯入規則"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:122
+#: src/prefs/ruleUi.js:121
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "開啟後修正此類視窗的自動判斷"
 
-#: src/prefs/ruleUi.js:161
+#: src/prefs/ruleUi.js:160
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "選取自視窗「%s」"

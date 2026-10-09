@@ -607,9 +607,7 @@ export function expectedWindowRadius({
     return 0;
 }
 
-// The picker's highlight metrics are generated from the Shell's own pickers: the border from the
-// Looking Glass picker, the fill from the screenshot window selector. vendor/gnome-shell/README.md
-// records which is which, and why the border does not follow the selector's 6px.
+// Picker highlight metrics match upstream Looking Glass (2px border) and screenshot selector fill.
 export {HIGHLIGHT_BORDER_WIDTH};
 
 /**

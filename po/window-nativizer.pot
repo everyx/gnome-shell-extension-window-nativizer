@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 00:02+0800\n"
+"POT-Creation-Date: 2026-10-09 14:11+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -176,11 +176,11 @@ msgid "Replace existing rules with imported rules for all conflicts"
 msgstr ""
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:122
+#: src/prefs/ruleUi.js:121
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr ""
 
-#: src/prefs/ruleUi.js:161
+#: src/prefs/ruleUi.js:160
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr ""

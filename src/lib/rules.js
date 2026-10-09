@@ -61,10 +61,7 @@ export function boolString(value) {
 }
 
 /**
- * Identity and specifier, split at the last ':'. The identity is verbatim, so it may itself
- * hold ':' (the shell's own `window:<n>` placeholder does); the specifier is colon-free by
- * construction, which is what lets its leading ':' be the last one in the key.
- * Callers validate with VALID_RULE_KEY_PATTERN first, so a key without ':' never reaches here.
+ * Splits a rule key into identity and specifier at the last colon.
  * @param {string} key
  * @returns {{identity: string, specifier: string}}
  */
@@ -74,8 +71,7 @@ function splitRuleKey(key) {
 }
 
 /**
- * The identity lowercased, so 'WeChat'/'wechat' are one kind. Plain toLowerCase, never the
- * locale variant: Turkish maps 'I' to a dotless 'ı', giving one window two keys.
+ * Normalizes rule key identity to lowercase for case-insensitive matching.
  * @param {string} key
  * @returns {string}
  */

@@ -1,22 +1,6 @@
 /**
- * Pure base class providing modern GNOME 51 ShaderEffect interface.
- *
- * In GNOME 51+, Shell.GLSLEffect was removed in favor of Clutter.ShaderEffect.
- * This module transparently adapts Clutter.ShaderEffect (GNOME 51+) and
- * Shell.GLSLEffect (GNOME 45–50) with zero global prototype mutation.
- *
- * Subclasses provide shader code via `static getShaderSource()` returning
- * `{hook?, declarations, code, replace?}`, and upload uniforms via
- * `this.set_uniform_float(name, n_components, value)`. That source must be a constant:
- * Clutter asks the modern branch for a *static* snippet, so it is built once and
- * cached on the class - a source that varied per instance would be answered with
- * whichever instance asked first.
- *
- * The modern branch deliberately defines no `set_uniform_float`: Mutter 51 added the
- * introspectable `clutter_shader_effect_set_uniform_float(name, n_components, value)`
- * (its `(array length=total_count)` argument is hidden by GJS) exactly to replace
- * Shell.GLSLEffect's. Defining one here would shadow that native method, and a partial
- * reimplementation (e.g. via `set_uniform_value`) would drop vector components.
+ * Adapts between Clutter.ShaderEffect (GNOME 51+) and Shell.GLSLEffect (GNOME 45-50).
+ * Subclasses provide static shader source via getShaderSource().
  */
 
 import Clutter from 'gi://Clutter';

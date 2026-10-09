@@ -5,8 +5,7 @@ import Gtk from 'gi://Gtk';
 import {RuleAxis, RULE_AXES} from '../lib/rules.js';
 import {axisName, asMarkup, windowKindSentence, _} from '../lib/rulePresenter.js';
 
-// One bundled icon per axis, plus the stock icon that stands in when the
-// bundle is missing; see src/icons/NOTICE.
+// Bundled symbolic icons per axis with fallback stock icons.
 export const AXIS_ICONS = {
     [RuleAxis.CORNERS]: {bundled: 'winnativizer-corners-symbolic', fallback: 'window-restore-symbolic'},
     [RuleAxis.SHADOW]: {bundled: 'winnativizer-shadow-symbolic', fallback: 'edit-copy-symbolic'},

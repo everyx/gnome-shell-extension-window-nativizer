@@ -1,19 +1,7 @@
 /**
  * GTK4 / GSK Grid Snapping Utilities.
- *
- * Implements physical pixel grid alignment directly aligned with GTK 4.24's
- * GskRectSnap, GSK_RECT_SNAP_ROUND, and gsk_rect_snap_to_grid.
- *
- * Rationale:
- * Under fractional scaling or floating-point actor positions, adjacent 8-slice
- * quads and compositor clipping effects suffer from subpixel rasterization
- * jitter (±0.5 physical px phase drift). Snapping rects and cutlines to the
- * physical device pixel grid eliminates seams, overlap artifacts, and edge blur.
- *
- * Reference:
- * - research/gtk/gsk/gskrectsnap.h
- * - research/gtk/gsk/gskrectsnapprivate.h
- * - research/gtk/gsk/gskrectprivate.h
+ * Implements physical pixel grid alignment matching GTK 4.24 GskRectSnap.
+ * Snapping rects and cutlines eliminates fractional scaling seams and blur.
  */
 
 
@@ -115,17 +103,7 @@ export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
 
 /**
  * Snaps a buffer actor's body frame to the physical device grid by symmetrically
- * snapping the outer insets margins per side.
- *
- * Rationale:
- * Snapping absolute rect coordinates `x` and `x + width` independently under
- * fractional scaling suffers from parity drift: when bufferWidth and insets
- * have non-matching fractional parts, `round(w * s) - round((w - r) * s)` can
- * differ from `round(r * s)` by 1 physical pixel, breaking 4-way symmetry and
- * leaving subpixel client border stroke residue on one side.
- * Snapping margins symmetrically guarantees that equal declared insets yield
- * identical physical margin cuts on both sides across all fractional scales.
- *
+ * snapping outer insets margins per side, preventing fractional parity drift.
  * @param {{width: number, height: number}} bufferSize - Buffer size in logical px
  * @param {import('./frame.js').Insets|null} [insets] - Ring margins per side
  * @param {number} scale - Physical device scale

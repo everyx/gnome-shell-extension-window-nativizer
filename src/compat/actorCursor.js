@@ -1,29 +1,10 @@
 /**
- * Pointer cursors, asked for by name, on whichever line this is running on.
- *
- * The API moved. `Clutter.Actor.set_cursor_type` and the `ClutterCursorType` enum it takes both
- * arrive in 50; before that there is no per-actor cursor at all. The enum used to be read into a
- * module-level table, which is what stopped the extension loading on 45-49: the module threw while it
- * was being evaluated (`TypeError: (intermediate value).CursorType is undefined`) and the shell
- * reported the whole extension as failed. So it is looked up per call, and a line without it simply
- * gets no cursor.
- *
- * Names rather than enum values, because the caller is a window band whose directions are its own
- * vocabulary (lib/resizeBand.js) and the compositor's enum should not be part of it. Resolving them
- * in one place is also where the 45-49 path would go - `global.display.set_cursor(MetaCursor)`, a
- * display-wide cursor rather than a per-actor one, so owning its reset would come with it - when
- * there is a line to verify that on.
- *
- * No GI import, so the lookup is unit-testable: the namespace is reached through the importer the
- * shell leaves on `globalThis`, as lib/window.js reaches `Shell`.
+ * Resolves per-actor pointer cursors across GNOME Shell versions.
+ * Supports Clutter.Actor.set_cursor_type on GNOME 50+, safely degrading on earlier shells.
  */
 
 /**
- * The pointer a caller asks for. A value of this kind rather than a bare string: a misspelt string
- * would resolve to nothing and leave the pointer alone in silence, which is exactly the failure this
- * module just spent a commit removing. The eight directions are the band's own vocabulary - the same
- * tokens `edgeForPoint()` answers and the grab-op table is keyed by - so a direction needs no
- * translation here.
+ * Recognized cursor shapes for window resize bands and inspector picker.
  */
 export const CursorShape = Object.freeze({
     DEFAULT: 'default',

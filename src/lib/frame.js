@@ -44,10 +44,8 @@ export function bodyFrame(size, insets = ZERO_INSETS) {
 }
 
 /**
- * The per-side ring between a buffer and its frame rect (`buffer_rect - frame_rect`). An X11
- * SSD window reads as the frame's invisible border width (>= 0), not null: Mutter sets
- * `buffer_rect = frame->rect`, the frame grown by those borders (`window-x11.c`). Null when
- * the frame is not inside the buffer at all.
+ * Computes per-side insets between buffer and frame rect (`buffer_rect - frame_rect`).
+ * Returns null when the frame does not fit within the buffer.
  * @param {{x: number, y: number, width: number, height: number}} buffer
  * @param {{x: number, y: number, width: number, height: number}} frame
  * @returns {Insets|null}
