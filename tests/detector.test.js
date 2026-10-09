@@ -20,12 +20,7 @@ import {
     buildRuleKeyFromProperties,
 } from '../src/lib/pick.js';
 
-/**
- * Meta's maximize bit flags, mirroring vendor/mutter/window.h. The unit suite runs without GI
- * typelibs so Meta.MaximizeFlags is not reachable here, and a bare 1/2/3 in a spec says nothing
- * about which flag it means.
- */
-const MaximizeFlags = Object.freeze({NONE: 0, HORIZONTAL: 1, VERTICAL: 2, BOTH: 3});
+
 
 /** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
 function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight) {
@@ -953,28 +948,6 @@ describe('isWindowMaximized', () => {
             is_maximized: () => false,
         };
         expect(isWindowMaximized(winFalse)).toBeFalse();
-    });
-
-    it('falls back to win.get_maximized() on GNOME 45–48', () => {
-        const win45Both = {
-            get_maximized: () => MaximizeFlags.BOTH,
-        };
-        expect(isWindowMaximized(win45Both)).toBeTrue();
-
-        const win45Horiz = {
-            get_maximized: () => MaximizeFlags.HORIZONTAL, // partially tiled
-        };
-        expect(isWindowMaximized(win45Horiz)).toBeFalse();
-
-        const win45Vert = {
-            get_maximized: () => MaximizeFlags.VERTICAL, // partially tiled
-        };
-        expect(isWindowMaximized(win45Vert)).toBeFalse();
-
-        const win45None = {
-            get_maximized: () => MaximizeFlags.NONE,
-        };
-        expect(isWindowMaximized(win45None)).toBeFalse();
     });
 
     it('handles null/undefined gracefully', () => {

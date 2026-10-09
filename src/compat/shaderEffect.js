@@ -1,5 +1,5 @@
 /**
- * Adapts between Clutter.ShaderEffect (GNOME 51+) and Shell.GLSLEffect (GNOME 45-50).
+ * Adapts between Clutter.ShaderEffect (GNOME 51+) and Shell.GLSLEffect (GNOME 50).
  * Subclasses provide static shader source via getShaderSource().
  */
 
@@ -36,7 +36,7 @@ export const ShaderEffect = Shell?.GLSLEffect
         }
 
         /**
-         * Sets float uniform using variable name, caching location on GNOME 45–50.
+         * Sets float uniform using variable name, caching location on GNOME 50.
          * Targets modern GNOME 51 3-argument signature: (name, n_components, value).
          * @param {string} name
          * @param {number} n_components

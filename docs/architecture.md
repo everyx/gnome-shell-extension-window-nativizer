@@ -25,7 +25,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
 | `effects/` | rounded clipping, shadow geometry, the shadow actor, and baked GPU shadow textures |
-| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, grab ops, actor cursors) across GNOME 45–51 |
+| `compat/` | zero-side-effect ponyfills bridging compositor watersheds (shader effects, grab ops, actor cursors) across GNOME 50–51 |
 
 ## The two processes
 
