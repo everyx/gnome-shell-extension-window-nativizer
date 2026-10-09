@@ -76,11 +76,7 @@ export class Manager {
         this._connect(this._signals, global.display, 'notify::focus-window', () => {
             this._resetBandCursors();
 
-            // Focus changes only `appears_focused`, which decides the shadow tone of exactly
-            // the two windows involved - not every window. Reconcile those two; each also
-            // reconciles through its own `notify::appears-focused`, so this is the belt to
-            // that suspenders. Focus landing on an unmanaged popup (issue #13) is still
-            // carried by the window that lost focus.
+            // Reconcile focus shadow styles for the windows losing and gaining focus.
             const previous = this._lastFocusWindow;
             const focusWin = global.display.focus_window;
             this._lastFocusWindow = focusWin;
@@ -95,9 +91,7 @@ export class Manager {
             this._reconcile();
         });
 
-        // GTK hands its CSS transitions no frame clock when animations are off, so a native window
-        // changes its shadow in one frame. Ours has to stop blending for the same reason, or the
-        // one window still moving is ours.
+        // Honor system animation toggle to snap shadow state instantly when animations are disabled.
         this._connect(this._signals, St.Settings.get(), 'notify::enable-animations', () => {
             this._animationsEnabled = St.Settings.get().enable_animations;
             this._reconcile();
@@ -301,11 +295,7 @@ export class Manager {
         if (this._lastFocusWindow === win)
             this._lastFocusWindow = null;
 
-        // Remove the entry before reading the pid: a deallocated window's get_pid() can throw,
-        // and the entry must already be gone or it would be re-synced forever. That throw costs the
-        // `forgetProcess` below, the only prune site for the process cache, so a process reusing
-        // this pid would be decorated from the dead one's answer. Left as is: every caller holds
-        // the window for the duration of the call, so the throw has no demonstrated trigger.
+        // Defensively query PID: get_pid() may fail if the native window actor is already finalizing.
         let pid = -1;
         try {
             pid = win.get_pid?.() ?? -1;
@@ -324,7 +314,7 @@ export class Manager {
                     // Skip a peer that is itself going away.
                 }
             }
-            // Last window for pid gone → drop process cache (also cleared in destroy()).
+            // Last window for pid gone -> drop process cache.
             if (!hasPeer)
                 this._classifier?.forgetProcess(pid);
         }
@@ -376,10 +366,7 @@ export class Manager {
                 deco.undecorate();
                 return;
             }
-            // The process has not been classified yet: nothing of ours is drawn for these frames,
-            // so the window keeps the decoration its toolkit gave it, and the answer landing a
-            // frame later runs the decision again. Deciding on a default is the guess the tri-state
-            // exists to remove.
+            // Defer decoration while process classification is still in flight.
             if (isClassificationPending(inputs))
                 return;
             const actions = evaluateWindowActions(inputs);

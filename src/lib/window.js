@@ -171,11 +171,7 @@ export function resolveMonitorBounds(display, win) {
     return null;
 }
 
-// Tracker-derived answers are remembered. A declared answer returns before the cache, a pid
-// fallback would freeze a session-local rule, and a peer-derived answer is not remembered
-// either: the peer scan is O(actors) but only runs for a window that declares no identity at
-// all, while caching it could not be invalidated correctly for a peer the manager does not
-// track (a popup, a dock).
+// Weak cache for resolved fallback identities; declared identities bypass cache.
 const fallbackIdentities = new WeakMap();
 
 /** @param {object} win @returns {string} stable identity or '' */
@@ -247,12 +243,8 @@ export function resolveWindowIdentity(win) {
  * @property {boolean} hasSsd
  * @property {boolean} isX11
  * @property {string} clientTypeToken
- * @property {boolean|null} nativeLikeCorners - Whether the process already draws itself the way we
- *           would, or null while its `/proc/<pid>/maps` read is still in flight. Null is not a
- *           decision input: it means "not known yet", and the caller defers rather than decide on
- *           a default.
- * @property {boolean|null} hasGtk4Client - Whether the client is GTK4, or null while the same read
- *           is still in flight.
+ * @property {boolean|null} nativeLikeCorners - Whether process draws native-like decorations, or null while pending
+ * @property {boolean|null} hasGtk4Client - Whether client is GTK4, or null while pending
  * @property {number} windowType
  * @property {boolean} hasParent
  * @property {boolean} isAttachedDialog
@@ -318,9 +310,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     const declaredWmClass = safeRead(() => readDeclaredIdentity(win), '');
     const wmClass = wmClassOverride || declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
 
-    // The classification answers null while its read is in flight, and a throwing classifier reads
-    // as the same "not known yet": both are teardown races, and deferring is what the answer
-    // landing a frame later would have done anyway.
+    // Null while read is pending or if classifier fails during teardown.
     const nativeLikeCorners = safeRead(() => {
         if (classifier && typeof classifier.adwaitaLook === 'function')
             return classifier.adwaitaLook(pid);
@@ -384,9 +374,7 @@ export function isWindowReading(value) {
 }
 
 /**
- * Whether a reading's process classification has not landed yet, so the decision must defer for the
- * frame. Deciding on the null instead would either decorate a window that rounds its own corners or
- * leave a plain one bare, and the answer landing a frame later would contradict it.
+ * Whether process classification is still in flight.
  * @param {{nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}} reading
  * @returns {boolean}
  */

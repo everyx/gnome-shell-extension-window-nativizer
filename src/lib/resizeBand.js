@@ -1,30 +1,18 @@
 /**
- * Resize band geometry: the strip around a window where a drag starts a compositor
- * resize grab. Two separate things live here. `edgeForPoint()` answers which direction a
- * pointer resolves to, and it is a direct transcription of GTK's
- * `get_edge_for_coordinates()` (`vendor/gtk/gtkwindow.c`), first match wins.
- * `computeResizeBands()` answers where an event is delivered: four disjoint rectangles
- * that cover the ring, carrying no direction of their own. Pure, so both can be tested
- * without a session.
+ * Resize band geometry for compositor resize grab.
+ * `edgeForPoint()` resolves direction (first match wins, matching GTK semantics).
+ * `computeResizeBands()` calculates the four disjoint outer ring hit rectangles.
  */
 
 import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
 
-/** GTK4's own handle width: `RESIZE_HANDLE_SIZE` from vendor/gtk/gtkwindow.c, the input region
- * of a CSD window grown on every side (`update_realized_window_properties`). */
+/** GTK-compatible handle width (input region grown around CSD window). */
 export const RESIZE_BAND = RESIZE_HANDLE_SIZE;
 
-/** GTK's corner reach, `RESIZE_HANDLE_CORNER_SIZE` (vendor/gtk/gtkwindow.c). */
+/** GTK-compatible corner reach. */
 export const RESIZE_CORNER = RESIZE_HANDLE_CORNER_SIZE;
 
-/**
- * Thinnest window that gets a band, `2 * RESIZE_BAND` (24px). This bounds the ring itself:
- * a window this thin has no middle left once the band is grown on both sides. It has no
- * native meaning, and is not a boundary GTK knows: GTK's input region is the body grown by
- * `RESIZE_HANDLE_SIZE` on every side whatever the window size is
- * (`update_realized_window_properties`, gtkwindow.c), so a native window this small or
- * smaller still has a full grab ring.
- */
+/** Thinnest window that gets a band (2 * RESIZE_BAND). */
 export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
 
 /**
@@ -62,14 +50,9 @@ export function normalizeConstrainedEdges({
 }
 
 /**
- * Maps a pointer coordinate to the resize direction GTK's own hit-test would resolve.
- *
- * Only the outward ring is ours. GTK also reads an inner 24px corner when the pointer is
- * inside the body (`gsk_rounded_rect_corner_box_contains_point`); that surface belongs to
- * the client, so a point inside the body is null here.
- *
- * A constrained edge resolves to null, and the corner regions beside it to the unconstrained straight
- * edge (extending GTK hit-test behavior for constrained windows).
+ * Maps pointer coordinate to resize direction.
+ * Points inside window body resolve to null (handled by client).
+ * Constrained edges resolve to null, and adjacent corners resolve to unconstrained edge.
  * @param {Rect} frame - Window body, in the same space as `x`/`y`
  * @param {number} x
  * @param {number} y
@@ -106,8 +89,7 @@ export function edgeForPoint(frame, x, y, {
         maximizedVertically,
     });
 
-    // GTK's order, and GTK's first match wins - on a narrow window the earlier band takes the
-    // overlap of the two corner reaches.
+    // First match wins: earlier edge claims corner overlap on narrow windows.
     if (x < left && x >= left - b) {
         if (constrained.left)
             return null;
@@ -221,15 +203,9 @@ export function emptyBands() {
 }
 
 /**
- * In-place form for the resize hot path: writes the four ring rectangles into `bands` (a
- * persistent object whose regions are rects or null) and reuses each region's own rect, so
- * only the first time a region becomes present allocates. Returns whether anything changed.
- *
- * The four rectangles tile `frame`'s `RESIZE_BAND`-wide outer ring, each clipped to `bounds`.
- * The direction a point resolves to is `edgeForPoint()`; these rectangles only decide where an
- * event is delivered atomically - disjoint, half-open, exactly covering the ring. Units are
- * logical px at every scale; a non-positive or non-finite `scale` gets no band, so a caller
- * that cannot say which space it measured in is never silently misread.
+ * Writes the four disjoint outer ring rectangles into `bands` in place, clipped to `bounds`.
+ * Reuses existing rect objects in `bands` to avoid GC allocation on hot path.
+ * Direction is resolved separately via `edgeForPoint()`.
  * @param {Record<string, Rect|null>} bands - mutated in place
  * @param {object} params - see `computeResizeBands`
  * @returns {boolean} Whether `bands` differs from what it held

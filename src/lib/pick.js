@@ -12,7 +12,6 @@ import {
     isWindowReading,
 } from './window.js';
 
-// Generated from vendor/mutter/window.h.
 export {WindowClientType};
 
 // Re-exported window inspection utilities for backward compatibility.
