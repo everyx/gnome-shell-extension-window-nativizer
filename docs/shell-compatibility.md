@@ -131,6 +131,18 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   connections. The audit exempts this single message by matching its exact signature and reporting its
   count.
 
+- **`Gtk-CRITICAL **: ...: Unable to register the application: ... Could not activate remote peer 'org.a11y.atspi.Registry'`**,
+  logged by GTK applications in headless/nested sessions without an AT-SPI accessibility bus. Process-independent
+  environment noise, counted and reported.
+
+- **`Gjs-WARNING **: ...: Type GITypeInfo of property ... does not match ... Falling back to slow path`**,
+  from upstream GJS property introspection where C getter return types disagree with introspection metadata
+  (e.g. `Adw.PreferencesWindow::visible-page`). Counted and reported.
+
+- **`libmutter-WARNING **: ...: Tried to ping window ... with a bad serial! Not allowed.`**,
+  from Mutter when pinging a client window that has unmapped or severed its Wayland connection during stress
+  tests. Counted and reported.
+
 ## Working rules
 
 - **The decisions and queries are pure (Command-Query Separation).** Everything that decides

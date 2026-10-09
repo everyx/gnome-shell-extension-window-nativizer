@@ -156,7 +156,9 @@ by hand. The clip body is snapped to the physical grid with the same rule the sh
 use, so the two stay in phase across fractional scales. When a client ring has to be cleared,
 the clip boundary is inset by a safe margin before rounding, which excises GTK3's internal Cairo
 half-pixel stroke bleed and outer box-shadow residue without distorting the shadow or the tiled
-ring.
+ring. Under fractional scaling, the fragment shader pushes texture sampling coordinates inward
+along the boundary normal (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
+sampling external stroke bleed on both straight edges and corner arcs.
 
 Upload cost: the effect deduplicates its decisions and repaints only on change, and the paint
 guards its uniform uploads with dirty checks, so a static repaint uploads nothing and a resize

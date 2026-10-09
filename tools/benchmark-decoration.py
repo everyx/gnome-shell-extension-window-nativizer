@@ -77,8 +77,8 @@ PROFILE_ROWS = 18
 
 # Outward rows run from the frame edge (offset 0) into the cast. The boundary row is where the
 # client's own edge and this extension's cast meet, and it is ours on the declared path: the
-# shadow shader bleeds ~1.3px inside the frame (SNAP_BLEED in tools/gen-shader.mjs), so any
-# inward offset of the clip body turns that row into shadow instead of body. It is compared, not
+# shadow shader cutout aligns strictly with GTK4's analytical box shadow, so any misalignment
+# of the clip body turns that row into shadow instead of body. It is compared, not
 # exempted - the run that motivated this file compared only offset 1 onward and so read a
 # shadow-covered edge as a matching one. Its raw value belongs to the client (see shape()), so it
 # enters the comparison as its departure from the window's own body.

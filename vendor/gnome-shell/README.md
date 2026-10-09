@@ -22,5 +22,5 @@ vendored from upstream gnome-shell.
   committed source of truth, at the COMMIT above.
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
-  2. Run `node tools/gen-inspector.mjs`
+  2. Run `pnpm run gen:code` (or `node tools/gen-inspector.mjs`)
   3. Verify that the generated diff matches expectations

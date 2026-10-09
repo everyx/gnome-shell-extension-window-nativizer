@@ -21,11 +21,11 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, X11 (Xwayland) and multi-window cases, and a zero-warning audit of the log |
-| `pnpm run test:bench` | measures three windows on one frame - a live libadwaita one, one whose client declared its own shadow ring, and a bare one - and prints all their profiles |
-| `pnpm run check:bench` | fidelity guard: exits 1 unless both decorated windows' shadows match the live libadwaita window's within 2 grey levels and each is 4-way symmetric |
+| `pnpm run test:bench` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
+| `pnpm run check:bench` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
-| `pnpm run check:style` | re-derives the generated style, shader, Cogl/Clutter padding, Mutter, GTK resize-handle, picker highlight, locale and Shell API-table artifacts from their sources and fails if they drifted; also fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
+| `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are encapsulated in `src/compat/` (via `check-compat-ownership.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
 | `pnpm run lint:zip` | analyses that zip with shexli |
@@ -235,6 +235,7 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 | [rule-model.md](rule-model.md) | the rule key and state format, the reversed axes, identity resolution |
 | [architecture.md](architecture.md) | modules, the two processes, the actors |
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
+| [shell-api.md](shell-api.md) | what each upstream Shell/Mutter call is for, and why the extension needs it |
 
 **Comments are for the line they sit on.** Keep one when deleting it would make the next
 line unreadable or easy to misread: what an otherwise arbitrary condition selects (a
@@ -266,7 +267,7 @@ rosters). Anything discoverable via types, tests, or grep belongs to the machine
 An introspectable fact written in markdown is merely an unverified, rotting cache.
 
 1. **Machine-verified layer (`tests/`)**: High churn, zero drift. All concrete parameters, edge cases,
-   and geometric formulas live in executable unit tests (`npm test`). If code shifts, tests fail immediately.
+   and geometric formulas live in executable unit tests (`pnpm test`). If code shifts, tests fail immediately.
 2. **In-code comments layer (JSDoc & inline)**: Co-located with code, high locality. Carries local "Why",
    counter-intuitive workarounds, and non-obvious traps. Omits restatements of code syntax or trivial types.
    Kept in the same file and reviewed in the same git diff as the code change.

@@ -263,6 +263,15 @@ To solve this at the root:
    rather than the filled disc the
    old shader evaluated, so it no longer floods alpha under the window edge and the first boundary
    pixel.
+7. **Inward Normal Texture Sampling Offset under Fractional Scaling**:
+   When clearing client-drawn decoration rings (`uClearRing > 0.5`), GTK3 windows often carry
+   semi-transparent Cairo border strokes (`0.5px` outside, `0.5px` inside the frame). Under fractional
+   scaling (e.g. 1.25x, 1.33x), hardware bilinear texture filtering samples texels across the border edge,
+   pulling exterior dark pixels into the boundary. To eliminate this without shrinking the window's
+   physical geometry, `clipEffect.js` pushes the texture sampling coordinates inward along the boundary
+   normal by `max(0.0, d + inset)` where `inset = min(1.0 + 0.5 / uScale, maxInset)`. Both straight
+   edges and corner arcs sample clean interior pixels, guaranteeing zero dark seam or notch artifacts
+   under fractional scaling while preserving full content fidelity.
 
 ### Golden Baseline at 1.0x Integer Scale
 
@@ -463,3 +472,14 @@ file, as the environment witness above.
 
 **This check needs a session, so nothing runs it automatically yet**, which is how it went a week
 without anyone noticing it had been failing. Wiring it into a hook or a CI job is open work.
+
+### GTK3 CSD Pixel-Level Verification in E2E
+
+While `benchmark-decoration.py` focuses on GTK4 shadow curves, GTK3 CSD edge transitions and
+corner anti-aliasing are asserted directly in the automated E2E test suite (`tools/test-e2e.sh`).
+A minimal GTK3 client with declared margins (`tools/gtk3-probe.py`) is rendered over a pure white
+backdrop across four subpixel phase positions (x = 240, 241, 242, 243). A continuous radial ray
+scan (19 rays sampled every 5° from top to left shoulder) verifies both minimum intensity thresholds
+and monotonic radial/tangential color transitions, ensuring zero dark stroke bleed, notch artifacts,
+or subpixel phase jitter.
+
