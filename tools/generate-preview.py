@@ -260,7 +260,13 @@ def main():
 
     # 8. Save
     os.makedirs(os.path.dirname(PREVIEW_OUTPUT), exist_ok=True)
-    canvas.save(PREVIEW_OUTPUT, "WEBP", quality=95)
+    # Lossless, so that a diff in this asset means the rendering changed. At q95 the encoder
+    # re-quantises as soon as the content moves even slightly, and that shows up as a scatter of
+    # +/-1 levels well away from anything that moved - measured across one pair of generations:
+    # 28% of the AFTER panel differing at a median of 5/765, where the window's own profile had
+    # done nothing but shift by a pixel. Costs about 2.4x the bytes (7.8 KB -> 18.9 KB) on an image
+    # that is mostly flat colour, which is what makes lossless cheap here.
+    canvas.save(PREVIEW_OUTPUT, "WEBP", lossless=True)
     print(f">> Successfully saved: {PREVIEW_OUTPUT} ({os.path.getsize(PREVIEW_OUTPUT)} bytes)")
 
     # Stop nested shell cleanly
