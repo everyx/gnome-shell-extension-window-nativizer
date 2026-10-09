@@ -25,7 +25,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run check:bench` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
-| `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are encapsulated in `src/compat/` (via `check-compat-ownership.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
+| `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
 | `pnpm run lint:zip` | analyses that zip with shexli |
@@ -42,7 +42,7 @@ call the shell does not have before a reviewer does. The fourth is a judgement t
 a comment here explains the line it sits on, and the reasoning goes in `docs/`.
 
 **What a stub may stand for, and what only pixels settle.** A stub may only stand for something the
-type declares. `tests/compat.test.js` used to stub `display.get_default_seat`, a method
+type declares. `tests/platform.test.js` used to stub `display.get_default_seat`, a method
 `Meta.Display` has not declared in any of 45-51, so the test passed while the code path resolved
 nothing and the resize band stayed silently inert on 45-48. The names the code may rely on are in
 `tools/shell-api.json`, `tools/gjs-surface.js` proves them against a real shell, and a stub for a

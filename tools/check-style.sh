@@ -13,4 +13,4 @@ node tools/gen-inspector.mjs --check
 node tools/gen-locale.mjs --check
 node tools/gen-shell-api.mjs --check
 node tools/check-shell-version.mjs --check
-node tools/check-compat-ownership.mjs --check
+node tools/check-platform-boundary.mjs --check

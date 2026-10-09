@@ -18,7 +18,7 @@
  * The assertion boundary is the boundary of what the code assumes. Existence is asserted for
  * everything the extension calls, because it is the cheapest check with the widest reach. Shape is
  * not restated here for a member whose declaration moves across the audited lines: that member is
- * owned by a seam in src/compat/, and the seam is asked what it selected below. Pinning one line's
+ * owned by a seam in src/platform/, and the seam is asked what it selected below. Pinning one line's
  * arity here is what produced a false failure on GNOME 51, where the code was right and the
  * constant was stale.
  * Everything else is printed, not asserted: an assertion needs a hand-written expectation, and a
@@ -60,7 +60,7 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'get_buffer_rect', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'allows_resize', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_monitor', arity: 0},
-    // The shape is compat/grabOp.js's: 45 takes a device and a sequence, 46-48 add pos_hint, 49-51
+    // The shape is platform/grabOp.js's: 45 takes a device and a sequence, 46-48 add pos_hint, 49-51
     // take a sprite. Asserting one of them here is the mistake this entry used to make.
     {ns: 'Meta', cls: 'Window', member: 'begin_grab_op'},
     {ns: 'Meta', cls: 'Window', member: 'get_compositor_private', arity: 0},
@@ -81,7 +81,7 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Display', member: 'get_tab_list', params: ['type', 'workspace']},
     {ns: 'Meta', cls: 'Backend', member: 'get_monitor_manager', arity: 0},
     // Clutter
-    // The cursor call and its enum are compat/actorCursor.js's: both arrive in 50.
+    // The cursor call and its enum are platform/actorCursor.js's: both arrive in 50.
     {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', optional: true},
     // The enum that call takes. It arrives in the same release, and the code reads it behind a
     // capability check - 45-49 have neither, and reading it while a module was evaluated is what
@@ -96,7 +96,7 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', optional: true},
     {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', optional: true},
-    // What compat/grabOp.js dispatches on: 49-51 have the sprite pair, 45-48 reach the pointer
+    // What platform/grabOp.js dispatches on: 49-51 have the sprite pair, 45-48 reach the pointer
     // through the seat. Either way the dispatch picks the shape, so only existence is asserted.
     {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', optional: true},
@@ -109,7 +109,7 @@ const SURFACE = [
     {ns: 'Cogl', cls: 'Pipeline', member: 'get_layer_filters', params: ['layer_index']},
     {ns: 'Cogl', cls: 'PipelineFilter', enum: true, members: ['LINEAR_MIPMAP_LINEAR', 'LINEAR', 'NEAREST']},
     // gnome-shell, only reachable from inside the shell
-    // compat/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
+    // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
     // Clutter.ShaderEffect in 51. The uniform upload is the seam's, so no shape is pinned here -
     // the group below only requires that one of the two paths exists.
     {ns: 'Shell', cls: 'GLSLEffect', class: true, optional: true},
@@ -327,32 +327,32 @@ for (const group of GROUPS) {
         report(group.name, present.map(m => m.join('.')).join(' / '));
 }
 
-// A member whose declaration moves across the audited lines is the compat layer's to pick, not
+// A member whose declaration moves across the audited lines is the platform layer's to pick, not
 // this file's to pin. Ask each seam what it selected and assert the selection is callable on the
 // typelibs this shell is running - that is the runtime half of the ownership rule, and it is what
 // the deleted per-member arity and parameter tables used to stand in for.
-const COMPAT = GLib.build_filenamev([ROOT, 'src', 'compat', 'index.js']);
-let compat = null;
+const PLATFORM = GLib.build_filenamev([ROOT, 'src', 'platform', 'index.js']);
+let platform = null;
 try {
-    compat = await import(GLib.filename_to_uri(COMPAT, null));
+    platform = await import(GLib.filename_to_uri(PLATFORM, null));
 } catch (e) {
-    fail('src/compat', `the seam module did not load: ${e.message}`);
+    fail('src/platform', `the seam module did not load: ${e.message}`);
 }
-if (compat) {
+if (platform) {
     const seam = (what, value) => {
         if (typeof value === 'function')
-            report(`compat ${what}`, 'callable');
+            report(`platform ${what}`, 'callable');
         else
-            fail(`compat ${what}`, `the seam selected ${value === undefined ? 'nothing' : typeof value}, which is not callable`);
+            fail(`platform ${what}`, `the seam selected ${value === undefined ? 'nothing' : typeof value}, which is not callable`);
     };
-    seam('ShaderEffect', compat.ShaderEffect);
+    seam('ShaderEffect', platform.ShaderEffect);
     // The selected base class may define the upload itself (Shell.GLSLEffect, 45-50) or inherit
     // Mutter's native one (Clutter.ShaderEffect, 51), so this reaches through the chain either way.
-    seam('ShaderEffect.set_uniform_float', compat.ShaderEffect?.prototype?.set_uniform_float);
-    seam('beginWindowGrabOp', compat.beginWindowGrabOp);
-    seam('getPointerSprite', compat.getPointerSprite);
-    seam('setActorCursor', compat.setActorCursor);
-    seam('coglContextForBake', compat.coglContextForBake);
+    seam('ShaderEffect.set_uniform_float', platform.ShaderEffect?.prototype?.set_uniform_float);
+    seam('beginWindowGrabOp', platform.beginWindowGrabOp);
+    seam('getPointerSprite', platform.getPointerSprite);
+    seam('setActorCursor', platform.setActorCursor);
+    seam('coglContextForBake', platform.coglContextForBake);
 }
 
 // The typelibs are found by version-numbered directory, and a GNOME line whose typelibs we never

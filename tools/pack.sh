@@ -17,7 +17,7 @@ trap 'rm -f "${ROOT_DIR}/src/LICENSE"' EXIT INT TERM
 # 4. Pack extension into dist/
 gnome-extensions pack src \
   --force \
-  --extra-source=compat \
+  --extra-source=platform \
   --extra-source=lib \
   --extra-source=prefs \
   --extra-source=effects \

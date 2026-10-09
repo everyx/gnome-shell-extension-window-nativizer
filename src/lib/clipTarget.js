@@ -7,6 +7,7 @@
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
+import {getWindowBufferRect, getWindowClientType} from '../platform/window.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;
 
@@ -41,7 +42,7 @@ export function isCompatibleSurfaceGeometry(candidate, win) {
     if (!candidate || !win)
         return false;
 
-    const buffer = win.get_buffer_rect?.();
+    const buffer = getWindowBufferRect(win);
     // Fail-open: if buffer cannot be queried yet, defer rejection to subsequent reconcile.
     if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
         return true;
@@ -74,7 +75,7 @@ export function resolveClipTarget(win, actor, St = null) {
     if (!actor)
         return null;
 
-    const isX11 = win?.get_client_type?.() === CLIENT_TYPE_X11;
+    const isX11 = getWindowClientType(win) === CLIENT_TYPE_X11;
     const defaultTarget = isX11 ? actor.get_first_child?.() ?? actor : actor;
 
     const children = actor.get_children?.();

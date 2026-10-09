@@ -2197,7 +2197,7 @@ print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
-summary "GJS Surface: PASSED (every member we call is callable, and the compat seams resolved; signatures above)"
+summary "GJS Surface: PASSED (every member we call is callable, and the platform seams resolved; signatures above)"
 summary "Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"
 summary "Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
 summary "Shadow Blend: $BLEND_RESULT_SUMMARY"

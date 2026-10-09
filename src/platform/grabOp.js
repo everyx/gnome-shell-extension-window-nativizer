@@ -35,3 +35,34 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     win.begin_grab_op(op, sprite, time, posHint);
     return true;
 }
+
+function metaNamespace() {
+    try {
+        return globalThis.imports?.gi?.Meta ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Resolves the compositor Meta.GrabOp for a directional resize.
+ * @param {string} direction - 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'
+ * @param {object|null} [meta] - Optional Meta namespace for testing
+ * @returns {number|null} Meta.GrabOp resize op or null
+ */
+export function getResizeGrabOp(direction, meta = metaNamespace()) {
+    const grabOp = meta?.GrabOp;
+    if (!grabOp)
+        return null;
+    switch (direction) {
+    case 'n': return grabOp.RESIZING_N ?? null;
+    case 'ne': return grabOp.RESIZING_NE ?? null;
+    case 'e': return grabOp.RESIZING_E ?? null;
+    case 'se': return grabOp.RESIZING_SE ?? null;
+    case 's': return grabOp.RESIZING_S ?? null;
+    case 'sw': return grabOp.RESIZING_SW ?? null;
+    case 'w': return grabOp.RESIZING_W ?? null;
+    case 'nw': return grabOp.RESIZING_NW ?? null;
+    default: return null;
+    }
+}
