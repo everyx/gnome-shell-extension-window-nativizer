@@ -240,7 +240,7 @@ is where it is read rather than what it does. It arrives in 50 with the method, 
 directions used to be resolved into a **module-level table** of its members: on 45-49 the table threw
 while the extension was being loaded, so the shell reported the whole extension as failed
 (`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
-behind a capability check in `compat/actorCursor.js`, and a line without the enum gets no cursor
+behind a capability check in `platform/actorCursor.js`, and a line without the enum gets no cursor
 instead of no extension.
 
 ## cogl_pipeline_filter
@@ -250,8 +250,8 @@ Used when configuring the layer filters for overview thumbnails.
 
 ## shell_glsl_set_uniform_float
 
-`effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The whole file goes
-away in 51, which is why the compat class exists at all.
+`effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The per-line
+shader base class behind `platform/shaderEffect.js` is one seam of the unified platform library.
 
 ## backend_get_sprite
 

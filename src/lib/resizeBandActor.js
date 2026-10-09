@@ -11,10 +11,11 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
-import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {beginWindowGrabOp, CursorShape, getPointerSprite, setActorCursor} from '../compat/index.js';
+import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
+import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
+import {setActorAboveSibling} from '../platform/display.js';
 
 import {ZERO_INSETS} from './frame.js';
 import {
@@ -25,7 +26,7 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
-import {getWindowFromActor} from './pick.js';
+import {getWindowFromActor, isWindowAllowsResize} from '../platform/window.js';
 import {setActorBox} from './snap.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
@@ -33,18 +34,6 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // The band reaches RESIZE_BAND (12) outward on every side, so the container has to be
 // larger than the window actor by that much, or the regions would be clipped out of it.
 const OUTER = RESIZE_BAND;
-
-// Direction-to-grab-op mapping. Cursor shape is resolved via compat/actorCursor.js.
-const DIRECTION_GRAB_OP = {
-    n: Meta.GrabOp.RESIZING_N,
-    ne: Meta.GrabOp.RESIZING_NE,
-    e: Meta.GrabOp.RESIZING_E,
-    se: Meta.GrabOp.RESIZING_SE,
-    s: Meta.GrabOp.RESIZING_S,
-    sw: Meta.GrabOp.RESIZING_SW,
-    w: Meta.GrabOp.RESIZING_W,
-    nw: Meta.GrabOp.RESIZING_NW,
-};
 
 /**
  * @param {{x:number,y:number,width:number,height:number}|null} a
@@ -236,7 +225,7 @@ export const ResizeBand = GObject.registerClass({
 
     /** Re-pin above the window actor; window_group's stacking is rebuilt on 'restacked'. */
     restack() {
-        this._container?.set_child_above_sibling(this, this._windowActor);
+        setActorAboveSibling(this, this._windowActor, this._container);
     }
 
     /** Back to the default arrow, e.g. after a grab op or when the window moved. */
@@ -328,7 +317,7 @@ export const ResizeBand = GObject.registerClass({
             return Clutter.EVENT_PROPAGATE;
 
         const win = getWindowFromActor(this._windowActor);
-        if (!win?.allows_resize?.())
+        if (!isWindowAllowsResize(win))
             return Clutter.EVENT_PROPAGATE;
 
         const sprite = getPointerSprite(event);
@@ -336,9 +325,10 @@ export const ResizeBand = GObject.registerClass({
         const posHint = new Graphene.Point({x, y});
 
         // Hand off to Mutter via the compositor grab helper.
+        const op = getResizeGrabOp(direction);
         const grabbed = beginWindowGrabOp(
             win,
-            DIRECTION_GRAB_OP[direction],
+            op,
             sprite,
             event.get_time(),
             posHint

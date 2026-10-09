@@ -26,7 +26,7 @@ deploy_ext() {
     [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
     [[ -f "$SRC_DIR/stylesheet.css" ]] && cp "$SRC_DIR/stylesheet.css" "$EXT_DIR/"
     [[ -d "$SRC_DIR/lib" ]] && cp -r "$SRC_DIR/lib" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/compat" ]] && cp -r "$SRC_DIR/compat" "$EXT_DIR/"
+    [[ -d "$SRC_DIR/platform" ]] && cp -r "$SRC_DIR/platform" "$EXT_DIR/"
     [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"
     [[ -d "$SRC_DIR/icons" ]] && cp -r "$SRC_DIR/icons" "$EXT_DIR/"
     [[ -d "$SRC_DIR/locale" ]] && cp -r "$SRC_DIR/locale" "$EXT_DIR/"

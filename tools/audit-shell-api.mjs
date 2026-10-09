@@ -102,7 +102,7 @@ const SURFACE = [
     {id: 'cogl_pipeline_filter', member: 'Cogl.PipelineFilter', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'COGL_PIPELINE_FILTER_NEAREST'},
     // The cursor enum the resize band's directions resolve to. It arrives in 50 with
     // set_cursor_type, and it is recorded because of how it is read: a module-level table of its
-    // members is what kept the extension from loading on 45-49 (see compat/actorCursor.js).
+    // members is what kept the extension from loading on 45-49 (see platform/actorCursor.js).
     {id: 'clutter_cursor_type', member: 'Clutter.CursorType', repo: 'mutter', kind: 'enum', file: 'clutter/clutter/clutter-enums.h', sym: 'CLUTTER_CURSOR_DEFAULT'},
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
     {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},

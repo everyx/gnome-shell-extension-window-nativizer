@@ -2,12 +2,27 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {CursorShape, setActorCursor} from '../compat/index.js';
+import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
+import {
+    getWindowActors,
+    getActiveWorkspace,
+    getStage,
+    getStageDimensions,
+} from '../platform/display.js';
+import {
+    getWindowFrameRect,
+    getWindowType,
+    getWindowPid,
+    getWindowDisplayTitle,
+    isWindowMinimized,
+    isWindowHidden,
+    isWindowOnAllWorkspaces,
+    isWindowLocatedOnWorkspace,
+} from '../platform/window.js';
 
 import {
     INSPECTOR_DBUS_NAME,
@@ -26,7 +41,6 @@ import {
 import {
     getWindowFromActor,
     readWindow,
-    readWindowString,
     resolveWindowIdentity,
 } from './window.js';
 
@@ -115,29 +129,29 @@ export class InspectorService {
     }
 
     _findTargetWindow(stageX, stageY) {
-        const actors = global.get_window_actors?.() ?? [];
+        const actors = getWindowActors();
         // Hoisted out of the loop: the active workspace cannot change while one hit test enumerates windows.
-        const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
+        const activeWorkspace = getActiveWorkspace();
         for (let i = actors.length - 1; i >= 0; i--) {
             // A window torn down mid-scan must not abort the hit test - or escape a Clutter
             // handler and leave the D-Bus pick unanswered: skip it and keep looking.
             try {
                 const winActor = actors[i];
                 const win = getWindowFromActor(winActor);
-                if (!win || win.minimized || (win.is_hidden && win.is_hidden()))
+                if (!win || isWindowMinimized(win) || isWindowHidden(win))
                     continue;
                 if (winActor.is_mapped && !winActor.is_mapped())
                     continue;
 
-                if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
+                if (activeWorkspace && !isWindowOnAllWorkspaces(win) && !isWindowLocatedOnWorkspace(win, activeWorkspace))
                     continue;
 
-                const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
+                const type = getWindowType(win);
                 if (!isDecoratableWindowType(type))
                     continue;
 
-                const frame = win.get_frame_rect();
-                if (stageX >= frame.x && stageX < frame.x + frame.width &&
+                const frame = getWindowFrameRect(win);
+                if (frame && stageX >= frame.x && stageX < frame.x + frame.width &&
                     stageY >= frame.y && stageY < frame.y + frame.height)
                     return win;
             } catch {
@@ -170,13 +184,14 @@ export class InspectorService {
         // the first `add_child`: the overlay is full-screen and reactive, so a throw between the two
         // would leave it swallowing every click until the shell restarted, out of reach of
         // `_cleanupPickUI()`.
+        const dims = getStageDimensions();
         this._overlay = new St.Widget({
             name: 'WindowNativizerInspectorOverlay',
             reactive: true,
             x: 0,
             y: 0,
-            width: global.stage.width,
-            height: global.stage.height,
+            width: dims.width,
+            height: dims.height,
         });
 
         // The accent colour is the `-st-accent-color` CSS term, not a literal:
@@ -198,11 +213,11 @@ export class InspectorService {
             try {
                 const targetWin = this._findTargetWindow(x, y);
                 if (targetWin) {
-                    // Queries never start the /proc read synchronously; the event drives it,
-                    // and the answer lands a frame later for the next motion to read.
-                    const pid = targetWin.get_pid?.();
+                    const pid = getWindowPid(targetWin);
                     this._manager?.classifier?.probeAdwaitaLook(pid);
-                    const frame = targetWin.get_frame_rect();
+                    const frame = getWindowFrameRect(targetWin);
+                    if (!frame)
+                        return;
                     const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
                     const innerRadius = this._getExpectedWindowRadius(targetWin);
                     const outerRadius = highlightOuterRadius(innerRadius, HIGHLIGHT_BORDER_WIDTH);
@@ -256,7 +271,7 @@ export class InspectorService {
             return;
         }
         try {
-            setActorCursor(global.stage, CursorShape.CROSSHAIR);
+            setActorCursor(getStage(), CursorShape.CROSSHAIR);
         } catch {
             // stage may be unmanaging
         }
@@ -279,11 +294,11 @@ export class InspectorService {
         try {
             // The suggested-rule queries read the process cache; start the read at this request
             // boundary so they stay side-effect free.
-            this._manager?.classifier?.probeAdwaitaLook(win.get_pid?.());
+            this._manager?.classifier?.probeAdwaitaLook(getWindowPid(win));
             const properties = extractWindowProperties(win, resolveWindowIdentity(win));
 
             // Display only, not used in rule identity matching.
-            const title = readWindowString(() => win.get_title());
+            const title = getWindowDisplayTitle(win);
             if (title)
                 properties.windowTitle = title;
 
@@ -334,7 +349,7 @@ export class InspectorService {
         }
 
         try {
-            setActorCursor(global.stage, CursorShape.DEFAULT);
+            setActorCursor(getStage(), CursorShape.DEFAULT);
         } catch {
             // stage may be unmanaging
         }

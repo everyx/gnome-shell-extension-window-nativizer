@@ -1,5 +1,4 @@
 import GLib from 'gi://GLib';
-import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -19,6 +18,19 @@ import * as shadowTexture from '../effects/shadowTexture.js';
 import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
 import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
 import {RESIZE_BAND_G_TYPE, ResizeBand} from './resizeBandActor.js';
+import {
+    getDisplay,
+    getFocusWindow,
+    getWindowGroup,
+    getMonitorManager,
+    getTabList,
+    getWindowActors,
+} from '../platform/display.js';
+import {
+    getWindowActor,
+    getWindowType,
+    getWindowPid,
+} from '../platform/window.js';
 
 
 /** @returns {string|undefined} Registered GType name; name comparison survives module re-evaluation. */
@@ -58,7 +70,8 @@ export class Manager {
 
         // Track overview state to switch between standard and mipmapped hardware filtering.
         this._inOverview = Boolean(Main.overview.visible);
-        this._lastFocusWindow = global.display.focus_window;
+        const display = getDisplay();
+        this._lastFocusWindow = getFocusWindow(display);
         this._highContrast = St.Settings.get().high_contrast;
         this._animationsEnabled = St.Settings.get().enable_animations;
         this._dark = this._isDark();
@@ -66,19 +79,19 @@ export class Manager {
         this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
         this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
 
-        this._connect(this._signals, global.display, 'window-created', (_, win) => this._trackWindow(win));
-        this._connect(this._signals, global.display, 'grab-op-end', () => {
+        this._connect(this._signals, display, 'window-created', (_, win) => this._trackWindow(win));
+        this._connect(this._signals, display, 'grab-op-end', () => {
             // Mutter drove the cursor through the grab; take the band's back to DEFAULT.
             this._resetBandCursors();
             this._reconcile();
         });
-        this._connect(this._signals, global.display, 'restacked', () => this._restackActors());
-        this._connect(this._signals, global.display, 'notify::focus-window', () => {
+        this._connect(this._signals, display, 'restacked', () => this._restackActors());
+        this._connect(this._signals, display, 'notify::focus-window', () => {
             this._resetBandCursors();
 
             // Reconcile focus shadow styles for the windows losing and gaining focus.
             const previous = this._lastFocusWindow;
-            const focusWin = global.display.focus_window;
+            const focusWin = getFocusWindow(display);
             this._lastFocusWindow = focusWin;
             if (previous && previous !== focusWin && this._windows.has(previous))
                 this._reconcileWindow(previous);
@@ -103,7 +116,7 @@ export class Manager {
             this._reconcile();
         });
 
-        const monitorManager = global.backend?.get_monitor_manager?.();
+        const monitorManager = getMonitorManager();
         if (monitorManager)
             this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
 
@@ -117,7 +130,7 @@ export class Manager {
         }
         this._refreshSettings();
 
-        for (const win of global.display.get_tab_list(Meta.TabList.NORMAL_ALL, null))
+        for (const win of getTabList())
             this._trackWindow(win);
         this._reconcile();
     }
@@ -149,7 +162,7 @@ export class Manager {
 
     /** Remove orphaned effects/actors from windows closed mid-session (clip/shadow must not outlive disable()). */
     _tearDownStrays() {
-        for (const actor of global.window_group?.get_children?.() ?? []) {
+        for (const actor of getWindowGroup()?.get_children?.() ?? []) {
             if (gtypeName(actor) !== SHADOW_ACTOR_G_TYPE && gtypeName(actor) !== RESIZE_BAND_G_TYPE)
                 continue;
             try {
@@ -158,7 +171,7 @@ export class Manager {
                 // Actor already finalized or torn down mid-sweep.
             }
         }
-        for (const winActor of global.get_window_actors?.() ?? []) {
+        for (const winActor of getWindowActors()) {
             // Clip may be on window actor or X11 surface child → walk subtree.
             const pending = [winActor];
             while (pending.length > 0) {
@@ -220,12 +233,12 @@ export class Manager {
     }
 
     _trackWindow(win) {
-        if (!win || !isDecoratableWindowType(win.get_window_type?.()) || this._windows.has(win))
+        if (!win || !isDecoratableWindowType(getWindowType(win)) || this._windows.has(win))
             return;
 
         const deco = new WindowDecoration(win, {
-            container: global.window_group,
-            display: global.display,
+            container: getWindowGroup(),
+            display: getDisplay(),
             RoundedClipEffect,
             ShadowActor,
             ResizeBand,
@@ -248,7 +261,7 @@ export class Manager {
 
         this._connect(deco.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
 
-        const actor = win.get_compositor_private();
+        const actor = getWindowActor(win);
         this._wireActorSignals(win, deco, actor);
         if (actor && actor.width > 0 && actor.height > 0) {
             deco.firstFrameDone = true;
@@ -295,23 +308,13 @@ export class Manager {
         if (this._lastFocusWindow === win)
             this._lastFocusWindow = null;
 
-        // Defensively query PID: get_pid() may fail if the native window actor is already finalizing.
-        let pid = -1;
-        try {
-            pid = win.get_pid?.() ?? -1;
-        } catch {
-            // Window already gone; nothing to correlate.
-        }
+        const pid = getWindowPid(win);
         if (pid > 0) {
             let hasPeer = false;
             for (const other of this._windows.keys()) {
-                try {
-                    if (other.get_pid?.() === pid) {
-                        hasPeer = true;
-                        break;
-                    }
-                } catch {
-                    // Skip a peer that is itself going away.
+                if (getWindowPid(other) === pid) {
+                    hasPeer = true;
+                    break;
                 }
             }
             // Last window for pid gone -> drop process cache.
@@ -326,12 +329,8 @@ export class Manager {
      */
     _onProcessKnown(pid) {
         for (const win of this._windows.keys()) {
-            try {
-                if (win.get_pid?.() === pid)
-                    this._reconcileWindow(win);
-            } catch {
-                // Window went away while the process answer landed.
-            }
+            if (getWindowPid(win) === pid)
+                this._reconcileWindow(win);
         }
     }
 
@@ -353,12 +352,12 @@ export class Manager {
             return;
 
         try {
-            const actor = win.get_compositor_private();
+            const actor = getWindowActor(win);
             this._wireActorSignals(win, deco, actor);
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
-            const pid = win.get_pid?.();
+            const pid = getWindowPid(win);
             this._classifier?.probeAdwaitaLook(pid);
 
             const inputs = this._decorationInputs(win);
@@ -412,7 +411,7 @@ export class Manager {
     _restackActors() {
         for (const [win, deco] of this._windows) {
             try {
-                deco.restack(win.get_compositor_private());
+                deco.restack(getWindowActor(win));
             } catch {
                 // Window went away mid-restack; the next restack drops it.
             }
