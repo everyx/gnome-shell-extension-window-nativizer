@@ -26,14 +26,17 @@ export function getPointerSprite(event) {
  * @param {object|null} sprite - Pointer sprite
  * @param {number} time - Event timestamp
  * @param {object} posHint - Graphene.Point or coordinate object
- * @returns {boolean} True if the grab operation was dispatched
+ * @returns {boolean} True if Mutter accepted the grab
  */
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
-    if (!win?.begin_grab_op || !sprite)
+    if (typeof win?.begin_grab_op !== 'function' || !sprite || op === null || op === undefined)
         return false;
 
-    win.begin_grab_op(op, sprite, time, posHint);
-    return true;
+    try {
+        return win.begin_grab_op(op, sprite, time, posHint) === true;
+    } catch {
+        return false;
+    }
 }
 
 function metaNamespace() {

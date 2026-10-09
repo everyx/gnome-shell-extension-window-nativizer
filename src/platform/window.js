@@ -230,7 +230,12 @@ export function isWindowAttachedDialog(win) {
  */
 export function isWindowAllowsResize(win) {
     try {
-        return win?.allows_resize ? Boolean(win.allows_resize()) : true;
+        const value = win?.allows_resize;
+        if (typeof value === 'function')
+            return Boolean(value.call(win));
+        if (typeof value === 'boolean')
+            return value;
+        return true;
     } catch {
         return true;
     }
