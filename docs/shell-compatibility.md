@@ -6,10 +6,15 @@ recorded in `tools/shell-api.json`, together with the tag and commit each one ca
 `tools/audit-shell-api.mjs` re-derives them, and [development.md](development.md) describes when to
 run it.
 
+> [!NOTE]
+> **Runtime Baseline**: The runtime execution baseline of this extension is strictly GNOME 50–51. Historical
+> API entries for GNOME 45–49 are retained in the audit record (`tools/shell-api.json`) and the table below
+> strictly as a static reference for upstream API evolution and historical regressions.
+
 While GNOME 51 aligns the Mutter API
 version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs instead of `18`),
-the core compositor and actor pipeline retains long-term architectural stability across 45–51,
-with specific evolutionary watersheds handled via defensive polyfills and graceful degradation.
+the core compositor and actor pipeline retains long-term architectural stability across 50–51,
+with the shader base class bridged across 50 and 51.
 
 The table is generated from `tools/shell-api.json` by `tools/gen-shell-api.mjs`, and the status column
 is computed from the declarations recorded there - see [shell-api.md](shell-api.md) for what each call is
@@ -86,10 +91,11 @@ Anything here that stops being true is an upstream compatibility break, not an i
 ## Evolution across GNOME 45–51
 
 Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
-operation signature, the per-actor cursor, and the Mutter typelib naming. The shader base class, the
-grab signature and the per-actor cursor are bridged through compatibility shims, and the maximize query
-through a capability probe; the typelib name is never spelled, so it binds whatever
-`gi://Meta` ships. What changed and what the extension does about it is described where each call
+operation signature, the per-actor cursor, and the Mutter typelib naming. With the runtime baseline
+elevated to GNOME 50+, the grab signature, maximize query, and per-actor cursor target modern upstream
+APIs directly without pre-50 shims; the shader base class continues to bridge GNOME 50 (`Shell.GLSLEffect`)
+and 51 (`Clutter.OffscreenEffect`), and the typelib binds dynamically via `gi://Meta`.
+What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
 computed rather than remembered.
 
@@ -97,7 +103,7 @@ computed rather than remembered.
 
 GNOME Shell 51 migration guide lists additional upstream breaking changes that were audited for applicability:
 - **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. The extension's `disable()` is completely synchronous.
-- **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely on GNOME 49–51: the dispatch asks whether the backend can produce a pointer sprite at all, and only the 45–48 path reaches for a device.
+- **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely: the dispatch obtains the backend from `stage.get_context().get_backend()` or `global.backend`.
 - **`St.ButtonMask` enum renames**: Not used by this extension.
 - **`St.BoxLayout:vertical` property removed** (deprecated since 48): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
 - **`Gio.DBus.makeProxyWrapper()` returns class needing `new`**: Not used (our IPC uses `Gio.DBusExportedObject` / standard GDBus proxy).

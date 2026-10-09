@@ -24,18 +24,13 @@ docks) in the eligibility checks, the rule fingerprints and the inspector picker
 
 ## is_maximized
 
-`win.is_maximized()` - the canonical query where it exists; the status column of the table in
-[shell-compatibility.md](shell-compatibility.md) says from which line, and the record holds the
-declaration. The extension probes for the method
-rather than the version, so the fallback is chosen by what the shell offers. Note that Mutter
-defines `meta_window_is_maximized()` in `src/core/window.c` from 48 but does not declare it in the
-public header until 49: GJS cannot call what the header does not declare, so 48 still needs the
-fallback.
+`win.is_maximized()` - the canonical query on GNOME 50+, returning a boolean directly. The extension
+reads it via optional chaining `Boolean(win?.is_maximized?.())`.
 
 ## get_maximized
 
-`win.get_maximized()` - the 45-48 spelling, a `MetaMaximizeFlags` bitmask. Only `(flags & 3) === 3`
-means `Meta.MaximizeFlags.BOTH`; a partial tile sets one flag and is not a maximize.
+`win.get_maximized()` - historical 45–48 spelling returning a `MetaMaximizeFlags` bitmask. Retained
+in the audit record for historical tracking; the extension no longer calls it at runtime.
 
 ## is_fullscreen
 
@@ -76,11 +71,10 @@ resolved per monitor, so this is read before either.
 
 ## begin_grab_op
 
-`win.begin_grab_op()` - three shapes, not two. 45 takes `(op, device, sequence, time)`; 46-48 adds
-`pos_hint`; 49-51 replaces device and sequence with a `sprite`. The extension dispatches on
-arity, which separates 46-48 from the rest; 45 and 49-51 both declare four, so it asks a second
-question - whether the backend can produce a pointer sprite at all - and that is what tells them
-apart.
+`win.begin_grab_op()` - three shapes across upstream history: 45 took `(op, device, sequence, time)`,
+46–48 added `pos_hint`, and 49–51 replaced device and sequence with `sprite`. With the runtime
+baseline elevated to GNOME 50+, the extension directly calls the modern 4-argument sprite signature
+`(op, sprite, time, pos_hint)`.
 
 ## get_compositor_private
 
@@ -261,24 +255,23 @@ away in 51, which is why the compat class exists at all.
 
 ## backend_get_sprite
 
-`backend.get_sprite()` - in the same release the grab operation started taking a sprite
-instead of a device and a sequence. The extension dispatches on this pair: 45 and 49-51 both
-declare four parameters, so arity alone cannot tell them apart.
+`backend.get_sprite()` - the primary method on GNOME 50+ to resolve the pointer sprite for a given
+event via `backend.get_sprite(stage, event)`.
 
 ## backend_get_pointer_sprite
 
-`backend.get_pointer_sprite()` - the fallback spelling of the same call, tried when `get_sprite` is
-unavailable. Either one being callable is what marks a shell as 49 or later.
+`backend.get_pointer_sprite()` - fallback method on GNOME 50+ when `get_sprite` is unavailable,
+called via `backend.get_pointer_sprite(stage)`.
 
 ## seat_get_pointer
 
-`seat.get_pointer()` - the core pointer, resolved on 45-48 through the backend's default seat. It is
-the device the legacy grab signature takes.
+`seat.get_pointer()` - historical 45–48 pointer device resolution. Retained in the audit record;
+the extension no longer calls it at runtime.
 
 ## backend_get_default_seat
 
-`backend.get_default_seat()` - resolves the pointer device on 45-48. The backend is reached the same
-way the sprite API's is, through the stage's context.
+`backend.get_default_seat()` - historical 45–48 seat resolution. Retained in the audit record;
+the extension no longer calls it at runtime.
 
 ## shell_glsl_effect_h
 
