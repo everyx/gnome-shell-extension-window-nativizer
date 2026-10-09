@@ -123,11 +123,23 @@ describe('platform', () => {
             const mockWin = {
                 begin_grab_op(op, spriteArg, time, pos) {
                     callArgs = [op, spriteArg, time, pos];
+                    return true;
                 },
             };
 
             expect(beginWindowGrabOp(mockWin, 10, sprite, 12345, posHint)).toBeTrue();
             expect(callArgs).toEqual([10, sprite, 12345, posHint]);
+        });
+
+        it('propagates a false return from the compositor', () => {
+            const sprite = {isSprite: true};
+            const mockWin = {
+                begin_grab_op() {
+                    return false;
+                },
+            };
+
+            expect(beginWindowGrabOp(mockWin, 10, sprite, 0, null)).toBeFalse();
         });
 
         it('returns false when the sprite is missing', () => {
@@ -146,6 +158,27 @@ describe('platform', () => {
             const sprite = {isSprite: true};
             expect(beginWindowGrabOp(null, 10, sprite, 0, null)).toBeFalse();
             expect(beginWindowGrabOp({}, 10, sprite, 0, null)).toBeFalse();
+        });
+
+        it('returns false when the op is null or the dispatch throws', () => {
+            const sprite = {isSprite: true};
+            let called = false;
+            const mockWin = {
+                begin_grab_op() {
+                    called = true;
+                },
+            };
+
+            expect(beginWindowGrabOp(mockWin, null, sprite, 0, null)).toBeFalse();
+            expect(beginWindowGrabOp(mockWin, undefined, sprite, 0, null)).toBeFalse();
+            expect(called).toBeFalse();
+
+            const throwingWin = {
+                begin_grab_op() {
+                    throw new Error('disposed');
+                },
+            };
+            expect(beginWindowGrabOp(throwingWin, 10, sprite, 0, null)).toBeFalse();
         });
     });
 
@@ -552,6 +585,11 @@ describe('platform', () => {
             expect(isWindowOnAllWorkspaces(throwingWin)).toBeFalse();
             expect(isWindowLocatedOnWorkspace(throwingWin, {})).toBeFalse();
             expect(getWindowDisplayTitle(throwingWin)).toBe('');
+        });
+
+        it('preserves an explicit boolean allows_resize property', () => {
+            expect(isWindowAllowsResize({allows_resize: true})).toBeTrue();
+            expect(isWindowAllowsResize({allows_resize: false})).toBeFalse();
         });
     });
 
