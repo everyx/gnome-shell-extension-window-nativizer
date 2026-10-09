@@ -567,7 +567,10 @@ double-resampling under fractional scaling. Concentric corner alignment and zero
 guaranteed by `clipEffect.js`'s snapping rule locking the physical pixel grid with the shadow
 actor, and symmetric physical margin snapping (`snapActorBodyFrame` in `lib/snap.js`)
 locks identical per-side cuts onto the device grid, completely excising Cairo half-pixel stroke residue
-under fractional scaling while keeping clip body and shadow body strictly unified.
+under fractional scaling while keeping clip body and shadow body strictly unified. To further prevent
+GPU hardware bilinear filtering from bleeding external client stroke pixels inward across fractional
+boundaries, the fragment shader pushes texture sampling coordinates inward along the boundary normal,
+leaving edge transitions completely clean.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
