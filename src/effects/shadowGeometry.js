@@ -9,14 +9,10 @@ import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 import {snapActorBodyFrame} from '../lib/snap.js';
 
-// px; derived by tools/gen-style.mjs from the farthest Gaussian reach over every shadow
-// layer (blur 14: 3 sigma = 21, + spread 5) plus the Cogl offscreen offset below.
+// Padding in px, derived from maximum Gaussian reach over all shadow layers.
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 
-// Cogl/Clutter `_clutter_actor_box_enlarge_for_effects` (vendor/mutter/clutter-actor-box.c,
-// parsed by tools/gen-clutter.mjs): an offscreen is padded 2px top/left and 1px right/bottom,
-// 3px total per axis. The bake buffer carries the 3px (`BAKE_EXTRA`), and the shader's window
-// origin sits at the 2px offset (`BAKE_ORIGIN`), both from the single generated source.
+// Offscreen padding matching Mutter clutter-actor-box conventions (2px origin, 3px extra).
 const BAKE_ORIGIN = EFFECT_PADDING_ORIGIN;
 const BAKE_EXTRA = EFFECT_PADDING_EXTRA;
 
@@ -37,12 +33,7 @@ export function shadowGeometry(radius) {
 }
 
 /**
- * The rect the eight slices are laid out over. The shadow actor is bound to the window actor
- * `2*SHADOW_PAD` larger, so the buffer under its live size is that size less the pad; the body is
- * the frame inside the buffer - the same `snapActorBodyFrame` the clip reads - and the cast is that body
- * grown back by the pad. One rect, so the hollow middle the slices leave is the frame the clip
- * draws: a declared ring of any width moves the shadow with the body, never off it.
- *
+ * Computes the cast rect from actor live size by snapping the body frame and expanding by SHADOW_PAD.
  * @param {{width: number, height: number}} actorSize - Shadow actor's live size in px
  * @param {import('../lib/frame.js').Insets} [insets] - Ring the client declared, per side
  * @param {number} [scale=1.0] - Physical scale factor

@@ -1,12 +1,8 @@
 /**
  * Uniform location cache resolution.
  *
- * `get_uniform_location` returns -1 until the shader pipeline is compiled, which happens
- * lazily on the first paint. Caching that -1 would freeze the window out of its uniforms:
- * every later repaint would find a "valid" cached miss and skip the upload, leaving the
- * window square. So a miss is never stored and is re-queried on the next call.
- *
- * GI-free so the rule can be unit-tested (see tests/compat.test.js).
+ * `get_uniform_location` returns -1 until shader compilation on first paint.
+ * Misses (-1) are never cached to avoid freezing uniforms.
  */
 
 /**

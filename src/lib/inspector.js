@@ -30,8 +30,7 @@ import {
     resolveWindowIdentity,
 } from './window.js';
 
-// Highlight visual styling, generated from the Shell's own pickers: see
-// src/lib/inspectorStyle.generated.js and vendor/gnome-shell/README.md.
+// Highlight visual styling derived from upstream Shell pickers.
 
 function highlightStyle(outerRadius) {
     return `border: ${HIGHLIGHT_BORDER_WIDTH}px solid -st-accent-color; ` +

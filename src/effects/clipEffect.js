@@ -1,11 +1,7 @@
 /**
  * RoundedClipEffect: clips the window body to a rounded rect with optional 1px inner outline.
- *
- * Geometry is computed in `vfunc_paint_target`, from the actor's live size plus the insets
- * stored here. The body rect used to be snapshotted by the manager's 50ms reconcile, which
- * is why a resize showed square corners for every frame between two reconciles; the actor
- * size cannot lag the actor, so the clip cannot either. `setParams` now carries only the
- * decisions (insets, radius, outline, clearRing, scale), and those may stay debounced.
+ * Dynamic geometry is computed live on each paint frame to prevent resize lag;
+ * styling decisions (radius, insets, outline) are updated via setParams().
  */
 
 import GObject from 'gi://GObject';
@@ -24,7 +20,7 @@ uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disab
 uniform float uClearRing; // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uScale;     // Physical device scale factor
 
-// _clutter_actor_box_enlarge_for_effects (tools/gen-clutter.mjs) pads 2px top-left, 3px total
+// Clutter effect padding: 2px top-left offset, 3px total enlargement
 const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
 const vec2 FBO_EXTRA  = vec2(${EFFECT_PADDING_EXTRA.toFixed(1)}, ${EFFECT_PADDING_EXTRA.toFixed(1)});
 
@@ -47,10 +43,7 @@ const CODE = `
     vec2 q = abs(fromCenter) - frameHalf + effR;
     bool isCorner = q.x > 0.0 && q.y > 0.0;
 
-    // Smooth inward normal sampling offset:
-    // To prevent the GPU hardware bilinear sampler from filtering outside the window body
-    // and bleeding client-side 1px dark borders/shadows under fractional scaling,
-    // push sampling coordinates inward along the boundary normal (both straight edges and corner arcs).
+    // Push sampling coords inward along boundary normal to avoid fractional bilinear stroke bleed:
     vec2 sampleP = p;
     if (uClearRing > 0.5) {
         float maxInset = max(0.0, min(frameHalf.x, frameHalf.y) - 0.5);
@@ -208,9 +201,7 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * Runs after Clutter has sized the offscreen for this frame, so the actor's size is
-     * the one being painted. Coming back here also means no `queue_repaint`: this is the
-     * paint, not a decision that invalidates it.
+     * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
      * @param {object} node
      * @param {object} paintContext
      */
@@ -218,15 +209,9 @@ export const RoundedClipEffect = GObject.registerClass({
         const actor = this.get_actor();
         const width = actor?.width ?? 0;
         const height = actor?.height ?? 0;
-        // Only a degenerate actor (nothing to show) skips the pass. The shadow is derived
-        // from the same actor and is degenerate with it, so there is no visible "shadow but
-        // no clip" frame: the body this would have left square has no area either.
         if (!(width > 0) || !(height > 0))
             return;
 
-        // The ring can outrun the actor for the frame a resize passes through (insets are
-        // debounced, the actor is not). `bodyFrame` then returns the whole actor, so the pass
-        // still runs: a body with no area is not the same as a frame with nothing to draw.
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
 

@@ -34,11 +34,7 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // larger than the window actor by that much, or the regions would be clipped out of it.
 const OUTER = RESIZE_BAND;
 
-// The matching compositor grab op, keyed by the direction `edgeForPoint()` resolves. A corner never
-// resolves to a straight edge unless GTK's own order says so there. The cursor for a direction is
-// asked for by the same key through compat/actorCursor.js, which resolves it against the line's own
-// enum - it is not a table here, because on 45-49 that enum does not exist and reading it while this
-// module was evaluated is what stopped the extension loading there.
+// Direction-to-grab-op mapping. Cursor shape is resolved via compat/actorCursor.js.
 const DIRECTION_GRAB_OP = {
     n: Meta.GrabOp.RESIZING_N,
     ne: Meta.GrabOp.RESIZING_NE,
@@ -107,10 +103,7 @@ export const ResizeBand = GObject.registerClass({
         this._scale = 1;
         this._constrainedEdges = null;
 
-        // The actor is the ground truth for the band's geometry: it is the thing Mutter
-        // resizes every frame, while our reconcile is debounced. Binding here (rather than
-        // reading the frame rect on a 50ms tick) is what keeps the regions under the
-        // pointer during a drag.
+        // Bind directly to window actor to track live size during drag without debounce lag.
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -OUTER],
             [Clutter.BindCoordinate.Y, -OUTER],
@@ -183,9 +176,7 @@ export const ResizeBand = GObject.registerClass({
      * @param {Clutter.ActorBox} box
      */
     vfunc_allocate(box) {
-        // Not super: St.Widget would run the (fixed) layout manager, which would undo the
-        // direct child allocations below on the next pass. This is the same shape
-        // boxpointer.js uses.
+        // Bypass St.Widget layout manager to preserve direct child allocations.
         this.set_allocation(box);
 
         // Guard against late allocations arriving after or during destroy().

@@ -107,8 +107,7 @@ export class ProcessClassifier {
             if (this._inFlight.get(pid) !== entry)
                 return;
             this._inFlight.delete(pid);
-            // A process whose maps cannot be read is decorated, and cached as such: a retry per query
-            // would start a read per reconcile. forgetProcess() is the retry point (last window closed).
+            // Cache NO_PROVIDER on read failure to avoid per-reconcile I/O retries; cleared on forgetProcess().
             this._processCache.set(pid, error ? NO_PROVIDER : classifyProcess(mapsText));
             try {
                 this._onProcessKnown?.(pid);
@@ -125,10 +124,7 @@ export class ProcessClassifier {
     }
 
     /**
-     * What the process's maps say: true for an Adwaita provider, false for a process that maps
-     * none, and null while the read is still in flight. Null is an answer rather than a default:
-     * the caller is the one that knows whether to wait or to guess, and a default here would have
-     * to be undone by every caller that forgot to wait.
+     * Returns true for Adwaita providers, false for non-Adwaita, or null while read is in flight.
      * @param {number} pid
      * @returns {boolean|null}
      */
