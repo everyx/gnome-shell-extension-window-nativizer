@@ -46,8 +46,7 @@ function styleColor(shadows) {
  * @returns {string}
  */
 export function styleKey(radius, shadows) {
-    // The colour is part of the key: the tiled ring is a layer like any other and its colour is the
-    // one that changes with the theme, so without it a light and a dark bake would collide.
+    // Include color in key to prevent collision between light and dark theme bakes.
     const layers = shadows.map(s => `${s.blur},${s.spread},${s.alpha},${(s.color ?? [0, 0, 0]).join(',')}`);
     return `${radius}|${layers.join(';')}`;
 }

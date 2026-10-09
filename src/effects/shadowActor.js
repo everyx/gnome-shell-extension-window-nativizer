@@ -178,12 +178,7 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    // The cast comes from the buffer this actor is bound to, not from the padded size: the ring
-    // is subtracted there and the pad given back, so the body the slices leave hollow is the
-    // frame the clip draws. `this.width/height` is the live allocation, so a resize is tracked
-    // every frame instead of waiting for the manager's 50ms reconcile. No insets = the body is
-    // the whole actor, which is what a bare toplevel is; the same fallback as the clip means the
-    // two cannot disagree when a debounced ring outruns the actor for one frame.
+    // Recomputed from live actor dimensions on each frame to keep shadow in sync during resize.
     _castRect(scale) {
         return shadowCastRect({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS, scale ?? this._scale ?? 1.0);
     }
@@ -200,7 +195,6 @@ export const ShadowActor = GObject.registerClass({
             const geometry = shadowGeometry(style.radius);
             style.slices = shadowSlices(geometry, cast.width, cast.height);
             style.corner = geometry.corner;
-            // Freeze to enforce the immutability contract so token-aliasing in entry.cast cannot be defeated
             style.cast = Object.freeze(cast);
         }
 
@@ -217,8 +211,7 @@ export const ShadowActor = GObject.registerClass({
         }
 
         if (entry.cast !== style.cast) {
-            // Actor-Local snapping: cutlines remain invariant in local space during window drag,
-            // while mutating pre-allocated boxes in-place on resize achieves zero GC allocation.
+            // Snap in actor-local space to keep cutlines invariant during window drag.
             snapSliceBoxesInto(entry.boxes, style.cast, style.corner, scale);
             entry.cast = style.cast;
         }

@@ -144,9 +144,7 @@ export class WindowDecoration {
 
         this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, insets, inOverview);
 
-        // The shadow actor draws the tiled ring too, so "has shadow" is not what decides whether
-        // it exists: a tiled window has no shadow at all - upstream's tiled rule is a 1px ring.
-        // But the ring is only ours on a window we decorate at all.
+        // Draw shadow actor if tiled ring is needed, or if window needs drop shadow without deferring to client.
         const deferToClientShadow = actions.clearRing && !this.clip;
         this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
 
@@ -176,12 +174,7 @@ export class WindowDecoration {
      * @param {boolean} [inOverview=false]
      */
     _syncClip(wantEffect, clearRing = false, clipTarget = null, insets = null, inOverview = false) {
-        // Attach/detach is a decision, not a frame measurement: it no longer depends on the
-        // actor's current allocation (that is why a resize used to drop the effect for a
-        // frame). The only window that wants an effect and gets none is one whose insets
-        // is null - a frame that does not fit inside its buffer at all. A framed X11 window is not
-        // that case: its buffer is the frame grown by the invisible borders, so it is
-        // clipped like any other (measured: the surface child is buffer-sized).
+        // Clip effect requires valid insets (null indicates frame does not fit inside buffer).
         const wanted = wantEffect && Boolean(insets);
         const hasClip = Boolean(this.clip);
 
