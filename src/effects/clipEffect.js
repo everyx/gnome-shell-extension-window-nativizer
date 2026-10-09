@@ -41,10 +41,28 @@ const CODE = `
     vec2 frameCenter = uFrame.xy + uFrame.zw * 0.5 + FBO_OFFSET;
     vec2 frameHalf = uFrame.zw * 0.5;
     vec2 fromCenter = p - frameCenter;
-    // sdRoundedBox requires r <= half the smaller side. Unclamped, a body smaller than
-    // 2*radius (a resize or close-animation frame) over-rounds instead of drawing the
-    // intended corner arc; clamp the radius to what the body can hold.
-    float d = sdRoundedBox(fromCenter, frameHalf, min(uRadius, min(frameHalf.x, frameHalf.y)));
+
+    float effR = min(uRadius, min(frameHalf.x, frameHalf.y));
+    float d = sdRoundedBox(fromCenter, frameHalf, effR);
+    vec2 q = abs(fromCenter) - frameHalf + effR;
+    bool isCorner = q.x > 0.0 && q.y > 0.0;
+
+    // Smooth inward normal sampling offset:
+    // To prevent the GPU hardware bilinear sampler from filtering outside the window body
+    // and bleeding client-side 1px dark borders/shadows under fractional scaling,
+    // push sampling coordinates inward along the boundary normal (both straight edges and corner arcs).
+    vec2 sampleP = p;
+    if (uClearRing > 0.5) {
+        float maxInset = max(0.0, min(frameHalf.x, frameHalf.y) - 0.5);
+        float inset = min(1.0 + 0.5 / uScale, maxInset);
+        vec2 v = max(q, 0.0);
+        float vLen = length(v);
+        if (vLen > 0.0001) {
+            vec2 normal = (v / vLen) * sign(fromCenter);
+            sampleP = p - normal * max(0.0, d + inset);
+        }
+    }
+    cogl_color_out = cogl_color_in * texture2D(cogl_sampler0, sampleP / quadSize);
 
     vec2 beyond = step(vec2(0.0), abs(fromCenter) - frameHalf);
     float inSquare = 1.0 - max(beyond.x, beyond.y);
@@ -55,10 +73,6 @@ const CODE = `
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
-
-    float effR = min(uRadius, min(frameHalf.x, frameHalf.y));
-    vec2 q = abs(fromCenter) - frameHalf + effR;
-    bool isCorner = q.x > 0.0 && q.y > 0.0;
 
     // Physical 1px anti-aliasing transition on corner arcs:
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
