@@ -969,7 +969,9 @@ for test_x in 240 241 242 243; do
         return JSON.stringify({
             x: f.x,
             left: Math.round(f.x * s),
-            y: Math.round((f.y + 150) * s)
+            top: Math.round(f.y * s),
+            y: Math.round((f.y + 150) * s),
+            scale: s
         });
     })()
     ')"
@@ -977,7 +979,7 @@ for test_x in 240 241 242 243; do
     gdbus call --address "$EDGE_PHASE_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
         --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-phase.png >/dev/null 2>&1
     if ! python3 - "$PHASE_POS" "$test_x" <<'PYEOF'
-import json, re, sys
+import json, math, re, sys
 from PIL import Image
 
 match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
@@ -988,32 +990,104 @@ if "error" in pos:
     sys.exit(f"target error: {pos}")
 test_x = sys.argv[2]
 im = Image.open('/tmp/window-nativizer-phase.png').convert('RGB')
+s = pos.get('scale', 1.0)
+cx, cy = pos['left'], pos['top']
+
+# 1. Straight edge transition check:
 px, py = pos['left'], pos['y']
-row = [im.getpixel((x, py))[0] for x in range(px - 5, px + 5)]
-min_val = min(row)
-print(f"DEBUG: test_x={test_x} f.x={pos.get('x')} px={px} min_val={min_val} row={row}")
+straight_row = [im.getpixel((x, py))[0] for x in range(px - 5, px + 5)]
+straight_min = min(straight_row)
 
 # In pure white backdrop (>240), Adwaita shadow layers have a theoretical maximum saturation
 # of ~27% opacity (intensity >= 185, reference Libadwaita settles around ~200).
 # A pixel strictly darker than 185 represents an anomalous dark seam/stroke bleed artifact.
-if min_val < 185:
-    sys.exit(f"dark seam artifact detected: min intensity {min_val} < 185 in edge profile {row}")
+if straight_min < 185:
+    sys.exit(f"dark straight edge seam detected: min intensity {straight_min} < 185 in edge profile {straight_row}")
+
+# 2. Continuous Radial Ray Scan across entire corner arc from top shoulder to left shoulder:
+# Arc center is at (cx + 15*s, cy + 15*s), radius is 15*s:
+r_center_x = cx + 15.0 * s
+r_center_y = cy + 15.0 * s
+arc_r = 15.0 * s
+
+ray_mins = []
+for deg in range(0, 91, 5):
+    rad = math.radians(deg)
+    dx_dir = -math.sin(rad)
+    dy_dir = -math.cos(rad)
+
+    ray_profile = []
+    for step in range(-int(6 * s), int(7 * s)):
+        r = arc_r + step
+        sample_x = int(round(r_center_x + r * dx_dir))
+        sample_y = int(round(r_center_y + r * dy_dir))
+        if 0 <= sample_x < im.width and 0 <= sample_y < im.height:
+            ray_profile.append(im.getpixel((sample_x, sample_y))[0])
+
+    if not ray_profile:
+        continue
+
+    ray_min = min(ray_profile)
+    ray_mins.append((deg, ray_min, ray_profile))
+
+    # (a) Absolute dark dip assertion along the ray:
+    if ray_min < 185:
+        sys.exit(f"dark corner seam detected at deg={deg}: min intensity {ray_min} < 185 in ray {ray_profile}")
+
+    # (b) Radial color jump / V-notch detection:
+    # A smooth physical AA transition ramps gradually (|step delta| <= 25).
+    # An anomalous dark stroke dip and rebound (|delta| > 35) represents an edge notch artifact.
+    for i in range(len(ray_profile) - 1):
+        step_delta = abs(ray_profile[i + 1] - ray_profile[i])
+        if step_delta > 35:
+            sys.exit(f"radial color jump detected at deg={deg}: step delta {step_delta} > 35 between {ray_profile[i]} and {ray_profile[i + 1]} in ray {ray_profile}")
+
+# (c) Tangential continuity:
+# The minimum edge value must transition smoothly between consecutive rays (no abrupt step discontinuity > 25):
+for i in range(len(ray_mins) - 1):
+    deg_curr, min_curr, _ = ray_mins[i]
+    deg_next, min_next, _ = ray_mins[i + 1]
+    tangential_step = abs(min_next - min_curr)
+    if tangential_step > 25:
+        sys.exit(f"tangential corner discontinuity detected between deg={deg_curr} ({min_curr}) and deg={deg_next} ({min_next}): step {tangential_step} > 25")
+
+corner_overall_min = min(m for _, m, _ in ray_mins)
+print(f"DEBUG: test_x={test_x} f.x={pos.get('x')} straight_px={px} straight_min={straight_min} corner_min={corner_overall_min} (rays 0..90 deg: {[m for _, m, _ in ray_mins]})")
 PYEOF
     then
-        echo "!! Straight edge dark dip artifact detected at phase x=$test_x!"
+        echo "!! Straight edge or corner dark dip artifact detected at phase x=$test_x!"
         EDGE_PHASE_CHECK=0
         break
     fi
 done
 
-# Cleanup temporary backdrop and probe instances:
+# Gracefully close temporary backdrop and probe instances via compositor delete:
+shell_eval '
+(() => {
+    global.get_window_actors().forEach(a => {
+        const t = a.meta_window?.get_title() || "";
+        const c = a.meta_window?.get_wm_class() || "";
+        if (t === "GTK3 CSD Probe" || c.toLowerCase().includes("backdrop")) {
+            a.meta_window?.delete(global.get_current_time());
+        }
+    });
+})()
+' >/dev/null || true
+for _ in $(seq 1 40); do
+    remains="$(shell_eval 'global.get_window_actors().some(a => { const t = a.meta_window?.get_title() || ""; const c = a.meta_window?.get_wm_class() || ""; return t === "GTK3 CSD Probe" || c.toLowerCase().includes("backdrop"); }) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$remains" = "0" ] && break
+    sleep 0.1
+done
 kill "$BACKDROP_PHASE_PID" 2>/dev/null || true
 [ -n "$GTK3_PHASE_PID" ] && kill "$GTK3_PHASE_PID" 2>/dev/null || true
+wait "$BACKDROP_PHASE_PID" 2>/dev/null || true
+[ -n "$GTK3_PHASE_PID" ] && wait "$GTK3_PHASE_PID" 2>/dev/null || true
+
 
 if [[ "$EDGE_PHASE_CHECK" -ne 1 ]]; then
     exit 1
 fi
-echo ">> Subpixel phase straight edge verified: smooth monotonic transition across all 4 phases."
+echo ">> Subpixel phase straight edge & corner verified: smooth monotonic transition across all 4 phases."
 
 # (d) A window the user placed flush by hand is not tiled: no maximize flag is set for it, so
 # Mutter reports every edge unconstrained and the band has to survive. Inferring tiling from
@@ -1326,6 +1400,10 @@ for i in $(seq 1 40); do
     fi
     sleep 0.1
 done
+if [[ "$count" -ne 0 ]]; then
+    shell_eval 'global.get_window_actors().forEach(a => a.meta_window?.delete(global.get_current_time()))' >/dev/null || true
+    sleep 0.5
+fi
 
 # (i) Test transient popup menu gate & unmanaged focus protection (Issue #13):
 #    - Layer 1: When an application opens a transient popup/dropdown menu, Mutter creates a
@@ -2026,6 +2104,11 @@ a11y_registry_absent = re.compile(
 gjs_property_introspection = re.compile(
     r": Gjs-WARNING \*\*: .*Type GITypeInfo of property .* does not match.*Falling back to slow path")
 
+# Mutter logs a warning when pinging a client window that unmapped or closed its Wayland connection:
+#   (gnome-shell:<pid>): libmutter-WARNING **: ...: Tried to ping window ... with a bad serial! Not allowed.
+mutter_ping_serial = re.compile(
+    r": libmutter-WARNING \*\*: .*Tried to ping window .* with a bad serial! Not allowed\.")
+
 # The teardown fault-injection case makes one tracked window throw from `get_compositor_private()`,
 # to prove `disable()` finishes anyway. Catching and logging it is the behaviour under test, so
 # exactly this line is expected - and exactly one of them: the pattern is narrower than the general
@@ -2049,6 +2132,7 @@ exempted = 0
 exempted_ibus = 0
 exempted_a11y = 0
 exempted_gjs_introspection = 0
+exempted_mutter_ping = 0
 exempted_teardown = 0
 exempted_picker = 0
 for idx, line in enumerate(lines, start=1):
@@ -2077,6 +2161,9 @@ for idx, line in enumerate(lines, start=1):
     if gjs_property_introspection.search(line):
         exempted_gjs_introspection += 1
         continue
+    if mutter_ping_serial.search(line):
+        exempted_mutter_ping += 1
+        continue
     if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
 
@@ -2104,6 +2191,8 @@ if exempted_a11y:
     print(f">> {exempted_a11y} environment-only a11y-registry line(s) exempted (see the note above the pattern).")
 if exempted_gjs_introspection:
     print(f">> {exempted_gjs_introspection} known upstream GJS introspection line(s) exempted (see the note above the pattern).")
+if exempted_mutter_ping:
+    print(f">> {exempted_mutter_ping} known upstream Mutter ping line(s) exempted (see the note above the pattern).")
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
@@ -2120,7 +2209,7 @@ summary "Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
 summary "Overview Clip Mode: PASSED (corners retained with hardware mipmapping in overview, restored on desktop)"
 summary "Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 summary "Partial & Full Maximize: PASSED (band attached while tiled, dropped when fully maximized, restored after)"
-summary "Subpixel Phase Straight Edge Monotonicity: PASSED (zero dark edge artifacts across fractional phases)"
+summary "Subpixel Phase Straight Edge & Corner Monotonicity: PASSED (zero dark edge or corner artifacts across fractional phases)"
 summary "Libadwaita client left alone: $LIBNATIVE_RESULT"
 summary "Transient Popup Rejection (Layer 1 & 2): PASSED (unmanaged popup ignored, 0 unnecessary reconciles)"
 summary "Reload Stress (5 cycles): PASSED (no leaked actors, window tracked once per cycle)"
