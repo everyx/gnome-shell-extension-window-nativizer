@@ -382,15 +382,15 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasRing).toBeFalse();
     });
 
-    it('falls back to false when get_maximized throws in isolation', () => {
-        const throwingGetMaximizedWin = {
+    it('falls back to false when is_maximized throws in isolation', () => {
+        const throwingIsMaximizedWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
             get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            get_maximized: () => {
-                throw new Error('get_maximized error');
+            is_maximized: () => {
+                throw new Error('is_maximized error');
             },
         };
-        const reading = readWindow(throwingGetMaximizedWin);
+        const reading = readWindow(throwingIsMaximizedWin);
         expect(reading).not.toBeNull();
         expect(reading.isMaximized).toBeFalse();
         expect(reading.tiled).toBeFalse();
