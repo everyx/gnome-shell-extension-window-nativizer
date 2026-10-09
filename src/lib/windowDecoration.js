@@ -14,13 +14,15 @@ import {resolveClipTarget} from './clipTarget.js';
 import {hasPositiveInsets} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
+import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
+import {getWindowActor} from '../platform/window.js';
 
 export class WindowDecoration {
     /**
      * @param {Meta.Window} win
      * @param {object} [options]
-     * @param {Clutter.Actor} [options.container] - Usually global.window_group
-     * @param {Meta.Display} [options.display] - Usually global.display
+     * @param {Clutter.Actor} [options.container] - Usually getWindowGroup()
+     * @param {Meta.Display} [options.display] - Usually getDisplay()
      * @param {object} [options.St] - Usually imports.gi.St
      * @param {Function} [options.RoundedClipEffect]
      * @param {Function} [options.ShadowActor]
@@ -28,8 +30,8 @@ export class WindowDecoration {
      */
     constructor(win, options = {}) {
         this._win = win;
-        this._container = options.container ?? (globalThis.global?.window_group ?? null);
-        this._display = options.display ?? (globalThis.global?.display ?? null);
+        this._container = options.container ?? (getWindowGroup() ?? null);
+        this._display = options.display ?? (getDisplay() ?? null);
         this._St = options.St ?? (globalThis.St ?? null);
 
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
@@ -115,11 +117,7 @@ export class WindowDecoration {
     _getActor(actor = null) {
         if (actor)
             return actor;
-        try {
-            return this._win?.get_compositor_private?.() ?? null;
-        } catch {
-            return null;
-        }
+        return getWindowActor(this._win);
     }
 
     /**
@@ -313,7 +311,7 @@ export class WindowDecoration {
             return;
 
         if (this.shadow && this._container)
-            this._container.set_child_below_sibling?.(this.shadow, winActor);
+            setActorBelowSibling(this.shadow, winActor, this._container);
 
         this.resizeBand?.restack?.();
     }
