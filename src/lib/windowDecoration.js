@@ -11,11 +11,30 @@
 import GLib from 'gi://GLib';
 
 import {resolveClipTarget} from './clipTarget.js';
-import {hasPositiveInsets, FLAT_SAFE_INSET} from './frame.js';
+import {hasPositiveInsets, FLAT_SAFE_INSET, ZERO_INSETS} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
+import {WindowClientType} from './mutterRules.generated.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
-import {getWindowActor} from '../platform/window.js';
+import {getWindowActor, getWindowClientType} from '../platform/window.js';
+
+/**
+ * GNOME Shell's cap on an overview thumbnail's scale, from `WINDOW_PREVIEW_MAXIMUM_SCALE`
+ * (js/ui/workspace.js). No preview is drawn larger than this fraction of the window's
+ * logical size, which is what bounds the resolution the corner mask ever has to resolve.
+ */
+const OVERVIEW_PREVIEW_MAX_SCALE = 0.95;
+
+/**
+ * Hard ceiling on either side of the overview corner mask, in texels.
+ *
+ * Measured against actual rendering: the corner arc stops looking polygonal (mask texels
+ * per screen pixel) at roughly 0.7, and is indistinguishable from a full-resolution mask
+ * at 1.0. The ceiling only bites on monitors big enough that this preview never reaches it,
+ * which keeps the arc above the visible threshold up to ~5K-wide displays and degrades it
+ * gradually beyond.
+ */
+const OVERVIEW_MASK_MAX_DIMENSION = 2560;
 
 export class WindowDecoration {
     /**
@@ -27,6 +46,8 @@ export class WindowDecoration {
      * @param {Function} [options.RoundedClipEffect]
      * @param {Function} [options.ShadowActor]
      * @param {Function} [options.ResizeBand]
+     * @param {object} [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
+     * @param {Function} [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
      */
     constructor(win, options = {}) {
         this._win = win;
@@ -37,6 +58,8 @@ export class WindowDecoration {
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
+        this._OverviewMask = options.OverviewMask ?? null;
+        this._OverviewShadowClass = options.OverviewShadow ?? null;
 
         this.clip = null;
         this.clipTarget = null;
@@ -48,6 +71,19 @@ export class WindowDecoration {
         this._style = null;
         this._scale = 1.0;
         this._inOverview = false;
+
+        // Overview rounding: an A_8 mask on the shaped texture plus a shadow clone,
+        // both live only while the overview is shown.
+        this._overviewStex = null;
+        this._overviewMask = null;
+        this._overviewSurface = null;
+        this._overviewMaskRestoreId = 0;
+        this._overviewContainer = null;
+        this._overviewContainerDestroyId = 0;
+        this._overviewSavedOpacity = 255;
+        this._overviewSizeId = 0;
+        this._overviewWorkspaceId = 0;
+        this._overviewShadow = null;
 
         this.shadow = null;
         this.resizeBand = null;
@@ -155,6 +191,11 @@ export class WindowDecoration {
 
         if (this.clip || this.shadow)
             this._applyStyle(actions.style, decorInsets, actions.drawClip, scale);
+
+        // _syncClip runs the overview transition before the style is current, so on the
+        // applying pass the mask decision has to be taken once more.
+        if (inOverview)
+            this.setOverviewMode(true);
     }
 
     /**
@@ -165,8 +206,259 @@ export class WindowDecoration {
         this._inOverview = Boolean(inOverview);
         if (!this.clip)
             return;
-        this.clip.setOverviewMode?.(this._inOverview);
+        // The offscreen clip is suspended for the overview on every client type: the FBO it
+        // renders into has no mipmaps, and the preview clone's downscale of it is what blurs
+        // thumbnails. Rounding moves into the shaped-texture mask instead, which rides
+        // Mutter's own mipmapped pipeline.
+        this.clip.set_enabled?.(!this._inOverview);
         this._syncClipParams();
+        if (this._inOverview && this._canApplyOverviewMask())
+            this._applyOverviewMask();
+        else
+            this._clearOverviewMask();
+        if (this._inOverview)
+            this._applyOverviewShadow();
+        else
+            this._clearOverviewShadow();
+    }
+
+    /**
+     * Whether the overview can round this window through the shaped-texture mask.
+     *
+     * X11/XWayland also qualifies: Mutter rebuilds the mask from the X11 shape on surface
+     * syncs, so the mask is re-applied after those (see `_applyOverviewMask`). A window whose
+     * corner or outline is not drawn has no mask to build.
+     *
+     * @returns {boolean}
+     */
+    _canApplyOverviewMask() {
+        return Boolean(this.drawClip && this._style);
+    }
+
+    /**
+     * Rounds the window's shaped texture during the overview.
+     *
+     * Mutter samples the mask with the same minification filter as the window
+     * colour, so a downscaled thumbnail keeps hardware mipmapping. Mutter skips
+     * the mask on its opaque fast path, so the preview container's opacity is
+     * pulled one step below 255 to force the blended path; the 1/255 alpha that
+     * costs is imperceptible.
+     */
+    _applyOverviewMask() {
+        if (this._overviewStex || !this._canApplyOverviewMask())
+            return;
+
+        const buildRoundedMask = this._OverviewMask?.buildRoundedMask;
+        if (!buildRoundedMask)
+            return;
+
+        const actor = this._getActor();
+        const stex = actor?.get_texture?.() ?? null;
+        const multi = stex?.get_texture?.() ?? null;
+        const context = multi?.get_plane?.(0)?.get_context?.() ?? null;
+        const preview = this._win?._delegate ?? null;
+        const container = preview?.window_container ?? null;
+        if (!stex || !context || !container)
+            return;
+
+        const actorWidth = actor?.width ?? 0;
+        const actorHeight = actor?.height ?? 0;
+        const textureWidth = multi.get_width?.() ?? 0;
+        const textureHeight = multi.get_height?.() ?? 0;
+        if (!(actorWidth > 0) || !(actorHeight > 0) || !(textureWidth > 0) || !(textureHeight > 0))
+            return;
+
+        // Insets and radius are logical; the texture carries the client's buffer.
+        const bufferScale = textureWidth / actorWidth;
+        const insets = this.clipInsets ?? ZERO_INSETS;
+
+        // A thumbnail-sized mask is all the corner arcs need; a full-buffer one would cost
+        // a byte per client pixel (tens of MB for a hidpi 4K window) for detail the preview
+        // cannot show.
+        const maskScale = this._overviewMaskScale(textureWidth, textureHeight, bufferScale, this._scale || 1);
+        const mask = buildRoundedMask(context, {
+            width: textureWidth * maskScale,
+            height: textureHeight * maskScale,
+            frameX: insets.left * bufferScale * maskScale,
+            frameY: insets.top * bufferScale * maskScale,
+            frameW: (actorWidth - insets.left - insets.right) * bufferScale * maskScale,
+            frameH: (actorHeight - insets.top - insets.bottom) * bufferScale * maskScale,
+            radius: (this._style.radius ?? 0) * bufferScale * maskScale,
+            clearRing: this.effectiveClearRing,
+        });
+        if (!mask)
+            return;
+
+        stex.set_mask_texture(mask);
+
+        this._overviewStex = stex;
+        this._overviewMask = mask;
+        this._overviewContainer = container;
+        this._overviewContainerDestroyId = container.connect('destroy', () => {
+            // The preview can be torn down before the overview 'hidden' signal; drop the
+            // reference so the teardown never touches a disposed actor.
+            this._overviewContainer = null;
+            this._overviewContainerDestroyId = 0;
+        });
+        this._overviewSavedOpacity = container.get_opacity();
+        container.set_opacity(Math.min(254, this._overviewSavedOpacity));
+        this._overviewSizeId = this._win.connect('size-changed', () => this._refreshOverviewMask());
+
+        // A workspace move made from the overview builds a fresh WindowPreview whose container
+        // starts at full opacity, so the mask and the opacity bypass have to be re-applied to
+        // the new card. The new preview is already in place when the signal lands.
+        this._overviewWorkspaceId = this._win.connect('workspace-changed', () => this._refreshOverviewMask());
+
+        // X11/XWayland rebuilds this mask slot from the X11 shape on every surface sync
+        // (`meta_xwayland_surface_sync_actor_state` -> `update_regions` ->
+        // `build_and_scan_frame_mask`), so it has to be re-applied after each one. The
+        // surface actor announces exactly that with 'repaint-scheduled'; native Wayland
+        // surfaces never touch the slot, so only X11 needs the hook.
+        if (getWindowClientType(this._win) === WindowClientType.X11) {
+            const surface = this.clipTarget;
+            if (typeof surface?.connect === 'function') {
+                this._overviewSurface = surface;
+                this._overviewMaskRestoreId = surface.connect('repaint-scheduled', () => {
+                    this._overviewStex?.set_mask_texture?.(this._overviewMask);
+                });
+            }
+        }
+    }
+
+    /**
+     * Resolution factor for the overview corner mask.
+     *
+     * The mask is sampled through the window texture's own coordinates, so it only has to
+     * resolve what the overview actually draws: a thumbnail never larger than
+     * `OVERVIEW_PREVIEW_MAX_SCALE` of the window's logical size, on screen at the monitor
+     * scale. In buffer texels that is `OVERVIEW_PREVIEW_MAX_SCALE * monitorScale / bufferScale`,
+     * so a hidpi-buffer client on a low-dpi monitor gets downsampled, and a 1x client on a
+     * hidpi monitor is capped at buffer resolution. A full-buffer mask would instead cost a
+     * byte per client pixel — tens of megabytes for a 4K window — for detail no preview shows.
+     *
+     * @param {number} textureWidth - Window buffer width, texture px
+     * @param {number} textureHeight - Window buffer height, texture px
+     * @param {number} bufferScale - Buffer texels per logical pixel
+     * @param {number} monitorScale - Monitor scale for the window's monitor
+     * @returns {number} Factor in [0.05, 1]
+     */
+    _overviewMaskScale(textureWidth, textureHeight, bufferScale, monitorScale) {
+        const longest = Math.max(textureWidth, textureHeight);
+        const previewScale = OVERVIEW_PREVIEW_MAX_SCALE * monitorScale / (bufferScale || 1);
+        const scale = Math.min(previewScale, OVERVIEW_MASK_MAX_DIMENSION / longest);
+        return Math.min(1, Math.max(scale, 0.05));
+    }
+
+    /** Rebuilds the mask after a resize while the overview is shown. */
+    _refreshOverviewMask() {
+        if (!this._inOverview || !this._overviewStex)
+            return;
+        this._clearOverviewMask();
+        this._applyOverviewMask();
+    }
+
+    /** Retires the overview mask and restores the preview container opacity. */
+    _clearOverviewMask() {
+        if (this._overviewMaskRestoreId) {
+            try {
+                this._overviewSurface?.disconnect?.(this._overviewMaskRestoreId);
+            } catch {
+                // Surface already gone.
+            }
+            this._overviewMaskRestoreId = 0;
+            this._overviewSurface = null;
+        }
+
+        if (this._overviewContainerDestroyId) {
+            try {
+                this._overviewContainer.disconnect(this._overviewContainerDestroyId);
+            } catch {
+                // Preview already gone.
+            }
+            this._overviewContainerDestroyId = 0;
+        }
+
+        if (this._overviewSizeId) {
+            try {
+                this._win.disconnect(this._overviewSizeId);
+            } catch {
+                // Window already gone.
+            }
+            this._overviewSizeId = 0;
+        }
+
+        if (this._overviewWorkspaceId) {
+            try {
+                this._win.disconnect(this._overviewWorkspaceId);
+            } catch {
+                // Window already gone.
+            }
+            this._overviewWorkspaceId = 0;
+        }
+
+        if (this._overviewContainer) {
+            try {
+                this._overviewContainer.set_opacity(this._overviewSavedOpacity);
+            } catch {
+                // Preview already destroyed.
+            }
+            this._overviewContainer = null;
+        }
+
+        if (this._overviewStex) {
+            const opaqueMask = this._OverviewMask?.opaqueMask;
+            const context = this._overviewStex.get_texture?.()?.get_plane?.(0)?.get_context?.() ?? null;
+            if (opaqueMask && context) {
+                try {
+                    this._overviewStex.set_mask_texture(opaqueMask(context));
+                } catch {
+                    // Shaped texture already gone.
+                }
+            }
+            this._overviewStex = null;
+        }
+        this._overviewMask = null;
+    }
+
+    /** Adds the shadow clone under the overview preview. */
+    _applyOverviewShadow() {
+        const OverviewShadow = this._OverviewShadowClass;
+        if (this._overviewShadow || !this.shadow || !OverviewShadow)
+            return;
+
+        const preview = this._win?._delegate ?? null;
+        const container = preview?.window_container ?? null;
+        if (!preview || !container)
+            return;
+
+        const width = this._win.get_frame_rect?.()?.width ?? 0;
+        if (!(width > 0))
+            return;
+
+        try {
+            const shadow = new OverviewShadow(this.shadow, preview, container, width);
+            shadow.connect('destroy', () => {
+                // The preview owns the clone and destroys it before 'hidden'; null the
+                // reference so teardown never calls into a disposed actor.
+                if (this._overviewShadow === shadow)
+                    this._overviewShadow = null;
+            });
+            this._overviewShadow = shadow;
+        } catch {
+            this._overviewShadow = null;
+        }
+    }
+
+    /** Removes the overview shadow clone. */
+    _clearOverviewShadow() {
+        if (!this._overviewShadow)
+            return;
+        try {
+            this._overviewShadow.destroy();
+        } catch {
+            // Preview already destroyed.
+        }
+        this._overviewShadow = null;
     }
 
     /**
@@ -345,6 +637,8 @@ export class WindowDecoration {
     undecorate() {
         this.drawClip = false;
         this._style = null;
+        this._clearOverviewMask();
+        this._clearOverviewShadow();
         this._syncClip(false);
         this._syncShadow(false);
         this._syncResizeBand(false, null, null);
@@ -390,6 +684,9 @@ export class WindowDecoration {
             }
         }
         this.signals.length = 0;
+
+        this._clearOverviewMask();
+        this._clearOverviewShadow();
 
         if (!keepVisualsForClose) {
             this._removeClipEffect();

@@ -215,24 +215,6 @@ it rather than reimplementing it: going through `set_uniform_value` would drop v
 `pipeline.set_uniform_float()` - uploads the shadow's uniforms on the Cogl pipeline. GJS exposes two
 signatures for it, so the extension probes which one the host provides.
 
-## offscreen_effect_get_pipeline
-
-`effect.get_pipeline()` - retrieves the underlying Cogl pipeline from `Clutter.OffscreenEffect`.
-The extension queries this during paint to configure hardware mipmapping on the offscreen FBO.
-
-## cogl_pipeline_set_layer_filters
-
-`pipeline.set_layer_filters()` - configures the minification and magnification filters on a Cogl pipeline
-texture layer. Used to set `LINEAR_MIPMAP_LINEAR` during overview mode.
-
-## cogl_pipeline_get_layer_filters
-
-`pipeline.get_layer_filters()` - queries the active minification and magnification filters on a Cogl pipeline
-texture layer. The C prototype takes two `(out)` parameters (`CoglPipelineFilter *min_filter, *mag_filter`);
-GJS folds these out-arguments into a two-element return array `[min_filter, mag_filter]` rather than accepting
-pointers. Used in E2E integration test assertions to verify that hardware mipmapping is actually applied
-to the pipeline layer during overview mode and restored upon returning to desktop.
-
 ## clutter_cursor_type
 
 `Clutter.CursorType` - the cursor `Clutter.Actor.set_cursor_type` takes, and the reason this row exists
@@ -242,11 +224,6 @@ while the extension was being loaded, so the shell reported the whole extension 
 (`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
 behind a capability check in `platform/actorCursor.js`, and a line without the enum gets no cursor
 instead of no extension.
-
-## cogl_pipeline_filter
-
-`Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
-Used when configuring the layer filters for overview thumbnails.
 
 ## shell_glsl_set_uniform_float
 
@@ -336,5 +313,6 @@ window actor rather than inside the window's own actor tree.
 ## overview_visible
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
-then switch each clip effect's layer filter to hardware mipmapping,
-so downscaled previews stay filtered; the effect is retained, not suspended.
+then hand every decoration its overview state: Wayland windows suspend the clip effect and round
+through the shaped-texture mask, while X11 windows keep the clip and switch its layer filter to
+hardware mipmapping.

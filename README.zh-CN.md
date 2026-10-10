@@ -55,7 +55,7 @@
 ### 🛡️ 智能识别与非侵入设计
 - **不打扰原生应用**：自动识别并跳过映射 Libadwaita 或 Libhandy 的进程（读 `/proc/<pid>/maps`）；Firefox 与其他 GTK3 应用一样参与原生适配
 - **消除多层阴影**：精确识别 Mutter 与系统既有阴影，只补缺失部分
-- **Overview 视图原生对齐**：进入 GNOME Shell Overview 时无缝保留圆角，配合硬件三线性 Mipmap 消除缩小走样与摩尔纹
+- **Overview 视图原生对齐**：进入 GNOME Shell Overview 时无缝保留圆角与阴影，圆角走 Mutter 自身的 shaped-texture 遮罩，缩略图与原生同样清晰
 - **拼缝处理**：与相邻分屏窗口匹配时只去掉环境阴影；1px 分屏描边环画在窗口四周，不会在共享的边上被抑制
 
 ### 🔍 分数缩放文字清晰度保护

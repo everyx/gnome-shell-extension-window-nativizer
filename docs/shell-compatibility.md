@@ -65,10 +65,6 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
 | `effect.set_uniform_float()` | 45–50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
 | `pipeline.set_uniform_float()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
-| `effect.get_pipeline()` | 45–51 stable | [why](shell-api.md#offscreen_effect_get_pipeline) |
-| `pipeline.set_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_layer_filters) |
-| `pipeline.get_layer_filters()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_get_layer_filters) |
-| `Cogl.PipelineFilter` | 45–51 stable | [why](shell-api.md#cogl_pipeline_filter) |
 | `Clutter.CursorType` | 45–49 absent / 50–51 | [why](shell-api.md#clutter_cursor_type) |
 | `effect.set_uniform_float() [Shell.GLSLEffect]` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
 | `backend.get_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_sprite) |

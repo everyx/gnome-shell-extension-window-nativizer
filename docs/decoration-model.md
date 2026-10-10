@@ -657,59 +657,60 @@ As a consequence, downscaling the full-resolution offscreen FBO texture to ~0.25
 thumbnails suffers from severe aliasing, moiré patterns, and text blur (GNOME Shell upstream
 issue #7903).
 
-### Retaining rounded corners with hardware mipmapping
+### Retaining rounded corners through the shaped-texture mask
 
-To achieve seamless visual consistency with Libadwaita / native CSD windows in Overview thumbnails, the extension retains rounded corners in the overview by default and eliminates downsampling blur through hardware mipmapping:
+The FBO has no mipmaps, so the fix is to not use one in the overview at all. Mutter exposes
+`Meta.ShapedTexture.set_mask_texture()` — the A_8 alpha mask it already uses for shaped X11
+windows — and its paint path samples that mask as a second layer of the *same* Cogl pipeline
+as the window colour (`get_masked_pipeline()` in `src/compositor/meta-shaped-texture.c`),
+under the same `LINEAR_MIPMAP_NEAREST` minification the mipmap tower gets. Rounding therefore
+rides Mutter's native hardware mipmapping: the thumbnail is rounded and exactly as sharp as an
+undecorated window, with no offscreen pass.
 
-- **Visual consistency and anti-aliasing quality**: While a 12–15px corner radius mathematically shrinks to ~2–3 logical pixels at ~0.25x thumbnail scale, unclipped 90° rectangular corners create an immediate visual anomaly when positioned directly adjacent to native GTK4/Libadwaita windows (which consistently render rounded corners in overview). Furthermore, when fewer windows are open or when preview cards occupy substantial viewport space, the absolute on-screen prominence of the corners increases significantly. Historically, disabling the clip effect in overview was chosen not because rounded corners were deemed imperceptible, but because bilinear downsampling of an un-mipmapped FBO degraded the 2–3px curves into noisy, aliased artifacts and blurred text. By solving downsampling aliasing at the root through hardware mipmapping, retaining rounded corners achieves both visual consistency and clean edge antialiasing.
-- The clip effect remains attached during overview; the decoration is put into mipmapping mode rather than having its clip disabled.
-- When entering overview, the manager informs every active decoration.
-- Reusing the desktop convention (no outline on tiled/maximized windows), the decoration drops its outline during overview. This completely eliminates subpixel edge fringing and strobing on downscaled ~0.25x thumbnails while preserving crisp rounded corners. Upon returning to the desktop, the normal 1px inner outline is restored seamlessly.
-- On each paint, the clip effect dynamically sets its Cogl pipeline's minification filter to `COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR`.
-- **LOD and perimeter antialiasing preservation**:
-  - The inward normal sampling offset (`clearStroke`) is strictly suppressed (`clearStroke = false`) during overview. Because Cairo stroke bleed is sub-pixel in miniature thumbnails, normal sampling displacement is unnecessary and would otherwise introduce non-linear coordinate discontinuities across 2x2 fragment quads, triggering false mipmap LOD spikes (blur halos) on thumbnail edges.
-  - While desktop straight edges utilize hard step cutoffs to prevent bilinear dragging blur, overview thumbnails restore smooth physical antialiasing across the entire perimeter (`uOverview = 1.0`), eliminating downscaling jaggies, moiré strobing, and corner-to-edge transition kinks.
-  - Subpixel actor grid translations are locked to zero during overview to keep thumbnail bounding boxes phase-stable across animations.
-- **Cogl cost model**: rendering into the offscreen marks its texture dirty, so with a mipmapped minification filter active Cogl regenerates the mipmap chain on each preview redraw. A static preview pays nothing; a window still committing damage while the overview is open (video, UI animation) regenerates the chain every frame, proportional to its buffer area. The automated benchmarks measure desktop composition, not overview GPU load.
-- This hardware mipmapping drastically reduces downsampling moiré and aliasing in the ~0.25x overview clone without monkey-patching GNOME Shell's `WindowPreview` or introducing multi-pass FBO overhead.
-- When exiting overview, the override stops. On the next paint frame, Mutter's `ClutterOffscreenEffect.pre_paint` (`ensure_pipeline_filter_for_scale()`) automatically restores the standard `NEAREST` / `LINEAR` filter, ensuring zero mipmap generation overhead during normal desktop composition.
+Entering the overview, the manager tells every decoration, which:
 
-### Why window shadows are omitted in overview
+- Suspends the desktop clip effect. It is the FBO that blurs, so it must not stay attached.
+- Builds a rounded A_8 mask matching the clip's body geometry — insets and radius scaled from
+  logical pixels into the client's buffer pixels — and installs it with `set_mask_texture()`.
+  Alpha is 255 over the body, carries the corner coverage in the four corner squares, and is
+  255 outside the body unless the ring is cleared (flat windows): the same coverage the desktop
+  shader computes. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
+- Drops the preview container's opacity to 254. Mutter consults the mask only on its blended
+  path (`use_opaque_region = opaque_region && opacity == 255`), and an opaque client declares a
+  full-surface opaque region, so the fast path would paint square corners. One step below 255
+  forces the blended path; the cost is 1/255 of alpha, a single level of difference on a 0-255
+  channel, measured and imperceptible.
 
-While native Libadwaita / GTK4 windows appear with faint shadows in GNOME Shell's Overview, non-CSD windows decorated by this extension appear as clean, flat rounded cards. A natural architectural question arises: **Why can rounded corners be retained in overview with virtually zero overhead, whereas window shadows cannot be implemented with similarly low performance impact?**
+Leaving the overview, the mask is replaced by a 1x1 fully opaque texture (`set_mask_texture`
+rejects `null`) and the container opacity is restored; the clip effect is re-enabled.
 
-This asymmetry stems from fundamental compositor actor topology and pipeline mechanics, as well as the steep runtime penalties of alternative approaches:
+**X11/XWayland re-applies the mask after surface syncs.** Mutter rebuilds this same
+`mask_texture` slot from the X11 shape on every surface sync
+(`meta_xwayland_surface_sync_actor_state` → `update_regions` → `build_and_scan_frame_mask`),
+so a mask set once is wiped within a frame and the window renders square. The surface actor
+emits `repaint-scheduled` at exactly that point, and the decoration re-applies the mask there;
+verified in the dev shell — a 391px-radius mask survives window movement and the thumbnail stays
+rounded. Upstream has no native window rounded-clip to fall back on —
+`Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only
+implementation (MR !1717) and the Clutter rounded-corner-clipping roadmap item (issue #2087) is
+still open.
 
-#### 1. First-principles analysis: Intra-actor vs. Extra-actor topology
+**Cost.** The mask is one byte per texel, generated once per window per overview entry
+(only the four corner squares are computed; the body is a memset) and released on exit. Its
+resolution is the largest preview the overview can draw — Shell's `WINDOW_PREVIEW_MAXIMUM_SCALE`
+(0.95, js/ui/workspace.js) applied to the window at the monitor's scale, expressed in buffer
+texels as `0.95 * monitorScale / bufferScale` — with a hard ceiling of 2560 texels on the
+longest side. The ceiling is calibrated against rendered corners: the arc turns visibly
+polygonal below roughly 0.7 mask texels per screen pixel and is indistinguishable from a
+full-resolution mask at 1.0, so 2560 keeps a 4K window's arc above that threshold and degrades
+it gradually beyond. No per-frame work, no offscreen pass, no mipmap regeneration.
 
-The reason rounded corners can piggyback on Mutter's native pipeline while shadows cannot is fundamentally topological:
+### Overview shadows via a preview shadow clone
 
-- **Rounded corners are an *intra-actor* operation**:
-  - The clip effect operates directly on `MetaWindowActor`. Its bounding box is fully contained within the client window's buffer rectangle (`buffer_rect`).
-  - In Mutter's overview architecture (`ShellWindowPreviewLayout.c` / `WindowPreview.js`), GNOME Shell constructs window previews using `clutter_clone_new(window_actor)`. Because the clip effect's offscreen FBO texture is the rendering target of the cloned host actor itself, Mutter's C layout pipeline automatically and seamlessly inherits the clipped texture in the clone.
-  - No additional actors, no extra scenegraph nodes, no external layout calculations, and no GJS per-frame matrix tracking are required. The only adaptation needed is switching the hardware mipmap sampler filter in GPU fragment shading.
-
-- **Window shadows are an *extra-actor* operation**:
-  - Non-CSD windows (X11 / Xwayland or Wayland clients without client-side decorations) report zero frame extents (`_GTK_FRAME_EXTENTS = 0`). Their physical buffer boundary ends sharply at the window frame.
-  - A natural drop shadow must extend 30–60 pixels outward in all directions beyond the window edge. To prevent this expanded area from corrupting compositor input picking (which would cause clicks near window edges to be misrouted) and to decouple shadow state from desktop tiling/maximization, shadows cannot be rendered inside the window actor; they must be managed as separate external sibling actors (the shadow actor lives in `global.window_group`, not `Main.uiGroup`).
-  - GNOME Shell's C layout manager (`ShellWindowPreviewLayout`) strictly manages and clones only `MetaWindowActor`. It has no knowledge of external sibling actors. Consequently, shadows are inherently omitted from native preview cloning.
-
-#### 2. Evaluation of potential low-overhead shadow implementations
-
-To explore whether a low-overhead shadow mechanism is possible, we evaluated four potential technical routes:
-
-| Implementation Route | Mechanism | Performance Impact & Feasibility | Verdict |
-| :--- | :--- | :--- | :--- |
-| **A. Injected Shadow Clone**<br>*(e.g., Rounded Window Corners Reborn)* | Monkey-patch `WindowPreview` to instantiate a secondary `Clutter.Clone` of the shadow actor under each preview card. | **High CPU overhead & stability hazard**: Mutter's C layout manager (`ShellWindowPreviewLayout.c`) only animates and transforms the recognized `window_actor`. Non-window children fall into a fallback branch with fixed sizing. To scale the shadow with the preview card, the extension must hook `scale-x`, `scale-y`, and `allocation-changed` signals in GJS, computing floating-point transformation matrices in the JavaScript main loop on every animation frame (at 144Hz/240Hz, this causes CPU spikes, frame drops, and GC jank). Furthermore, monkey-patching `WindowPreview` breaks cross-version compatibility across GNOME 45–48+, triggers ghost `Clutter.Actor is disposed` crashes during drag-and-drop or workspace switching, and severely conflicts with extensions like Dash to Dock, V-Shell, and Tiling Shell. | ❌ Rejected (High CPU load & severe instability) |
-| **B. Intra-actor Shadow Effect**<br>*(Combine shadow into `MetaWindowActor` FBO)* | Expand the FBO bounding box of the clip effect outward by 30–60px padding to draw blurred shadows directly in the shader. | **Prohibitive GPU memory bandwidth & input corruption**: Padding an FBO by 60px on all sides increases the offscreen surface dimensions drastically. On a 4K display, a standard 2560×1440 window FBO area expands by over 20–30%, resulting in millions of additional pixels read and written to offscreen memory each frame. Crucially, expanding the actor allocation breaks desktop pointer picking (shadow fringes intercept mouse events intended for adjacent windows) and makes it impossible to cleanly peel off shadows when windows are tiled or maximized. | ❌ Rejected (Excessive GPU bandwidth & broken desktop input) |
-| **C. Shell Theme CSS `box-shadow`** | Apply CSS `box-shadow` to the preview container (`.window-preview`) in the overview stylesheet. | **Double-shadow visual artifacts & software blur**: Clutter / `St.Widget` handles CSS box-shadows inefficiently (often falling back to CPU software-blurred surfaces), causing micro-stutter when opening the overview with many windows. More fatally, native GTK4/Libadwaita windows already contain client-side shadows inside their Wayland buffers; applying a CSS shadow unconditionally causes jarring "double shadows" around native apps, and visually encapsulates floating preview UI elements like the close button. | ❌ Rejected (Unacceptable visual artifacts & CPU blur) |
-| **D. Flat Rounded Card**<br>*(Adopted design)* | Retain rounded corners via the native `Clutter.Clone` hierarchy with hardware mipmapping; omit drop shadows in overview. | **Near-zero overhead & zero invasiveness**: Reuses Mutter's existing native clone with zero extra actors, zero GJS matrix tracking, zero monkey-patching, and zero allocation inflation. Mipmapping is handled entirely in GPU texture units on demand. | ✅ Adopted (Optimal performance & full stability) |
-
-#### 3. Alignment with modern human interface guidelines
-
-Beyond performance and compositor mechanics, omitting outer drop shadows in multi-tasking overview modes aligns with contemporary interface design conventions:
-- When the overview opens, the desktop background is dimmed and blurred, shifting the visual paradigm from floating, layered desktop windows to a clean, structured workspace grid.
-- Modern multitasking interfaces (such as macOS Mission Control, iOS App Switcher, and ChromeOS Overview) consistently favor crisp, flat, rounded preview tiles over heavy cast shadows to minimize visual noise and enhance spatial legibility.
-- By retaining smooth, anti-aliased rounded corners without monkey-patching GNOME Shell's layout engine, this extension achieves full geometric harmony with native Libadwaita preview tiles at maximum runtime efficiency and zero crash risk.
-
-
+The desktop shadow is a sibling of the window actor in `global.window_group`, so the preview's
+`Clutter.Clone` of the window actor never carries it. `overviewShadow.js` adds a
+`Clutter.Clone` of the shadow actor as a child of the preview, below `window_container`, and
+overrides `vfunc_allocate()` to expand the thumbnail box by `SHADOW_PAD` scaled to the preview.
+The clone paints the shadow's baked 8-slice mesh, so scaling it is a texture sample, not a
+re-blur. It monkey-patches nothing: the allocation is a Clutter vfunc, not a GJS signal handler
+recomputing matrices per frame, and the clone is a plain scene-graph child of the preview.

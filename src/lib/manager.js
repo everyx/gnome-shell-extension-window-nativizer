@@ -17,6 +17,8 @@ import {WindowDecoration} from './windowDecoration.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
 import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
+import * as overviewMask from '../effects/overviewMask.js';
+import {OverviewShadow} from '../effects/overviewShadow.js';
 import {RESIZE_BAND_G_TYPE, ResizeBand} from './resizeBandActor.js';
 import {
     getDisplay,
@@ -242,6 +244,8 @@ export class Manager {
             RoundedClipEffect,
             ShadowActor,
             ResizeBand,
+            OverviewMask: overviewMask,
+            OverviewShadow,
             St,
         });
         this._windows.set(win, deco);

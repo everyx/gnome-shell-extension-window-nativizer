@@ -13,7 +13,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         constructor() {
             this.enabled = true;
             this.params = null;
-            this.overviewMode = false;
         }
 
         set_enabled(val) {
@@ -22,10 +21,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setParams(params) {
             this.params = params;
-        }
-
-        setOverviewMode(val) {
-            this.overviewMode = val;
         }
     }
 
@@ -98,7 +93,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         mockWin = {
             get_compositor_private: () => mockActor,
-            get_client_type: () => WindowClientType.X11,
+            get_client_type: () => WindowClientType.WAYLAND,
         };
 
         mockContainer = {
@@ -159,11 +154,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasClip).toBeFalse();
         expect(mockActor.effects.length).toBe(0);
 
-        // Attach clip while in overview -> enabled and in overview mode
+        // Attach clip while in overview, with the style already decided -> the clip is
+        // suspended so the preview clone samples the window's own mipmapped texture
+        // instead of an offscreen FBO.
+        deco.drawClip = true;
+        deco._style = {radius: 12, outline: null, shadows: []};
         deco._syncClip(true, false, mockActor, insets, true);
         expect(deco.hasClip).toBeTrue();
-        expect(deco.clip.enabled).toBeTrue();
-        expect(deco.clip.overviewMode).toBeTrue();
+        expect(deco.clip.enabled).toBeFalse();
     });
 
     it('manages shadow actor lifecycle in _syncShadow', () => {
@@ -283,18 +281,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             monitorScale: 1,
         };
 
-        // apply while in overview (clip retained, overviewMode enabled, outline suppressed to avoid subpixel fringe)
+        // apply while in overview (clip suspended, outline suppressed to avoid subpixel fringe)
         deco.apply({actions, inputs, actor: mockActor, inOverview: true});
         expect(deco.hasClip).toBeTrue();
-        expect(deco.clip.enabled).toBeTrue();
-        expect(deco.clip.overviewMode).toBeTrue();
+        expect(deco.clip.enabled).toBeFalse();
         expect(deco.clip.params.outline).toBeNull();
 
-        // apply on desktop (outline restored, overviewMode disabled)
+        // apply on desktop (outline restored, clip re-enabled)
         deco.apply({actions, inputs, actor: mockActor, inOverview: false});
         expect(deco.hasClip).toBeTrue();
         expect(deco.clip.enabled).toBeTrue();
-        expect(deco.clip.overviewMode).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
     });
 
@@ -487,17 +483,15 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const inputs = {insets, monitorScale: 1};
         deco.apply({actions, inputs, actor: mockActor});
 
-        // setOverviewMode entering overview (outline suppressed, overviewMode enabled, clearStroke suppressed)
+        // setOverviewMode entering overview (clip suspended, outline suppressed)
         deco.setOverviewMode(true);
-        expect(deco.clip.enabled).toBeTrue();
-        expect(deco.clip.overviewMode).toBeTrue();
+        expect(deco.clip.enabled).toBeFalse();
         expect(deco.clip.params.outline).toBeNull();
         expect(deco.clip.params.clearStroke).toBeFalse();
 
-        // setOverviewMode leaving overview (outline restored, overviewMode disabled, clearStroke preserved)
+        // setOverviewMode leaving overview (outline restored, clip re-enabled)
         deco.setOverviewMode(false);
         expect(deco.clip.enabled).toBeTrue();
-        expect(deco.clip.overviewMode).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
         expect(deco.clip.params.clearStroke).toBeTrue();
 
@@ -542,5 +536,259 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasShadow).toBeFalse();
         expect(deco.hasResizeBand).toBeFalse();
         expect(deco.drawClip).toBeFalse();
+    });
+
+    it('rounds X11 (XWayland) windows through the mask too, suspending the offscreen clip', () => {
+        mockWin.get_client_type = () => WindowClientType.X11;
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const actions = {
+            drawClip: true,
+            clearRing: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        deco.apply({actions, inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1}, actor: mockActor});
+        expect(deco._canApplyOverviewMask()).toBeTrue();
+
+        deco.setOverviewMode(true);
+        expect(deco.clip.enabled).toBeFalse();
+    });
+
+    it('re-applies the XWayland mask after each surface sync', () => {
+        mockWin.get_client_type = () => WindowClientType.X11;
+        const fakeMask = {tag: 'rounded'};
+        const fakeOpaque = {tag: 'opaque'};
+        const OverviewMask = {
+            buildRoundedMask: () => fakeMask,
+            opaqueMask: () => fakeOpaque,
+        };
+        const surface = {
+            mask: null,
+            set_mask_texture(texture) {
+                this.mask = texture;
+            },
+            get_texture: () => ({
+                get_plane: () => ({get_context: () => ({})}),
+                get_width: () => 800,
+                get_height: () => 600,
+            }),
+        };
+        // X11 resolves the clip target to the window actor's first child, which mockActor lacks,
+        // so the target is mockActor itself and that is what gets the re-apply hook.
+        mockActor.handlers = [];
+        mockActor.connect = (signal, cb) => {
+            mockActor.handlers.push({signal, cb});
+            return mockActor.handlers.length;
+        };
+        mockActor.disconnect = () => {};
+        mockActor.get_texture = () => surface;
+
+        const container = {
+            opacity: 255,
+            get_opacity() {
+                return this.opacity;
+            },
+            set_opacity(value) {
+                this.opacity = value;
+            },
+            connect: () => 1,
+            disconnect: () => {},
+        };
+        mockWin._delegate = {window_container: container};
+        mockWin.connect = () => 1;
+        mockWin.disconnect = () => {};
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            OverviewMask,
+        });
+        const actions = {
+            drawClip: true,
+            clearRing: false,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        deco.apply({actions, inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1}, actor: mockActor});
+
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(fakeMask);
+
+        const restore = mockActor.handlers.find(h => h.signal === 'repaint-scheduled');
+        expect(restore).toBeDefined();
+        // Mutter rewrites the slot from the X11 shape on a surface sync; the hook restores it.
+        surface.mask = null;
+        restore.cb();
+        expect(surface.mask).toBe(fakeMask);
+
+        deco.setOverviewMode(false);
+        expect(surface.mask).toBe(fakeOpaque);
+    });
+
+    it('applies the shaped-texture mask and the container-opacity bypass on Wayland', () => {
+        const fakeMask = {tag: 'rounded'};
+        const fakeOpaque = {tag: 'opaque'};
+        const OverviewMask = {
+            buildRoundedMask: () => fakeMask,
+            opaqueMask: () => fakeOpaque,
+        };
+        const surface = {
+            mask: null,
+            set_mask_texture(texture) {
+                this.mask = texture;
+            },
+            get_texture: () => ({
+                get_plane: () => ({get_context: () => ({})}),
+                get_width: () => 800,
+                get_height: () => 600,
+            }),
+        };
+        mockActor.get_texture = () => surface;
+
+        const container = {
+            opacity: 255,
+            get_opacity() {
+                return this.opacity;
+            },
+            set_opacity(value) {
+                this.opacity = value;
+            },
+            connect: () => 1,
+            disconnect: () => {},
+        };
+        mockWin._delegate = {window_container: container};
+        mockWin.connect = () => 1;
+        mockWin.disconnect = () => {};
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            OverviewMask,
+        });
+        const actions = {
+            drawClip: true,
+            clearRing: false,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        deco.apply({actions, inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1}, actor: mockActor});
+
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(fakeMask);
+        expect(container.opacity).toBe(254);
+        expect(deco.clip.enabled).toBeFalse();
+
+        deco.setOverviewMode(false);
+        expect(surface.mask).toBe(fakeOpaque);
+        expect(container.opacity).toBe(255);
+        expect(deco.clip.enabled).toBeTrue();
+    });
+
+    it('re-applies the mask when the window moves to another workspace in the overview', () => {
+        const fakeMask = {tag: 'rounded'};
+        const fakeOpaque = {tag: 'opaque'};
+        const OverviewMask = {
+            buildRoundedMask: () => fakeMask,
+            opaqueMask: () => fakeOpaque,
+        };
+        const surface = {
+            mask: null,
+            set_mask_texture(texture) {
+                this.mask = texture;
+            },
+            get_texture: () => ({
+                get_plane: () => ({get_context: () => ({})}),
+                get_width: () => 800,
+                get_height: () => 600,
+            }),
+        };
+        mockActor.get_texture = () => surface;
+        const winSignals = [];
+        mockWin.connect = (signal, cb) => {
+            winSignals.push({signal, cb});
+            return winSignals.length;
+        };
+        mockWin.disconnect = () => {};
+
+        const newContainer = () => ({
+            opacity: 255,
+            get_opacity() {
+                return this.opacity;
+            },
+            set_opacity(value) {
+                this.opacity = value;
+            },
+            connect: () => 1,
+            disconnect: () => {},
+        });
+        const firstCard = newContainer();
+        mockWin._delegate = {window_container: firstCard};
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            OverviewMask,
+        });
+        const actions = {
+            drawClip: true,
+            clearRing: false,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        deco.apply({actions, inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1}, actor: mockActor});
+        deco.setOverviewMode(true);
+        expect(firstCard.opacity).toBe(254);
+        expect(surface.mask).toBe(fakeMask);
+
+        // The window moves to another workspace: a fresh preview with its container at full opacity.
+        const secondCard = newContainer();
+        mockWin._delegate = {window_container: secondCard};
+        const moved = winSignals.find(s => s.signal === 'workspace-changed');
+        expect(moved).toBeDefined();
+        moved.cb();
+
+        expect(secondCard.opacity).toBe(254);
+        expect(surface.mask).toBe(fakeMask);
+    });
+
+    it('sizes the overview mask to the largest preview the overview can draw, then caps it', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+        });
+
+        // 1x buffer on a 1x monitor: the preview tops out at 0.95 of the window.
+        expect(deco._overviewMaskScale(800, 600, 1, 1)).toBe(0.95);
+        // A hidpi buffer on a low-dpi monitor is downsampled to the on-screen size.
+        expect(deco._overviewMaskScale(4000, 2400, 2, 1)).toBeCloseTo(0.475, 5);
+        // Above the cap, the longest side is pinned at OVERVIEW_MASK_MAX_DIMENSION.
+        expect(deco._overviewMaskScale(3840, 2160, 1, 1)).toBeCloseTo(2560 / 3840, 5);
+        expect(deco._overviewMaskScale(7680, 4320, 1, 1)).toBeCloseTo(2560 / 7680, 5);
+        // Never degenerate.
+        expect(deco._overviewMaskScale(100000, 100000, 1, 1)).toBe(0.05);
     });
 });
