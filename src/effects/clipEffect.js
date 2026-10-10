@@ -11,7 +11,6 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {snapActorBodyFrame} from '../lib/snap.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
-import {getWindowSubpixelOffset} from '../platform/window.js';
 
 const DECLARATIONS = `
 uniform vec2 uSize;       // Actor size in px
@@ -232,11 +231,6 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
-        const offset = this._overviewMode
-            ? {x: 0, y: 0}
-            : getWindowSubpixelOffset(actor?.meta_window, actor);
-        frame.x += offset.x;
-        frame.y += offset.y;
 
         if (this._lastOverviewMode !== this._overviewMode) {
             this._overviewVec[0] = this._overviewMode ? 1 : 0;

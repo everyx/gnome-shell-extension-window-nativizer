@@ -186,7 +186,9 @@ def place_subjects(env):
             const w = byId("dev.windownativizer." + name);
             if (w) {{
                 const f = w.get_frame_rect();
-                rects[name] = {{ x: f.x, y: f.y, width: f.width, height: f.height,
+                const inset = name === "bare" ? 1 : 0;
+                rects[name] = {{ x: f.x + inset, y: f.y + inset,
+                                 width: f.width - inset * 2, height: f.height - inset * 2,
                                  scale: global.display.get_monitor_scale(w.get_monitor()) }};
             }}
         }}
@@ -306,7 +308,9 @@ def focus_subject(env, name):
             const w = byId("dev.windownativizer." + n);
             if (w) {{
                 const f = w.get_frame_rect();
-                rects[n] = {{ x: f.x, y: f.y, width: f.width, height: f.height,
+                const inset = n === "bare" ? 1 : 0;
+                rects[n] = {{ x: f.x + inset, y: f.y + inset,
+                              width: f.width - inset * 2, height: f.height - inset * 2,
                               scale: global.display.get_monitor_scale(w.get_monitor()) }};
             }}
         }}

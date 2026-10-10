@@ -11,7 +11,7 @@
 import GLib from 'gi://GLib';
 
 import {resolveClipTarget} from './clipTarget.js';
-import {hasPositiveInsets} from './frame.js';
+import {hasPositiveInsets, FLAT_SAFE_INSET} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
@@ -137,19 +137,24 @@ export class WindowDecoration {
             return;
 
         const clipTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
-        const insets = inputs.insets;
+        const rawInsets = inputs.insets;
         const scale = inputs?.monitorScale ?? 1.0;
 
-        this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, insets, inOverview);
+        const isFlat = !hasPositiveInsets(rawInsets);
+        const decorInsets = isFlat && (actions.drawClip || actions.drawShadow)
+            ? FLAT_SAFE_INSET
+            : rawInsets;
+
+        this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, decorInsets, inOverview, isFlat);
 
         // Draw shadow actor if tiled ring is needed, or if window needs drop shadow without deferring to client.
         const deferToClientShadow = actions.clearRing && !this.clip;
         this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
 
-        this._syncResizeBand(actions.drawResize, inputs, insets, winActor);
+        this._syncResizeBand(actions.drawResize, inputs, decorInsets, winActor);
 
         if (this.clip || this.shadow)
-            this._applyStyle(actions.style, insets, actions.drawClip, scale);
+            this._applyStyle(actions.style, decorInsets, actions.drawClip, scale);
     }
 
     /**
@@ -170,8 +175,9 @@ export class WindowDecoration {
      * @param {Clutter.Actor|null} clipTarget
      * @param {import('./frame.js').Insets|null} insets
      * @param {boolean} [inOverview=false]
+     * @param {boolean} [isFlat=false]
      */
-    _syncClip(wantEffect, clearRing = false, clipTarget = null, insets = null, inOverview = false) {
+    _syncClip(wantEffect, clearRing = false, clipTarget = null, insets = null, inOverview = false, isFlat = false) {
         // Clip effect requires valid insets (null indicates frame does not fit inside buffer).
         const wanted = wantEffect && Boolean(insets);
         const hasClip = Boolean(this.clip);
@@ -197,7 +203,7 @@ export class WindowDecoration {
         }
         this.clipInsets = this.clip ? insets : null;
         this.clearRing = Boolean(clearRing);
-        this.effectiveClearRing = this.clip ? Boolean(clearRing || !hasPositiveInsets(insets)) : false;
+        this.effectiveClearRing = this.clip ? Boolean(clearRing || isFlat) : false;
         this.setOverviewMode(inOverview);
     }
 

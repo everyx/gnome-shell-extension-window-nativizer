@@ -148,7 +148,7 @@ The corner is a distance field. To keep straight edges crisp under fractional sc
 anti-alias ramp is confined strictly to the corner arcs, so straight edges keep full content
 alpha and do not blur when the compositor resamples the offscreen a second time; the model and
 the measurements are in `decoration-alignment.md`. A 1px inner outline is drawn half a physical
-pixel inside the body, and a zero alpha disables it - which is also how overview suppresses it.
+pixel inside the body, and a zero alpha disables it - which is how overview suppresses it. For flat ringless windows (such as WeChat) that paint client-side rectangular borders right up to the actor boundary, a 1px safe inward inset (`FLAT_SAFE_INSET`) excises the client-drawn rectangular border outside the body, allowing the native Adwaita inner outline and box shadow to decorate the entire perimeter consistently without double lines or corner seam artifacts.
 
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
