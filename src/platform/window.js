@@ -2,7 +2,8 @@
  * Window-level Shell and Mutter API operations and queries for GNOME 50+.
  */
 
-import {WindowType} from '../lib/mutterRules.generated.js';
+import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
+import {getMonitorScale, getMonitorGeometry} from './display.js';
 
 /**
  * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
@@ -356,6 +357,53 @@ export function getWindowTileMatch(win) {
         return win?.get_tile_match?.() ?? null;
     } catch {
         return null;
+    }
+}
+
+/**
+ * Computes Mutter Wayland subpixel grid alignment offset for an actor.
+ * Matches surface_container_apply_transform in Mutter (meta-window-actor-wayland.c:143-154).
+ * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or invalid monitors.
+ *
+ * @param {object|null} win - Meta.Window
+ * @param {object|null} actor - Clutter.Actor (windowActor)
+ * @returns {{x: number, y: number}}
+ */
+export function getWindowSubpixelOffset(win, actor) {
+    if (!win || !actor)
+        return {x: 0, y: 0};
+
+    try {
+        if (getWindowClientType(win) !== WindowClientType.WAYLAND)
+            return {x: 0, y: 0};
+
+        const monitorIndex = typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
+        if (monitorIndex < 0)
+            return {x: 0, y: 0};
+
+        const scale = getMonitorScale(monitorIndex);
+        if (!(scale > 0) || !Number.isFinite(scale) || Math.abs(scale - Math.round(scale)) < 0.001)
+            return {x: 0, y: 0};
+
+        const geom = getMonitorGeometry(monitorIndex);
+        const monitorX = geom?.x ?? 0;
+        const monitorY = geom?.y ?? 0;
+
+        // In GNOME Shell, windowActor is a direct child of windowGroup (origin at 0, 0).
+        const actorX = (actor.x ?? 0) + (actor.translation_x ?? 0);
+        const actorY = (actor.y ?? 0) + (actor.translation_y ?? 0);
+        const relX = actorX - monitorX;
+        const relY = actorY - monitorY;
+
+        const adjRelX = Math.round(relX * scale) / scale;
+        const adjRelY = Math.round(relY * scale) / scale;
+
+        return {
+            x: adjRelX - relX,
+            y: adjRelY - relY,
+        };
+    } catch {
+        return {x: 0, y: 0};
     }
 }
 

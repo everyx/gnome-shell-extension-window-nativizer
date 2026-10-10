@@ -26,7 +26,8 @@ export {
     isWindowAppearsFocused,
     getWindowTileMatch,
     getWindowFromActor,
-    findMetaWindow
+    findMetaWindow,
+    getWindowSubpixelOffset
 } from './window.js';
 
 export {
