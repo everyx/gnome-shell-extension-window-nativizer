@@ -7,6 +7,9 @@
 /** No ring: the actor is the body. Used as the fallback when no margin was readable. */
 export const ZERO_INSETS = Object.freeze({left: 0, top: 0, right: 0, bottom: 0});
 
+/** Safe 1px inward inset margin for flat ringless windows to excise client rectangular borders. */
+export const FLAT_SAFE_INSET = Object.freeze({left: 1, top: 1, right: 1, bottom: 1});
+
 /** @typedef {{left: number, top: number, right: number, bottom: number}} Insets */
 
 /**

@@ -1,5 +1,6 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
+import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 
 describe('WindowDecoration (lifecycle and orchestration)', () => {
     let mockWin;
@@ -267,7 +268,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const outline = {color: [1, 1, 1], alpha: 0.1};
         const actions = {
             drawClip: true,
-            clearRing: false,
+            clearRing: true,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
@@ -306,13 +307,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             ResizeBand: MockResizeBand,
         });
 
+        const outline = {color: [255, 255, 255], alpha: 0.07};
         const actions = {
             drawClip: true,
             clearRing: false, // detector reports false because no client shadow exists to clear
             drawRing: false,
             drawShadow: true,
             drawResize: true,
-            style: {radius: 15, outline: null, shadows: []},
+            style: {radius: 15, outline, shadows: []},
         };
         const zeroInsets = {left: 0, top: 0, right: 0, bottom: 0};
         const inputs = {
@@ -325,10 +327,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // WindowDecoration retains clearRing as false (client declared no ring)
         // while computing effectiveClearRing as true so shader erases outer rectangular corners.
         // It must leave clearStroke false so shader preserves 1:1 sampling without pushing coords inward.
+        // Flat ringless windows use FLAT_SAFE_INSET (1px inward) to excise rectangular client borders,
+        // while retaining Adwaita inner outline on desktop to achieve seamless native decoration consistency.
         expect(deco.clearRing).toBeFalse();
         expect(deco.effectiveClearRing).toBeTrue();
+        expect(deco.clipInsets).toEqual(FLAT_SAFE_INSET);
+        expect(deco.clip.params.insets).toEqual(FLAT_SAFE_INSET);
+        expect(deco.shadow.insets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.clearRing).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeFalse();
+        expect(deco.clip.params.outline).toEqual(outline);
     });
 
     it('keeps the clip body on the declared frame so it matches the shadow body', () => {
@@ -470,7 +478,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const outline = {color: [1, 1, 1], alpha: 0.1};
         const actions = {
             drawClip: true,
-            clearRing: false,
+            clearRing: true,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
@@ -479,7 +487,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const inputs = {insets, monitorScale: 1};
         deco.apply({actions, inputs, actor: mockActor});
 
-        // setOverviewMode entering overview (outline suppressed, overviewMode enabled, clearStroke preserved)
+        // setOverviewMode entering overview (outline suppressed, overviewMode enabled, clearStroke suppressed)
         deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeTrue();
         expect(deco.clip.overviewMode).toBeTrue();
@@ -491,7 +499,15 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.enabled).toBeTrue();
         expect(deco.clip.overviewMode).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
-        expect(deco.clip.params.clearStroke).toBeFalse();
+        expect(deco.clip.params.clearStroke).toBeTrue();
+
+        // For flat ringless windows (clearRing=false), outline is active on desktop and suppressed in overview
+        deco.apply({actions: {...actions, clearRing: false}, inputs, actor: mockActor});
+        expect(deco.clip.params.outline).toEqual(outline);
+        deco.setOverviewMode(true);
+        expect(deco.clip.params.outline).toBeNull();
+        deco.setOverviewMode(false);
+        expect(deco.clip.params.outline).toEqual(outline);
 
         // On ringed windows (clearRing=true), clearStroke must be suppressed in overview to preserve mipmap LOD derivatives
         const ringedActions = {...actions, clearRing: true};
