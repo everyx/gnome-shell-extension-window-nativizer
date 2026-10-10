@@ -20,6 +20,7 @@ uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uClearRing;   // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
+uniform float uOverview;    // 1 restores smooth AA across all edges during overview mode, 0 keeps sharp desktop edges
 uniform float uScale;       // Physical device scale factor
 
 // Clutter effect padding: 2px top-left offset, 3px total enlargement
@@ -69,11 +70,12 @@ const CODE = `
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    // Physical 1px anti-aliasing transition on corner arcs:
+    // Physical 1px anti-aliasing transition on corner arcs (or entire perimeter during overview):
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
     float straight = mix(1.0, inSquare, uClearRing);
-    cogl_color_out *= isCorner ? mix(keep, corner, uClearRing) : straight;
+    float edgeFactor = isCorner || uOverview > 0.5 ? mix(keep, corner, uClearRing) : straight;
+    cogl_color_out *= edgeFactor;
 `;
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
@@ -110,6 +112,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._lastFrameW = -1;
         this._lastFrameH = -1;
         this._lastScale = -1;
+        this._lastOverviewMode = null;
         this._scale = 1.0;
 
         this._sizeVec = [0, 0];
@@ -118,6 +121,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._radiusVec = [0];
         this._clearRingVec = [0];
         this._clearStrokeVec = [0];
+        this._overviewVec = [0];
 
         this._overviewMode = false;
     }
@@ -228,9 +232,17 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
-        const offset = getWindowSubpixelOffset(actor?.meta_window, actor);
+        const offset = this._overviewMode
+            ? {x: 0, y: 0}
+            : getWindowSubpixelOffset(actor?.meta_window, actor);
         frame.x += offset.x;
         frame.y += offset.y;
+
+        if (this._lastOverviewMode !== this._overviewMode) {
+            this._overviewVec[0] = this._overviewMode ? 1 : 0;
+            this.set_uniform_float('uOverview', 1, this._overviewVec);
+            this._lastOverviewMode = this._overviewMode;
+        }
 
         if (this._lastScale !== scale) {
             this._scaleVec[0] = scale;

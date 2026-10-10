@@ -1196,13 +1196,22 @@ OVERVIEW_STATE="$(shell_eval '
             const clip = getClip();
             const minFilter = getMinFilter(clip);
             const isMipmapped = minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR;
-            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() && isMipmapped === expectedMipmapped) {
+            const clearStroke = clip?._clearStroke ?? null;
+            const overviewUniform = clip?._overviewVec ? clip._overviewVec[0] : null;
+            const expectedClearStroke = !expectedOverview;
+            const expectedOverviewUniform = expectedOverview ? 1 : 0;
+            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() &&
+                isMipmapped === expectedMipmapped &&
+                clearStroke === expectedClearStroke &&
+                overviewUniform === expectedOverviewUniform) {
                 return {
                     matched: true,
                     overviewVisible: Main.overview.visible,
                     clipEnabled: clip.get_enabled(),
                     minFilter,
                     isMipmapped,
+                    clearStroke,
+                    overviewUniform,
                     hasClip: true
                 };
             }
@@ -1215,7 +1224,9 @@ OVERVIEW_STATE="$(shell_eval '
             hasClip: Boolean(clip),
             clipEnabled: clip ? clip.get_enabled() : null,
             minFilter,
-            isMipmapped: minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR
+            isMipmapped: minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR,
+            clearStroke: clip?._clearStroke ?? null,
+            overviewUniform: clip?._overviewVec ? clip._overviewVec[0] : null
         };
     };
 
@@ -1234,16 +1245,20 @@ OVERVIEW_STATE="$(shell_eval '
         overviewVisible: overviewRes.overviewVisible,
         inOverviewEnabled: overviewRes.clipEnabled,
         inOverviewMipmapped: overviewRes.isMipmapped,
+        inOverviewClearStroke: overviewRes.clearStroke,
+        inOverviewUniform: overviewRes.overviewUniform,
         inOverviewMinFilter: overviewRes.minFilter,
         desktopOverviewVisible: desktopRes.overviewVisible,
         restoredEnabled: desktopRes.clipEnabled,
-        restoredMipmapped: desktopRes.isMipmapped
+        restoredMipmapped: desktopRes.isMipmapped,
+        restoredClearStroke: desktopRes.clearStroke,
+        restoredOverviewUniform: desktopRes.overviewUniform
     });
 })()
 ')"
 echo ">> Overview state check: $OVERVIEW_STATE"
-if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "showingModeEarly": true, "overviewVisible": true, "inOverviewEnabled": true, "inOverviewMipmapped": true, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredMipmapped": false}'; then
-    echo "!! Overview assertion failed: clip effect or hardware mipmapping was not properly managed during overview!"
+if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "showingModeEarly": true, "overviewVisible": true, "inOverviewEnabled": true, "inOverviewMipmapped": true, "inOverviewClearStroke": false, "inOverviewUniform": 1, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredMipmapped": false, "restoredClearStroke": true, "restoredOverviewUniform": 0}'; then
+    echo "!! Overview assertion failed: clip effect, clearStroke suppression, or overview AA uniform was not properly managed during overview!"
     exit 1
 fi
 echo ">> Overview lifecycle verified: clip retained and hardware mipmapping activated in overview, restored on desktop."
