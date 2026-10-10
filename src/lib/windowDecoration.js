@@ -296,6 +296,7 @@ export class WindowDecoration {
                 radius: this.drawClip ? this._style.radius : 0,
                 outline: this.drawClip && !this._inOverview ? this._style.outline : null,
                 clearRing: this.effectiveClearRing,
+                clearStroke: this.clearRing,
                 scale: this._scale,
             });
         }
