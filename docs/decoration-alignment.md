@@ -264,7 +264,7 @@ To solve this at the root:
    old shader evaluated, so it no longer floods alpha under the window edge and the first boundary
    pixel.
 7. **Inward Normal Texture Sampling Offset under Fractional Scaling**:
-   When clearing client-drawn decoration rings (`uClearRing > 0.5`), GTK3 windows often carry
+   When clearing client-drawn decoration rings (`uClearStroke > 0.5`), GTK3 windows often carry
    semi-transparent Cairo border strokes (`0.5px` outside, `0.5px` inside the frame). Under fractional
    scaling (e.g. 1.25x, 1.33x), hardware bilinear texture filtering samples texels across the border edge,
    pulling exterior dark pixels into the boundary. To eliminate this without shrinking the window's

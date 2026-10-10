@@ -17,8 +17,9 @@ uniform vec2 uSize;       // Actor size in px
 uniform vec4 uFrame;      // Body rect in actor coords: x, y, w, h (px)
 uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
-uniform float uClearRing; // 1 erases outer bounding rect and ring, 0 keeps ring
-uniform float uScale;     // Physical device scale factor
+uniform float uClearRing;   // 1 erases outer bounding rect and ring, 0 keeps ring
+uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
+uniform float uScale;       // Physical device scale factor
 
 // Clutter effect padding: 2px top-left offset, 3px total enlargement
 const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
@@ -45,7 +46,7 @@ const CODE = `
 
     // Push sampling coords inward along boundary normal to avoid fractional bilinear stroke bleed:
     vec2 sampleP = p;
-    if (uClearRing > 0.5) {
+    if (uClearStroke > 0.5) {
         float maxInset = max(0.0, min(frameHalf.x, frameHalf.y) - 0.5);
         float inset = min(1.0 + 0.5 / uScale, maxInset);
         vec2 v = max(q, 0.0);
@@ -97,6 +98,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._outline = undefined;
         this._outlineVec = [0, 0, 0, 0];
         this._clearRing = undefined;
+        this._clearStroke = undefined;
 
         // Cached geometry and reusable arrays to avoid per-frame allocations and
         // redundant GPU uniform uploads.
@@ -114,6 +116,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._scaleVec = [1.0];
         this._radiusVec = [0];
         this._clearRingVec = [0];
+        this._clearStrokeVec = [0];
 
         this._overviewMode = false;
     }
@@ -125,9 +128,10 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param {number} params.radius - Corner radius in px
      * @param {{color:number[],alpha:number}|null} params.outline
      * @param {boolean} [params.clearRing=false]
+     * @param {boolean} [params.clearStroke=false]
      * @param {number} [params.scale=1.0] - Monitor fractional/integer scale
      */
-    setParams({insets, radius, outline, clearRing = false, scale = 1.0}) {
+    setParams({insets, radius, outline, clearRing = false, clearStroke = false, scale = 1.0}) {
         const scaleChanged = typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale;
         if (scaleChanged)
             this._scale = scale;
@@ -148,10 +152,12 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const last = this._insets;
         const nextClearRing = Boolean(clearRing);
+        const nextClearStroke = Boolean(clearStroke);
         if (last.left === insets.left && last.top === insets.top &&
             last.right === insets.right && last.bottom === insets.bottom &&
             this._radius === radius && !outlineChanged &&
             this._clearRing === nextClearRing &&
+            this._clearStroke === nextClearStroke &&
             !scaleChanged)
             return;
 
@@ -159,11 +165,13 @@ export const RoundedClipEffect = GObject.registerClass({
             last.right !== insets.right || last.bottom !== insets.bottom;
         const radiusChanged = this._radius !== radius;
         const clearRingChanged = this._clearRing !== nextClearRing;
+        const clearStrokeChanged = this._clearStroke !== nextClearStroke;
 
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
         this._radius = radius;
         this._outline = outline;
         this._clearRing = nextClearRing;
+        this._clearStroke = nextClearStroke;
 
         if (radiusChanged) {
             this._radiusVec[0] = radius;
@@ -178,6 +186,11 @@ export const RoundedClipEffect = GObject.registerClass({
         if (clearRingChanged) {
             this._clearRingVec[0] = nextClearRing ? 1 : 0;
             this.set_uniform_float('uClearRing', 1, this._clearRingVec);
+        }
+
+        if (clearStrokeChanged) {
+            this._clearStrokeVec[0] = nextClearStroke ? 1 : 0;
+            this.set_uniform_float('uClearStroke', 1, this._clearStrokeVec);
         }
 
         // Insets changed: invalidate cached frame geometry so vfunc_paint_target

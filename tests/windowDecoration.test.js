@@ -323,10 +323,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.hasClip).toBeTrue();
         // WindowDecoration retains clearRing as false (client declared no ring)
-        // while computing effectiveClearRing as true so shader erases outer rectangular corners
+        // while computing effectiveClearRing as true so shader erases outer rectangular corners.
+        // It must leave clearStroke false so shader preserves 1:1 sampling without pushing coords inward.
         expect(deco.clearRing).toBeFalse();
         expect(deco.effectiveClearRing).toBeTrue();
         expect(deco.clip.params.clearRing).toBeTrue();
+        expect(deco.clip.params.clearStroke).toBeFalse();
     });
 
     it('keeps the clip body on the declared frame so it matches the shadow body', () => {
@@ -358,6 +360,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // where libadwaita puts the window's own edge pixel, and exposes the shader's inward bleed.
         expect(deco.clipInsets).toEqual(declaredInsets);
         expect(deco.clip.params.insets).toEqual(declaredInsets);
+        expect(deco.clip.params.clearRing).toBeTrue();
+        expect(deco.clip.params.clearStroke).toBeTrue();
         expect(deco.shadow.insets).toEqual(declaredInsets);
     });
 
@@ -475,17 +479,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const inputs = {insets, monitorScale: 1};
         deco.apply({actions, inputs, actor: mockActor});
 
-        // setOverviewMode entering overview (outline suppressed, overviewMode enabled)
+        // setOverviewMode entering overview (outline suppressed, overviewMode enabled, clearStroke preserved)
         deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeTrue();
         expect(deco.clip.overviewMode).toBeTrue();
         expect(deco.clip.params.outline).toBeNull();
+        expect(deco.clip.params.clearStroke).toBeFalse();
 
-        // setOverviewMode leaving overview (outline restored, overviewMode disabled)
+        // setOverviewMode leaving overview (outline restored, overviewMode disabled, clearStroke preserved)
         deco.setOverviewMode(false);
         expect(deco.clip.enabled).toBeTrue();
         expect(deco.clip.overviewMode).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
+        expect(deco.clip.params.clearStroke).toBeFalse();
 
         // setOverviewMode safely no-ops when clip is null
         const bareDeco = new WindowDecoration(mockWin, {
