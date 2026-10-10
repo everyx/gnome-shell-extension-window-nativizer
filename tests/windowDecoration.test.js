@@ -493,6 +493,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.outline).toEqual(outline);
         expect(deco.clip.params.clearStroke).toBeFalse();
 
+        // On ringed windows (clearRing=true), clearStroke must be suppressed in overview to preserve mipmap LOD derivatives
+        const ringedActions = {...actions, clearRing: true};
+        deco.apply({actions: ringedActions, inputs, actor: mockActor});
+        expect(deco.clip.params.clearStroke).toBeTrue();
+
+        deco.setOverviewMode(true);
+        expect(deco.clip.params.clearStroke).toBeFalse();
+
+        deco.setOverviewMode(false);
+        expect(deco.clip.params.clearStroke).toBeTrue();
+
         // setOverviewMode safely no-ops when clip is null
         const bareDeco = new WindowDecoration(mockWin, {
             container: mockContainer,
