@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.11.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.10.0...v0.11.0) (2026-10-10)
+
+
+### Features
+
+* **prefs:** add rules import and export via clipboard ([#5](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/5)) ([f5e833e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f5e833e0492c3d4b140636c8a1f65caf5f6ecaa0))
+
+
+### Bug Fixes
+
+* **compat:** ask for a cursor by shape, only where the line has one ([7ac4c0d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7ac4c0d40105882fcaa913b00830c36dc668854c))
+* **compat:** give 46 a way to a Cogl context ([5f9472d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5f9472de4a418f5000dcd3b0025cab9bb4092640))
+* **effects:** align shadow shader cutout with GTK4 analytical box shadow ([baa0699](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/baa0699e22610ab24d6135ffe725d3fc5bbc8f92))
+* **effects:** cast the shadow by the body the clip draws ([4eb43ac](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4eb43acc77396c357b24bfd211ff8e603605c93c))
+* **effects:** compensate Mutter Wayland subpixel grid translation to eliminate edge gaps ([405fc87](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/405fc87362168ba61a9b1b09bdc5e3bf9aecd41a))
+* **effects:** decouple straight edge clipping from corner AA to prevent dragging blur ([0021992](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/00219926de8853a543ccfcdea0aef1b33287687e))
+* **effects:** eliminate overview edge aliasing and preserve mipmap LOD derivatives ([77470c5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/77470c508809e74d4a54b0dfa1b3ffe89f114f59))
+* **effects:** excise flat window client borders with safe insets to prevent corner seams ([d188ee5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d188ee5cecdd325bc84ada060f5abc19b68529ae))
+* **effects:** extend corner slice to cover Gaussian optical decay ([428676d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/428676d0023fd05fc06e530130f8dd8af08dfc7c))
+* **effects:** extract Gaussian constant SQRT1_2 from upstream common.glsl ([9cddd7c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9cddd7c009e34211ee15bb6bd01920785292564c))
+* **effects:** isolate CSD stroke normal sampling push to prevent ringless edge flicker ([8a15db4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8a15db49d8e7434b1616eefa7e63fd1139ae390e))
+* **effects:** push texture sampling inward along boundary normal to eliminate fractional scaling dark seams ([83b880a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/83b880aa69155f5b6d848897efe7b30f755e83b4))
+* **effects:** snap buffer body margins symmetrically across device grid and align body edge ([dc2d19c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dc2d19c8520f115bdfa57058d68100ec9fec8c86))
+* **lib:** read the declared ring one way ([c1d8b69](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c1d8b69f99e22db8d16d5e8274da7abfa4f2ca02))
+* **platform:** honor the compositor grab result and boolean allows_resize ([3bb091d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3bb091d6880d01b6f182bb4c2abb610c8b2e9eb2))
+
+
+### Documentation
+
+* align documentation and comments with the code ([0faea4d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0faea4d96656fb61f7ea431851079d4560d289d0))
+* align documentation with symmetric physical margin snapping ([2a6bc32](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2a6bc3296eb1eb77b4d42a6e56a8d0b57d4b3bbe))
+* document straight edge AA decoupling and safe inset alignment ([90867c9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/90867c9249133620085b4314c9dbaca4463b3202))
+* eliminate circular doc pointers and greeter comments ([62c7138](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/62c7138bc337de90a8ec281da718da57ab56186d))
+* introduce patched mutter package in Going Further ([a6b4482](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a6b4482fc8c2eefe4130f395e4abb66bbd602b1c))
+* prune implementation detail from the design documents ([a927b46](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a927b46862e3daa5340b62db34a903b9ff1f1070))
+* synchronize documentation and toolchains with codebase reality ([9a2b68e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9a2b68e4bcebf9921121d6f6012a158d8904bf94))
+* update preview image ([492863d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/492863d34f10d416b4f23cc109ad7b1cf5b755fc))
+
 ## [0.10.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.9.0...v0.10.0) (2026-10-03)
 
 
