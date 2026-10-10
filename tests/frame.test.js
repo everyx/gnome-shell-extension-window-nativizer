@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {bodyFrame, frameFromInsets, insetsFromRects, ZERO_INSETS} from '../src/lib/frame.js';
+import {bodyFrame, frameFromInsets, insetsFromRects, ZERO_INSETS, FLAT_SAFE_INSET} from '../src/lib/frame.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
@@ -100,6 +100,12 @@ describe('insetsFromRects', () => {
     it('reads insets with fractional / subpixel coordinates', () => {
         expect(insetsFromRects(rect(0.5, 0.5, 100.5, 100.5), rect(12.5, 0.5, 84.0, 80.0)))
             .toEqual(insets(12, 0, 4.5, 20.5));
+    });
+
+    it('defines FLAT_SAFE_INSET with 1px margin on all sides', () => {
+        expect(FLAT_SAFE_INSET).toEqual(insets(1, 1, 1, 1));
+        expect(bodyFrame({width: 100, height: 100}, FLAT_SAFE_INSET))
+            .toEqual(rect(1, 1, 98, 98));
     });
 });
 

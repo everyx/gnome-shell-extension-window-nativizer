@@ -530,6 +530,7 @@ drawn on every edge, so the client's own ring is cleared for ours to replace. A 
 drops the shadow decision, never the ring we draw.
 High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
 and deepens the outline from 7% to 30%.
+Flat ringless windows (`hasRing=false`, `clearRing=false`, such as WeChat) apply a 1px safe inward inset (`FLAT_SAFE_INSET`) to excise client-drawn rectangular borders outside the clip body. With the client's rigid rectangular stroke excised, the window receives the native Adwaita inner white outline and box shadow across its entire perimeter, eliminating double-line stroke artifacts, corner seam gaps, and cut-point white fringes.
 
 ## What the decoration costs
 
