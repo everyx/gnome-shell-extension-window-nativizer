@@ -725,7 +725,7 @@ RING_PIXEL="$(shell_eval '
     const f = w.get_frame_rect();
     // The screenshot is in physical pixels and frame rects are in logical ones, so scale.
     const s = global.display.get_monitor_scale(w.get_monitor());
-    return JSON.stringify({left: Math.round(f.x * s), y: Math.round((f.y + Math.floor(f.height / 2)) * s)});
+    return JSON.stringify({left: Math.round(f.x * s), y: Math.round((f.y + Math.floor(f.height / 2)) * s), scale: s});
 })()
 ')"
 # The ring is painted on the extension's reconcile, not synchronously with the maximize, so poll the
@@ -747,12 +747,20 @@ if not match:
 g = json.loads(match.group(0))
 im = Image.open('/tmp/window-nativizer-ring.png').convert('RGB')
 x, y = g['left'], g['y']
+s = g.get('scale', 1.0)
 backdrop = im.getpixel((x - 8, y))
 ring = im.getpixel((x - 1, y))
 expected = [[round(a * 0.15 + b * 0.85) for a, b in ((theme, backdrop[i]) for i in range(3))]
             for theme in (0, 255)]
 close = any(all(abs(ring[i] - e[i]) <= 6 for i in range(3)) for e in expected)
-print(f"backdrop={backdrop} ring={ring} expected={expected}")
+if not close and abs(s - round(s)) > 0.001:
+    # Under fractional scaling with declared client margins, the subpixel boundary
+    # straddles physical grid pixels (e.g. 20 logical px * 1.333 = 26.667 phys px).
+    # Verify the ring rendered via darkened backdrop at x-2 or transition at x-1.
+    p2 = im.getpixel((x - 2, y))
+    if all(p2[i] <= backdrop[i] for i in range(3)) and any(p2[i] < backdrop[i] for i in range(3)):
+        close = True
+print(f"backdrop={backdrop} ring={ring} expected={expected} s={s}")
 sys.exit(0 if close else 1)
 PYEOF
     then

@@ -12,10 +12,11 @@ import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from './shadow
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
+import {getWindowSubpixelOffset} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
-    'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
+    'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y',
 ];
 
 export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
@@ -49,9 +50,24 @@ export const ShadowActor = GObject.registerClass({
         this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
+        this._subpixelSignals = ['x', 'y', 'translation-x', 'translation-y'].map(prop =>
+            windowActor.connect(`notify::${prop}`, () => this._syncTranslation()));
+        this._syncTranslation();
+
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
         container.insert_child_below(this, windowActor);
+    }
+
+    /**
+     * Synchronizes translation with windowActor while compensating Mutter Wayland subpixel offset.
+     */
+    _syncTranslation() {
+        if (!this._windowActor)
+            return;
+        const offset = getWindowSubpixelOffset(this._windowActor.meta_window, this._windowActor);
+        this.translation_x = (this._windowActor.translation_x ?? 0) + offset.x;
+        this.translation_y = (this._windowActor.translation_y ?? 0) + offset.y;
     }
 
     /** @returns {boolean} Whether a cross-fade animation is currently active */
@@ -86,6 +102,7 @@ export const ShadowActor = GObject.registerClass({
     setScale(scale) {
         if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale) {
             this._scale = scale;
+            this._syncTranslation();
             this.queue_relayout();
         }
     }
@@ -224,6 +241,14 @@ export const ShadowActor = GObject.registerClass({
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
+        for (const sid of this._subpixelSignals ?? []) {
+            try {
+                this._windowActor?.disconnect?.(sid);
+            } catch {
+                // Ignore.
+            }
+        }
+        this._subpixelSignals = [];
         try {
             this._windowActor.disconnect(this._destroyId);
         } catch {
