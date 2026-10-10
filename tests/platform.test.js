@@ -31,7 +31,8 @@ import {
     isWindowLocatedOnWorkspace,
     getWindowDisplayTitle,
     getWindowFromActor,
-    findMetaWindow
+    findMetaWindow,
+    getWindowSubpixelOffset
 } from '../src/platform/window.js';
 import {
     getDisplay,
@@ -801,4 +802,119 @@ describe('platform', () => {
             expect(getStageDimensions()).toEqual({width: 0, height: 0});
         });
     });
+
+    describe('getWindowSubpixelOffset', () => {
+        let originalGlobal;
+
+        beforeEach(() => {
+            originalGlobal = globalThis.global;
+        });
+
+        afterEach(() => {
+            globalThis.global = originalGlobal;
+        });
+
+        it('returns zero offset on null or undefined window or actor', () => {
+            expect(getWindowSubpixelOffset(null, null)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset({get_client_type: () => 0}, null)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(null, {x: 100, y: 100})).toEqual({x: 0, y: 0});
+        });
+
+        it('returns zero offset for non-Wayland windows', () => {
+            const x11Win = {
+                get_client_type: () => 1, // X11
+                get_monitor: () => 0,
+            };
+            const actor = {x: 242, y: 200};
+            expect(getWindowSubpixelOffset(x11Win, actor)).toEqual({x: 0, y: 0});
+        });
+
+        it('returns zero offset on invalid monitor index', () => {
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_monitor: () => -1,
+            };
+            const actor = {x: 242, y: 200};
+            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+        });
+
+        it('returns zero offset on integer scale factors', () => {
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_scale: () => 1.0,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                },
+            };
+            const win = {
+                get_client_type: () => 0,
+                get_monitor: () => 0,
+            };
+            const actor = {x: 242, y: 200};
+            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+
+            globalThis.global.display.get_monitor_scale = () => 2.0;
+            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+        });
+
+        it('calculates subpixel grid offset correctly across 4 phases under 1.33x scale', () => {
+            const scale = 4 / 3; // 1.3333333333333333
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_scale: () => scale,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                },
+            };
+            const win = {
+                get_client_type: () => 0,
+                get_monitor: () => 0,
+            };
+
+            // Phase x=240: 240 * 4/3 = 320.0 -> offset = 0
+            const offset240 = getWindowSubpixelOffset(win, {x: 240, y: 200});
+            expect(Math.abs(offset240.x)).toBeLessThan(0.001);
+
+            // Phase x=241: 241 * 4/3 = 321.333 -> round = 321 -> adj = 240.75 -> offset = -0.25
+            const offset241 = getWindowSubpixelOffset(win, {x: 241, y: 200});
+            expect(Math.abs(offset241.x - (-0.25))).toBeLessThan(0.001);
+
+            // Phase x=242: 242 * 4/3 = 322.667 -> round = 323 -> adj = 242.25 -> offset = +0.25
+            const offset242 = getWindowSubpixelOffset(win, {x: 242, y: 200});
+            expect(Math.abs(offset242.x - 0.25)).toBeLessThan(0.001);
+
+            // Phase x=243: 243 * 4/3 = 324.0 -> offset = 0
+            const offset243 = getWindowSubpixelOffset(win, {x: 243, y: 200});
+            expect(Math.abs(offset243.x)).toBeLessThan(0.001);
+        });
+
+        it('includes actor translation in subpixel offset calculations', () => {
+            const scale = 4 / 3;
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_scale: () => scale,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                },
+            };
+            const win = {
+                get_client_type: () => 0,
+                get_monitor: () => 0,
+            };
+
+            // x=240 but translation_x=2 -> effective x=242 -> offset = +0.25
+            const offset = getWindowSubpixelOffset(win, {x: 240, y: 200, translation_x: 2, translation_y: 0});
+            expect(Math.abs(offset.x - 0.25)).toBeLessThan(0.001);
+        });
+
+        it('defends against exceptions and returns zero offset', () => {
+            const throwingWin = {
+                get_client_type: () => {
+                    throw new Error('Compositor window destroyed');
+                },
+            };
+            expect(getWindowSubpixelOffset(throwingWin, {x: 100, y: 100})).toEqual({x: 0, y: 0});
+        });
+    });
 });
+
