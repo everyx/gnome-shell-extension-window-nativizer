@@ -11,7 +11,7 @@ import {
 } from './detector.js';
 import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
-import {isClassificationPending, readWindow} from './window.js';
+import {reconcileOutcome, readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
 import {WindowDecoration} from './windowDecoration.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
@@ -368,12 +368,14 @@ export class Manager {
             this._classifier?.probeAdwaitaLook(pid);
 
             const inputs = this._decorationInputs(win);
-            if (!inputs) {
+            // The branch itself lives in the reading module, so a spec can table it:
+            // no reading to undecorate, classification in flight to wait, otherwise apply.
+            const outcome = reconcileOutcome(inputs);
+            if (outcome === 'undecorate') {
                 deco.undecorate();
                 return;
             }
-            // Defer decoration while process classification is still in flight.
-            if (isClassificationPending(inputs))
+            if (outcome === 'defer')
                 return;
             const actions = evaluateWindowActions(inputs);
 
