@@ -160,6 +160,27 @@ export function getWindowActor(win) {
 }
 
 /**
+ * Reads the overview preview's window container for a window, or null outside the overview.
+ *
+ * The overview's preview is Shell-private (`metaWindow._delegate`, set in
+ * `js/ui/windowPreview.js`) and the container is its child, so the whole chain — parent and
+ * container — is read here rather than in the decoration modules. The container's parent is
+ * the preview the shadow clone is mounted under.
+ *
+ * @param {object|null} win - Meta.Window
+ * @returns {{container: object, preview: object}|null} Actors, or null outside the overview
+ */
+export function getOverviewPreview(win) {
+    try {
+        const preview = win?._delegate ?? null;
+        const container = preview?.window_container ?? null;
+        return preview && container ? {preview, container} : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Reads the Meta.WindowClientType (Wayland or X11).
  * @param {object|null} win - Meta.Window
  * @returns {number|null} Meta.WindowClientType or null

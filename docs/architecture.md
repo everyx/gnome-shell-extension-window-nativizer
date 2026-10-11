@@ -12,8 +12,10 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
 | `lib/frame.js` | body-inside-actor geometry (pure) |
 | `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
+| `lib/overviewDecoration.js` | the overview's own decoration: the shaped-texture corner mask, the preview opacity bypass, and the shadow clone |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
 | `lib/pick.js` | the picker's bus name/path and property dictionary |
+| `lib/pickTarget.js` | the picker's hit test as a pure function of candidate readings |
 | `lib/snap.js` | grid snapping math and the 8-slice geometry layout (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
 | `lib/settings.js` | GSettings IO adapter |
@@ -24,6 +26,8 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, decoration lifecycle, and the inspection surfaces |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
+| `effects/clipParams.js` | the clip effect's upload decisions: which uniforms changed and when the cached frame is stale (pure) |
+| `effects/overviewMaskBytes.js` | the overview corner mask's A_8 bytes, split from the Cogl upload (pure) |
 | `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
 | `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51 |
 

@@ -255,6 +255,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             firstFrameDone: false,
             isPendingReconcile: false,
             ring: null,
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
         });
     });
 
@@ -604,6 +605,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             firstFrameDone: false,
             isPendingReconcile: false,
             ring: null,
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
         });
     });
 
@@ -723,7 +725,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
     it('leaves XWayland windows square and sharp, never touching the mask slot', () => {
         const {surface, deco} = setupMaskHarness({clientType: WindowClientType.X11, drawShadow: true});
-        expect(deco._canApplyOverviewMask()).toBeFalse();
+        expect(deco.overview.canApplyMask({drawClip: true, hasStyle: true})).toBeFalse();
 
         deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeFalse();
@@ -816,13 +818,13 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         // 1x buffer on a 1x monitor: the preview tops out at 0.95 of the window.
-        expect(deco._overviewMaskScale(800, 600, 1, 1)).toBe(0.95);
+        expect(deco.overview._overviewMaskScale(800, 600, 1, 1)).toBe(0.95);
         // A hidpi buffer on a low-dpi monitor is downsampled to the on-screen size.
-        expect(deco._overviewMaskScale(4000, 2400, 2, 1)).toBeCloseTo(0.475, 5);
+        expect(deco.overview._overviewMaskScale(4000, 2400, 2, 1)).toBeCloseTo(0.475, 5);
         // Above the cap, the longest side is pinned at OVERVIEW_MASK_MAX_DIMENSION.
-        expect(deco._overviewMaskScale(3840, 2160, 1, 1)).toBeCloseTo(2560 / 3840, 5);
-        expect(deco._overviewMaskScale(7680, 4320, 1, 1)).toBeCloseTo(2560 / 7680, 5);
+        expect(deco.overview._overviewMaskScale(3840, 2160, 1, 1)).toBeCloseTo(2560 / 3840, 5);
+        expect(deco.overview._overviewMaskScale(7680, 4320, 1, 1)).toBeCloseTo(2560 / 7680, 5);
         // Never degenerate.
-        expect(deco._overviewMaskScale(100000, 100000, 1, 1)).toBe(0.05);
+        expect(deco.overview._overviewMaskScale(100000, 100000, 1, 1)).toBe(0.05);
     });
 });
