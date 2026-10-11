@@ -10,6 +10,7 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {snapActorBodyFrame} from '../lib/snap.js';
+import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -17,7 +18,7 @@ uniform vec2 uSize;       // Actor size in px
 uniform vec4 uFrame;      // Body rect in actor coords: x, y, w, h (px)
 uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
-uniform float uClearRing;   // 1 erases outer bounding rect and ring, 0 keeps ring
+uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
 uniform float uScale;       // Physical device scale factor
 
@@ -71,8 +72,8 @@ const CODE = `
     // Physical 1px anti-aliasing transition on corner arcs:
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
-    float straight = mix(1.0, inSquare, uClearRing);
-    float edgeFactor = isCorner ? mix(keep, corner, uClearRing) : straight;
+    float straight = mix(1.0, inSquare, uErase);
+    float edgeFactor = isCorner ? mix(keep, corner, uErase) : straight;
     cogl_color_out *= edgeFactor;
 `;
 
@@ -98,25 +99,24 @@ export const RoundedClipEffect = GObject.registerClass({
         this._radius = undefined;
         this._outline = undefined;
         this._outlineVec = [0, 0, 0, 0];
-        this._clearRing = undefined;
+        this._erase = undefined;
         this._clearStroke = undefined;
 
         // Cached geometry and reusable arrays to avoid per-frame allocations and
         // redundant GPU uniform uploads.
-        this._lastWidth = 0;
-        this._lastHeight = 0;
-        this._lastFrameX = -1;
-        this._lastFrameY = -1;
-        this._lastFrameW = -1;
-        this._lastFrameH = -1;
-        this._lastScale = -1;
+        this._paint = {
+            scale: -1,
+            width: 0,
+            height: 0,
+            frame: {x: -1, y: -1, width: -1, height: -1},
+        };
         this._scale = 1.0;
 
         this._sizeVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
         this._scaleVec = [1.0];
         this._radiusVec = [0];
-        this._clearRingVec = [0];
+        this._eraseVec = [0];
         this._clearStrokeVec = [0];
     }
 
@@ -126,76 +126,54 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param {import('../lib/frame.js').Insets} params.insets - Ring between actor and body
      * @param {number} params.radius - Corner radius in px
      * @param {{color:number[],alpha:number}|null} params.outline
-     * @param {boolean} [params.clearRing=false]
+     * @param {boolean} [params.erase=false]
      * @param {boolean} [params.clearStroke=false]
      * @param {number} [params.scale=1.0] - Monitor fractional/integer scale
      */
-    setParams({insets, radius, outline, clearRing = false, clearStroke = false, scale = 1.0}) {
-        const scaleChanged = typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale;
-        if (scaleChanged)
-            this._scale = scale;
-
-        const nextOutlineVec = outline
-            ? [
-                outline.color[0] > 1 ? outline.color[0] / 255 : outline.color[0],
-                outline.color[1] > 1 ? outline.color[1] / 255 : outline.color[1],
-                outline.color[2] > 1 ? outline.color[2] / 255 : outline.color[2],
-                outline.alpha,
-            ]
-            : [0, 0, 0, 0];
-        const outlineChanged = !this._outlineVec ||
-            this._outlineVec[0] !== nextOutlineVec[0] ||
-            this._outlineVec[1] !== nextOutlineVec[1] ||
-            this._outlineVec[2] !== nextOutlineVec[2] ||
-            this._outlineVec[3] !== nextOutlineVec[3];
-
-        const last = this._insets;
-        const nextClearRing = Boolean(clearRing);
-        const nextClearStroke = Boolean(clearStroke);
-        if (last.left === insets.left && last.top === insets.top &&
-            last.right === insets.right && last.bottom === insets.bottom &&
-            this._radius === radius && !outlineChanged &&
-            this._clearRing === nextClearRing &&
-            this._clearStroke === nextClearStroke &&
-            !scaleChanged)
+    setParams({insets, radius, outline, erase = false, clearStroke = false, scale = 1.0}) {
+        const changes = clipParamChanges({
+            insets: this._insets,
+            radius: this._radius,
+            outline: this._outlineVec,
+            erase: this._erase,
+            clearStroke: this._clearStroke,
+            scale: this._scale,
+        }, {insets, radius, outline, erase, clearStroke, scale});
+        if (!changes.changed)
             return;
-
-        const insetsChanged = last.left !== insets.left || last.top !== insets.top ||
-            last.right !== insets.right || last.bottom !== insets.bottom;
-        const radiusChanged = this._radius !== radius;
-        const clearRingChanged = this._clearRing !== nextClearRing;
-        const clearStrokeChanged = this._clearStroke !== nextClearStroke;
 
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
         this._radius = radius;
         this._outline = outline;
-        this._clearRing = nextClearRing;
-        this._clearStroke = nextClearStroke;
+        this._erase = Boolean(erase);
+        this._clearStroke = Boolean(clearStroke);
+        if (changes.scale !== undefined)
+            this._scale = changes.scale;
 
-        if (radiusChanged) {
-            this._radiusVec[0] = radius;
+        if (changes.radius !== undefined) {
+            this._radiusVec[0] = changes.radius;
             this.set_uniform_float('uRadius', 1, this._radiusVec);
         }
 
-        if (outlineChanged) {
-            this._outlineVec = nextOutlineVec;
+        if (changes.outline !== undefined) {
+            this._outlineVec = changes.outline;
             this.set_uniform_float('uOutline', 4, this._outlineVec);
         }
 
-        if (clearRingChanged) {
-            this._clearRingVec[0] = nextClearRing ? 1 : 0;
-            this.set_uniform_float('uClearRing', 1, this._clearRingVec);
+        if (changes.erase !== undefined) {
+            this._eraseVec[0] = changes.erase ? 1 : 0;
+            this.set_uniform_float('uErase', 1, this._eraseVec);
         }
 
-        if (clearStrokeChanged) {
-            this._clearStrokeVec[0] = nextClearStroke ? 1 : 0;
+        if (changes.clearStroke !== undefined) {
+            this._clearStrokeVec[0] = changes.clearStroke ? 1 : 0;
             this.set_uniform_float('uClearStroke', 1, this._clearStrokeVec);
         }
 
         // Insets changed: invalidate cached frame geometry so vfunc_paint_target
         // is forced to recalculate and re-upload uFrame on the next paint pass.
-        if (insetsChanged)
-            this._lastFrameW = -1;
+        if (changes.frame)
+            this._paint.frame.width = -1;
 
         this.queue_repaint();
     }
@@ -214,32 +192,32 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
+        const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
-        if (this._lastScale !== scale) {
-            this._scaleVec[0] = scale;
+        if (changes.scale !== undefined) {
+            this._scaleVec[0] = changes.scale;
             this.set_uniform_float('uScale', 1, this._scaleVec);
-            this._lastScale = scale;
+            this._paint.scale = changes.scale;
         }
 
-        if (this._lastWidth !== width || this._lastHeight !== height) {
-            this._sizeVec[0] = width;
-            this._sizeVec[1] = height;
+        if (changes.size !== undefined) {
+            this._sizeVec[0] = changes.size[0];
+            this._sizeVec[1] = changes.size[1];
             this.set_uniform_float('uSize', 2, this._sizeVec);
-            this._lastWidth = width;
-            this._lastHeight = height;
+            this._paint.width = changes.size[0];
+            this._paint.height = changes.size[1];
         }
 
-        if (this._lastFrameX !== frame.x || this._lastFrameY !== frame.y ||
-            this._lastFrameW !== frame.width || this._lastFrameH !== frame.height) {
-            this._frameVec[0] = frame.x;
-            this._frameVec[1] = frame.y;
-            this._frameVec[2] = frame.width;
-            this._frameVec[3] = frame.height;
+        if (changes.frame !== undefined) {
+            this._frameVec[0] = changes.frame[0];
+            this._frameVec[1] = changes.frame[1];
+            this._frameVec[2] = changes.frame[2];
+            this._frameVec[3] = changes.frame[3];
             this.set_uniform_float('uFrame', 4, this._frameVec);
-            this._lastFrameX = frame.x;
-            this._lastFrameY = frame.y;
-            this._lastFrameW = frame.width;
-            this._lastFrameH = frame.height;
+            this._paint.frame.x = changes.frame[0];
+            this._paint.frame.y = changes.frame[1];
+            this._paint.frame.width = changes.frame[2];
+            this._paint.frame.height = changes.frame[3];
         }
 
         super.vfunc_paint_target(node, paintContext);

@@ -255,3 +255,76 @@ export function computeResizeBands(params) {
     computeResizeBandsInto(bands, params);
     return bands;
 }
+
+/**
+ * Writes the container allocation mapping into `out` in place, reusing `out.frame` and
+ * `out.bounds`.
+ *
+ * The band container is the window actor grown by RESIZE_BAND per side, so the body starts
+ * RESIZE_BAND + the declared inset in from the container origin. `bounds` is a monitor rect
+ * in stage coordinates and is translated into container coordinates so the clip and the
+ * frame share one space. This runs every resize frame, so the actor keeps a scratch record
+ * and the pure mapping fills it rather than allocating a frame and bounds per pass.
+ *
+ * @param {{frame:Rect|null, bounds:Rect|null, scale:number}} out - Mutated in place
+ * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox - Clutter.ActorBox, read as data
+ * @param {import('./frame.js').Insets} insets - Ring between actor and body
+ * @param {Rect|null} bounds - Monitor rect in stage coordinates, or null for no clip
+ * @param {number} scale - Monitor scale the frame was read at
+ * @returns {object} `out`, for chaining
+ */
+export function bandParamsInto(out, containerBox, insets, bounds, scale) {
+    const containerWidth = containerBox.x2 - containerBox.x1;
+    const containerHeight = containerBox.y2 - containerBox.y1;
+
+    const frame = out.frame ?? (out.frame = {x: 0, y: 0, width: 0, height: 0});
+    frame.x = insets.left + RESIZE_BAND;
+    frame.y = insets.top + RESIZE_BAND;
+    frame.width = containerWidth - RESIZE_BAND * 2 - insets.left - insets.right;
+    frame.height = containerHeight - RESIZE_BAND * 2 - insets.top - insets.bottom;
+
+    if (bounds) {
+        const translated = out.bounds ?? (out.bounds = {x: 0, y: 0, width: 0, height: 0});
+        translated.x = bounds.x - containerBox.x1;
+        translated.y = bounds.y - containerBox.y1;
+        translated.width = bounds.width;
+        translated.height = bounds.height;
+    } else {
+        out.bounds = null;
+    }
+
+    out.scale = scale;
+    return out;
+}
+
+/**
+ * Allocating wrapper over `bandParamsInto`, for callers that do not keep a scratch record
+ * (the spec helper `bandBoxes` and the specs themselves).
+ * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox
+ * @param {import('./frame.js').Insets} insets
+ * @param {Rect|null} bounds
+ * @param {number} scale
+ * @returns {{frame:Rect, bounds:Rect|null, scale:number}}
+ */
+export function bandParams(containerBox, insets, bounds, scale) {
+    return bandParamsInto({frame: null, bounds: null, scale: 1}, containerBox, insets, bounds, scale);
+}
+
+/**
+ * The four strip rects one container allocation produces, as plain data.
+ *
+ * This is the mapping `vfunc_allocate()` uses plus the ring computation, so the sign and
+ * scale conventions of the live allocation are spec-covered. A constrained or empty side
+ * stays null; the actor writes it as a 0x0 child box.
+ *
+ * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox
+ * @param {import('./frame.js').Insets} insets
+ * @param {Rect|null} bounds
+ * @param {number} scale
+ * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [constrainedEdges=null]
+ * @returns {{params:object, boxes:Record<string, Rect|null>}}
+ */
+export function bandBoxes(containerBox, insets, bounds, scale, constrainedEdges = null) {
+    const params = bandParams(containerBox, insets, bounds, scale);
+    return {params, boxes: computeResizeBands({...params, constrainedEdges})};
+}

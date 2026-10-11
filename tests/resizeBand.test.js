@@ -4,6 +4,9 @@
  */
 
 import {
+    bandBoxes,
+    bandParams,
+    bandParamsInto,
     computeResizeBands,
     computeResizeBandsInto,
     edgeForPoint,
@@ -732,5 +735,78 @@ describe('decideResizeBand', () => {
         expect([reversed.drawShadow, reversed.drawClip, reversed.drawResize])
             .toEqual([false, true, false]);
         expect(reversed.reason).toBe('rule-applied(wps:resize)');
+    });
+});
+
+describe('bandBoxes', () => {
+    const zero = {left: 0, top: 0, right: 0, bottom: 0};
+    const containerBox = (x1, y1, x2, y2) => ({x1, y1, x2, y2});
+
+    it('writes the mapping into the caller record and reuses its frame and bounds objects', () => {
+        const out = {frame: null, bounds: null, scale: 1};
+        bandParamsInto(out, containerBox(0, 0, 400, 300), zero, rect(10, 20, 100, 80), 1);
+        const frame = out.frame;
+        const bounds = out.bounds;
+        expect(frame).toEqual({
+            x: RESIZE_BAND, y: RESIZE_BAND,
+            width: 400 - 2 * RESIZE_BAND, height: 300 - 2 * RESIZE_BAND,
+        });
+        expect(bounds).toEqual({x: 10, y: 20, width: 100, height: 80});
+
+        // A later resize frame overwrites the same objects: the hot path allocates nothing.
+        bandParamsInto(out, containerBox(5, 7, 405, 307), zero, rect(15, 27, 100, 80), 2);
+        expect(out.frame).toBe(frame);
+        expect(out.bounds).toBe(bounds);
+        expect(bounds.x).toBe(10);
+        expect(out.scale).toBe(2);
+    });
+
+    it('maps a live container allocation onto the ring\'s frame', () => {
+        const insets = {left: 10, top: 20, right: 30, bottom: 40};
+        const params = bandParams(containerBox(0, 0, 400, 300), insets, null, 1);
+        // The container is the window actor grown by RESIZE_BAND per side, so the body
+        // starts RESIZE_BAND + the declared inset in from the container origin.
+        expect(params.frame).toEqual({
+            x: 10 + RESIZE_BAND,
+            y: 20 + RESIZE_BAND,
+            width: 400 - 2 * RESIZE_BAND - 10 - 30,
+            height: 300 - 2 * RESIZE_BAND - 20 - 40,
+        });
+        expect(params.bounds).toBeNull();
+        expect(params.scale).toBe(1);
+    });
+
+    it('places the four strips around the mapped frame', () => {
+        const {params, boxes} = bandBoxes(containerBox(0, 0, 400, 300), zero, null, 1);
+        expect(boxes.top).toEqual({
+            x: params.frame.x - RESIZE_BAND, y: params.frame.y - RESIZE_BAND,
+            width: params.frame.width + 2 * RESIZE_BAND, height: RESIZE_BAND,
+        });
+        expect(boxes.bottom).toEqual({
+            x: params.frame.x - RESIZE_BAND, y: params.frame.y + params.frame.height,
+            width: params.frame.width + 2 * RESIZE_BAND, height: RESIZE_BAND,
+        });
+        expect(boxes.left).toEqual({
+            x: params.frame.x - RESIZE_BAND, y: params.frame.y,
+            width: RESIZE_BAND, height: params.frame.height,
+        });
+        expect(boxes.right).toEqual({
+            x: params.frame.x + params.frame.width, y: params.frame.y,
+            width: RESIZE_BAND, height: params.frame.height,
+        });
+    });
+
+    it('translates monitor bounds from stage into container coordinates', () => {
+        const params = bandParams(containerBox(100, 50, 500, 350), zero, rect(120, 60, 200, 200), 1);
+        expect(params.bounds).toEqual({x: 20, y: 10, width: 200, height: 200});
+    });
+
+    it('leaves a constrained axis without a strip, the 0x0 the actor writes', () => {
+        const {boxes} = bandBoxes(containerBox(0, 0, 400, 300), zero, null, 1,
+            {top: true, bottom: true, left: false, right: false});
+        expect(boxes.top).toBeNull();
+        expect(boxes.bottom).toBeNull();
+        expect(boxes.left).not.toBeNull();
+        expect(boxes.right).not.toBeNull();
     });
 });

@@ -19,6 +19,7 @@ import {setActorAboveSibling} from '../platform/display.js';
 
 import {ZERO_INSETS} from './frame.js';
 import {
+    bandParamsInto,
     computeResizeBandsInto,
     edgeForPoint,
     emptyBands,
@@ -84,7 +85,7 @@ export const ResizeBand = GObject.registerClass({
         this._regions = new Map();
         this._childBox = new Clutter.ActorBox();
         this._bands = emptyBands();
-        this._boundsScratch = null;
+        this._params = {frame: null, bounds: null, scale: 1};
         this._frame = null;
         this._hover = null;
         this._insets = ZERO_INSETS;
@@ -172,33 +173,20 @@ export const ResizeBand = GObject.registerClass({
         if (!this._childBox)
             return;
 
-        const containerWidth = box.x2 - box.x1;
-        const containerHeight = box.y2 - box.y1;
-        // The frame and the translated bounds are reused in place: this runs every resize
-        // frame, so they must not be new objects each pass. The container is the actor grown
-        // by OUTER per side; undo that to place the body, kept in the container's coordinates
-        // so `_directionForEvent()` resolves the pointer against it with GTK's own order.
-        const frame = this._frame ?? (this._frame = {x: 0, y: 0, width: 0, height: 0});
-        frame.x = this._insets.left + OUTER;
-        frame.y = this._insets.top + OUTER;
-        frame.width = containerWidth - OUTER * 2 - this._insets.left - this._insets.right;
-        frame.height = containerHeight - OUTER * 2 - this._insets.top - this._insets.bottom;
-
-        let bounds = null;
-        if (this._bounds) {
-            bounds = this._boundsScratch ?? (this._boundsScratch = {x: 0, y: 0, width: 0, height: 0});
-            bounds.x = this._bounds.x - box.x1;
-            bounds.y = this._bounds.y - box.y1;
-            bounds.width = this._bounds.width;
-            bounds.height = this._bounds.height;
-        }
+        // The mapping from the live container box to the frame and the translated monitor
+        // bounds lives in the pure bandParamsInto, so its sign conventions stay spec-covered;
+        // the scratch record is reused every resize frame.
+        bandParamsInto(this._params, box, this._insets, this._bounds, this._scale);
+        // Kept for `_directionForEvent()`, which resolves the pointer against the same
+        // container-coordinate frame the strips were placed from.
+        this._frame = this._params.frame;
 
         // Written into `this._bands` in place; the returned flag replaces the old sameBands().
         const changed = computeResizeBandsInto(this._bands, {
-            frame,
-            bounds,
+            frame: this._params.frame,
+            bounds: this._params.bounds,
             // No surface clip: the band may sit outside the client's surface.
-            scale: this._scale,
+            scale: this._params.scale,
             constrainedEdges: this._constrainedEdges,
         });
 
@@ -250,6 +238,7 @@ export const ResizeBand = GObject.registerClass({
         this._regions.clear();
         this._childBox = null;
         this._bands = null;
+        this._params = null;
         this._frame = null;
         this._constrainedEdges = null;
         try {
