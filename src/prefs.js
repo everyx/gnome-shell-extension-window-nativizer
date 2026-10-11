@@ -630,8 +630,8 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         renderGroup.add(crispRow);
 
         const overviewCornersRow = new Adw.SwitchRow({
-            title: asMarkup(_('Force corners on every window')),
-            subtitle: asMarkup(_('Sharpness comes first by default, so XWayland and a few Wayland windows lose their corners in the overview. Enabling this rounds them too, at the cost of a blurrier preview.')),
+            title: asMarkup(_('Force overview corners on every window')),
+            subtitle: asMarkup(_('Round XWayland and the few Wayland windows left square for sharpness (they come out blurrier)')),
         });
         settings.bind('force-overview-corners', overviewCornersRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(overviewCornersRow);
