@@ -55,7 +55,7 @@
 ### 🛡️ 智能识别与非侵入设计
 - **不打扰原生应用**：自动识别并跳过映射 Libadwaita 或 Libhandy 的进程（读 `/proc/<pid>/maps`）；Firefox 与其他 GTK3 应用一样参与原生适配
 - **消除多层阴影**：精确识别 Mutter 与系统既有阴影，只补缺失部分
-- **Overview 视图原生对齐**：进入 GNOME Shell Overview 时无缝保留圆角与阴影，圆角走 Mutter 自身的 shaped-texture 遮罩，缩略图与原生同样清晰；无法安全圆角的窗口（X11/XWayland）在概览中显示为直角但锐利，除非强制开启圆角
+- **Overview 视图原生对齐**：概览预览保留圆角与阴影、且不模糊；XWayland 窗口两者无法兼得，按默认的「画质优先」退为直角但锐利，不在乎画质时也可以强制补上圆角
 - **拼缝处理**：与相邻分屏窗口匹配时只去掉环境阴影；1px 分屏描边环画在窗口四周，不会在共享的边上被抑制
 
 ### 🔍 分数缩放文字清晰度保护
@@ -87,7 +87,7 @@ Window Nativizer 对绝大多数应用能自动识别，但也支持按窗口种
 | :--- | :--- |
 | 无 | 默认。自动判断照常生效，大多数窗口不需要修正 |
 | 圆角 | 把扩展没圆的窗口圆上，或让圆角出问题的窗口保持原样（黑边、瑕疵，或想要原生外观） |
-| 阴影 | 在扩展把阴影留给客户端时改成我们自己投，或反过来收回我们的阴影（常见于 X11，合成器已绘制） |
+| 阴影 | 在扩展把阴影留给客户端时改成我们自己投，或反过来收回我们的阴影（常见于 XWayland，合成器已绘制） |
 | 调整大小 | 在固定比例弹窗上收回 band（我们的 band 跟不上），或在扩展把窗口自带的把手误判为原生时补上原生抓取环（GTK4 宽边距） |
 
 觉得哪个窗口看着不对，在**首选项**的**误判修正**里点**选取窗口…**即可。
@@ -100,7 +100,7 @@ Window Nativizer 对绝大多数应用能自动识别，但也支持按窗口种
 
 误判修正针对的是判断出错的地方。下面三件事不是判断：
 
-- **Mutter 给 X11 裸窗口画的阴影**：Electron/X11 这类自绘边框的客户端就属于这一类，失焦时阴影一步跳变，而我们装饰的窗口都是淡出。那道阴影由合成器画在窗口方块之外，GJS 清不掉，我们自绘只会多出一层
+- **Mutter 给 XWayland 裸窗口画的阴影**：Electron 这类 XWayland 客户端就属于这一类，失焦时阴影一步跳变，而我们装饰的窗口都是淡出。那道阴影由合成器画在窗口方块之外，GJS 清不掉，我们自绘只会多出一层
 - **客户端在自身表面内画的东西**：自绘标题栏、面内边框、自带抓手。合成器只看到几何，看不到绘制内容
 - **libadwaita 给消息对话框的更浅阴影**：它是客户端内部的 GTK 类，合成器只看到窗口类型；按类型猜会误伤不是消息对话框的那些
 
@@ -111,7 +111,7 @@ Window Nativizer 对绝大多数应用能自动识别，但也支持按窗口种
 ## 安装使用
 
 ### 环境要求
-- GNOME Shell 50、51（Wayland 或 X11）
+- GNOME Shell 50、51
 
 ### 从 Release 安装（推荐）
 从 [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases) 下载 `window-nativizer@everyx.github.io.shell-extension.zip`，直接执行：
@@ -129,7 +129,7 @@ pnpm run install:ext
 ```
 
 ### 启用与重启
-注销重登（X11 按 `Alt+F2` 输入 `r` 重启 Shell），然后启用扩展：
+注销重登，然后启用扩展：
 ```sh
 gnome-extensions enable window-nativizer@everyx.github.io
 ```
@@ -152,7 +152,7 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 - **HDR 屏幕离屏着色保真**：传递 `color-state` 并支持 FP16 离屏纹理，彻底解决 HDR 显示器上应用圆角后窗口被强制调暗（降至 SDR 100 nits）的问题（[#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)）。
 - **分数倍缩放离屏渲染修复**：集成上游未合并的 [MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)，消除分数倍缩放下离屏特效边缘偶发的亚像素黑缝与透明裂缝（[#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)）。
-- **X11 阴影失焦平滑过渡**：为 Mutter 自绘阴影的 X11 窗口（如 Electron 应用）补齐 200ms ease-out 淡出过渡，对齐 Libadwaita 原生手感，消除瞬切跳变。
+- **XWayland 阴影失焦平滑过渡**：为 Mutter 自绘阴影的 XWayland 窗口（如 Electron 应用）补齐 200ms ease-out 淡出过渡，对齐 Libadwaita 原生手感，消除瞬切跳变。
 - **更多稳定性与性能修复**：一并集成了若干尚未合并的上游修复（如表面生命周期处理、性能优化等）。
 
 **Arch Linux 用户一键安装：**

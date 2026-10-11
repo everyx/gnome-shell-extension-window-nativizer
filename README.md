@@ -56,7 +56,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); Firefox is nativized like any other GTK3 app
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
-- **Overview-aware**: Keeps rounded corners and shadows in overview previews, rounding through Mutter's own shaped-texture mask so thumbnails stay as sharp as native; windows the mask cannot round safely (X11/XWayland) show square, sharp previews unless you force corners
+- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; XWayland windows cannot have both there, so the quality-first default leaves them square and sharp — their corners can be forced on if the quality is the part you would rather trade
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection
@@ -88,7 +88,7 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 | :--- | :--- |
 | Nothing | Default. The automatic decision stands; most windows need no correction at all |
 | Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
-| Shadow | Cast ours where the decision left the client's, or retract ours (common on X11, where Mutter paints one) |
+| Shadow | Cast ours where the decision left the client's, or retract ours (common on XWayland, where Mutter paints one) |
 | Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
 To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
@@ -101,7 +101,7 @@ To correct a window that looks wrong, open **Preferences** and click **Pick wind
 
 Corrections cover the decisions the reading gets wrong. These three are not decisions:
 
-- **Mutter's shadow on a bare X11 window**: an Electron client under X11 keeps one, and loses it in a single step where every window we decorate fades. The compositor draws that shadow outside the window square and GJS cannot clear it, so ours would only be a second one
+- **Mutter's shadow on a bare XWayland window**: an Electron client under XWayland keeps one, and loses it in a single step where every window we decorate fades. The compositor draws that shadow outside the window square and GJS cannot clear it, so ours would only be a second one
 - **What a client paints inside its own surface**: a custom titlebar, an in-surface border, its own grips. The compositor sees geometry, not paint
 - **The lighter shadow libadwaita gives a message dialog**: it is a style class inside the client, and the window type is all the compositor sees. Guessing from the type would hit the dialogs that are not message dialogs
 
@@ -113,7 +113,7 @@ boundaries.
 ## Installation
 
 ### Requirements
-- GNOME Shell 50, 51 (Wayland or X11)
+- GNOME Shell 50, 51
 
 ### From Release (Recommended)
 Download `window-nativizer@everyx.github.io.shell-extension.zip` from [GitHub Releases](https://github.com/everyx/gnome-shell-extension-window-nativizer/releases):
@@ -131,7 +131,7 @@ pnpm run install:ext
 ```
 
 ### Enable
-Log out and back in (on X11, press `Alt+F2` and run `r`), then enable:
+Log out and back in, then enable:
 ```sh
 gnome-extensions enable window-nativizer@everyx.github.io
 ```
@@ -159,7 +159,7 @@ Certain compositor-level limitations cannot be solved by an extension alone. The
 
 - **HDR Color Fidelity on Offscreen Effects**: Propagates window `color-state` and enables FP16 offscreen textures, preventing clipped HDR windows from being forcibly dimmed to 100 nits SDR ([#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)).
 - **Fractional Offscreen Rendering**: Incorporates upstream [MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) to eliminate subpixel edge seams under fractional scaling ([#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)).
-- **Smooth X11 Shadow Transitions**: Adds a 200ms ease-out backdrop fade for Mutter-rendered X11 window shadows (e.g. Electron apps), matching Libadwaita's smooth transitions instead of snapping instantly.
+- **Smooth XWayland Shadow Transitions**: Adds a 200ms ease-out backdrop fade for Mutter-rendered XWayland window shadows (e.g. Electron apps), matching Libadwaita's smooth transitions instead of snapping instantly.
 - **Upstream Fixes & Stability**: Includes several pending upstream patches for surface lifecycle handling and performance optimizations.
 
 **Installation for Arch Linux Users:**

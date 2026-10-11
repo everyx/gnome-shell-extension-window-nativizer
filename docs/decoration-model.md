@@ -31,7 +31,7 @@ rounding them?             the client's own ring is cleared exactly when the rin
    the same kind of evidence, and each is answered only from its own:
    - **Shadows** are a *reading*, not an observation: the window declares a margin
      (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
-     and Mutter paints the shadow of a bare X11 window unless one of `has_shadow()`'s
+     and Mutter paints the shadow of a bare XWayland window unless one of `has_shadow()`'s
      gates excludes it (*Where we deliberately differ from Mutter*). A declared margin
      is read the way Mutter reads it, as the boolean `has_custom_frame_extents`: **any**
      declared margin is a ring, on one axis or both, 1px as much as 40px. That is why
@@ -155,7 +155,7 @@ square when a rule left the corners theirs.
 
 The ring is a **declaration, not content**: `_GTK_FRAME_EXTENTS` on X11 and
 `set_window_geometry` on Wayland both say "this much of my buffer is decoration", and
-the client drew its frame there. Measured: WeChat's CEF window (X11, Depth 32,
+the client drew its frame there. Measured: WeChat's CEF window (XWayland, Depth 32,
 extents `4,4,4,4`) paints a 1px decorated edge inside its ring, which clearing removes
 along with the square corner it was drawn for.
 
@@ -169,7 +169,7 @@ ring at all.
 
 ## Where we deliberately differ from Mutter
 
-- **X11 / XWayland without custom frame extents & Server-Side Decorations (SSD).**
+- **XWayland without custom frame extents & Server-Side Decorations (SSD).**
   Upstream libadwaita/GTK stylesheet explicitly sets
   `window.csd.ssd-frame { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }`,
   so the frame client (`mutter-x11-frames`) bakes a shadow with square bottom corners. When
@@ -184,7 +184,7 @@ ring at all.
   `buffer 1920×1051 == frame 1920×1051`, `_GTK_FRAME_EXTENTS=0,0,0,0`, `actor 1920×1051`,
   first child `1920×1051` — actor and child are equal to the frame, no ring to clear, so
   no fallback assumption is made (the surface is the frame). Such windows are also
-  structurally ineligible (`maximized/fullscreen`). For a bare X11 window (no SSD, no
+  structurally ineligible (`maximized/fullscreen`). For a bare XWayland window (no SSD, no
   extents), Mutter paints its native shadow strictly outside the window square into the
   beneath-region; that shadow is out of reach, so a bare window without a rule retains
   Mutter's native shadow.
@@ -421,9 +421,9 @@ windows to begin with - they come from Qt, Electron or GTK3, which never used th
 guess would trade a visible risk for an invisible gain. A dialog of a real libadwaita application is
 not affected either way: the Adwaita-look probe exempts the process.
 
-**Mutter's X11 shadow.** A bare X11 window - undecorated, no declared margin - keeps the shadow
+**Mutter's X11 shadow.** A bare XWayland window - undecorated, no declared margin - keeps the shadow
 Mutter paints for it, which is what happens to a client that draws its own frame without declaring
-`_GTK_FRAME_EXTENTS` (Electron under X11). That shadow is out of our reach: the compositor draws it
+`_GTK_FRAME_EXTENTS` (Electron under XWayland). That shadow is out of our reach: the compositor draws it
 outside the window square, GJS cannot clear it, and adding ours would put two where there is one.
 Its visible cost is the focus transition: Mutter holds a focused and an unfocused shadow and swaps
 the two objects without easing, so such a window drops its halo in a single step where every window
@@ -455,7 +455,7 @@ the reading being one-sided; the last is simply not verified yet.
 - **Extents of all zeros read as a bare window.** Mutter sets `has_custom_frame_extents`
   for the property alone, zeros included (GTK4 writes `0,0,0,0` whenever the surface has
   a client shadow but no extents to declare, e.g. while maximized), and our margin is
-  then 0x0. On X11 that lands in the bare case where we decline to paint, so such a
+  then 0x0. On XWayland that lands in the bare case where we decline to paint, so such a
   window keeps our corners and gets no shadow at all.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
@@ -464,7 +464,7 @@ the reading being one-sided; the last is simply not verified yet.
   The margin reading answers null when the frame does not fit inside the buffer at all;
   a rect read that throws is caught where the inputs are gathered, so the window is skipped —
   same outcome: the body cannot be placed;
-  the guard keeps the clip from cutting a ring it cannot place. A framed X11 window is not
+  the guard keeps the clip from cutting a ring it cannot place. A framed XWayland window is not
   that case: Mutter sets `buffer_rect = frame->rect`, and `frame->rect` is the frame grown
   by the frame's **invisible borders** (`window-x11.c`, `meta-x11-frame.c`), so the insets
   are that border width (≥ 0) and the body lands exactly on `frame_rect`. Measured in the
@@ -482,9 +482,9 @@ the reading being one-sided; the last is simply not verified yet.
   ring itself, so the client's ring is cleared for ours to replace rather than stack on top - and only
   when we are in fact drawing one, so an SSD frame or a window that does not allow resizing keeps its
   own.
-- **X11 with HiDPI: the units of the margin reading are unverified.** On Wayland the
+- **XWayland with HiDPI: the units of the margin reading are unverified.** On Wayland the
   margin is already in logical pixels and answers "declared or not" directly (*The
-  margins, and the scale question*); whether an X11 / XWayland window on a scaled
+  margins, and the scale question*); whether an XWayland window on a scaled
   monitor reads the same way has not been checked.
 
 ## The margins, and the scale question
@@ -539,7 +539,7 @@ session:
 
 | Part | Where | Size |
 |---|---|---|
-| clip | `clipEffect.js`, on the window actor (surface child on X11) | window size + 3px, ~8.3 MB at 1920x1080 (also paints inner outline) |
+| clip | `clipEffect.js`, on the window actor (surface child on XWayland) | window size + 3px, ~8.3 MB at 1920x1080 (also paints inner outline) |
 | shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window (pure Gaussian diffuse shadow) |
 
 The corner-clipping pass is skipped when there is nothing to round (radius 0 and no outline);
@@ -700,7 +700,7 @@ rejects `null`) and the container opacity is restored; the clip effect is re-ena
 **Where the mask is not safe, the overview leaves it alone.** Two kinds of window cannot take
 the mask:
 
-- **X11/XWayland** keeps the window's shape in that same `mask_texture` slot, and Mutter rewrites
+- **XWayland** keeps the window's shape in that same `mask_texture` slot, and Mutter rewrites
   it from the shape on every surface sync. `set_mask_texture` cannot be undone from GJS (it
   rejects `null`, and nothing else reaches the slot), so an overwritten slot would deform a shaped
   window once the overview ends.

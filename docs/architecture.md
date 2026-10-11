@@ -106,7 +106,7 @@ boundary align to GTK 4.24's physical device-pixel grid:
 
 - **Physical scale resolution**: Mutter's actor resource scale is integer-ceil'd at the C level
   and reports integer scales on fractional displays. The compositor hierarchy is climbed to the
-  toplevel window (even through child surface containers under X11 or third-party extensions) to
+  toplevel window (even through child surface containers under XWayland or third-party extensions) to
   query the true fractional monitor scale.
 - **Actor-local snapping**: snapping is deliberately confined to the actor-local coordinate
   space. Cutlines stay geometrically invariant while the window moves, leaving stage translation

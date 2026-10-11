@@ -137,7 +137,7 @@ describe('rulePresenter', () => {
             expect(sentence).toBe('Wayland window, with no parent, resizable');
         });
 
-        it('formats X11 dialog attached to parent with fixed dimensions', () => {
+        it('formats XWayland dialog attached to parent with fixed dimensions', () => {
             const sentence = windowKindSentence({
                 client_type: 'x11',
                 window_type: WindowType.DIALOG,
@@ -146,7 +146,7 @@ describe('rulePresenter', () => {
                 allows_resize: false,
                 size: '480x320',
             });
-            expect(sentence).toBe('X11 dialog, attached to its parent, fixed-size (480×320)');
+            expect(sentence).toBe('XWayland dialog, attached to its parent, fixed-size (480×320)');
         });
 
         it('formats window with system-drawn frame', () => {

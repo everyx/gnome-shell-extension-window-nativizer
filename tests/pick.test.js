@@ -44,7 +44,7 @@ describe('extractWindowProperties', () => {
         });
     });
 
-    it('marks X11 clients and encodes every boolean field', () => {
+    it('marks XWayland clients and encodes every boolean field', () => {
         const x11Win = {
             get_wm_class: () => 'wechat',
             get_window_type: () => WindowType.MODAL_DIALOG,

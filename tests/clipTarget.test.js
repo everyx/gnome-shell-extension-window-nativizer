@@ -115,7 +115,7 @@ describe('clipTarget', () => {
                 expect(target).toBe(actor);
             });
 
-            it('returns first child on X11 when surface child exists', () => {
+            it('returns first child on XWayland when surface child exists', () => {
                 const win = createMockWindow({clientType: WindowClientType.X11});
                 const surface = new MockSurfaceActor();
                 const actor = createMockActor({children: [surface]});
@@ -124,7 +124,7 @@ describe('clipTarget', () => {
                 expect(target).toBe(surface);
             });
 
-            it('falls back to window actor on X11 when first child is missing', () => {
+            it('falls back to window actor on XWayland when first child is missing', () => {
                 const win = createMockWindow({clientType: WindowClientType.X11});
                 const actor = createMockActor({children: []});
 
@@ -158,7 +158,7 @@ describe('clipTarget', () => {
                 expect(target).toBe(actor);
             });
 
-            it('bypasses blur widget and targets surface child on X11 when geometry matches', () => {
+            it('bypasses blur widget and targets surface child on XWayland when geometry matches', () => {
                 const win = createMockWindow({clientType: WindowClientType.X11, buffer: {width: 550, height: 487}});
                 const blurWidget = new MockStWidget('BlurMyShellActor');
                 const surfaceActor = new MockSurfaceActor('MetaSurfaceActorX11', {x: 0, y: 0, width: 550, height: 487});
@@ -180,7 +180,7 @@ describe('clipTarget', () => {
                 const winX11 = createMockWindow({clientType: WindowClientType.X11});
                 const actorX11 = createMockActor({children: [blurWidget]});
 
-                // On X11 the normal target is actor.get_first_child() ?? actor; with only a blur
+                // On XWayland the normal target is actor.get_first_child() ?? actor; with only a blur
                 // widget present that is the blur widget. The bypass is skipped (nothing to
                 // upgrade to), matching rounded-window-corners' unwrapActor().
                 expect(resolveClipTarget(winX11, actorX11, mockSt)).toBe(blurWidget);

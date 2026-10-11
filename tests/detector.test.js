@@ -170,7 +170,7 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toBe('has-csd(4.0x4.0)');
     });
 
-    it('Wayland window declaring a 4px ring (Chromium/CEF) -> read the same way as on X11', () => {
+    it('Wayland window declaring a 4px ring (Chromium/CEF) -> read the same way as on XWayland', () => {
         const r = inferDecorationBaseline({
             isX11: false,
             ...marginsFromRects(1156, 852, 1148, 844),
@@ -180,14 +180,14 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toBe('has-csd(4.0x4.0)');
     });
 
-    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
+    it('XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
         const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(800, 600, 800, 600)});
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
         expect(r.reason).toBe('x11-mutter-native-shadow');
     });
 
-    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> retains native shadow, clips corners', () => {
+    it('server-side decorations (SSD, traditional XWayland app with system titlebar) -> retains native shadow, clips corners', () => {
         const r = inferDecorationBaseline({hasSsd: true, ...marginsFromRects(800, 600, 800, 600)});
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
@@ -206,7 +206,7 @@ describe('inferDecorationBaseline', () => {
         expect(declared.shadow).toBeFalse(); // its own declared CSD shadow
     });
 
-    it('X11 with a small declared margin -> the client owns that shadow, baseline still rounds', () => {
+    it('XWayland with a small declared margin -> the client owns that shadow, baseline still rounds', () => {
         const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(808, 604, 800, 600)});
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
@@ -388,7 +388,7 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('no-csd');
     });
 
-    it('X11 window without frame extents (WPS, dida): skips shadow due to native Mutter shadow, clips corners', () => {
+    it('XWayland window without frame extents (WPS, dida): skips shadow due to native Mutter shadow, clips corners', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
@@ -447,7 +447,7 @@ describe('evaluateWindowActions', () => {
         expect(res.drawClip).toBeFalse();
     });
 
-    it('a 4px declared ring (WeChat/CEF: X11, extents 4,4,4,4) -> corners ours, ring cleared, our shadow', () => {
+    it('a 4px declared ring (WeChat/CEF: XWayland, extents 4,4,4,4) -> corners ours, ring cleared, our shadow', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const res = evaluateWindowActions({
             ...baseWin,
@@ -463,7 +463,7 @@ describe('evaluateWindowActions', () => {
     });
 
     it('a bare window (no declared extents) is still not client-decorated: zero is not a ring', () => {
-        // A `>= 0` reading would make every bare window "declared", and on X11 that
+        // A `>= 0` reading would make every bare window "declared", and on XWayland that
         // would put our shadow on top of Mutter's native one.
         const x11 = evaluateWindowActions({...baseWin, isX11: true, wmClass: 'wps'});
         expect(x11.clearRing).toBeFalse();
@@ -699,7 +699,7 @@ describe('evaluateWindowActions', () => {
         expect(resizableChild.drawClip).toBeTrue();
     });
 
-    it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
+    it('client type is part of the window kind: an XWayland window does not match a Wayland rule', () => {
         const rules = {
             [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'corners,shadow',
         };
@@ -1203,7 +1203,7 @@ describe('the pick heuristic', () => {
             expect(expectedWindowRadius({hasNativeLikeCorners: true, hasSsd: true, isActivelyClipped: false})).toBe(0);
         });
 
-        it('returns 0 for unclipped windows without native-like corners (e.g. plain X11, Qt, SSD)', () => {
+        it('returns 0 for unclipped windows without native-like corners (e.g. plain XWayland, Qt, SSD)', () => {
             expect(expectedWindowRadius({})).toBe(0);
             expect(expectedWindowRadius({hasSsd: true})).toBe(0);
             expect(expectedWindowRadius({hasNativeLikeCorners: false})).toBe(0);

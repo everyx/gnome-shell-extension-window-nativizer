@@ -333,5 +333,5 @@ window actor rather than inside the window's own actor tree.
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
 then hand every decoration its overview state: Wayland windows suspend the clip effect and round
-through the shaped-texture mask, while X11 windows keep the clip and switch its layer filter to
+through the shaped-texture mask, while XWayland windows keep the clip and switch its layer filter to
 hardware mipmapping.

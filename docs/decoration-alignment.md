@@ -16,8 +16,8 @@ Two things are drawn, and they have different mechanisms:
 
 | Part | Where it lives | Notes |
 | --- | --- | --- |
-| Rounded clip + inner outline | a rounded clip effect on the window actor (surface actor on X11) | skipped entirely under some settings, see below |
-| Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
+| Rounded clip + inner outline | a rounded clip effect on the window actor (surface actor on XWayland) | skipped entirely under some settings, see below |
+| Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare XWayland keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
 can never contain the shadow. Only a full-desktop screenshot shows both. The clip, on the

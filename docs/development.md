@@ -20,7 +20,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `test`, and `check:bench` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
-| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, X11 (Xwayland) and multi-window cases, and a zero-warning audit of the log |
+| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
 | `pnpm run test:bench` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
 | `pnpm run check:bench` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
@@ -210,8 +210,8 @@ so two screenshots of one session are comparable.
 ./tools/dev.sh app gjs tools/probe-window.js
 ```
 
-`./tools/dev.sh xapp <cmd>` runs the same client as an X11 (Xwayland) window instead, which is
-what exercises the X11 clip target; it resolves the nested Xwayland's display and authority for
+`./tools/dev.sh xapp <cmd>` runs the same client as an XWayland window instead, which is
+what exercises the XWayland clip target; it resolves the nested XWayland's display and authority for
 you.
 
 With `WINDOW_NATIVIZER_BACKDROP=1` the same script becomes a uniform white surface to measure a

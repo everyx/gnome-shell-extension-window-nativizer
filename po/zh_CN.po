@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 14:22+0800\n"
+"POT-Creation-Date: 2026-10-11 16:07+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -71,8 +71,8 @@ msgid "window"
 msgstr "窗口"
 
 #: src/lib/rulePresenter.js:159
-msgid "X11"
-msgstr "X11"
+msgid "XWayland"
+msgstr "XWayland"
 
 #: src/lib/rulePresenter.js:159
 msgid "Wayland"
