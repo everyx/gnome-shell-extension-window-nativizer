@@ -750,71 +750,54 @@
             }
         },
         {
-            "id": "offscreen_effect_get_pipeline",
-            "member": "effect.get_pipeline()",
+            "id": "shaped_texture_paint_to_bitmap",
+            "member": "stex.paint_to_bitmap()",
             "repo": "mutter",
             "kind": "fn",
-            "file": "clutter/clutter/clutter-offscreen-effect.h",
-            "sym": "clutter_offscreen_effect_get_pipeline",
+            "file": "src/meta/meta-shaped-texture.h",
+            "sym": "meta_shaped_texture_paint_to_bitmap",
             "decl": {
-                "45": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "46": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "47": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "48": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "49": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "50": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);",
-                "51": "CLUTTER_EXPORT CoglPipeline * clutter_offscreen_effect_get_pipeline (ClutterOffscreenEffect *effect);"
+                "45": null,
+                "46": null,
+                "47": null,
+                "48": null,
+                "49": null,
+                "50": null,
+                "51": "META_EXPORT CoglBitmap * meta_shaped_texture_paint_to_bitmap (MetaShapedTexture *stex, MtkRectangle *clip, CoglPixelFormat format);"
             }
         },
         {
-            "id": "cogl_pipeline_set_layer_filters",
-            "member": "pipeline.set_layer_filters()",
+            "id": "shaped_texture_get_image",
+            "member": "stex.get_image()",
             "repo": "mutter",
             "kind": "fn",
-            "file": "cogl/cogl/cogl-pipeline-layer-state.h",
-            "sym": "cogl_pipeline_set_layer_filters",
+            "file": "src/meta/meta-shaped-texture.h",
+            "sym": "meta_shaped_texture_get_image",
             "decl": {
-                "45": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "46": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "47": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "48": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "49": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "50": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);",
-                "51": "COGL_EXPORT void cogl_pipeline_set_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter min_filter, CoglPipelineFilter mag_filter);"
+                "45": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "46": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "47": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "48": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "49": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "50": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
+                "51": null
             }
         },
         {
-            "id": "cogl_pipeline_get_layer_filters",
-            "member": "pipeline.get_layer_filters()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "cogl/cogl/cogl-pipeline-layer-state.h",
-            "sym": "cogl_pipeline_get_layer_filters",
-            "decl": {
-                "45": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "46": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "47": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "48": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "49": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "50": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);",
-                "51": "COGL_EXPORT void cogl_pipeline_get_layer_filters (CoglPipeline *pipeline, int layer_index, CoglPipelineFilter *min_filter, CoglPipelineFilter *mag_filter);"
-            }
-        },
-        {
-            "id": "cogl_pipeline_filter",
-            "member": "Cogl.PipelineFilter",
+            "id": "cogl_pixel_format",
+            "member": "Cogl.PixelFormat",
             "repo": "mutter",
             "kind": "enum",
-            "file": "cogl/cogl/cogl-pipeline-layer-state.h",
-            "sym": "COGL_PIPELINE_FILTER_NEAREST",
+            "file": "cogl/cogl/cogl-pixel-format.h",
+            "sym": "COGL_PIXEL_FORMAT_A_8",
             "decl": {
-                "45": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "46": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "47": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "48": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "49": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "50": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,",
-                "51": "COGL_PIPELINE_FILTER_NEAREST = 0x2600,"
+                "45": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "46": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "47": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "48": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "49": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "50": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
+                "51": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,"
             }
         },
         {

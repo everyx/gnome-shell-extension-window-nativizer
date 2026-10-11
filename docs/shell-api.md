@@ -215,23 +215,24 @@ it rather than reimplementing it: going through `set_uniform_value` would drop v
 `pipeline.set_uniform_float()` - uploads the shadow's uniforms on the Cogl pipeline. GJS exposes two
 signatures for it, so the extension probes which one the host provides.
 
-## offscreen_effect_get_pipeline
+## shaped_texture_paint_to_bitmap
 
-`effect.get_pipeline()` - retrieves the underlying Cogl pipeline from `Clutter.OffscreenEffect`.
-The extension queries this during paint to configure hardware mipmapping on the offscreen FBO.
+`shapedTexture.paint_to_bitmap()` - the overview's safety probe. Mutter returns NULL from its own
+early-out while the shaped texture already renders through the offscreen path (a set mask, a
+viewport, a non-normal transform, a plane Cogl cannot read back), and otherwise reads back the
+requested clip. The extension passes a 1x1 clip, so probing a window that is not already offscreen
+costs one pixel - and the attached mask cannot be detached from GJS afterwards, which is why the
+question is worth asking before touching it.
 
-## cogl_pipeline_set_layer_filters
+## shaped_texture_get_image
 
-`pipeline.set_layer_filters()` - configures the minification and magnification filters on a Cogl pipeline
-texture layer. Used to set `LINEAR_MIPMAP_LINEAR` during overview mode.
+`shapedTexture.get_image()` - the GNOME 50 spelling of the same probe (`paint_to_bitmap` from 51).
+It shares the early-out, so the platform seam can call either.
 
-## cogl_pipeline_get_layer_filters
+## cogl_pixel_format
 
-`pipeline.get_layer_filters()` - queries the active minification and magnification filters on a Cogl pipeline
-texture layer. The C prototype takes two `(out)` parameters (`CoglPipelineFilter *min_filter, *mag_filter`);
-GJS folds these out-arguments into a two-element return array `[min_filter, mag_filter]` rather than accepting
-pointers. Used in E2E integration test assertions to verify that hardware mipmapping is actually applied
-to the pipeline layer during overview mode and restored upon returning to desktop.
+`Cogl.PixelFormat` - the format the probe asks for (`RGBA_8888`); the mask builder uses `A_8`, the
+single-channel layout Mutter's own mask slot expects.
 
 ## clutter_cursor_type
 
@@ -242,11 +243,6 @@ while the extension was being loaded, so the shell reported the whole extension 
 (`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
 behind a capability check in `platform/actorCursor.js`, and a line without the enum gets no cursor
 instead of no extension.
-
-## cogl_pipeline_filter
-
-`Cogl.PipelineFilter` - enumeration of texture filtering modes (`LINEAR_MIPMAP_LINEAR`, `LINEAR`, `NEAREST`).
-Used when configuring the layer filters for overview thumbnails.
 
 ## shell_glsl_set_uniform_float
 
@@ -336,5 +332,6 @@ window actor rather than inside the window's own actor tree.
 ## overview_visible
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
-then switch each clip effect's layer filter to hardware mipmapping,
-so downscaled previews stay filtered; the effect is retained, not suspended.
+then hand every decoration its overview state: Wayland windows suspend the clip effect and round
+through the shaped-texture mask, while X11 windows keep the clip and switch its layer filter to
+hardware mipmapping.
