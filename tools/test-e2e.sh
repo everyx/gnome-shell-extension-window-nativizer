@@ -1160,108 +1160,82 @@ sys.exit(0 if d.get("hasBand") and all(s.get(e, {}).get("width", 0) > 0 and s.ge
 echo ">> Declared-margin window state: $DECLARED_STATE"
 echo ">> Declared-margin window verified: band present on all four edges."
 
-# (f) Overview lifecycle assertion: RoundedClipEffect must remain enabled in overview,
-# activating hardware mipmapping (Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR) to prevent downsampling aliasing,
-# and restoring standard desktop filtering upon returning to desktop.
-echo ">> [test-e2e] Verifying clip effect and hardware mipmapping lifecycle in overview..."
+# (f) Overview lifecycle assertion: on Wayland the offscreen clip is suspended during the
+# overview and the rounding moves into the window's shaped-texture mask, which rides Mutter's
+# own mipmapped pipeline; the preview container drops to opacity 254 so Mutter takes its
+# blended path (where the mask is consulted), and the preview gets a shadow clone. All of it
+# is restored on the desktop.
+echo ">> [test-e2e] Verifying shaped-texture mask lifecycle in overview..."
 OVERVIEW_STATE="$(shell_eval '
 (async () => {
     const Main = await import("resource:///org/gnome/shell/ui/main.js");
     const GLib = imports.gi.GLib;
-    const Cogl = imports.gi.Cogl;
     const actors = global.get_window_actors();
     const target = actors.find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
     if (!target) return JSON.stringify({error: "window not found"});
 
     const getClip = () => target.get_effects().find(e => e.toString().includes("RoundedClipEffect"));
-
     const initialClip = getClip();
     const initialEnabled = initialClip ? initialClip.get_enabled() : null;
 
-    const getMinFilter = clip => {
-        const pipeline = clip?.get_pipeline?.();
-        if (!pipeline?.get_layer_filters)
-            return null;
-        try {
-            const filters = pipeline.get_layer_filters(0);
-            return Array.isArray(filters) ? filters[0] : filters;
-        } catch {
-            return null;
-        }
-    };
-
-    const pollState = async (expectedOverview, expectedMipmapped, maxRetries = 20) => {
-        for (let i = 0; i < maxRetries; i++) {
-            await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
-            const clip = getClip();
-            const minFilter = getMinFilter(clip);
-            const isMipmapped = minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR;
-            const clearStroke = clip?._clearStroke ?? null;
-            const overviewUniform = clip?._overviewVec ? clip._overviewVec[0] : null;
-            const expectedClearStroke = !expectedOverview;
-            const expectedOverviewUniform = expectedOverview ? 1 : 0;
-            if (Main.overview.visible === expectedOverview && clip && clip.get_enabled() &&
-                isMipmapped === expectedMipmapped &&
-                clearStroke === expectedClearStroke &&
-                overviewUniform === expectedOverviewUniform) {
-                return {
-                    matched: true,
-                    overviewVisible: Main.overview.visible,
-                    clipEnabled: clip.get_enabled(),
-                    minFilter,
-                    isMipmapped,
-                    clearStroke,
-                    overviewUniform,
-                    hasClip: true
-                };
-            }
-        }
+    const snapshot = () => {
         const clip = getClip();
-        const minFilter = getMinFilter(clip);
+        const preview = target.meta_window._delegate ?? null;
+        const wc = preview?.window_container ?? null;
+        const hasShadow = preview?.get_children?.().some(c => c.name === "WindowNativizerOverviewShadow") ?? false;
         return {
-            matched: false,
-            overviewVisible: Main.overview.visible,
-            hasClip: Boolean(clip),
+            clip,
             clipEnabled: clip ? clip.get_enabled() : null,
-            minFilter,
-            isMipmapped: minFilter === Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR,
             clearStroke: clip?._clearStroke ?? null,
-            overviewUniform: clip?._overviewVec ? clip._overviewVec[0] : null
+            hasContainer: Boolean(wc),
+            containerOpacity: wc ? wc.get_opacity() : null,
+            hasShadow,
         };
     };
 
+    const pollState = async (expectOverview, maxRetries = 20) => {
+        for (let i = 0; i < maxRetries; i++) {
+            await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
+            const s = snapshot();
+            const expectedEnabled = !expectOverview;
+            const expectedClearStroke = !expectOverview;
+            const containerOk = expectOverview ? (s.hasContainer && s.containerOpacity === 254) : true;
+            if (Main.overview.visible === expectOverview && s.clip && s.clipEnabled === expectedEnabled &&
+                s.clearStroke === expectedClearStroke &&
+                containerOk && s.hasShadow === expectOverview) {
+                return {...s, matched: true, overviewVisible: Main.overview.visible};
+            }
+        }
+        return {...snapshot(), matched: false, overviewVisible: Main.overview.visible};
+    };
+
     Main.overview.show();
-    const clipDuringShowing = getClip();
-    const showingModeEarly = clipDuringShowing ? clipDuringShowing._overviewMode : false;
-    const overviewRes = await pollState(true, true);
+    const overviewRes = await pollState(true);
+    const inOverviewShadow = overviewRes.hasShadow;
+    const inOverviewOpacity = overviewRes.containerOpacity;
 
     Main.overview.hide();
-    const desktopRes = await pollState(false, false);
+    const desktopRes = await pollState(false);
 
     return JSON.stringify({
-        hasClip: Boolean(initialClip) && overviewRes.hasClip && desktopRes.hasClip,
+        hasClip: Boolean(initialClip) && Boolean(overviewRes.clip) && Boolean(desktopRes.clip),
         initialEnabled,
-        showingModeEarly,
         overviewVisible: overviewRes.overviewVisible,
         inOverviewEnabled: overviewRes.clipEnabled,
-        inOverviewMipmapped: overviewRes.isMipmapped,
-        inOverviewClearStroke: overviewRes.clearStroke,
-        inOverviewUniform: overviewRes.overviewUniform,
-        inOverviewMinFilter: overviewRes.minFilter,
+        inOverviewOpacity,
+        inOverviewShadow,
         desktopOverviewVisible: desktopRes.overviewVisible,
         restoredEnabled: desktopRes.clipEnabled,
-        restoredMipmapped: desktopRes.isMipmapped,
-        restoredClearStroke: desktopRes.clearStroke,
-        restoredOverviewUniform: desktopRes.overviewUniform
+        restoredShadow: desktopRes.hasShadow
     });
 })()
 ')"
 echo ">> Overview state check: $OVERVIEW_STATE"
-if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "showingModeEarly": true, "overviewVisible": true, "inOverviewEnabled": true, "inOverviewMipmapped": true, "inOverviewClearStroke": false, "inOverviewUniform": 1, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredMipmapped": false, "restoredClearStroke": true, "restoredOverviewUniform": 0}'; then
-    echo "!! Overview assertion failed: clip effect, clearStroke suppression, or overview AA uniform was not properly managed during overview!"
+if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "overviewVisible": true, "inOverviewEnabled": false, "inOverviewOpacity": 254, "inOverviewShadow": true, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredShadow": false}'; then
+    echo "!! Overview assertion failed: shaped-texture mask, container opacity, or preview shadow lifecycle was not managed!"
     exit 1
 fi
-echo ">> Overview lifecycle verified: clip retained and hardware mipmapping activated in overview, restored on desktop."
+echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 with a shadow clone, all restored on the desktop."
 
 # The declared-margin client closes itself (--hold); wait for it to go before proceeding.
 for i in $(seq 1 40); do
@@ -2229,7 +2203,7 @@ summary "Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 summary "Maximize Easing Animation & Band Lifecycle: PASSED (transitions uninterrupted, actor translation preserved)"
 summary "Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 summary "Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
-summary "Overview Clip Mode: PASSED (corners retained with hardware mipmapping in overview, restored on desktop)"
+summary "Overview Clip Mode: PASSED (clip suspended, shaped-texture mask + preview shadow in overview, restored on desktop)"
 summary "Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 summary "Partial & Full Maximize: PASSED (band attached while tiled, dropped when fully maximized, restored after)"
 summary "Subpixel Phase Straight Edge & Corner Monotonicity: PASSED (zero dark edge or corner artifacts across fractional phases)"

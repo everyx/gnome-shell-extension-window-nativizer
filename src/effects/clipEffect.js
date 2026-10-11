@@ -19,7 +19,6 @@ uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uClearRing;   // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
-uniform float uOverview;    // 1 restores smooth AA across all edges during overview mode, 0 keeps sharp desktop edges
 uniform float uScale;       // Physical device scale factor
 
 // Clutter effect padding: 2px top-left offset, 3px total enlargement
@@ -73,7 +72,7 @@ const CODE = `
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
     float straight = mix(1.0, inSquare, uClearRing);
-    float edgeFactor = isCorner || uOverview > 0.5 ? mix(keep, corner, uClearRing) : straight;
+    float edgeFactor = isCorner ? mix(keep, corner, uClearRing) : straight;
     cogl_color_out *= edgeFactor;
 `;
 
@@ -111,7 +110,6 @@ export const RoundedClipEffect = GObject.registerClass({
         this._lastFrameW = -1;
         this._lastFrameH = -1;
         this._lastScale = -1;
-        this._lastOverviewMode = null;
         this._scale = 1.0;
 
         this._sizeVec = [0, 0];
@@ -120,9 +118,6 @@ export const RoundedClipEffect = GObject.registerClass({
         this._radiusVec = [0];
         this._clearRingVec = [0];
         this._clearStrokeVec = [0];
-        this._overviewVec = [0];
-
-        this._overviewMode = false;
     }
 
     /**
@@ -206,18 +201,6 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * Toggles hardware-filtered mipmapping for downscaled overview thumbnails.
-     * @param {boolean} inOverview
-     */
-    setOverviewMode(inOverview) {
-        const next = Boolean(inOverview);
-        if (this._overviewMode === next)
-            return;
-        this._overviewMode = next;
-        this.queue_repaint();
-    }
-
-    /**
      * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
      * @param {object} node
      * @param {object} paintContext
@@ -231,12 +214,6 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
-
-        if (this._lastOverviewMode !== this._overviewMode) {
-            this._overviewVec[0] = this._overviewMode ? 1 : 0;
-            this.set_uniform_float('uOverview', 1, this._overviewVec);
-            this._lastOverviewMode = this._overviewMode;
-        }
 
         if (this._lastScale !== scale) {
             this._scaleVec[0] = scale;
@@ -263,18 +240,6 @@ export const RoundedClipEffect = GObject.registerClass({
             this._lastFrameY = frame.y;
             this._lastFrameW = frame.width;
             this._lastFrameH = frame.height;
-        }
-
-        if (this._overviewMode) {
-            const pipeline = this.get_pipeline();
-            if (pipeline?.set_layer_filters) {
-                // Override layer 0 filters to maintain hardware mipmapping during overview mode.
-                pipeline.set_layer_filters(
-                    0,
-                    Cogl.PipelineFilter.LINEAR_MIPMAP_LINEAR,
-                    Cogl.PipelineFilter.LINEAR
-                );
-            }
         }
 
         super.vfunc_paint_target(node, paintContext);

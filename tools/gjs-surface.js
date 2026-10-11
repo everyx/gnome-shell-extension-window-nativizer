@@ -92,7 +92,6 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
-    {ns: 'Clutter', cls: 'OffscreenEffect', member: 'get_pipeline', arity: 0},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', optional: true},
     {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', optional: true},
@@ -103,11 +102,12 @@ const SURFACE = [
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
-    {ns: 'Cogl', cls: 'Pipeline', member: 'set_layer_filters', params: ['layer_index', 'min_filter', 'mag_filter']},
-    // The C prototype takes two out-pointers (min_filter, mag_filter); GJS folds them into an
-    // out-argument return array [min_filter, mag_filter], matching get_buffer_rect's out-arg pattern.
-    {ns: 'Cogl', cls: 'Pipeline', member: 'get_layer_filters', params: ['layer_index']},
-    {ns: 'Cogl', cls: 'PipelineFilter', enum: true, members: ['LINEAR_MIPMAP_LINEAR', 'LINEAR', 'NEAREST']},
+    // The overview's mask probe asks the shaped texture whether masking this window would move
+    // its desktop screenshot off the direct-read path. 51 renamed it get_image -> paint_to_bitmap.
+    {ns: 'Meta', cls: 'ShapedTexture', class: true},
+    {ns: 'Meta', cls: 'ShapedTexture', member: 'paint_to_bitmap', arity: 2, optional: true},
+    {ns: 'Meta', cls: 'ShapedTexture', member: 'get_image', arity: 1, optional: true},
+    {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['RGBA_8888', 'A_8']},
     // gnome-shell, only reachable from inside the shell
     // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
     // Clutter.ShaderEffect in 51. The uniform upload is the seam's, so no shape is pinned here -

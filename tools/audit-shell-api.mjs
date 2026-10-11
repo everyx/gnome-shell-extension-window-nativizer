@@ -96,10 +96,12 @@ const SURFACE = [
     {id: 'offscreen_effect_paint_target', member: 'Clutter.OffscreenEffect:vfunc_paint_target()', repo: 'mutter', kind: 'vfunc', file: 'clutter/clutter/clutter-offscreen-effect.h', sym: 'paint_target'},
     {id: 'clutter_set_uniform_float', member: 'effect.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'clutter_shader_effect_set_uniform_float'},
     {id: 'cogl_pipeline_set_uniform_float', member: 'pipeline.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-state.h', sym: 'cogl_pipeline_set_uniform_float'},
-    {id: 'offscreen_effect_get_pipeline', member: 'effect.get_pipeline()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-offscreen-effect.h', sym: 'clutter_offscreen_effect_get_pipeline'},
-    {id: 'cogl_pipeline_set_layer_filters', member: 'pipeline.set_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_set_layer_filters'},
-    {id: 'cogl_pipeline_get_layer_filters', member: 'pipeline.get_layer_filters()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'cogl_pipeline_get_layer_filters'},
-    {id: 'cogl_pipeline_filter', member: 'Cogl.PipelineFilter', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pipeline-layer-state.h', sym: 'COGL_PIPELINE_FILTER_NEAREST'},
+    // The shaped texture's screenshot probe: the overview asks shapeTexture.paint_to_bitmap()
+    // (get_image() through 50) whether masking a window would move its desktop screenshot to
+    // the offscreen path. Both spellings share the early-out the probe relies on.
+    {id: 'shaped_texture_paint_to_bitmap', member: 'stex.paint_to_bitmap()', repo: 'mutter', kind: 'fn', file: 'src/meta/meta-shaped-texture.h', sym: 'meta_shaped_texture_paint_to_bitmap'},
+    {id: 'shaped_texture_get_image', member: 'stex.get_image()', repo: 'mutter', kind: 'fn', file: 'src/meta/meta-shaped-texture.h', sym: 'meta_shaped_texture_get_image'},
+    {id: 'cogl_pixel_format', member: 'Cogl.PixelFormat', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pixel-format.h', sym: 'COGL_PIXEL_FORMAT_A_8'},
     // The cursor enum the resize band's directions resolve to. It arrives in 50 with
     // set_cursor_type, and it is recorded because of how it is read: a module-level table of its
     // members is what kept the extension from loading on 45-49 (see platform/actorCursor.js).
