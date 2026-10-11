@@ -5,6 +5,8 @@
 
 import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
 import {bodyFrame} from '../src/lib/frame.js';
+import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
+import {checkDecorationEligibility} from '../src/lib/detector.js';
 
 describe('shadowGeometry', () => {
     it('sizes the bake buffer from pad, radius and the Cogl offscreen padding', () => {
@@ -132,5 +134,44 @@ describe('shadowSlices', () => {
         expect(boxes[0].x2).toBe(corner);
         expect(boxes[1].x1).toBe(400 - corner);
         expect(boxes[2].y1).toBe(300 - corner);
+    });
+
+    it('shows a narrow cast exactly as much of the corner as it draws, in bake px', () => {
+        const {corner, buffer} = shadowGeometry(15);
+        const cast = corner + 20;
+        const c = cast / 2;
+        const boxes = shadowSlices({corner, window: 2 * (SHADOW_PAD + 15), buffer}, cast, 400);
+
+        // The quad is smaller than the bake's corner...
+        expect(boxes[0].x2).toBeCloseTo(c, 6);
+        // ...and samples that many bake px of it, so the mapping is 1:1 and the cutout, the arc
+        // and the falloff all stay where the bake put them.
+        expect((boxes[0].s2 - boxes[0].s1) * buffer).toBeCloseTo(c, 6);
+        expect((boxes[0].t2 - boxes[0].t1) * buffer).toBeCloseTo(c, 6);
+        // The far corner mirrors it from the other end of the bake.
+        expect((boxes[3].s2 - boxes[3].s1) * buffer).toBeCloseTo(c, 6);
+        expect((boxes[3].t2 - boxes[3].t1) * buffer).toBeCloseTo(c, 6);
+    });
+
+    it('keeps the arc inside what a corner shows, at every size the detector decorates', () => {
+        // The two constants the shadow's correctness rests on - the size a window starts being
+        // decorated at, and how far the arc reaches in from the cast edge - are the same
+        // inequality: 2*radius + 2*SHADOW_PAD == 2*(SHADOW_PAD + radius). Read the floor off the
+        // detector rather than restating it, so lowering it here would fail this test rather than
+        // silently cutting the arc off the window's corners.
+        const radius = ADWAITA_STYLE.window.radius;
+        const {corner, buffer} = shadowGeometry(radius);
+        const arcReach = SHADOW_PAD + radius;
+        let floor = 1;
+        while (!checkDecorationEligibility({frameWidth: floor, frameHeight: floor}).eligible)
+            floor++;
+
+        for (let frame = floor; frame <= 2 * corner; frame++) {
+            const cast = frame + SHADOW_PAD * 2;
+            const boxes = shadowSlices({corner, window: 2 * arcReach, buffer}, cast, 400);
+            const shown = (boxes[0].s2 - boxes[0].s1) * buffer;
+            expect(shown).withContext(`frame ${frame}`).toBeCloseTo(Math.min(corner, cast / 2), 6);
+            expect(shown).withContext(`frame ${frame}`).toBeGreaterThanOrEqual(arcReach - 1e-6);
+        }
     });
 });
