@@ -20,7 +20,19 @@ Two things are drawn, and they have different mechanisms:
 | Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
-can never contain the shadow. Only a full-desktop screenshot shows both.
+can never contain the shadow. Only a full-desktop screenshot shows both. The clip, on the
+other hand, is always in the shot: it paints the actor's effect chain, so the four corners
+come out with no alpha where the client drew its own square ones.
+
+That is the correct encoding of the screen, not a cost of the clip. On screen those corner
+pixels are the desktop - the clip is what puts the desktop there - so a capture saying "the
+window contributes nothing here" says exactly what the screen says, and a self-rounding CSD
+window's own capture carries alpha at its corners the same way. The test is whether the shot
+composites back: over the desktop it was taken on, the corners take that desktop back and the
+screen is reconstructed pixel for pixel; over anything else they take that instead, which is
+what an alpha channel means. Measured on a GTK3 window over a white backdrop: 5383 pixels
+below full alpha with the extension enabled against 680 with it disabled, the top-left pixel
+reading `(0,0,0,0)` against `(250,250,251,255)`.
 
 ## The measurement that works
 
