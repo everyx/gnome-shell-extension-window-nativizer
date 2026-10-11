@@ -562,7 +562,19 @@ and a one-pixel strip from each edge describe the whole shape and the strips str
 is Mutter's approach as well: `MetaShadow` (`src/x11/meta-shadow-factory.c`) is a
 `CoglTexture` rendered once and painted as a nine-slice. The bake draws the same GLSL the
 generator takes from GTK4, so this stays the upstream shadow, computed once instead of
-every frame. In `clipEffect.js`, the 1px SDF AA ramp is restricted strictly to corner arcs,
+every frame.
+
+A corner slice draws a corner of the bake at 1:1, which is what fixes the position of
+everything inside it: the body's cutout, the arc, the Gaussian falloff are all laid out in bake
+px. Shrinking the corner quad into a cast narrower than two corners therefore has to show fewer
+bake px, not the same ones scaled down, or the cutout stops landing on the frame and the shadow
+pulls away from the window - measured on a 60x180 window (cast 116x236, corner 58 against a
+corner of 71), the cutout came out 5px inside the frame, leaving a white gap where the shadow
+should have met the window. That stays exact for every decorated window because the two limits
+are one inequality: a window starts being decorated at `2 * radius` (`MIN_DECORABLE_SIZE`,
+`detector.js`), which puts the cast at `2 * radius + 2 * SHADOW_PAD` = `2 * (SHADOW_PAD +
+radius)` - and `SHADOW_PAD + radius` is exactly how far the arc reaches in from the cast edge,
+so the corner the crop keeps always covers it. In `clipEffect.js`, the 1px SDF AA ramp is restricted strictly to corner arcs,
 preserving 100% sharp content alpha on straight edges to prevent subpixel dragging blur from
 double-resampling under fractional scaling. Concentric corner alignment and zero-leak clipping are
 guaranteed by `clipEffect.js`'s snapping rule locking the physical pixel grid with the shadow
