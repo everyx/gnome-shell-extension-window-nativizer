@@ -6,6 +6,7 @@ import {
     safeRead,
     isWindowReading,
     isClassificationPending,
+    reconcileOutcome,
 } from '../src/lib/window.js';
 
 import {evaluateWindowActions} from '../src/lib/detector.js';
@@ -506,5 +507,30 @@ describe('the ring a pick records is the ring the runtime looks up', () => {
         const actions = evaluateWindowActions({...reading, focused: true, rules: {[key]: 'corners'}});
 
         expect(actions.reason).toContain('rule-applied');
+    });
+});
+
+describe('reconcileOutcome (pure function)', () => {
+    // The three-way branch the manager used to hold inline: what a reconcile does with a window
+    // follows from the reading alone, so it is a table here rather than a session away.
+    const reading = overrides => ({
+        nativeLikeCorners: true, hasGtk4Client: true, ...overrides,
+    });
+
+    it('drops the decoration when the reading has no usable geometry', () => {
+        expect(reconcileOutcome(null)).toBe('undecorate');
+        expect(reconcileOutcome(undefined)).toBe('undecorate');
+    });
+
+    it('waits while the process classification is still in flight', () => {
+        expect(reconcileOutcome(reading({nativeLikeCorners: null}))).toBe('defer');
+        expect(reconcileOutcome(reading({hasGtk4Client: null}))).toBe('defer');
+        expect(reconcileOutcome(reading({nativeLikeCorners: null, hasGtk4Client: null}))).toBe('defer');
+    });
+
+    it('applies once the reading is complete and the window is classified', () => {
+        expect(reconcileOutcome(reading())).toBe('apply');
+        expect(reconcileOutcome(reading({nativeLikeCorners: false}))).toBe('apply');
+        expect(reconcileOutcome(reading({hasGtk4Client: false}))).toBe('apply');
     });
 });

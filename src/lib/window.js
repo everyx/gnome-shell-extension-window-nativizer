@@ -299,3 +299,20 @@ export function isWindowReading(value) {
 export function isClassificationPending(reading) {
     return reading?.nativeLikeCorners === null || reading?.hasGtk4Client === null;
 }
+
+/**
+ * What a reconcile should do with a window, read from the reading alone: drop the decoration when
+ * there is no usable geometry, wait while the process classification is still in flight, and apply
+ * otherwise. Named here so the branch can be a table in a spec instead of a chain the end-to-end
+ * run has to reach; the manager only routes on the answer.
+ *
+ * @param {{nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}|null} reading
+ * @returns {'undecorate'|'defer'|'apply'}
+ */
+export function reconcileOutcome(reading) {
+    if (!reading)
+        return 'undecorate';
+    if (isClassificationPending(reading))
+        return 'defer';
+    return 'apply';
+}
