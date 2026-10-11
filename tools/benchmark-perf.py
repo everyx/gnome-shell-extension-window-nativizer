@@ -40,8 +40,21 @@ CLK_TCK = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
 
 # Performance Budgets (Regression Guards for --check)
 BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
-# Max dynamic resize CPU delta: 120ms across 150 frames (<0.8ms/frame).
-# Physical baseline breakdown:
+# Max dynamic resize CPU delta as a fraction of that same run's disabled baseline: 0.75 across
+# 150 frames.
+#
+# Relative, not absolute, because the delta is not machine-invariant: the same commit measured
+# +109.7ms in one session and +96.5ms in another, tracking its own disabled baseline (206.1 vs
+# 189.1) rather than any change in the code. Only the ratio of the two stays put. Four sessions
+# over two commits (v0.10.0 and master) put it at 0.510, 0.532, 0.564 and 0.625, so 0.75 sits
+# about twice the observed session-to-session spread above today's cost.
+#
+# The old guard was this delta as a flat 120ms. It is not kept alongside the ratio: at
+# 118.0/118.9ms measured it had ~1% of headroom, which is less than the harness' own
+# round-to-round spread (+-5ms) and far less than its session-to-session spread (+-13ms on the
+# delta, +-23ms on the baseline), so it flaked instead of guarding.
+#
+# Physical baseline breakdown of what that ratio is made of:
 # - ~80ms for RoundedClipEffect FBO offscreen shader + ShadowActor 8-slice quads
 # - ~10ms for ResizeBand: its four bind constraints, four reactive hit-test actors and the live
 #   allocation. Measured on the same windows with the resize axis reversed vs the heuristic (private
@@ -49,7 +62,7 @@ BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
 #   step per window over ten. It costs no idle CPU and holds 6.4KB resident per window.
 #   The earlier ~25ms here was an estimate, not a measurement.
 # - ~15ms allowance for compositor scheduling jitter across 150 frames
-BUDGET_MAX_STRESS_CPU_DELTA_MS = 120.0
+BUDGET_MAX_STRESS_CPU_RATIO = 0.75
 BUDGET_MAX_PER_WINDOW_PSS_KB = 2048.0     # Max per-window RAM delta: 2.0 MB
 # The band's own share, from the phase that flips only that setting.
 BUDGET_MAX_BAND_STRESS_CPU_MS = 30.0      # the band's own share is 5-14ms over 150 resize steps,
@@ -579,6 +592,7 @@ def main():
                 "delta": {
                     "idle_cpu_pct": delta_idle_cpu,
                     "stress_cpu_ms": delta_stress_cpu_ms,
+                    "stress_cpu_ratio": delta_stress_cpu_ms / dis_stress_cpu_ms,
                     "stress_cpu_pct": delta_stress_cpu_pct,
                     "win_rss_kb": delta_win_rss,
                     "win_pss_kb": delta_win_pss,
@@ -602,11 +616,23 @@ def main():
             else:
                 print(f"OK [PASS] Idle CPU delta ({delta_idle_cpu:+.2f}%) within budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
 
-            if delta_stress_cpu_ms > BUDGET_MAX_STRESS_CPU_DELTA_MS:
-                print(f"!! [FAIL] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) exceeds budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
+            stress_ratio = delta_stress_cpu_ms / dis_stress_cpu_ms
+            # --quick is one cold round with no warmup, so its measurement still carries the
+            # JIT/shader/FBO first-touch cost the full run discards (1.13 measured against
+            # 0.56-0.63 warm). The guard needs the warm run: report, do not judge.
+            if args.quick:
+                print(f"-- [SKIP] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms, "
+                      f"{stress_ratio:.2f}x the disabled baseline): --quick runs cold "
+                      f"and cannot be budgeted; use the full run")
+            elif stress_ratio > BUDGET_MAX_STRESS_CPU_RATIO:
+                print(f"!! [FAIL] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) is "
+                      f"{stress_ratio:.2f}x the disabled baseline, "
+                      f"over budget ({BUDGET_MAX_STRESS_CPU_RATIO:.2f}x)")
                 failed = True
             else:
-                print(f"OK [PASS] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) within budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
+                print(f"OK [PASS] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms, "
+                      f"{stress_ratio:.2f}x the disabled baseline) "
+                      f"within budget ({BUDGET_MAX_STRESS_CPU_RATIO:.2f}x)")
 
             if delta_win_pss > BUDGET_MAX_PER_WINDOW_PSS_KB:
                 print(f"!! [FAIL] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) exceeds budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
