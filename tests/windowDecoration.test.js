@@ -252,8 +252,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             isActivelyClipped: false,
             hasShadow: false,
             hasResizeBand: false,
-            firstFrameDone: false,
-            isPendingReconcile: false,
             ring: null,
             overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
         });
@@ -531,11 +529,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
-        const mockDisconnectObj = {
-            disconnect: jasmine.createSpy('disconnect'),
-        };
-        deco.signals.push([mockDisconnectObj, 1234]);
-
         const shadowRef = deco.shadow;
         const bandRef = deco.resizeBand;
 
@@ -546,8 +539,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasResizeBand).toBeFalse();
         expect(shadowRef.destroyed).toBeTrue();
         expect(bandRef.destroyed).toBeTrue();
-        expect(mockDisconnectObj.disconnect).toHaveBeenCalledWith(1234);
-        expect(deco.signals.length).toBe(0);
     });
 
     it('preserves clip and shadow when keepVisualsForClose is true', () => {
@@ -564,21 +555,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
-        const mockDisconnectObj = {
-            disconnect: jasmine.createSpy('disconnect'),
-        };
-        deco.signals.push([mockDisconnectObj, 5678]);
-
         const shadowRef = deco.shadow;
         const bandRef = deco.resizeBand;
 
         deco.destroy({keepVisualsForClose: true});
 
-        // ResizeBand and signals are cleared
+        // ResizeBand is cleared
         expect(deco.hasResizeBand).toBeFalse();
         expect(bandRef.destroyed).toBeTrue();
-        expect(mockDisconnectObj.disconnect).toHaveBeenCalledWith(5678);
-        expect(deco.signals.length).toBe(0);
 
         // Visuals are preserved for window close animation
         expect(deco.hasClip).toBeTrue();
@@ -602,8 +586,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             isActivelyClipped: false,
             hasShadow: false,
             hasResizeBand: false,
-            firstFrameDone: false,
-            isPendingReconcile: false,
             ring: null,
             overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
         });
