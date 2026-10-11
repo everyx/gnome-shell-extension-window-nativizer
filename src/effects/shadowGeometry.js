@@ -59,6 +59,20 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
  * or transiently negative cast, and unclamped corner math would then emit slices whose
  * x1 > x2 (inverted texture coordinates) instead of an empty one.
  *
+ * When the cast is narrower than two corners, the corner quads shrink to `c` - and what they
+ * sample shrinks with them. Everything the bake encodes is positioned in bake px: the body's
+ * SDF cutout, the arc, the Gaussian falloff. Sampling the whole corner into a smaller quad
+ * scales all of it, so the cutout stops landing on the frame and the shadow pulls away from
+ * the window. Measured on a 60x180 window (cast 116x236, c = 58 against a corner of 71): the
+ * cutout, which belongs SHADOW_PAD in from the cast edge, came out 5px inside it, leaving a
+ * white gap between the window and its shadow. Showing `c` bake px instead keeps the mapping
+ * 1:1, so nothing baked moves.
+ *
+ * That never eats an arc: the decoration floor is the same inequality. `MIN_DECORABLE_SIZE`
+ * (detector.js) starts a window at `2 * radius`, which puts the cast at `2 * radius +
+ * 2 * SHADOW_PAD` = `2 * (SHADOW_PAD + radius)` - and `SHADOW_PAD + radius` is exactly how far
+ * the arc reaches in from the cast edge, so `c` always covers it.
+ *
  * @param {{corner:number,window:number,buffer:number}} geometry
  * @param {number} width - Padded rect width in px
  * @param {number} height - Padded rect height in px
@@ -77,14 +91,21 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     const right = Math.max(c, safeW - c);
     const bottom = Math.max(c, safeH - c);
 
+    // Bake px the corner shows: all of them when the cast is wide enough for both corners (which
+    // is the only size the bake was sized for), `c` of them - the outer ones - when it is not.
+    const shown = c / buffer;
+    const innerNear = near + shown;
+    const outerFar = far + span;
+    const innerFar = outerFar - shown;
+
     return [
-        {x1: 0, y1: 0, x2: c, y2: c, s1: near, t1: near, s2: near + span, t2: near + span},
-        {x1: right, y1: 0, x2: safeW, y2: c, s1: far, t1: near, s2: far + span, t2: near + span},
-        {x1: 0, y1: bottom, x2: c, y2: safeH, s1: near, t1: far, s2: near + span, t2: far + span},
-        {x1: right, y1: bottom, x2: safeW, y2: safeH, s1: far, t1: far, s2: far + span, t2: far + span},
-        {x1: c, y1: 0, x2: right, y2: c, s1: edge, t1: near, s2: edge + strip, t2: near + span},
-        {x1: c, y1: bottom, x2: right, y2: safeH, s1: edge, t1: far, s2: edge + strip, t2: far + span},
-        {x1: 0, y1: c, x2: c, y2: bottom, s1: near, t1: edge, s2: near + span, t2: edge + strip},
-        {x1: right, y1: c, x2: safeW, y2: bottom, s1: far, t1: edge, s2: far + span, t2: edge + strip},
+        {x1: 0, y1: 0, x2: c, y2: c, s1: near, t1: near, s2: innerNear, t2: innerNear},
+        {x1: right, y1: 0, x2: safeW, y2: c, s1: innerFar, t1: near, s2: outerFar, t2: innerNear},
+        {x1: 0, y1: bottom, x2: c, y2: safeH, s1: near, t1: innerFar, s2: innerNear, t2: outerFar},
+        {x1: right, y1: bottom, x2: safeW, y2: safeH, s1: innerFar, t1: innerFar, s2: outerFar, t2: outerFar},
+        {x1: c, y1: 0, x2: right, y2: c, s1: edge, t1: near, s2: edge + strip, t2: innerNear},
+        {x1: c, y1: bottom, x2: right, y2: safeH, s1: edge, t1: innerFar, s2: edge + strip, t2: outerFar},
+        {x1: 0, y1: c, x2: c, y2: bottom, s1: near, t1: edge, s2: innerNear, t2: edge + strip},
+        {x1: right, y1: c, x2: safeW, y2: bottom, s1: innerFar, t1: edge, s2: outerFar, t2: edge + strip},
     ];
 }
