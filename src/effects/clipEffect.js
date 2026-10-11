@@ -68,7 +68,7 @@ const CODE = `
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    // Physical 1px anti-aliasing transition on corner arcs (or entire perimeter during overview):
+    // Physical 1px anti-aliasing transition on corner arcs:
     float corner = 1.0 - clamp(d * uScale + 0.5, 0.0, 1.0);
     float keep = min(corner + 1.0 - inSquare, 1.0);
     float straight = mix(1.0, inSquare, uClearRing);

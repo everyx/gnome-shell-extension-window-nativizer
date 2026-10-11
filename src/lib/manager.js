@@ -72,7 +72,7 @@ export class Manager {
         // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
         this._classifier.setOnProcessKnown(pid => this._onProcessKnown(pid));
 
-        // Track overview state to switch between standard and mipmapped hardware filtering.
+        // Track the overview state so decorations switch into overview mode with it.
         this._inOverview = Boolean(Main.overview.visible);
         const display = getDisplay();
         this._lastFocusWindow = getFocusWindow(display);
@@ -176,7 +176,7 @@ export class Manager {
             }
         }
         for (const winActor of getWindowActors()) {
-            // Clip may be on window actor or X11 surface child → walk subtree.
+            // Clip may be on window actor or XWayland surface child → walk subtree.
             const pending = [winActor];
             while (pending.length > 0) {
                 const target = pending.pop();

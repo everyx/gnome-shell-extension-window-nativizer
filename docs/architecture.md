@@ -24,7 +24,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, decoration lifecycle, and the inspection surfaces |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
-| `effects/` | rounded clipping, shadow geometry, the shadow actor, and baked GPU shadow textures |
+| `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
 | `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51 |
 
 ## The two processes
@@ -68,9 +68,10 @@ early while it is set - and is dropped in a `finally`, so a teardown that throws
 lets a later enable run rather than wedging on a stale manager.
 
 The manager connects only the shell signals a decoration input can change on, plus the
-overview's show/hide transitions (which switch to hardware mipmapping and suppress the inner
-outline, keeping the corners), and deliberately no workspace signal: no decoration input
-depends on the workspace, so switching workspaces cannot change any window's appearance.
+overview's show/hide transitions (which hand every decoration its overview state), and
+deliberately no workspace signal at the manager: no decoration input depends on the workspace.
+What a decoration does with that state - and the workspace move that rebuilds a preview, which
+the decoration hooks itself - is in `decoration-model.md`.
 
 The guard is set before the manager starts, so a failure after that point would otherwise wedge
 every later enable; the catch rolls the half-enabled state back through the normal teardown.
@@ -111,7 +112,8 @@ boundary align to GTK 4.24's physical device-pixel grid:
 - **Actor-local snapping**: snapping is deliberately confined to the actor-local coordinate
   space. Cutlines stay geometrically invariant while the window moves, leaving stage translation
   entirely to the GPU transform. The trade-off is a subpixel phase offset on stage, in exchange
-  for eliminating subpixel shimmering/crawling and hot-path allocations during drags.
+  for eliminating subpixel shimmering/crawling and hot-path allocations during drags; the shadow
+  actor pays it back by folding that offset into its own translation (`getWindowSubpixelOffset`).
 - **Multi-monitor cache isolation**: a window can be rendered across displays of differing DPI,
   so snapped shadow boxes are cached per physical scale to prevent cache thrashing.
 - **Device-grid clip boundary**: the clip's body snaps to the same grid the shadow cutlines use,
@@ -153,20 +155,18 @@ pixel inside the body, and a zero alpha disables it - which is how overview supp
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
 by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
-use, so the two stay in phase across fractional scales. When a client ring has to be cleared,
-the clip boundary is inset by a safe margin before rounding, which excises GTK3's internal Cairo
-half-pixel stroke bleed and outer box-shadow residue without distorting the shadow or the tiled
-ring. Under fractional scaling, the fragment shader pushes texture sampling coordinates inward
-along the boundary normal (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
+use, so the two stay in phase across fractional scales. Under fractional scaling, the fragment
+shader pushes texture sampling coordinates inward along the boundary normal
+(`max(0.0, d + inset)`), preventing hardware bilinear filtering from
 sampling external stroke bleed on both straight edges and corner arcs.
 
 Upload cost: the effect deduplicates its decisions and repaints only on change, and the paint
 guards its uniform uploads with dirty checks, so a static repaint uploads nothing and a resize
 changes only the pipeline state that actually moved.
 
-In overview the clip is retained: hardware trilinear mipmapping replaces the standard filtering
-and the inner outline is suppressed, so downscaled previews stay clean; both are restored on
-return to the desktop. During a window's close transition, Clutter property bindings keep the
+In overview the clip is suspended and the corner comes from an A_8 mask on Mutter's shaped
+texture: what the mask can round, what it cannot, and how that is decided are in
+`decoration-model.md`. During a window's close transition, Clutter property bindings keep the
 shadow actor in step with the window actor until it is destroyed.
 
 ## Effects — shadow baking and slicing
@@ -182,8 +182,9 @@ every shadow set (`3σ` plus the spread) plus the Cogl offscreen offset - derive
 corner slice is made to reach into the straight edge beyond the geometric arc so that its cutline
 sits where the Gaussian decay has fully settled to the 1D edge profile; that matches Mutter's own
 `inner_border = shape_border + spread` (`meta-shadow-factory.c`) and guarantees $C^0$ continuity
-across the corner and edge slices. A window smaller than the two corners scales them down, which
-is the correct shape when the window is all corner. All sizes are logical px.
+across the corner and edge slices. A window smaller than the two corners crops the slices
+instead, keeping the 1:1 mapping (`decoration-model.md` has the reasoning). All sizes are
+logical px.
 
 The bake quad's extra size and top/left offset come from the same Cogl padding Mutter uses. Only
 the per-axis total is an upstream literal; the top/left split is derived from it for an

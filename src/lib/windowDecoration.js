@@ -31,7 +31,7 @@ const OVERVIEW_PREVIEW_MAX_SCALE = 0.95;
  * Measured against actual rendering: the corner arc stops looking polygonal (mask texels
  * per screen pixel) at roughly 0.7, and is indistinguishable from a full-resolution mask
  * at 1.0. The ceiling only bites on monitors big enough that this preview never reaches it,
- * which keeps the arc above the visible threshold up to ~5K-wide displays and degrades it
+ * which keeps the arc above the visible threshold up to ~4K-wide displays and degrades it
  * gradually beyond.
  */
 const OVERVIEW_MASK_MAX_DIMENSION = 2560;
@@ -285,10 +285,7 @@ export class WindowDecoration {
     }
 
     /**
-     * Whether the overview can round this window through the shaped-texture mask.
-     *
-     * X11/XWayland also qualifies: Mutter rebuilds the mask from the X11 shape on surface
-     * syncs, so the mask is re-applied after those (see `_applyOverviewMask`). A window whose
+     * Whether the overview can round this window through the shaped-texture mask. A window whose
      * corner or outline is not drawn has no mask to build.
      *
      * @returns {boolean}
@@ -296,7 +293,7 @@ export class WindowDecoration {
     _canApplyOverviewMask() {
         if (!this.drawClip || !this._style)
             return false;
-        // X11/XWayland keeps the window's shape in the same mask slot and Mutter rewrites it
+        // XWayland keeps the window's shape in the same mask slot and Mutter rewrites it
         // from that shape, so overwriting it would deform the window once the overview ends —
         // and GJS cannot put it back (`set_mask_texture` rejects null).
         return getWindowClientType(this._win) !== WindowClientType.X11;
@@ -523,7 +520,7 @@ export class WindowDecoration {
                 this.clipTarget = null;
             }
         } else if (wanted) {
-            // X11 may replace surface child; re-pin if target moved.
+            // XWayland may replace surface child; re-pin if target moved.
             if (clipTarget !== this.clipTarget) {
                 this._removeClipEffect();
                 this.clipTarget = clipTarget;

@@ -93,7 +93,7 @@ Five upstream watersheds fall in this range - the shader base class, the maximiz
 operation signature, the per-actor cursor, and the Mutter typelib naming. With the runtime baseline
 elevated to GNOME 50+, the grab signature, maximize query, and per-actor cursor target modern upstream
 APIs directly without pre-50 shims; the shader base class continues to bridge GNOME 50 (`Shell.GLSLEffect`)
-and 51 (`Clutter.OffscreenEffect`), and the typelib binds dynamically via `gi://Meta`.
+and 51 (`Clutter.ShaderEffect`), and the typelib binds dynamically via `gi://Meta`.
 What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
 computed rather than remembered.
@@ -165,6 +165,6 @@ defect that fires on a normal path has to be dealt with here rather than worked 
 - **Never instantiate long-lived GObjects at JS module scope.** EGO-X-004 rejects
   module-scope GObjects (e.g. `Gio.Cancellable`); tie their lifecycle strictly to session or instance boundaries.
 - **Signals that may not exist are connected in "safe" mode.** Window- and
-  actor-level signals vary across 45–51, and the object can be unmanaged while we
+  actor-level signals vary across the audited 45–51 lines (the runtime itself is 50–51), and the object can be unmanaged while we
   connect, so a failure there is expected and swallowed. A failure on a global
   signal is not: it means an API assumption is wrong.

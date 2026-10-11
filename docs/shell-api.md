@@ -15,7 +15,7 @@ does not exist, so the two cannot drift apart silently.
 ## get_client_type
 
 `win.get_client_type()` - returns `Meta.WindowClientType`. The only reliable way to tell a Wayland
-client from an X11 one, which decides whether an X11 frame is in the way.
+client from an XWayland one, which decides whether an X11 frame is in the way.
 
 ## get_window_type
 
@@ -24,7 +24,7 @@ docks) in the eligibility checks, the rule fingerprints and the inspector picker
 
 ## is_maximized
 
-`win.is_maximized()` - the canonical query on GNOME 50+, returning a boolean directly. The extension
+`win.is_maximized()` - the canonical query from GNOME 49, returning a boolean directly. The extension
 reads it via optional chaining `Boolean(win?.is_maximized?.())`.
 
 ## get_maximized
@@ -163,7 +163,7 @@ hand-written table called it non-existent, which is true only from 50 on.
 ## set_cursor_type
 
 `actor.set_cursor_type()` - per-actor cursor, introduced in Clutter 50.
-The extension degrades on 45-49 without breaking resizing.
+The extension runs on 50-51, so the pre-50 shape it guards against never arrives.
 
 ## set_child_above_sibling
 
@@ -184,15 +184,15 @@ and size, so their geometry follows a resize without a JS tick.
 
 `effect.set_enabled()` - the offscreen-pass toggle a `Clutter.ActorMeta` effect exposes. A real
 method (`clutter_actor_meta_set_enabled`), not something GJS derives from the property of the same
-name; the effect inherits it from `Clutter.ActorMeta`. The extension does not call it: it attaches
-and detaches the effect instead, so the entry records the API and its property rather than a call
-site.
+name; the effect inherits it from `Clutter.ActorMeta`. The extension calls it to suspend the clip
+while the overview rounds through its mask, and to keep it for the windows the mask cannot take:
+the call sites are in `windowDecoration.js`.
 
 ## actor_meta_enabled
 
 `Clutter.ActorMeta:enabled` - the property behind that method. `clutter-effect.c` points the vfunc
 `clutter_effect_set_enabled` at its setter, which is the symbol an earlier version of this table
-cited as if it were the API. The extension reads neither the property nor the method.
+cited as if it were the API. The extension calls the method and never reads the property.
 
 ## actor_meta_get_actor
 
@@ -332,6 +332,7 @@ window actor rather than inside the window's own actor tree.
 ## overview_visible
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
-then hand every decoration its overview state: Wayland windows suspend the clip effect and round
-through the shaped-texture mask, while XWayland windows keep the clip and switch its layer filter to
-hardware mipmapping.
+then hand every decoration its overview state: Wayland windows whose texture can host a mask suspend
+the clip effect and round through the shaped-texture mask, while XWayland windows - and the Wayland
+ones the mask probe rejects - show square previews, keeping the clip only when the force-corners
+preference is on.

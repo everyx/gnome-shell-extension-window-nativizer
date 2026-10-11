@@ -627,7 +627,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco.setOverviewMode(false);
         expect(deco.clip.params.outline).toEqual(outline);
 
-        // On ringed windows (clearRing=true), clearStroke must be suppressed in overview to preserve mipmap LOD derivatives
+        // On ringed windows (clearRing=true), clearStroke is suppressed in overview.
         const ringedActions = {...actions, clearRing: true};
         deco.apply({actions: ringedActions, inputs, actor: mockActor});
         expect(deco.clip.params.clearStroke).toBeTrue();
@@ -699,7 +699,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         }
     });
 
-    it('leaves X11/XWayland windows square and sharp, never touching the mask slot', () => {
+    it('leaves XWayland windows square and sharp, never touching the mask slot', () => {
         const {surface, deco} = setupMaskHarness({clientType: WindowClientType.X11, drawShadow: true});
         expect(deco._canApplyOverviewMask()).toBeFalse();
 

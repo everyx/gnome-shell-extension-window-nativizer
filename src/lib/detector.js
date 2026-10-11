@@ -97,7 +97,7 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
 }
 
 /**
- * Whether the window keeps a Mutter X11 shadow we could never clear: a bare X11 window,
+ * Whether the window keeps a Mutter X11 shadow we could never clear: a bare XWayland window,
  * with no declared ring and no compositor frame. The remedy is a rule, not our shadow.
  * @param {object} params
  * @param {boolean} [params.hasSsd=false]

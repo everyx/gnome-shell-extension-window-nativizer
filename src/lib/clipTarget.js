@@ -1,7 +1,7 @@
 /**
  * Resolves target actor for RoundedClipEffect.
  *
- * Normal target: MetaWindowActor (Wayland) or first child (X11). When foreign
+ * Normal target: MetaWindowActor (Wayland) or first child (XWayland). When foreign
  * extensions (e.g. Blur my Shell) inject an St.Widget inside MetaWindowActor,
  * bypasses it to attach to the surface container to preserve offscreen sampling.
  */

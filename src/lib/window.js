@@ -76,7 +76,7 @@ export function readWindowString(getter) {
 }
 
 /**
- * Declared identity, first non-blank source wins. A whitespace-only field (an X11 client may
+ * Declared identity, first non-blank source wins. A whitespace-only field (an XWayland client may
  * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
  * become a rule key.
  * @param {object} win

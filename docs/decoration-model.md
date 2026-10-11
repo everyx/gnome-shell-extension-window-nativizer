@@ -427,8 +427,8 @@ Mutter paints for it, which is what happens to a client that draws its own frame
 outside the window square, GJS cannot clear it, and adding ours would put two where there is one.
 Its visible cost is the focus transition: Mutter holds a focused and an unfocused shadow and swaps
 the two objects without easing, so such a window drops its halo in a single step where every window
-we decorate fades. A rule cannot fix it either - the shadow axis retracts ours, and forcing it here
-would add rather than replace.
+we decorate fades. A rule cannot fix it either: the automatic decision here is already not to draw
+one, so reversing the axis only adds ours on top of Mutter's.
 
 **Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, and the reason is
 stronger than "the class belongs to the client": the class is not reachable in this session at all.
@@ -721,7 +721,8 @@ Upstream has no native window rounded-clip to fall back on —
 implementation (MR !1717) and the Clutter rounded-corner-clipping roadmap item (issue #2087) is
 still open.
 
-**Cost.** The mask is one byte per texel, generated once per window per overview entry
+**Cost.** The mask is one byte per texel, generated once per window per overview entry and rebuilt
+when the preview card or the client buffer changes
 (only the four corner squares are computed; the body is a memset) and released on exit. Its
 resolution is the largest preview the overview can draw — Shell's `WINDOW_PREVIEW_MAXIMUM_SCALE`
 (0.95, js/ui/workspace.js) applied to the window at the monitor's scale, expressed in buffer

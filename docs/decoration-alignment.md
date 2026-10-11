@@ -467,20 +467,20 @@ level is systematic rather than the frame it was taken in.
 
 Three things are asserted, and the split matters when one fails:
 
-- **fidelity** - our profile against the live libadwaita window's, within 2 grey levels (the two
-  differ by one step of the ramp where rounding lands, and nowhere else);
+- **fidelity** - our profile against the live libadwaita window's, within 0 grey levels in one frame
+  and 1 across alternating frames (per the comparisons above);
 - **symmetry** - our four sides are identical, and so are libadwaita's;
-- **the environment** - the live libadwaita window against the profile recorded from upstream, within
-  1 grey level. A failure here is the machine having moved, not the code, and it says so rather than
-  letting the fidelity number above it be read as a verdict.
+- **the environment** - the live libadwaita window read twice, within 0 grey levels. A failure here is
+  the machine having moved, not the code, and it says so rather than letting the fidelity number
+  above it be read as a verdict.
 
 The tool used to gate on a stored copy of *our own* earlier profile. That can only ever say "we
 changed": when the shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the
 run failed for a week without anyone running it, and the failure said nothing about whether the new
 output was right - it was, to within a grey level of libadwaita, while the stored profile sat 9 grey
 levels away from it. A reference of our own past numbers is blind in the other direction too: it
-cannot notice that we never matched libadwaita to begin with. Upstream's recorded profile stays in the
-file, as the environment witness above.
+cannot notice that we never matched libadwaita to begin with. Nothing is stored for later at all, in
+either direction: both witnesses compare live reads of the same session.
 
 **This check needs a session, so nothing runs it automatically yet**, which is how it went a week
 without anyone noticing it had been failing. Wiring it into a hook or a CI job is open work.

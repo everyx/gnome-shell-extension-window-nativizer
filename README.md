@@ -54,9 +54,9 @@ Visual rounding is only half the story — non-native windows often have paper-t
 - **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
 
 ### 🛡️ Smart & Non-Invasive
-- **Leaves native apps alone**: Automatically skips apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); Firefox is nativized like any other GTK3 app
-- **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
-- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; XWayland windows cannot have both there, so the quality-first default leaves them square and sharp — their corners can be forced on if the quality is the part you would rather trade
+- **Leaves native apps alone**: Automatically skips the rounded corners of apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); the resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
+- **No double shadows**: Identifies existing compositor shadows, clears a declared ring only when the ring we draw is ours, and otherwise supplements only what is missing
+- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; XWayland windows, and the few Wayland windows the mask would reseat, cannot have both there, so the quality-first default leaves them square and sharp — their corners can be forced on if the quality is the part you would rather trade
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection
@@ -88,7 +88,7 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 | :--- | :--- |
 | Nothing | Default. The automatic decision stands; most windows need no correction at all |
 | Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
-| Shadow | Cast ours where the decision left the client's, or retract ours (common on XWayland, where Mutter paints one) |
+| Shadow | Cast ours where the decision left the client's, or retract ours where the decision drew one |
 | Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
 
 To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
