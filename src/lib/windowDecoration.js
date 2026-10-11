@@ -75,6 +75,7 @@ export class WindowDecoration {
         // Overview rounding: an A_8 mask on the shaped texture plus a shadow clone,
         // both live only while the overview is shown.
         this._overviewStex = null;
+        this._forceOverviewCorners = false;
         this._overviewProbe = null;
         this._overviewContainer = null;
         this._overviewContainerDestroyId = 0;
@@ -165,10 +166,12 @@ export class WindowDecoration {
      * @param {Clutter.Actor} [params.target] - Resolved clip target actor
      * @param {boolean} [params.inOverview=false]
      */
-    apply({actions, inputs, actor = null, target = null, inOverview = false}) {
+    apply({actions, inputs, actor = null, target = null, inOverview = false, forceOverviewCorners = false}) {
         const winActor = this._getActor(actor);
         if (!winActor)
             return;
+
+        this._forceOverviewCorners = Boolean(forceOverviewCorners);
 
         const clipTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
         const rawInsets = inputs.insets;
@@ -215,13 +218,15 @@ export class WindowDecoration {
             return;
         }
 
-        // Two ways a window can be shown in the overview. Rounded and sharp comes from the
-        // shaped-texture mask, and is only taken where it costs the desktop nothing; otherwise the
-        // clip stays suspended and the thumbnail is square, and as sharp as an undecorated window.
+        // Three ways a window can be shown in the overview. Rounded and sharp comes from the
+        // shaped-texture mask, and is only taken where it costs the desktop nothing; rounded and
+        // blurry is the legacy offscreen clip, kept when the user forces corners; neither leaves
+        // the thumbnail square, and as sharp as an undecorated window.
         const maskable = this._canApplyOverviewMask() && !this._overviewMaskWouldChangeDesktop();
+        const keepClip = !maskable && this._forceOverviewCorners;
 
         if (this.clip) {
-            this.clip.set_enabled(false);
+            this.clip.set_enabled(keepClip);
             this._syncClipParams();
         }
 

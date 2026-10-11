@@ -54,6 +54,7 @@ export class Manager {
         this._animationsEnabled = true;
         this._dark = false;
         this._preferCrispText = false;
+        this._forceOverviewCorners = false;
         /** @type {ProcessClassifier|null} */
         this._classifier = null;
     }
@@ -124,7 +125,7 @@ export class Manager {
             this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
 
         this._settingsHandlerIds = [];
-        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text']) {
+        for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text', 'force-overview-corners']) {
             const id = this._settings.connect(`changed::${key}`, () => {
                 this._refreshSettings();
                 this._reconcile();
@@ -196,6 +197,7 @@ export class Manager {
     _refreshSettings() {
         this._rules = null;
         this._preferCrispText = this._settings.get_boolean('prefer-crisp-text');
+        this._forceOverviewCorners = this._settings.get_boolean('force-overview-corners');
     }
 
     /**
@@ -380,6 +382,7 @@ export class Manager {
                 inputs,
                 actor,
                 inOverview: this._inOverview,
+                forceOverviewCorners: this._forceOverviewCorners,
             });
         } catch {
             // Window went away mid-sync; the next signal re-runs it if it comes back.

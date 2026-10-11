@@ -120,6 +120,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
      * @param {boolean} [options.drawClip=true]
      * @param {boolean} [options.drawShadow=false]
      * @param {boolean} [options.maskWouldChangeScreenshot=false]
+     * @param {boolean} [options.forceOverviewCorners=false]
      * @param {boolean} [options.drawClip=true]
      * @param {boolean} [options.drawShadow=false]
      * @returns {object}
@@ -129,6 +130,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         drawClip = true,
         drawShadow = false,
         maskWouldChangeScreenshot = false,
+        forceOverviewCorners = false,
     } = {}) {
         mockWin.get_client_type = () => clientType;
 
@@ -222,6 +224,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             },
             inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1},
             actor: mockActor,
+            forceOverviewCorners,
         });
 
         return {mask, opaque, surface, container, makeContainer, windowSignals, shadowClones, probeCalls: () => probeCalls, deco};
@@ -703,6 +706,13 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeFalse();
         expect(surface.mask).toBeNull();
+
+        // Forcing corners keeps the legacy offscreen clip instead - which never touches that
+        // slot either, so the window's shape survives the overview.
+        const forced = setupMaskHarness({clientType: WindowClientType.X11, forceOverviewCorners: true});
+        forced.deco.setOverviewMode(true);
+        expect(forced.deco.clip.enabled).toBeTrue();
+        expect(forced.surface.mask).toBeNull();
     });
 
     it('skips the mask for a Wayland window whose desktop screenshot it would change', () => {
@@ -711,6 +721,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco.setOverviewMode(true);
         expect(deco.clip.enabled).toBeFalse();
         expect(surface.mask).toBeNull();
+
+        const forced = setupMaskHarness({maskWouldChangeScreenshot: true, forceOverviewCorners: true});
+        forced.deco.setOverviewMode(true);
+        expect(forced.deco.clip.enabled).toBeTrue();
+        expect(forced.surface.mask).toBeNull();
     });
 
     it('applies the shaped-texture mask and the container-opacity bypass on Wayland', () => {
