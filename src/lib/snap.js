@@ -176,22 +176,19 @@ export function setActorBox(box, x1, y1, x2, y2) {
 }
 
 /**
- * Mutates an existing array of 8 Clutter.ActorBox instances in-place to avoid
- * hot-path GC allocations during window paint or resize.
+ * Snaps the eight slice quads to the physical grid as plain rects.
  *
- * Slices are arranged as:
- *   0: top-left corner     1: top-right corner
- *   2: bottom-left corner  3: bottom-right corner
- *   4: top edge            5: bottom edge
- *   6: left edge           7: right edge
+ * The arithmetic lives here rather than next to its box-writing caller so a spec can read the
+ * coordinates as data; `snapSliceBoxesInto` is the Clutter-shaped wrapper over it. The monotonic
+ * clamp is part of the contract: rounding on a cast narrower than two corners can otherwise invert
+ * an edge, and Mutter's float composition would leave a seam.
  *
- * @param {Array<object>} boxes - Pre-allocated array of 8 Clutter.ActorBox objects
  * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
  * @param {number} corner - Corner reach in px (Math.min(corner, width/2, height/2))
  * @param {number} scale - Physical device scale
- * @returns {Array<object>} The mutated boxes
+ * @returns {Array<{x1:number,y1:number,x2:number,y2:number}>} The eight rects, in slice order
  */
-export function snapSliceBoxesInto(boxes, cast, corner, scale) {
+export function snapSliceRects(cast, corner, scale) {
     const width = Math.max(0, cast.width);
     const height = Math.max(0, cast.height);
     const cornerPx = Math.max(0, Math.min(corner, width / 2, height / 2));
@@ -219,31 +216,41 @@ export function snapSliceBoxesInto(boxes, cast, corner, scale) {
     const snappedY2 = Math.max(snappedY1, y2);
     const snappedY3 = Math.max(snappedY2, y3);
 
+    return [
+        {x1: snappedX0, y1: snappedY0, x2: snappedX1, y2: snappedY1},
+        {x1: snappedX2, y1: snappedY0, x2: snappedX3, y2: snappedY1},
+        {x1: snappedX0, y1: snappedY2, x2: snappedX1, y2: snappedY3},
+        {x1: snappedX2, y1: snappedY2, x2: snappedX3, y2: snappedY3},
+        {x1: snappedX1, y1: snappedY0, x2: snappedX2, y2: snappedY1},
+        {x1: snappedX1, y1: snappedY2, x2: snappedX2, y2: snappedY3},
+        {x1: snappedX0, y1: snappedY1, x2: snappedX1, y2: snappedY2},
+        {x1: snappedX2, y1: snappedY1, x2: snappedX3, y2: snappedY2},
+    ];
+}
+
+/**
+ * Mutates an existing array of 8 Clutter.ActorBox instances in-place to avoid
+ * hot-path GC allocations during window paint or resize.
+ *
+ * Slices are arranged as:
+ *   0: top-left corner     1: top-right corner
+ *   2: bottom-left corner  3: bottom-right corner
+ *   4: top edge            5: bottom edge
+ *   6: left edge           7: right edge
+ *
+ * @param {Array<object>} boxes - Pre-allocated array of 8 Clutter.ActorBox objects
+ * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
+ * @param {number} corner - Corner reach in px (Math.min(corner, width/2, height/2))
+ * @param {number} scale - Physical device scale
+ * @returns {Array<object>} The mutated boxes
+ */
+export function snapSliceBoxesInto(boxes, cast, corner, scale) {
+    const rects = snapSliceRects(cast, corner, scale);
+
     // Using box.init(x1, y1, x2, y2) guarantees zero 32-bit float ULP rounding seams
     // at slice junctions in Mutter's C engine ((float)a + (float)(b-a) != (float)b).
-    // 0: top-left [snappedX0, snappedY0, snappedX1, snappedY1]
-    setActorBox(boxes[0], snappedX0, snappedY0, snappedX1, snappedY1);
-
-    // 1: top-right [snappedX2, snappedY0, snappedX3, snappedY1]
-    setActorBox(boxes[1], snappedX2, snappedY0, snappedX3, snappedY1);
-
-    // 2: bottom-left [snappedX0, snappedY2, snappedX1, snappedY3]
-    setActorBox(boxes[2], snappedX0, snappedY2, snappedX1, snappedY3);
-
-    // 3: bottom-right [snappedX2, snappedY2, snappedX3, snappedY3]
-    setActorBox(boxes[3], snappedX2, snappedY2, snappedX3, snappedY3);
-
-    // 4: top edge [snappedX1, snappedY0, snappedX2, snappedY1]
-    setActorBox(boxes[4], snappedX1, snappedY0, snappedX2, snappedY1);
-
-    // 5: bottom edge [snappedX1, snappedY2, snappedX2, snappedY3]
-    setActorBox(boxes[5], snappedX1, snappedY2, snappedX2, snappedY3);
-
-    // 6: left edge [snappedX0, snappedY1, snappedX1, snappedY2]
-    setActorBox(boxes[6], snappedX0, snappedY1, snappedX1, snappedY2);
-
-    // 7: right edge [snappedX2, snappedY1, snappedX3, snappedY2]
-    setActorBox(boxes[7], snappedX2, snappedY1, snappedX3, snappedY2);
+    for (let i = 0; i < rects.length; i++)
+        setActorBox(boxes[i], rects[i].x1, rects[i].y1, rects[i].x2, rects[i].y2);
 
     return boxes;
 }

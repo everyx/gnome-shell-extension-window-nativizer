@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
+import {shadowCastRect, shadowGeometry, shadowLayout, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
 import {snapActorBodyFrame} from '../src/lib/snap.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';
@@ -174,4 +174,43 @@ describe('shadowSlices', () => {
             expect(shown).withContext(`frame ${frame}`).toBeGreaterThanOrEqual(arcReach - 1e-6);
         }
     });
+});
+
+describe('shadowLayout', () => {
+    const zero = {left: 0, top: 0, right: 0, bottom: 0};
+    // The actor is bound to the window actor grown by SHADOW_PAD per side.
+    const actorFor = (width, height) => ({
+        width: width + SHADOW_PAD * 2,
+        height: height + SHADOW_PAD * 2,
+    });
+
+    it('returns the same geometry for the same style and size on a second paint', () => {
+        const style = {radius: 12};
+        const first = shadowLayout(style, actorFor(400, 300), zero, 1);
+        // The actor stores the decision on the style; mimic that and run again.
+        style.cast = Object.freeze(first.cast);
+        style.slices = first.slices;
+        style.corner = first.corner;
+
+        const second = shadowLayout(style, actorFor(400, 300), zero, 1);
+        expect(second.castChanged).toBe(false);
+        expect(second.cast).toEqual(first.cast);
+        expect(second.slices).toBe(first.slices);
+        expect(second.corner).toBe(first.corner);
+    });
+
+    it('changes the cast and the slices when the actor size changes', () => {
+        const style = {radius: 12};
+        const first = shadowLayout(style, actorFor(400, 300), zero, 1);
+        style.cast = Object.freeze(first.cast);
+        style.slices = first.slices;
+        style.corner = first.corner;
+
+        const second = shadowLayout(style, actorFor(500, 300), zero, 1);
+        expect(second.castChanged).toBe(true);
+        expect(second.cast).not.toEqual(first.cast);
+        expect(second.slices).not.toEqual(first.slices);
+        expect(second.slices).toEqual(shadowSlices(shadowGeometry(12), second.cast.width, second.cast.height));
+    });
+
 });

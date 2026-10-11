@@ -109,3 +109,36 @@ export function shadowSlices({corner, window, buffer}, width, height) {
         {x1: right, y1: c, x2: safeW, y2: bottom, s1: innerFar, t1: edge, s2: outerFar, t2: edge + strip},
     ];
 }
+
+/**
+ * Decides the shadow layout for one paint: the cast rect, the slices and the corner, plus
+ * whether the cast moved enough to rebuild the slices.
+ *
+ * `style` carries the previous cast/slices/corner (absent on a fresh style), so the slice
+ * rebuild only runs when the cast moved or the style is new - the cache policy `_relayout`
+ * used to hold. The snapped quads are deliberately not here: only the caller knows whether
+ * it is going to write boxes this paint, so it snaps them from the cast and corner returned.
+ *
+ * @param {{radius:number, cast?:object, slices?:Array<object>, corner?:number}} style
+ * @param {{width:number, height:number}} actorSize - The shadow actor's live size in px
+ * @param {import('../lib/frame.js').Insets} [insets] - Ring the client declared, per side
+ * @param {number} [scale=1.0] - Physical scale factor
+ * @returns {{cast:object, slices:Array<object>, corner:number, castChanged:boolean}}
+ */
+export function shadowLayout(style, actorSize, insets, scale = 1.0) {
+    const cast = shadowCastRect(actorSize, insets, scale);
+    const previous = style.cast;
+    const castChanged = !previous ||
+        previous.x !== cast.x || previous.y !== cast.y ||
+        previous.width !== cast.width || previous.height !== cast.height;
+
+    let slices = style.slices;
+    let corner = style.corner;
+    if (castChanged || !slices) {
+        const geometry = shadowGeometry(style.radius);
+        slices = shadowSlices(geometry, cast.width, cast.height);
+        corner = geometry.corner;
+    }
+
+    return {cast, slices, corner, castChanged};
+}

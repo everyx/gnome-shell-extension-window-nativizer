@@ -8,9 +8,9 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowLayout, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
-import {snapSliceBoxesInto} from '../lib/snap.js';
+import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
 import {getWindowSubpixelOffset} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
@@ -206,24 +206,16 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    // Recomputed from live actor dimensions on each frame to keep shadow in sync during resize.
-    _castRect(scale) {
-        return shadowCastRect({width: this.width, height: this.height}, this._insets ?? ZERO_INSETS, scale ?? this._scale ?? 1.0);
-    }
-
-    // Cache slices per cast rect, and pre-allocated boxes per physical scale.
+    // The layout decision (cast, slices, snapped quads) lives in the pure shadowLayout;
+    // this method owns only the Clutter box objects it reuses per physical scale.
     _relayout(style, scale) {
-        const cast = this._castRect(scale);
-        const previous = style.cast;
-        const castChanged = !previous ||
-            previous.x !== cast.x || previous.y !== cast.y ||
-            previous.width !== cast.width || previous.height !== cast.height;
+        const layout = shadowLayout(style, {width: this.width, height: this.height}, this._insets ?? ZERO_INSETS, scale);
 
-        if (castChanged || !style.slices) {
-            const geometry = shadowGeometry(style.radius);
-            style.slices = shadowSlices(geometry, cast.width, cast.height);
-            style.corner = geometry.corner;
-            style.cast = Object.freeze(cast);
+        const slicesChanged = layout.castChanged || !style.slices;
+        if (slicesChanged) {
+            style.slices = layout.slices;
+            style.corner = layout.corner;
+            style.cast = Object.freeze(layout.cast);
         }
 
         if (!style.boxesByScale)
@@ -238,9 +230,15 @@ export const ShadowActor = GObject.registerClass({
             style.boxesByScale.set(scale, entry);
         }
 
-        if (entry.cast !== style.cast) {
+        // Snap only the boxes this paint writes; a repeat paint of the same scale and cast
+        // allocates nothing.
+        if (slicesChanged || entry.cast !== style.cast) {
             // Snap in actor-local space to keep cutlines invariant during window drag.
-            snapSliceBoxesInto(entry.boxes, style.cast, style.corner, scale);
+            const rects = snapSliceRects(style.cast, style.corner, scale);
+            for (let i = 0; i < entry.boxes.length; i++) {
+                const rect = rects[i];
+                setActorBox(entry.boxes[i], rect.x1, rect.y1, rect.x2, rect.y2);
+            }
             entry.cast = style.cast;
         }
 
