@@ -1,6 +1,7 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
+import {evaluateWindowActions} from '../src/lib/detector.js';
 
 describe('WindowDecoration (lifecycle and orchestration)', () => {
     let mockWin;
@@ -139,9 +140,13 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const mask = {tag: 'rounded'};
         const opaque = {tag: 'opaque'};
         let probeCalls = 0;
+        let opaqueCalls = 0;
         const OverviewMask = {
             buildRoundedMask: () => mask,
-            opaqueMask: () => opaque,
+            opaqueMask: () => {
+                opaqueCalls++;
+                return opaque;
+            },
             maskWouldChangeScreenshot: () => {
                 probeCalls++;
                 return maskWouldChangeScreenshot;
@@ -230,7 +235,33 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             forceOverviewCorners,
         });
 
-        return {mask, opaque, surface, container, makeContainer, windowSignals, shadowClones, probeCalls: () => probeCalls, deco};
+        return {
+            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones,
+            probeCalls: () => probeCalls,
+            opaqueCalls: () => opaqueCalls,
+            deco,
+        };
+    }
+
+    /**
+     * The action set a maximized window gets, built through the detector rather than hand-rolled
+     * so the fixture cannot drift from the real answer: no clip, no shadow, a square style.
+     *
+     * @returns {object}
+     */
+    function maximizedActions() {
+        return evaluateWindowActions({
+            bufferWidth: 800, bufferHeight: 600,
+            frameWidth: 800, frameHeight: 600,
+            isMaximized: true,
+            isX11: false,
+            wmClass: 'test-app',
+        });
+    }
+
+    /** @returns {object} The inputs a pass carries; the ring is flat. */
+    function passInputs() {
+        return {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1};
     }
 
     it('initializes with unattached state view', () => {
@@ -746,6 +777,38 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(surface.mask).toBe(opaque);
         expect(container.opacity).toBe(255);
         expect(deco.clip.enabled).toBeTrue();
+    });
+
+    it('keeps the corner state current on a pass that draws nothing', () => {
+        // A decorated window first, so the previous pass left drawClip true and the overview
+        // would happily mask it.
+        const {deco} = setupMaskHarness({drawClip: true});
+        expect(deco.stateView.drawClip).toBeTrue();
+
+        // Maximized: the same window now draws neither corners nor shadow. The pass must clear
+        // the previous reading, or the overview masks a preview whose desktop is square.
+        deco.apply({actions: maximizedActions(), inputs: passInputs(), actor: mockActor});
+
+        expect(deco.stateView.drawClip).toBeFalse();
+        expect(deco.overview.canApplyMask({
+            drawClip: deco.stateView.drawClip,
+            hasStyle: Boolean(deco._style),
+        })).toBeFalse();
+    });
+
+    it('retires the overview mask when a reconcile makes the window unmaskable', () => {
+        const {mask, opaque, surface, deco, opaqueCalls} = setupMaskHarness();
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(mask);
+        const before = opaqueCalls();
+
+        // Still inside the same overview entry, but now maximized: nothing left to round. The
+        // preview must take the opaque mask back instead of keeping the stale rounded one.
+        deco.apply({actions: maximizedActions(), inputs: passInputs(), actor: mockActor, inOverview: true});
+
+        expect(opaqueCalls()).toBeGreaterThan(before);
+        expect(surface.mask).toBe(opaque);
+        expect(deco.overview.stateView.hasMask).toBeFalse();
     });
 
     it('re-applies the mask when the window moves to another workspace in the overview', () => {
