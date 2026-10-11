@@ -29,6 +29,7 @@ import {
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
 } from './pick.js';
+import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BG_TRANSPARENTIZE} from './inspectorStyle.generated.js';
 import {
@@ -132,33 +133,36 @@ export class InspectorService {
         const actors = getWindowActors();
         // Hoisted out of the loop: the active workspace cannot change while one hit test enumerates windows.
         const activeWorkspace = getActiveWorkspace();
-        for (let i = actors.length - 1; i >= 0; i--) {
+        const candidates = [];
+        for (const winActor of actors) {
             // A window torn down mid-scan must not abort the hit test - or escape a Clutter
             // handler and leave the D-Bus pick unanswered: skip it and keep looking.
             try {
-                const winActor = actors[i];
                 const win = getWindowFromActor(winActor);
-                if (!win || isWindowMinimized(win) || isWindowHidden(win))
-                    continue;
-                if (winActor.is_mapped && !winActor.is_mapped())
-                    continue;
-
-                if (activeWorkspace && !isWindowOnAllWorkspaces(win) && !isWindowLocatedOnWorkspace(win, activeWorkspace))
-                    continue;
-
-                const type = getWindowType(win);
-                if (!isDecoratableWindowType(type))
-                    continue;
-
-                const frame = getWindowFrameRect(win);
-                if (frame && stageX >= frame.x && stageX < frame.x + frame.width &&
-                    stageY >= frame.y && stageY < frame.y + frame.height)
-                    return win;
+                let onAllWorkspaces = false;
+                let onWorkspace = false;
+                if (activeWorkspace && win) {
+                    onAllWorkspaces = isWindowOnAllWorkspaces(win);
+                    if (!onAllWorkspaces)
+                        onWorkspace = isWindowLocatedOnWorkspace(win, activeWorkspace);
+                }
+                candidates.push({
+                    window: win,
+                    minimized: isWindowMinimized(win),
+                    hidden: isWindowHidden(win),
+                    // `is_mapped` may be absent; a present one that returns false is the skip.
+                    mapped: !(winActor?.is_mapped && !winActor.is_mapped()),
+                    onAllWorkspaces,
+                    onWorkspace,
+                    decoratable: isDecoratableWindowType(getWindowType(win)),
+                    frame: getWindowFrameRect(win),
+                });
             } catch {
                 // Deallocated between the actor-list snapshot and these reads.
+                candidates.push(null);
             }
         }
-        return null;
+        return pickTarget(candidates, activeWorkspace, stageX, stageY);
     }
 
     _getExpectedWindowRadius(win) {
