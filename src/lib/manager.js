@@ -40,12 +40,30 @@ function gtypeName(object) {
     return object?.constructor?.$gtype?.name;
 }
 
+/**
+ * A window the manager tracks: the decoration it drives plus the bookkeeping the manager
+ * keeps for it — the signals connected here, the debounce and the first-frame gate. These
+ * belong to the manager's lifecycle, not the decoration's, so they live outside it.
+ */
+class TrackedWindow {
+    /** @param {WindowDecoration} deco */
+    constructor(deco) {
+        this.deco = deco;
+        /** @type {Array<[object, number]>} */
+        this.signals = [];
+        this.reconcileTimeout = null;
+        this.idleId = null;
+        this.firstFrameDone = false;
+        this.actorWired = false;
+    }
+}
+
 export class Manager {
     /** @param {import('../extension.js').default} ext */
     constructor(ext) {
         this._settings = ext.getSettings();
-        /** @type {Map<Meta.Window, WindowDecoration>} */
-        this._windows = new Map();  // Meta.Window -> WindowDecoration
+        /** @type {Map<Meta.Window, TrackedWindow>} */
+        this._windows = new Map();  // Meta.Window -> TrackedWindow
         this._signals = [];
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
@@ -144,9 +162,9 @@ export class Manager {
 
         // Isolate per-window errors so a failure on one window never aborts teardown
         // of remaining windows or drops global signal and state disconnection.
-        for (const deco of this._windows.values()) {
+        for (const record of this._windows.values()) {
             try {
-                deco.destroy();
+                this._destroyWindow(record);
             } catch (e) {
                 logError(e, '[window-nativizer] Failed to tear down a window decoration');
             }
@@ -251,7 +269,8 @@ export class Manager {
             OverviewShadow,
             St,
         });
-        this._windows.set(win, deco);
+        const record = new TrackedWindow(deco);
+        this._windows.set(win, record);
 
         const windowSignals = [
             'position-changed', 'size-changed',
@@ -259,19 +278,19 @@ export class Manager {
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
         ];
         for (const sig of windowSignals)
-            this._connect(deco.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
+            this._connect(record.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
 
         // Focus is not geometry, so it is not debounced: the shadow it selects is the animation
         // the user is watching, and delaying its start by the debounce window is visible against
         // the window's own backdrop change.
-        this._connect(deco.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
+        this._connect(record.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
 
-        this._connect(deco.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
+        this._connect(record.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
 
         const actor = getWindowActor(win);
-        this._wireActorSignals(win, deco, actor);
+        this._wireActorSignals(win, record, actor);
         if (actor && actor.width > 0 && actor.height > 0) {
-            deco.firstFrameDone = true;
+            record.firstFrameDone = true;
             this._reconcileWindow(win);
         } else {
             this._reconcileWindowDebounced(win);
@@ -280,21 +299,21 @@ export class Manager {
 
     /**
      * Connects the actor-driven signals once the window actor exists.
-     * @param {Meta.Window} win @param {WindowDecoration} deco @param {object|null} actor
+     * @param {Meta.Window} win @param {TrackedWindow} record @param {object|null} actor
      */
-    _wireActorSignals(win, deco, actor) {
-        if (!actor || deco.actorWired)
+    _wireActorSignals(win, record, actor) {
+        if (!actor || record.actorWired)
             return;
-        deco.actorWired = true;
+        record.actorWired = true;
 
-        this._connect(deco.signals, actor, 'notify::allocation', () => {
-            if (!deco.firstFrameDone && actor.width > 0 && actor.height > 0) {
-                if (deco.idleId)
-                    GLib.Source.remove(deco.idleId);
+        this._connect(record.signals, actor, 'notify::allocation', () => {
+            if (!record.firstFrameDone && actor.width > 0 && actor.height > 0) {
+                if (record.idleId)
+                    GLib.Source.remove(record.idleId);
                 // Defer to idle: don't mutate actor tree during allocation.
-                deco.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    deco.idleId = null;
-                    deco.firstFrameDone = true;
+                record.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    record.idleId = null;
+                    record.firstFrameDone = true;
                     this._reconcileWindow(win);
                     return GLib.SOURCE_REMOVE;
                 });
@@ -302,14 +321,40 @@ export class Manager {
                 this._reconcileWindowDebounced(win);
             }
         }, true);
-        this._connect(deco.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
-        this._connect(deco.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
+        this._connect(record.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
+        this._connect(record.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
+    }
+
+    /** Cancels the debounce and first-frame idle the manager scheduled for this window. */
+    _dropPendingWindowWork(record) {
+        if (record.idleId) {
+            GLib.Source.remove(record.idleId);
+            record.idleId = null;
+        }
+        if (record.reconcileTimeout) {
+            GLib.Source.remove(record.reconcileTimeout);
+            record.reconcileTimeout = null;
+        }
+    }
+
+    /**
+     * Ends the manager's bookkeeping for a window, then tears down its decoration. The
+     * signals, idle and debounce are the manager's, so this is where they go; the
+     * decoration's own teardown gets the options.
+     * @param {TrackedWindow} record
+     * @param {object} [options]
+     * @param {boolean} [options.keepVisualsForClose=false]
+     */
+    _destroyWindow(record, options = {}) {
+        this._dropPendingWindowWork(record);
+        this._disconnectSignals(record.signals);
+        record.deco.destroy(options);
     }
 
     _forgetWindow(win) {
-        const deco = this._windows.get(win);
-        if (deco)
-            deco.destroy({keepVisualsForClose: true});
+        const record = this._windows.get(win);
+        if (record)
+            this._destroyWindow(record, {keepVisualsForClose: true});
 
         this._windows.delete(win);
         if (this._lastFocusWindow === win)
@@ -342,25 +387,25 @@ export class Manager {
     }
 
     _reconcileWindowDebounced(win) {
-        const deco = this._windows.get(win);
-        if (!deco || deco.reconcileTimeout)
+        const record = this._windows.get(win);
+        if (!record || record.reconcileTimeout)
             return;
-        deco.reconcileTimeout = GLib.timeout_add(
+        record.reconcileTimeout = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, 50, () => {
-                deco.reconcileTimeout = null;
+                record.reconcileTimeout = null;
                 this._reconcileWindow(win);
                 return GLib.SOURCE_REMOVE;
             });
     }
 
     _reconcileWindow(win) {
-        const deco = this._windows.get(win);
-        if (!deco)
+        const record = this._windows.get(win);
+        if (!record)
             return;
 
         try {
             const actor = getWindowActor(win);
-            this._wireActorSignals(win, deco, actor);
+            this._wireActorSignals(win, record, actor);
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
@@ -372,14 +417,14 @@ export class Manager {
             // no reading to undecorate, classification in flight to wait, otherwise apply.
             const outcome = reconcileOutcome(inputs);
             if (outcome === 'undecorate') {
-                deco.undecorate();
+                record.deco.undecorate();
                 return;
             }
             if (outcome === 'defer')
                 return;
             const actions = evaluateWindowActions(inputs);
 
-            deco.apply({
+            record.deco.apply({
                 actions,
                 inputs,
                 actor,
@@ -414,14 +459,14 @@ export class Manager {
 
     /** Synchronize overview mode across all managed window decorations. */
     _syncOverviewDecos() {
-        for (const deco of this._windows.values())
-            deco.setOverviewMode(this._inOverview);
+        for (const record of this._windows.values())
+            record.deco.setOverviewMode(this._inOverview);
     }
 
     _restackActors() {
-        for (const [win, deco] of this._windows) {
+        for (const [win, record] of this._windows) {
             try {
-                deco.restack(getWindowActor(win));
+                record.deco.restack(getWindowActor(win));
             } catch {
                 // Window went away mid-restack; the next restack drops it.
             }
@@ -430,8 +475,8 @@ export class Manager {
 
     /** Back to the arrow on every band; the next motion event over one sets it again. */
     _resetBandCursors() {
-        for (const deco of this._windows.values())
-            deco.resetBandCursor();
+        for (const record of this._windows.values())
+            record.deco.resetBandCursor();
     }
 
     /**
@@ -494,7 +539,16 @@ export class Manager {
      * @returns {object|null}
      */
     stateView(win) {
-        return this._windows.get(win)?.stateView ?? null;
+        const record = this._windows.get(win);
+        if (!record)
+            return null;
+        // firstFrameDone/isPendingReconcile are manager bookkeeping, so the manager adds them
+        // to the decoration's own snapshot rather than the decoration reporting them.
+        return {
+            ...record.deco.stateView,
+            firstFrameDone: record.firstFrameDone,
+            isPendingReconcile: Boolean(record.reconcileTimeout),
+        };
     }
 
     /**
@@ -510,8 +564,8 @@ export class Manager {
      * @returns {boolean}
      */
     get hasPendingWindowReconcile() {
-        for (const deco of this._windows.values()) {
-            if (deco.reconcileTimeout)
+        for (const record of this._windows.values()) {
+            if (record.reconcileTimeout)
                 return true;
         }
         return false;
@@ -523,6 +577,6 @@ export class Manager {
      * @returns {boolean}
      */
     isWindowActivelyClipped(win) {
-        return Boolean(this._windows.get(win)?.isActivelyClipped);
+        return Boolean(this._windows.get(win)?.deco.isActivelyClipped);
     }
 }

@@ -8,8 +8,6 @@
  * Designed with dependency injection for full unit-testability without GNOME Shell private typelibs.
  */
 
-import GLib from 'gi://GLib';
-
 import {resolveClipTarget} from './clipTarget.js';
 import {FLAT_SAFE_INSET} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
@@ -63,13 +61,6 @@ export class WindowDecoration {
 
         this.shadow = null;
         this.resizeBand = null;
-
-        this.idleId = null;
-        this.reconcileTimeout = null;
-
-        this.firstFrameDone = false;
-        this.actorWired = false;
-        this.signals = [];
     }
 
     /** @returns {boolean} Whether the window is actively managed with a rounded clip effect */
@@ -101,8 +92,6 @@ export class WindowDecoration {
      *   isActivelyClipped: boolean,
      *   hasShadow: boolean,
      *   hasResizeBand: boolean,
-     *   firstFrameDone: boolean,
-     *   isPendingReconcile: boolean,
      *   ring: {insets: object|null, clear: boolean, erase: boolean}|null,
      *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasContainer: boolean, isProbed: boolean},
      * }}
@@ -114,8 +103,6 @@ export class WindowDecoration {
             isActivelyClipped: this.isActivelyClipped,
             hasShadow: this.hasShadow,
             hasResizeBand: this.hasResizeBand,
-            firstFrameDone: this.firstFrameDone,
-            isPendingReconcile: Boolean(this.reconcileTimeout),
             ring: this.ring ? {...this.ring} : null,
             overview: this.overview.stateView,
         };
@@ -366,18 +353,6 @@ export class WindowDecoration {
         this.resizeBand?.resetCursor?.();
     }
 
-    /** Drops any scheduled idle or timeout callbacks. */
-    _dropPendingWork() {
-        if (this.idleId) {
-            GLib.Source.remove(this.idleId);
-            this.idleId = null;
-        }
-        if (this.reconcileTimeout) {
-            GLib.Source.remove(this.reconcileTimeout);
-            this.reconcileTimeout = null;
-        }
-    }
-
     /**
      * Completely removes all effects and actors without destroying signal bindings.
      */
@@ -404,33 +379,23 @@ export class WindowDecoration {
 
     /**
      * Phased teardown of the window decoration:
-     * 1. Cancels pending timer/idle callbacks;
-     * 2. Destroys the resize band (preventing stray clicks);
-     * 3. Disconnects all signal listeners;
-     * 4. Detaches and destroys clip and shadow actors (unless keepVisualsForClose is true).
+     * 1. Destroys the resize band (preventing stray clicks);
+     * 2. Drops the overview decoration;
+     * 3. Detaches and destroys clip and shadow actors (unless keepVisualsForClose is true).
+     *
+     * The signals, debounce and first-frame idle are the manager's, torn down there.
      *
      * @param {object} [options]
      * @param {boolean} [options.keepVisualsForClose=false] - Keep clip and shadow attached
      *        so MetaWindowActor's close animation completes without visual pop.
      */
     destroy({keepVisualsForClose = false} = {}) {
-        this._dropPendingWork();
-
         try {
             this.resizeBand?.destroy?.();
         } catch {
             // Already destroyed.
         }
         this.resizeBand = null;
-
-        for (const [obj, id] of this.signals) {
-            try {
-                obj?.disconnect?.(id);
-            } catch {
-                // Object already gone.
-            }
-        }
-        this.signals.length = 0;
 
         this.overview.drop();
 

@@ -1774,7 +1774,7 @@ FAULT_STATE="$(shell_eval '
     const manager = ext._manager;
     manager._windows.set(
         {get_compositor_private() { throw new Error("injected teardown fault"); }},
-        {signals: []});
+        {signals: [], deco: {destroy() { throw new Error("injected teardown fault"); }}});
     let threw = false;
     try {
         ext.disable();
