@@ -121,14 +121,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
      * @param {boolean} [options.drawShadow=false]
      * @param {boolean} [options.maskWouldChangeScreenshot=false]
      * @param {boolean} [options.forceOverviewCorners=false]
-     * @param {boolean} [options.drawClip=true]
-     * @param {boolean} [options.drawShadow=false]
+     * @param {boolean} [options.ringClear=false]
+     * @param {object} [options.insets] - Declared ring, per side
      * @returns {object}
      */
     function setupMaskHarness({
         clientType = WindowClientType.WAYLAND,
         drawClip = true,
         drawShadow = false,
+        ringClear = false,
+        insets = {left: 0, top: 0, right: 0, bottom: 0},
         maskWouldChangeScreenshot = false,
         forceOverviewCorners = false,
     } = {}) {
@@ -213,16 +215,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             OverviewMask,
             OverviewShadow: FakeOverviewShadow,
         });
+        const flat = !(insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0);
         deco.apply({
             actions: {
                 drawClip,
-                clearRing: false,
                 drawRing: false,
                 drawShadow,
                 drawResize: false,
+                ring: {clear: ringClear, safeInset: flat && (drawClip || drawShadow)},
                 style: {radius: 12, outline: null, shadows: []},
             },
-            inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1},
+            inputs: {insets, monitorScale: 1},
             actor: mockActor,
             forceOverviewCorners,
         });
@@ -247,12 +250,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasClip: false,
             drawClip: false,
             isActivelyClipped: false,
-            clearRing: false,
-            effectiveClearRing: false,
             hasShadow: false,
             hasResizeBand: false,
             firstFrameDone: false,
             isPendingReconcile: false,
+            ring: null,
         });
     });
 
@@ -268,13 +270,13 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const insets = {left: 10, top: 10, right: 10, bottom: 10};
 
         // Attach clip in normal mode
-        deco._syncClip(true, false, mockActor, insets, false);
+        deco._syncClip(true, mockActor, insets, false);
         expect(deco.hasClip).toBeTrue();
         expect(deco.clip.enabled).toBeTrue();
         expect(mockActor.effects).toContain(deco.clip);
 
         // Detach clip
-        deco._syncClip(false, false, mockActor, null, false);
+        deco._syncClip(false, mockActor, null, false);
         expect(deco.hasClip).toBeFalse();
         expect(mockActor.effects.length).toBe(0);
 
@@ -283,7 +285,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // instead of an offscreen FBO.
         deco.drawClip = true;
         deco._style = {radius: 12, outline: null, shadows: []};
-        deco._syncClip(true, false, mockActor, insets, true);
+        deco._syncClip(true, mockActor, insets, true);
         expect(deco.hasClip).toBeTrue();
         expect(deco.clip.enabled).toBeFalse();
     });
@@ -350,10 +352,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         const actions = {
             drawClip: true,
-            clearRing: false,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
+            ring: {clear: false, safeInset: false},
             style: {
                 radius: 12,
                 outline: null,
@@ -378,6 +380,27 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.shadow.scale).toBe(1);
     });
 
+    it('resolves the ring plan once and exposes it through the state view', () => {
+        // A flat ringless window: the clip sits 1px inside to excise the client's rectangular
+        // border, so the plan erases the ring while the client declared none to push.
+        const flat = setupMaskHarness({drawClip: true, drawShadow: true});
+        expect(flat.deco.stateView.ring).toEqual({
+            insets: FLAT_SAFE_INSET,
+            clear: false,
+            erase: true,
+        });
+
+        // A declared ring with a shadow: the shadow is ours, so the ring is both erased and
+        // the client's ring is true (the clip pushes the stroke), and the body stays on the declared insets.
+        const declared = {left: 12, top: 12, right: 12, bottom: 12};
+        const ringed = setupMaskHarness({drawClip: true, drawShadow: true, ringClear: true, insets: declared});
+        expect(ringed.deco.stateView.ring).toEqual({
+            insets: declared,
+            clear: true,
+            erase: true,
+        });
+    });
+
     it('applies overview mode settings through apply() contract', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
@@ -390,10 +413,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const outline = {color: [1, 1, 1], alpha: 0.1};
         const actions = {
             drawClip: true,
-            clearRing: true,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
+            ring: {clear: true, safeInset: false},
             style: {
                 radius: 12,
                 outline,
@@ -418,7 +441,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.outline).toEqual(outline);
     });
 
-    it('forces clearRing true on windows without shadow insets (e.g. WeChat) to eliminate outer corner fringe', () => {
+    it('forces erase true on windows without shadow insets (e.g. WeChat) to eliminate outer corner fringe', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
             display: mockDisplay,
@@ -430,10 +453,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const outline = {color: [255, 255, 255], alpha: 0.07};
         const actions = {
             drawClip: true,
-            clearRing: false, // detector reports false because no client shadow exists to clear
             drawRing: false,
             drawShadow: true,
             drawResize: true,
+            ring: {clear: false, safeInset: true},
             style: {radius: 15, outline, shadows: []},
         };
         const zeroInsets = {left: 0, top: 0, right: 0, bottom: 0};
@@ -444,17 +467,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.hasClip).toBeTrue();
-        // WindowDecoration retains clearRing as false (client declared no ring)
-        // while computing effectiveClearRing as true so shader erases outer rectangular corners.
-        // It must leave clearStroke false so shader preserves 1:1 sampling without pushing coords inward.
+        // The client declared no ring, so the plan keeps `clear` false while `erase` is true so
+        // the shader erases the outer rectangular corners. It must leave clearStroke false so the
+        // shader preserves 1:1 sampling without pushing coords inward.
         // Flat ringless windows use FLAT_SAFE_INSET (1px inward) to excise rectangular client borders,
         // while retaining Adwaita inner outline on desktop to achieve seamless native decoration consistency.
-        expect(deco.clearRing).toBeFalse();
-        expect(deco.effectiveClearRing).toBeTrue();
+        expect(deco.ring.clear).toBeFalse();
+        expect(deco.ring.erase).toBeTrue();
         expect(deco.clipInsets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.insets).toEqual(FLAT_SAFE_INSET);
         expect(deco.shadow.insets).toEqual(FLAT_SAFE_INSET);
-        expect(deco.clip.params.clearRing).toBeTrue();
+        expect(deco.clip.params.erase).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
     });
@@ -470,10 +493,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         const actions = {
             drawClip: true,
-            clearRing: true,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
+            ring: {clear: true, safeInset: false},
             style: {radius: 15, outline: null, shadows: []},
         };
         const declaredInsets = {left: 26, top: 23, right: 26, bottom: 29};
@@ -488,7 +511,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // where libadwaita puts the window's own edge pixel, and exposes the shader's inward bleed.
         expect(deco.clipInsets).toEqual(declaredInsets);
         expect(deco.clip.params.insets).toEqual(declaredInsets);
-        expect(deco.clip.params.clearRing).toBeTrue();
+        expect(deco.clip.params.erase).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeTrue();
         expect(deco.shadow.insets).toEqual(declaredInsets);
     });
@@ -503,7 +526,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         const insets = {left: 10, top: 10, right: 10, bottom: 10};
-        deco._syncClip(true, false, mockActor, insets);
+        deco._syncClip(true, mockActor, insets);
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
@@ -536,7 +559,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         const insets = {left: 10, top: 10, right: 10, bottom: 10};
-        deco._syncClip(true, false, mockActor, insets);
+        deco._syncClip(true, mockActor, insets);
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
@@ -576,12 +599,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasClip: false,
             drawClip: false,
             isActivelyClipped: false,
-            clearRing: false,
-            effectiveClearRing: false,
             hasShadow: false,
             hasResizeBand: false,
             firstFrameDone: false,
             isPendingReconcile: false,
+            ring: null,
         });
     });
 
@@ -598,10 +620,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const outline = {color: [1, 1, 1], alpha: 0.1};
         const actions = {
             drawClip: true,
-            clearRing: true,
             drawRing: false,
             drawShadow: true,
             drawResize: true,
+            ring: {clear: true, safeInset: false},
             style: {radius: 12, outline, shadows: []},
         };
         const inputs = {insets, monitorScale: 1};
@@ -619,16 +641,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.outline).toEqual(outline);
         expect(deco.clip.params.clearStroke).toBeTrue();
 
-        // For flat ringless windows (clearRing=false), outline is active on desktop and suppressed in overview
-        deco.apply({actions: {...actions, clearRing: false}, inputs, actor: mockActor});
+        // For flat ringless windows (ring.clear=false), outline is active on desktop and suppressed in overview
+        deco.apply({actions: {...actions, ring: {...actions.ring, clear: false}}, inputs, actor: mockActor});
         expect(deco.clip.params.outline).toEqual(outline);
         deco.setOverviewMode(true);
         expect(deco.clip.params.outline).toBeNull();
         deco.setOverviewMode(false);
         expect(deco.clip.params.outline).toEqual(outline);
 
-        // On ringed windows (clearRing=true), clearStroke is suppressed in overview.
-        const ringedActions = {...actions, clearRing: true};
+        // On ringed windows (ring.clear=true), clearStroke is suppressed in overview.
+        const ringedActions = {...actions, ring: {...actions.ring, clear: true}};
         deco.apply({actions: ringedActions, inputs, actor: mockActor});
         expect(deco.clip.params.clearStroke).toBeTrue();
 

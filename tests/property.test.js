@@ -9,11 +9,12 @@
 
 import {
     SnapDirection,
+    snapActorBodyFrame,
     snapCoordToGrid,
     snapRectToGrid,
     snapSliceBoxesInto,
 } from '../src/lib/snap.js';
-import {bodyFrame, frameFromInsets, insetsFromRects} from '../src/lib/frame.js';
+import {frameFromInsets, insetsFromRects} from '../src/lib/frame.js';
 import {shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
 import {EFFECT_PADDING_EXTRA} from '../src/lib/clutterEffectPadding.generated.js';
 import {
@@ -118,17 +119,20 @@ describe('property: snap', () => {
 });
 
 describe('property: frame', () => {
-    it('bodyFrame never exceeds the actor and never goes negative', () => {
+    it('snapActorBodyFrame never exceeds the actor and never goes negative', () => {
         const rng = mulberry32(0x5eed);
         for (let i = 0; i < ITER; i++) {
-            const size = {width: range(rng, 0, 1000), height: range(rng, 0, 1000)};
+            // The snap rounds to the physical grid, so a whole-pixel actor at scale 1 is where
+            // the logical body and the physical one coincide; a fractional actor can legitimately
+            // grow to the rounded-up pixel, which is not an overrun.
+            const size = {width: Math.round(range(rng, 0, 1000)), height: Math.round(range(rng, 0, 1000))};
             const insets = {
                 left: range(rng, 0, 250),
                 top: range(rng, 0, 250),
                 right: range(rng, 0, 250),
                 bottom: range(rng, 0, 250),
             };
-            const body = bodyFrame(size, insets);
+            const body = snapActorBodyFrame(size, insets, 1);
 
             expect(body.width).toBeGreaterThanOrEqual(0);
             expect(body.height).toBeGreaterThanOrEqual(0);

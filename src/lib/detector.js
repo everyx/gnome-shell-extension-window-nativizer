@@ -235,9 +235,9 @@ export {isWindowMaximized, isWindowTiled};
  * @typedef {object} WindowActions
  * @property {boolean} drawShadow
  * @property {boolean} drawClip
- * @property {boolean} clearRing
  * @property {boolean} drawRing
  * @property {boolean} drawResize
+ * @property {{clear: boolean, safeInset: boolean}} ring
  * @property {object} style
  * @property {string} reason
  */
@@ -441,12 +441,23 @@ export function evaluateWindowActions({
     const drawRing = Boolean(style.border) && (clip || shadow || drawResize);
 
     // Ring is ours to clear exactly when the ring we draw is ours.
-    const clearRing = ownRing && (shadow || drawRing);
+    const clear = ownRing && (shadow || drawRing);
+
+    // The ring, read once: whether it is ours to take over, whether it has to be erased, and
+    // whether the clip has to sit 1px inside because the client painted a border up to the actor
+    // edge instead of declaring a ring. `ownRing` folds in the two-sided totals a caller without
+    // per-side insets can still give us, so flatness is read from the side insets themselves.
+    const flat = !insets ||
+        (insets.left <= 0 && insets.top <= 0 && insets.right <= 0 && insets.bottom <= 0);
+    const ring = {
+        clear,
+        safeInset: flat && (clip || shadow),
+    };
 
     let reason = rule
         ? `rule-applied(${wmClass}:${buildRuleState(rule)})`
         : baseline.reason;
-    if (clearRing)
+    if (clear)
         reason = `ring-cleared(${reason})`;
     if (shadowBeforeTiling && !shadow)
         reason = `tile-match(shadow-off,${reason})`;
@@ -456,13 +467,14 @@ export function evaluateWindowActions({
     // no axis (dock, desktop) gets neither.
     if (!eligibility.eligible) {
         return {
-            drawShadow: false, drawClip: false, clearRing: false, drawRing: false,
+            drawShadow: false, drawClip: false, drawRing: false,
             drawResize: isDecoratableWindowType(windowType) && drawResize,
+            ring: {...ring, clear: false, safeInset: false},
             style, reason: eligibility.reason,
         };
     }
 
-    return {drawShadow: shadow, drawClip: clip, clearRing, drawRing, drawResize, style, reason};
+    return {drawShadow: shadow, drawClip: clip, drawRing, drawResize, ring, style, reason};
 }
 
 /**

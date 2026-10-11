@@ -272,7 +272,7 @@ describe('declaresOwnShadow', () => {
             wmClass: 'navicat',
         });
         expect(res.drawShadow).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-ssd-frame)');
     });
@@ -420,7 +420,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-ssd-frame)');
     });
 
@@ -457,7 +457,7 @@ describe('evaluateWindowActions', () => {
             frameWidth: 1148, frameHeight: 844,
         });
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(4.0x4.0))');
     });
@@ -466,12 +466,12 @@ describe('evaluateWindowActions', () => {
         // A `>= 0` reading would make every bare window "declared", and on XWayland that
         // would put our shadow on top of Mutter's native one.
         const x11 = evaluateWindowActions({...baseWin, isX11: true, wmClass: 'wps'});
-        expect(x11.clearRing).toBeFalse();
+        expect(x11.ring.clear).toBeFalse();
         expect(x11.drawShadow).toBeFalse();
         expect(x11.reason).toBe('x11-mutter-native-shadow');
 
         const wayland = evaluateWindowActions({...baseWin, wmClass: 'bare-app'});
-        expect(wayland.clearRing).toBeFalse();
+        expect(wayland.ring.clear).toBeFalse();
         expect(wayland.drawShadow).toBeTrue();
         expect(wayland.reason).toBe('no-csd(0.0x0.0)');
     });
@@ -484,7 +484,7 @@ describe('evaluateWindowActions', () => {
             insets: {left: 0, right: 0, top: 12, bottom: 12},
         });
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(0.0x12.0))');
     });
@@ -499,7 +499,7 @@ describe('evaluateWindowActions', () => {
             insets: {left: 0, right: 0, top: 24, bottom: 24},
         });
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(0.0x24.0))');
     });
@@ -513,7 +513,7 @@ describe('evaluateWindowActions', () => {
             insets: {left: 0, right: 24, top: 0, bottom: 24},
         });
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(24.0x24.0))');
     });
@@ -528,7 +528,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
-        expect(res.clearRing).toBeFalse();
+        expect(res.ring.clear).toBeFalse();
         expect(res.drawResize).toBeTrue();
         expect(res.reason).toBe('rule-applied(custom-tool:corners,shadow)');
     });
@@ -541,7 +541,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeFalse();
-        expect(res.clearRing).toBeFalse();
+        expect(res.ring.clear).toBeFalse();
         expect(res.drawResize).toBeFalse();
         expect(res.reason).toBe('rule-applied(overlay-app:corners,shadow,resize)');
     });
@@ -736,7 +736,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({...ringedWindow, wmClass: 'gtk4-app'});
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeTrue();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.reason).toMatch(/^ring-cleared\(has-csd\(/);
     });
 
@@ -745,7 +745,7 @@ describe('evaluateWindowActions', () => {
             ...ringedWindow,
             wmClass: 'gtk4-app',
             rules: {[buildRuleKey('gtk4-app', {hasRing: true})]: state},
-        }).clearRing;
+        }).ring.clear;
 
         // The takeover makes the shadow ours, so reversing the shadow retracts it and the
         // ring stays the client's. Reversing both drops the takeover and then reverses the
@@ -766,7 +766,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
-        expect(res.clearRing).toBeFalse();
+        expect(res.ring.clear).toBeFalse();
         expect(res.reason).toBe('rule-applied(gtk4-app:corners)');
     });
 
@@ -780,7 +780,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawShadow).toBeTrue();
         expect(res.drawClip).toBeFalse();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
         expect(res.reason).toBe('ring-cleared(rule-applied(gtk4-app:corners,shadow))');
     });
 
@@ -830,7 +830,7 @@ describe('evaluateWindowActions', () => {
                 ...extra,
             });
             expect(res.drawRing).toBe(expected);
-            expect(res.clearRing).toBe(expected);
+            expect(res.ring.clear).toBe(expected);
         }
     });
 
@@ -846,7 +846,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
-        expect(res.clearRing).toBeTrue();
+        expect(res.ring.clear).toBeTrue();
     });
 
     it('crisp text on a has-csd window leaves it entirely alone', () => {
@@ -860,7 +860,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
-        expect(res.clearRing).toBeFalse();
+        expect(res.ring.clear).toBeFalse();
     });
 
     it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {

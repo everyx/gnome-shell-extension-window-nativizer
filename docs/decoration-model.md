@@ -159,6 +159,11 @@ the client drew its frame there. Measured: WeChat's CEF window (XWayland, Depth 
 extents `4,4,4,4`) paints a 1px decorated edge inside its ring, which clearing removes
 along with the square corner it was drawn for.
 
+The reading is resolved once, in the detector, into a single plan: the insets the body
+uses, whether the ring is erased, and whether the stroke is pushed. The clip, the shadow and
+the overview mask each read that plan instead of re-deriving it, and `hasPositiveInsets`'
+second reading of the same insets is gone.
+
 Two consequences worth knowing. The shadow is cast by the **body**, not by the actor
 (the shadow layout in `shadowActor.js`), or ours would be laid out around the ring the
 client reserved - the same distinction the clip makes with the body rectangle. Both rectangles are
@@ -530,7 +535,7 @@ drawn on every edge, so the client's own ring is cleared for ours to replace. A 
 drops the shadow decision, never the ring we draw.
 High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
 and deepens the outline from 7% to 30%.
-Flat ringless windows (`hasRing=false`, `clearRing=false`, such as WeChat) apply a 1px safe inward inset (`FLAT_SAFE_INSET`) to excise client-drawn rectangular borders outside the clip body. With the client's rigid rectangular stroke excised, the window receives the native Adwaita inner white outline and box shadow across its entire perimeter, eliminating double-line stroke artifacts, corner seam gaps, and cut-point white fringes.
+Flat ringless windows (`hasRing=false`, `ring.clear=false`, such as WeChat) apply a 1px safe inward inset (`FLAT_SAFE_INSET`) to excise client-drawn rectangular borders outside the clip body. With the client's rigid rectangular stroke excised, the window receives the native Adwaita inner white outline and box shadow across its entire perimeter, eliminating double-line stroke artifacts, corner seam gaps, and cut-point white fringes.
 
 ## What the decoration costs
 
