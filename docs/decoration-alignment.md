@@ -20,7 +20,10 @@ Two things are drawn, and they have different mechanisms:
 | Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare X11 keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
-can never contain the shadow. Only a full-desktop screenshot shows both.
+can never contain the shadow. Only a full-desktop screenshot shows both. The clip, on the
+other hand, is always in the shot - it paints the actor's effect chain, so the corners come
+out transparent in place of the client's own frame (`decoration-model.md` § Known boundaries
+has the mechanism and the numbers).
 
 ## The measurement that works
 

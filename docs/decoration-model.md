@@ -440,6 +440,18 @@ Wayland is always alpha and always composited, and on X11 Mutter itself owns tha
 alpha is a property of the display rather than of a window. The solid branch is dead code for every
 window this extension manages, so there is nothing to detect and nothing to approximate.
 
+**Window screenshots.** The rounded clip is an effect on the window actor, and a window-scoped
+screenshot (`Meta.WindowActor.paint_to_bitmap`, the offscreen render the screenshot UI and the
+window menu both ask for) paints that actor's effect chain - so our corners are in the shot. The
+four corner pixels come out fully transparent, where the client's own frame would have shown,
+because the clip erases what falls outside the arc. Measured on a GTK3 window over a white
+backdrop: 5383 pixels below full alpha with the extension enabled against 680 with it disabled, and
+the top-left pixel `(250,250,251,255)` becomes `(0,0,0,0)`. Nothing in the paint tells the effect
+it is rendering for a readback rather than for the screen, so leaving it out of the shot would mean
+teaching every consumer of that offscreen render to paint the window square. A full-desktop
+screenshot is unaffected: it goes through the stage, and the corners composite onto the desktop
+exactly as they do on screen.
+
 
 What this model cannot do, stated rather than papered over. Most of these follow from
 the reading being one-sided; the last is simply not verified yet.
