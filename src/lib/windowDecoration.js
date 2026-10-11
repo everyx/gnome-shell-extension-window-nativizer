@@ -158,8 +158,9 @@ export class WindowDecoration {
 
         this._syncResizeBand(actions.drawResize, inputs, this.ring.insets, winActor);
 
-        if (this.clip || this.shadow)
-            this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale);
+        // The style is this pass's own reading of the corner state; the overview re-reads it, so a
+        // pass that draws nothing (maximized, fullscreen) must still clear the previous one's.
+        this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale);
 
         // _syncClip only runs the overview transition when the clip's presence changed, so the
         // style this pass produced - and a desktop pass that has to take the clip back - is
@@ -305,7 +306,9 @@ export class WindowDecoration {
     _applyStyle(style, insets, drawClip, scale = 1.0) {
         this._style = style;
         this._scale = scale;
-        this.drawClip = Boolean(drawClip && style.radius > 0);
+        // Record what is drawn, not what was asked: a pass whose insets are null has no clip to
+        // attach, so the overview must not later mask a corner the desktop never shows.
+        this.drawClip = Boolean(this.clip && drawClip && style.radius > 0);
 
         this._syncClipParams();
         if (this.shadow) {
