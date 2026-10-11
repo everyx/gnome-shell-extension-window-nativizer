@@ -1,7 +1,7 @@
 /**
  * Frame geometry: the body inside the actor that carries it. The actor is the client's
- * buffer — body plus the ring the client reserved for its own shadow — so both the clip
- * effect and the shadow actor place their geometry with this.
+ * buffer — body plus the ring the client reserved for its own shadow — and both the clip
+ * effect and the shadow actor place the body with `frameFromInsets`.
  */
 
 /** No ring: the actor is the body. Used as the fallback when no margin was readable. */
@@ -29,24 +29,6 @@ export function frameFromInsets(size, insets = ZERO_INSETS) {
 }
 
 /**
- * The body to paint for an actor of `size`. Falls back to the whole actor when the ring
- * would leave no body - the insets are debounced, the actor is not, so the caller must keep
- * painting instead of skipping the frame.
- * @param {{width: number, height: number}} size - Actor size, logical px
- * @param {Insets} [insets=ZERO_INSETS] - Ring the client declared, per side
- * @returns {{x: number, y: number, width: number, height: number}} Body in actor coords
- */
-export function bodyFrame(size, insets = ZERO_INSETS) {
-    const frame = frameFromInsets(size, insets);
-    if (frame.width > 0 && frame.height > 0)
-        return frame;
-    return frameFromInsets({
-        width: Math.max(0, size?.width ?? 0),
-        height: Math.max(0, size?.height ?? 0),
-    }, ZERO_INSETS);
-}
-
-/**
  * Computes per-side insets between buffer and frame rect (`buffer_rect - frame_rect`).
  * Returns null when the frame does not fit within the buffer.
  * @param {{x: number, y: number, width: number, height: number}} buffer
@@ -69,13 +51,3 @@ export function insetsFromRects(buffer, frame) {
 
     return insets;
 }
-
-/**
- * Whether the insets represent any positive margin.
- * @param {Insets|null} insets
- * @returns {boolean}
- */
-export function hasPositiveInsets(insets) {
-    return Boolean(insets && (insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0));
-}
-

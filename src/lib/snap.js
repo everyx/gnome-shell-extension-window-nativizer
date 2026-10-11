@@ -4,6 +4,7 @@
  * Snapping rects and cutlines eliminates fractional scaling seams and blur.
  */
 
+import {frameFromInsets, ZERO_INSETS} from './frame.js';
 
 export const SNAP_EPSILON = 0.001;
 
@@ -110,20 +111,21 @@ export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
  * @returns {{x: number, y: number, width: number, height: number}}
  */
 export function snapActorBodyFrame(bufferSize, insets, scale) {
+    if (!(scale > 0) || !Number.isFinite(scale)) {
+        const size = {
+            width: bufferSize?.width ?? 0,
+            height: bufferSize?.height ?? 0,
+        };
+        const frame = frameFromInsets(size, insets ?? ZERO_INSETS);
+        if (frame.width > 0 && frame.height > 0)
+            return frame;
+        return {x: 0, y: 0, width: Math.max(0, size.width), height: Math.max(0, size.height)};
+    }
+
     const leftMargin = insets?.left ?? 0;
     const topMargin = insets?.top ?? 0;
     const rightMargin = insets?.right ?? 0;
     const bottomMargin = insets?.bottom ?? 0;
-
-    if (!(scale > 0) || !Number.isFinite(scale)) {
-        const w = bufferSize?.width ?? 0;
-        const h = bufferSize?.height ?? 0;
-        const bodyW = w - leftMargin - rightMargin;
-        const bodyH = h - topMargin - bottomMargin;
-        if (bodyW > 0 && bodyH > 0)
-            return {x: leftMargin, y: topMargin, width: bodyW, height: bodyH};
-        return {x: 0, y: 0, width: Math.max(0, w), height: Math.max(0, h)};
-    }
 
     const physW = Math.round(bufferSize.width * scale);
     const physH = Math.round(bufferSize.height * scale);

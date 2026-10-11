@@ -579,4 +579,11 @@ describe('snapActorBodyFrame', () => {
         const frame = snapActorBodyFrame(tinyBuffer, largeInsets, 1.0);
         expect(frame).toEqual({x: 0, y: 0, width: 30, height: 30});
     });
+
+    it('falls back to the whole actor when only one axis overruns', () => {
+        expect(snapActorBodyFrame({width: 20, height: 100}, {left: 12, top: 0, right: 12, bottom: 0}, 1.0))
+            .toEqual({x: 0, y: 0, width: 20, height: 100});
+        expect(snapActorBodyFrame({width: 100, height: 20}, {left: 0, top: 12, right: 0, bottom: 12}, 1.0))
+            .toEqual({x: 0, y: 0, width: 100, height: 20});
+    });
 });

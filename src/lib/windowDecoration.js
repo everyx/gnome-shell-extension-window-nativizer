@@ -11,7 +11,7 @@
 import GLib from 'gi://GLib';
 
 import {resolveClipTarget} from './clipTarget.js';
-import {hasPositiveInsets, FLAT_SAFE_INSET, ZERO_INSETS} from './frame.js';
+import {FLAT_SAFE_INSET, ZERO_INSETS} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {resolveMonitorBounds} from './window.js';
 import {WindowClientType} from './mutterRules.generated.js';
@@ -64,9 +64,9 @@ export class WindowDecoration {
         this.clip = null;
         this.clipTarget = null;
         this.clipInsets = null;
-        this.clearRing = false;
-        this.effectiveClearRing = false;
         this.drawClip = false;
+        // The resolved ring plan for the current pass; null until the first apply().
+        this.ring = null;
 
         this._style = null;
         this._scale = 1.0;
@@ -122,12 +122,11 @@ export class WindowDecoration {
      *   hasClip: boolean,
      *   drawClip: boolean,
      *   isActivelyClipped: boolean,
-     *   clearRing: boolean,
-     *   effectiveClearRing: boolean,
      *   hasShadow: boolean,
      *   hasResizeBand: boolean,
      *   firstFrameDone: boolean,
      *   isPendingReconcile: boolean,
+     *   ring: {insets: object|null, clear: boolean, erase: boolean}|null,
      * }}
      */
     get stateView() {
@@ -135,12 +134,11 @@ export class WindowDecoration {
             hasClip: Boolean(this.clip),
             drawClip: this.drawClip,
             isActivelyClipped: this.isActivelyClipped,
-            clearRing: this.clearRing,
-            effectiveClearRing: this.effectiveClearRing,
             hasShadow: this.hasShadow,
             hasResizeBand: this.hasResizeBand,
             firstFrameDone: this.firstFrameDone,
             isPendingReconcile: Boolean(this.reconcileTimeout),
+            ring: this.ring ? {...this.ring} : null,
         };
     }
 
@@ -177,21 +175,25 @@ export class WindowDecoration {
         const rawInsets = inputs.insets;
         const scale = inputs?.monitorScale ?? 1.0;
 
-        const isFlat = !hasPositiveInsets(rawInsets);
-        const decorInsets = isFlat && (actions.drawClip || actions.drawShadow)
-            ? FLAT_SAFE_INSET
-            : rawInsets;
+        // One plan per pass: the insets the body uses, and the two meanings the clip shader gives
+        // the ring. Every consumer below reads this instead of recombining the detector's answer.
+        this.ring = {
+            insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
+                ? FLAT_SAFE_INSET : rawInsets,
+            clear: actions.ring.clear,
+            erase: actions.ring.clear || actions.ring.safeInset,
+        };
 
-        this._syncClip(actions.drawClip || actions.clearRing, actions.clearRing, clipTarget, decorInsets, inOverview, isFlat);
+        this._syncClip(actions.drawClip || actions.ring.clear, clipTarget, this.ring.insets, inOverview);
 
         // Draw shadow actor if tiled ring is needed, or if window needs drop shadow without deferring to client.
-        const deferToClientShadow = actions.clearRing && !this.clip;
+        const deferToClientShadow = actions.ring.clear && !this.clip;
         this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
 
-        this._syncResizeBand(actions.drawResize, inputs, decorInsets, winActor);
+        this._syncResizeBand(actions.drawResize, inputs, this.ring.insets, winActor);
 
         if (this.clip || this.shadow)
-            this._applyStyle(actions.style, decorInsets, actions.drawClip, scale);
+            this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale);
 
         // _syncClip only runs the overview transition when the clip's presence changed, so the
         // style this pass produced - and a desktop pass that has to take the clip back - is
@@ -364,7 +366,7 @@ export class WindowDecoration {
             frameW: (actorWidth - insets.left - insets.right) * bufferScale * maskScale,
             frameH: (actorHeight - insets.top - insets.bottom) * bufferScale * maskScale,
             radius: (this._style.radius ?? 0) * bufferScale * maskScale,
-            clearRing: this.effectiveClearRing,
+            clearRing: this.clip ? Boolean(this.ring?.erase) : false,
         });
         if (!mask)
             return;
@@ -497,13 +499,11 @@ export class WindowDecoration {
 
     /**
      * @param {boolean} wantEffect
-     * @param {boolean} clearRing
-     * @param {Clutter.Actor|null} clipTarget
-     * @param {import('./frame.js').Insets|null} insets
+     * @param {Clutter.Actor|null} [clipTarget=null]
+     * @param {import('./frame.js').Insets|null} [insets=null]
      * @param {boolean} [inOverview=false]
-     * @param {boolean} [isFlat=false]
      */
-    _syncClip(wantEffect, clearRing = false, clipTarget = null, insets = null, inOverview = false, isFlat = false) {
+    _syncClip(wantEffect, clipTarget = null, insets = null, inOverview = false) {
         // Clip effect requires valid insets (null indicates frame does not fit inside buffer).
         const wanted = wantEffect && Boolean(insets);
         const hasClip = Boolean(this.clip);
@@ -528,8 +528,6 @@ export class WindowDecoration {
             }
         }
         this.clipInsets = this.clip ? insets : null;
-        this.clearRing = Boolean(clearRing);
-        this.effectiveClearRing = this.clip ? Boolean(clearRing || isFlat) : false;
         // Only a clip appearing or going away changes the overview's options. While the overview
         // is open, apply() syncs the rest once the style is current.
         if (wanted !== hasClip)
@@ -630,8 +628,8 @@ export class WindowDecoration {
                 insets: this.clipInsets,
                 radius: this.drawClip ? this._style.radius : 0,
                 outline: this.drawClip && !this._inOverview ? this._style.outline : null,
-                clearRing: this.effectiveClearRing,
-                clearStroke: !this._inOverview && this.clearRing,
+                erase: Boolean(this.ring?.erase),
+                clearStroke: !this._inOverview && Boolean(this.ring?.clear),
                 scale: this._scale,
             });
         }
@@ -674,6 +672,7 @@ export class WindowDecoration {
     undecorate() {
         this.drawClip = false;
         this._style = null;
+        this.ring = null;
         this._dropOverview();
         this._syncClip(false);
         this._syncShadow(false);

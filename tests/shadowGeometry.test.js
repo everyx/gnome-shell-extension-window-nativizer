@@ -4,7 +4,7 @@
  */
 
 import {shadowCastRect, shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
-import {bodyFrame} from '../src/lib/frame.js';
+import {snapActorBodyFrame} from '../src/lib/snap.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';
 
@@ -58,7 +58,7 @@ describe('shadowCastRect', () => {
             };
             // The body the clip draws, moved into the shadow actor's coordinates: the actor is
             // bound to the window actor SHADOW_PAD out, so the body sits SHADOW_PAD in from zero.
-            const body = bodyFrame(buffer, declared);
+            const body = snapActorBodyFrame(buffer, declared, 1);
             const frameInActor = {
                 x: body.x + SHADOW_PAD,
                 y: body.y + SHADOW_PAD,
@@ -77,7 +77,7 @@ describe('shadowCastRect', () => {
         const small = {width: 20, height: 100};
         const smallActor = {width: small.width + SHADOW_PAD * 2, height: small.height + SHADOW_PAD * 2};
         const declared = ring(30, 30, 30, 30);
-        const body = bodyFrame(small, declared);
+        const body = snapActorBodyFrame(small, declared, 1);
         expect(body).toEqual({x: 0, y: 0, width: small.width, height: small.height});
         expect(shadowCastRect(smallActor, declared)).toEqual({
             x: 0, y: 0,
