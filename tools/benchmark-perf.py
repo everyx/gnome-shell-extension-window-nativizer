@@ -40,14 +40,19 @@ CLK_TCK = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
 
 # Performance Budgets (Regression Guards for --check)
 BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
-# Max dynamic resize CPU delta as a fraction of that same run's disabled baseline: 0.75 across
-# 150 frames.
+# Max dynamic resize CPU delta as a fraction of that same round's disabled baseline: 0.85,
+# taken per round and then medianed across the rounds.
+#
+# Per round, not ratio-of-means: the rounds are the pairs the AB-BA interleave built to be
+# comparable, and one anomalous round moves a mean where it cannot move a median. Measured on a
+# commit whose first disabled round came in at 271ms against 204/208 for the rest: ratio-of-means
+# 0.376, median-of-rounds 0.515. The first would have passed a real regression.
 #
 # Relative, not absolute, because the delta is not machine-invariant: the same commit measured
 # +109.7ms in one session and +96.5ms in another, tracking its own disabled baseline (206.1 vs
-# 189.1) rather than any change in the code. Only the ratio of the two stays put. Four sessions
-# over two commits (v0.10.0 and master) put it at 0.510, 0.532, 0.564 and 0.625, so 0.75 sits
-# about twice the observed session-to-session spread above today's cost.
+# 189.1) rather than anything the code did. Only the ratio of the two stays put. Six sessions
+# over two commits read 0.514, 0.515 (v0.10.0) and 0.564, 0.589, 0.597, 0.681 (master), so 0.85
+# keeps about twice the round-to-round spread above today's cost.
 #
 # The old guard was this delta as a flat 120ms. It is not kept alongside the ratio: at
 # 118.0/118.9ms measured it had ~1% of headroom, which is less than the harness' own
@@ -62,7 +67,7 @@ BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
 #   step per window over ten. It costs no idle CPU and holds 6.4KB resident per window.
 #   The earlier ~25ms here was an estimate, not a measurement.
 # - ~15ms allowance for compositor scheduling jitter across 150 frames
-BUDGET_MAX_STRESS_CPU_RATIO = 0.75
+BUDGET_MAX_STRESS_CPU_RATIO = 0.85
 BUDGET_MAX_PER_WINDOW_PSS_KB = 2048.0     # Max per-window RAM delta: 2.0 MB
 # The band's own share, from the phase that flips only that setting.
 BUDGET_MAX_BAND_STRESS_CPU_MS = 30.0      # the band's own share is 5-14ms over 150 resize steps,
@@ -466,6 +471,23 @@ def with_client_cleanup(proc):
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def median_stress_ratio(disabled_rounds, enabled_rounds):
+    """The extension's stress CPU delta as a fraction of the same round's disabled baseline.
+
+    Per round, then median, rather than the ratio of the two means: one anomalous round moves
+    a mean and cannot move a median, and the rounds are the pairs the AB-BA interleave built to
+    be comparable. Measured on one commit whose first disabled round came in at 271ms against
+    204/208 for the rest: ratio-of-means 0.376, median-of-rounds 0.515 - the first would have
+    flattered the guard past a real regression.
+    """
+    ratios = sorted((e["stress_cpu_ms"] - d["stress_cpu_ms"]) / d["stress_cpu_ms"]
+                    for d, e in zip(disabled_rounds, enabled_rounds)
+                    if d["stress_cpu_ms"] > 0)
+    if not ratios:
+        return float("inf")
+    return ratios[len(ratios) // 2]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Window Nativizer CPU and Memory Performance Benchmark")
     parser.add_argument("--rounds", type=int, default=3, help="Number of benchmark rounds (default: 3)")
@@ -525,6 +547,7 @@ def main():
         dis_stress_cpu_ms = avg(results_disabled, "stress_cpu_ms")
         ena_stress_cpu_ms = avg(results_enabled, "stress_cpu_ms")
         delta_stress_cpu_ms = ena_stress_cpu_ms - dis_stress_cpu_ms
+        stress_ratio = median_stress_ratio(results_disabled, results_enabled)
 
         dis_stress_cpu_pct = avg(results_disabled, "stress_cpu_pct")
         ena_stress_cpu_pct = avg(results_enabled, "stress_cpu_pct")
@@ -592,7 +615,7 @@ def main():
                 "delta": {
                     "idle_cpu_pct": delta_idle_cpu,
                     "stress_cpu_ms": delta_stress_cpu_ms,
-                    "stress_cpu_ratio": delta_stress_cpu_ms / dis_stress_cpu_ms,
+                    "stress_cpu_ratio": stress_ratio,
                     "stress_cpu_pct": delta_stress_cpu_pct,
                     "win_rss_kb": delta_win_rss,
                     "win_pss_kb": delta_win_pss,
@@ -616,7 +639,7 @@ def main():
             else:
                 print(f"OK [PASS] Idle CPU delta ({delta_idle_cpu:+.2f}%) within budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
 
-            stress_ratio = delta_stress_cpu_ms / dis_stress_cpu_ms
+            stress_ratio = median_stress_ratio(results_disabled, results_enabled)
             # --quick is one cold round with no warmup, so its measurement still carries the
             # JIT/shader/FBO first-touch cost the full run discards (1.13 measured against
             # 0.56-0.63 warm). The guard needs the warm run: report, do not judge.
