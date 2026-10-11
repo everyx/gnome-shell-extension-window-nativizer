@@ -114,10 +114,12 @@ both would only make the second run slow, so the split follows what a check guar
   a week;
 - **every push** runs `lint:ego`, which reviews the extension as a whole; builds it (`build`) the way a user
   installs it; runs `lint:zip` (`shexli`) over that package, which reads it the way extensions.gnome.org will; and
-  drives `test:e2e` through a nested session. The first three describe what leaves the machine; the
-  fourth guards what a commit can break and is here because it takes two minutes, and a commit hook
-  slow enough to be bypassed is worth less than a push hook nobody minds. Pushes are rare; commits are
-  not.
+  drives `test:e2e` and `check:perf` through a nested session. The first three describe what leaves the machine;
+  the last two guard what a commit can break and are here because they are slow - measured on this machine,
+  two minutes for the end-to-end run and 104s for the performance one - and a commit hook slow enough to be
+  bypassed is worth less than a push hook nobody minds. Pushes are rare; commits are not. Neither needs a quiet
+  machine: the performance budget is a ratio against the same round's disabled baseline, so a busy machine moves
+  both arms and the guard reads it the same.
 
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
 the same checks twice on every push. Either hook can be skipped the same way when that is what you

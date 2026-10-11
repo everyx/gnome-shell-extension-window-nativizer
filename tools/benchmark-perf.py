@@ -70,12 +70,15 @@ BUDGET_MAX_IDLE_CPU_DELTA_PCT = 2.0       # Max idle CPU tax: 2%
 BUDGET_MAX_STRESS_CPU_RATIO = 0.85
 BUDGET_MAX_PER_WINDOW_PSS_KB = 2048.0     # Max per-window RAM delta: 2.0 MB
 # The band's own share, from the phase that flips only that setting.
-BUDGET_MAX_BAND_STRESS_CPU_MS = 30.0      # the band's own share is 5-14ms over 150 resize steps,
-                                          # which is inside a single window's round-to-round noise
-                                          # (~25ms), so this guards order-of-magnitude growth rather
-                                          # than a few milliseconds. Amplified over ten windows it
-                                          # measures 34us per step per window. Scaled for --quick,
-                                          # which runs fewer steps.
+# The band's own share, as a fraction of that same round's band-free resize cost: 0.25.
+#
+# Relative and polled, for the reasons above - and this one was *inside* its own noise floor, which
+# the flat 30ms it used to be was not: the band's share is 5-14ms over 150 steps against a
+# round-to-round spread of ~25ms, so it could fail a machine that was fine. It did, in the first run
+# that had check:perf in pre-push: +36.8ms on a 304.9ms baseline, ratio 0.12, budget exceeded.
+# Ratios measured over the sessions at the time: 0.003, 0.02, 0.03, 0.08, 0.12, 0.078. 0.25 is about
+# twice the highest. Amplified over ten windows it measures 34us per step per window.
+BUDGET_MAX_BAND_STRESS_CPU_RATIO = 0.25
 BUDGET_MAX_BAND_IDLE_CPU_PCT = 2.0        # measured 0.0%: nothing moves, nothing reallocates
 BUDGET_MAX_BAND_PER_WINDOW_PSS_KB = 256.0  # measured 6.4KB on an idle window (A-B-A); the
                                           # harness reads once per state, so leave it room
@@ -420,8 +423,10 @@ def run_band_phase(shell_pid, bus, rounds, stress_steps):
     # clock starts, and a run whose window came up undecided is retried rather than counted (that
     # happens in a session with heavy client churn, and a run of it would read as a free band).
     stress = {"on": [], "off": []}
+    pairs = []
     skipped = 0
     for round_idx in range(1, rounds + 1):
+        landed = {}
         for enabled in ([False, True] if round_idx % 2 == 1 else [True, False]):
             set_band(enabled, bus, verify=False)
             for attempt in range(1, 4):
@@ -433,9 +438,14 @@ def run_band_phase(shell_pid, bus, rounds, stress_steps):
                     set_band(enabled, bus, verify=False)
                     continue
                 stress["on" if enabled else "off"].append(cpu_ms)
+                landed[enabled] = cpu_ms
                 break
             else:
                 skipped += 1
+        # Only a round whose two arms both landed can be paired: a skipped run would otherwise pair
+        # one round's band-free cost with another round's banded one.
+        if len(landed) == 2:
+            pairs.append((landed[False], landed[True]))
     if skipped:
         print(f"   ({skipped} stress run(s) skipped: the band never appeared on their window)")
     if not stress["on"] or not stress["off"]:
@@ -446,14 +456,16 @@ def run_band_phase(shell_pid, bus, rounds, stress_steps):
     off_pss = (memory["off"]["pss"] + memory["off_again"]["pss"]) / 2
     off_dirty = (memory["off"]["private_dirty"] + memory["off_again"]["private_dirty"]) / 2
     set_band(True, bus, verify=False)  # leave the bench session as it was found
+    off_ms = sum(stress["off"]) / len(stress["off"])
+    on_ms = sum(stress["on"]) / len(stress["on"])
     return {
         "idle_off_pct": idle["off"],
         "idle_on_pct": idle["on"],
         "idle_delta_pct": idle["on"] - idle["off"],
-        "stress_off_ms": sum(stress["off"]) / len(stress["off"]),
-        "stress_on_ms": sum(stress["on"]) / len(stress["on"]),
-        "stress_delta_ms": (sum(stress["on"]) / len(stress["on"])
-                            - sum(stress["off"]) / len(stress["off"])),
+        "stress_off_ms": off_ms,
+        "stress_on_ms": on_ms,
+        "stress_delta_ms": on_ms - off_ms,
+        "stress_ratio": median_ratio(pairs),
         "stress_skipped": skipped,
         "pss_off_kb": off_pss,
         "pss_on_kb": memory["on"]["pss"],
@@ -471,21 +483,23 @@ def with_client_cleanup(proc):
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def median_stress_ratio(disabled_rounds, enabled_rounds):
-    """The extension's stress CPU delta as a fraction of the same round's disabled baseline.
+def median_ratio(pairs):
+    """Median of (value - base) / base over paired runs, one pair per round.
 
-    Per round, then median, rather than the ratio of the two means: one anomalous round moves
-    a mean and cannot move a median, and the rounds are the pairs the AB-BA interleave built to
-    be comparable. Measured on one commit whose first disabled round came in at 271ms against
-    204/208 for the rest: ratio-of-means 0.376, median-of-rounds 0.515 - the first would have
-    flattered the guard past a real regression.
+    Per round, then median, rather than the ratio of two means: one anomalous round moves a mean
+    and cannot move a median, and each round is a pair the AB-BA interleave built to be comparable.
+    Measured on one commit whose first disabled round came in at 271ms against 204/208 for the
+    rest: ratio-of-means 0.376, median-of-rounds 0.515 - the first would have flattered a guard
+    past a real regression.
     """
-    ratios = sorted((e["stress_cpu_ms"] - d["stress_cpu_ms"]) / d["stress_cpu_ms"]
-                    for d, e in zip(disabled_rounds, enabled_rounds)
-                    if d["stress_cpu_ms"] > 0)
-    if not ratios:
-        return float("inf")
-    return ratios[len(ratios) // 2]
+    ratios = sorted((value - base) / base for base, value in pairs if base > 0)
+    return ratios[len(ratios) // 2] if ratios else float("inf")
+
+
+def median_stress_ratio(disabled_rounds, enabled_rounds):
+    """The extension's stress CPU delta as a fraction of the same round's disabled baseline."""
+    return median_ratio([(d["stress_cpu_ms"], e["stress_cpu_ms"])
+                         for d, e in zip(disabled_rounds, enabled_rounds)])
 
 
 def main():
@@ -663,12 +677,15 @@ def main():
             else:
                 print(f"OK [PASS] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) within budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
 
-            band_budget_ms = BUDGET_MAX_BAND_STRESS_CPU_MS * stress_steps / 150.0
-            if band["stress_delta_ms"] > band_budget_ms:
-                print(f"!! [FAIL] Band resize CPU delta ({band['stress_delta_ms']:+.1f}ms) exceeds budget (+{band_budget_ms:.1f}ms)")
+            if band["stress_ratio"] > BUDGET_MAX_BAND_STRESS_CPU_RATIO:
+                print(f"!! [FAIL] Band resize CPU delta ({band['stress_delta_ms']:+.1f}ms) is "
+                      f"{band['stress_ratio']:.2f}x the band-free baseline, "
+                      f"over budget ({BUDGET_MAX_BAND_STRESS_CPU_RATIO:.2f}x)")
                 failed = True
             else:
-                print(f"OK [PASS] Band resize CPU delta ({band['stress_delta_ms']:+.1f}ms) within budget (+{band_budget_ms:.1f}ms)")
+                print(f"OK [PASS] Band resize CPU delta ({band['stress_delta_ms']:+.1f}ms, "
+                      f"{band['stress_ratio']:.2f}x the band-free baseline) "
+                      f"within budget ({BUDGET_MAX_BAND_STRESS_CPU_RATIO:.2f}x)")
 
             if abs(band["idle_delta_pct"]) > BUDGET_MAX_BAND_IDLE_CPU_PCT:
                 print(f"!! [FAIL] Band idle CPU delta ({band['idle_delta_pct']:+.2f}%) exceeds budget (±{BUDGET_MAX_BAND_IDLE_CPU_PCT:.1f}%)")

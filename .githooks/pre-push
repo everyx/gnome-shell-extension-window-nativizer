@@ -5,10 +5,17 @@
 # zip the way extensions.gnome.org will. None of them guards a single commit, so none runs at commit
 # time.
 #
-# test:e2e is here rather than in the commit hook for a different reason: it does guard what a commit
-# can break - a lifecycle or a resize band - but it drives a whole nested session for two minutes, and
-# a commit hook slow enough to be bypassed is worth less than a push hook nobody minds. Pushes are
-# rare; commits are not.
+# test:e2e and check:perf are here rather than in the commit hook for a different reason: both do
+# guard what a commit can break - a lifecycle, a resize band, a per-window cost - but they drive a
+# whole nested session, and a commit hook slow enough to be bypassed is worth less than a push hook
+# nobody minds. Measured on this machine: two minutes for e2e, 104s for check:perf (shell 5s, warmup
+# 10s, three rounds 59s, band 27s). Pushes are rare; commits are not.
+#
+# check:perf does not need a quiet machine: its budget is a ratio against the same round's disabled
+# baseline, so a busy or slower machine moves both arms and the guard reads it the same. A machine on
+# battery may still be a different machine - the old absolute budget false-failed there - but that has
+# not been measured since the budget became relative, so it is not skipped. Add the precondition to
+# run-checks if it ever flakes that way.
 #
 # A commit made with --no-verify therefore reaches CI with its style and behaviour unchecked; CI is
 # the backstop for that, which is cheaper than running the commit checks twice on every push.
@@ -30,6 +37,6 @@ if command -v uvx >/dev/null 2>&1 || command -v shexli >/dev/null 2>&1; then
 else
     echo "pre-push: no shexli or uvx, skipping the package analysis" >&2
 fi
-set -- "$@" test:e2e
+set -- "$@" test:e2e check:perf
 
 run_checks pre-push "$@"
