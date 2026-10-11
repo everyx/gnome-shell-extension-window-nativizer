@@ -13,5 +13,10 @@
       <summary>Prioritize crisp text rendering</summary>
       <description>Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead.</description>
     </key>
+    <key name="force-overview-corners" type="b">
+      <default>false</default>
+      <summary>Force corners on every window in the overview</summary>
+      <description>Sharpness comes first by default, so the overview drops the corners of the windows it cannot round sharply: X11/XWayland windows, whose shape lives in the same slot the mask would overwrite, and the few Wayland windows whose desktop screenshot the mask would move to a different path. Enabling this keeps their corners instead, at the cost of a blurrier thumbnail.</description>
+    </key>
   </schema>
 </schemalist>

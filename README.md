@@ -56,7 +56,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); Firefox is nativized like any other GTK3 app
 - **No double shadows**: Identifies existing compositor shadows and supplements only what is missing
-- **Overview-aware**: Keeps rounded corners and shadows in overview previews, rounding through Mutter's own shaped-texture mask so thumbnails stay as sharp as native; windows the mask cannot round safely (X11/XWayland) show square, sharp previews
+- **Overview-aware**: Keeps rounded corners and shadows in overview previews, rounding through Mutter's own shaped-texture mask so thumbnails stay as sharp as native; windows the mask cannot round safely (X11/XWayland) show square, sharp previews unless you force corners
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection
