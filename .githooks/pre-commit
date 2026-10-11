@@ -9,10 +9,20 @@
 # The whole-tree checks - ego-lint, and packing the extension the way a user receives it - belong to
 # the push instead: see pre-push. Each check has one hook, and this one does not repeat that one's.
 #
+# A commit that only writes documentation or assets cannot break any of them, so it runs none: on
+# this repo the chain is 34s, and paying that every time a comment or the README moves is how a hook
+# earns `--no-verify`. The list of paths that counts as inert lives in run-checks, and anything it
+# does not recognise runs as before - including a commit that deletes source files.
+#
 # Bypass with `git commit --no-verify` when that is what you mean.
 
 set -e
 
 . "$(dirname "$0")/run-checks"
+
+if git diff --cached --name-only | inert_paths_only; then
+    echo "pre-commit: documentation and assets only, nothing to check"
+    exit 0
+fi
 
 run_checks pre-commit lint check:style test check:bench

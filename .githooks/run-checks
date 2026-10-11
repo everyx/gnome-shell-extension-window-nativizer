@@ -8,6 +8,23 @@
 # session, to render the decoration and to drive a window through a lifecycle. On a machine that has
 # one they run, and they fail on a wrong decoration or a wrong behaviour like any other check - the
 # precondition is about the machine, not about the change.
+# A path no check here can be affected by: documentation and assets. Reads paths on stdin and
+# succeeds only when there is at least one and every one is one of those - an unknown path, or an
+# empty list, means the checks run as before. Failing open is the point: a gate that guesses wrong
+# is a gate that skips work silently.
+inert_paths_only() {
+    seen=0
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        seen=1
+        case "$path" in
+            *.md|docs/*|assets/*|LICENSE*) ;;
+            *) return 1 ;;
+        esac
+    done
+    [ "$seen" = 1 ]
+}
+
 check_precondition() {
     case "$1" in
         check:bench|test:e2e|check:perf|test:perf) command -v gnome-shell >/dev/null 2>&1 ;;

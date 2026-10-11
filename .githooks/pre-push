@@ -20,12 +20,37 @@
 # A commit made with --no-verify therefore reaches CI with its style and behaviour unchecked; CI is
 # the backstop for that, which is cheaper than running the commit checks twice on every push.
 #
+# What the push carries decides what runs: git hands this hook one line per ref, and when every path
+# in that range is documentation or assets, none of these checks can see it - a README push paid
+# four minutes for nothing before this. A new branch, a range git will not resolve, or any path the
+# inert list does not recognise runs the checks as before.
+#
 # Bypass with `git push --no-verify` when that is what you mean.
 
 set -e
 
 . "$(dirname "$0")/run-checks"
 
+inert=1
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -n "$remote_ref" ] || continue
+    case "$local_sha" in 0000000*) continue ;; esac          # deleting a ref: nothing to check
+    case "$remote_sha" in
+        0000000*) inert=0 ;;                                 # a new branch: no range to reason about
+        *)
+            if changed=$(git diff --name-only "$remote_sha..$local_sha" 2>/dev/null) &&
+               printf '%s\n' "$changed" | inert_paths_only; then
+                :
+            else
+                inert=0
+            fi ;;
+    esac
+done
+
+if [ "$inert" = 1 ]; then
+    echo "pre-push: documentation and assets only, nothing to check"
+    exit 0
+fi
 set -- lint:ego
 if command -v gnome-extensions >/dev/null 2>&1; then
     set -- "$@" build
