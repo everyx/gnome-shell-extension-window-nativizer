@@ -187,6 +187,11 @@ export function setActorBox(box, x1, y1, x2, y2) {
  * clamp is part of the contract: rounding on a cast narrower than two corners can otherwise invert
  * an edge, and Mutter's float composition would leave a seam.
  *
+ * Position snaps to the grid; the span does not get re-derived from two independently snapped
+ * cutlines. `shadowSlices` fixes the sampled UV span to `cornerPx / buffer` (in bake px), so the
+ * destination span must be exactly `cornerPx` or the corner/edge texture is rescaled - up to
+ * ~0.6% at 1.25x, 1.5x and 1.75x - instead of mapped 1:1.
+ *
  * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
  * @param {number} corner - Corner reach in px (Math.min(corner, width/2, height/2))
  * @param {number} scale - Physical device scale
@@ -198,14 +203,14 @@ export function snapSliceRects(cast, corner, scale) {
     const cornerPx = Math.max(0, Math.min(corner, width / 2, height / 2));
 
     const x0 = snapCoordToGrid(cast.x, scale, SnapDirection.ROUND);
-    const x1 = snapCoordToGrid(cast.x + cornerPx, scale, SnapDirection.ROUND);
-    const x2 = snapCoordToGrid(cast.x + width - cornerPx, scale, SnapDirection.ROUND);
     const x3 = snapCoordToGrid(cast.x + width, scale, SnapDirection.ROUND);
+    const x1 = x0 + cornerPx;
+    const x2 = x3 - cornerPx;
 
     const y0 = snapCoordToGrid(cast.y, scale, SnapDirection.ROUND);
-    const y1 = snapCoordToGrid(cast.y + cornerPx, scale, SnapDirection.ROUND);
-    const y2 = snapCoordToGrid(cast.y + height - cornerPx, scale, SnapDirection.ROUND);
     const y3 = snapCoordToGrid(cast.y + height, scale, SnapDirection.ROUND);
+    const y1 = y0 + cornerPx;
+    const y2 = y3 - cornerPx;
 
     // Enforce monotonic non-decreasing coordinate invariant (snappedX0 <= snappedX1 <= snappedX2 <= snappedX3).
     // Floating-point non-associativity on degenerate sizes (e.g. closing animations width < 2*corner)
