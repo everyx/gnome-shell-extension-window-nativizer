@@ -579,25 +579,18 @@ should have met the window. That stays exact for every decorated window because 
 are one inequality: a window starts being decorated at `2 * radius` (`MIN_DECORABLE_SIZE`,
 `detector.js`), which puts the cast at `2 * radius + 2 * SHADOW_PAD` = `2 * (SHADOW_PAD +
 radius)` - and `SHADOW_PAD + radius` is exactly how far the arc reaches in from the cast edge,
-so the corner the crop keeps always covers it. In `clipEffect.js`, the 1px SDF AA ramp is restricted strictly to corner arcs,
-preserving 100% sharp content alpha on straight edges to prevent subpixel dragging blur from
-double-resampling under fractional scaling. Concentric corner alignment and zero-leak clipping are
-guaranteed by `clipEffect.js`'s snapping rule locking the physical pixel grid with the shadow
-actor, and symmetric physical margin snapping (`snapActorBodyFrame` in `lib/snap.js`)
-locks identical per-side cuts onto the device grid, completely excising Cairo half-pixel stroke residue
-under fractional scaling while keeping clip body and shadow body strictly unified. To further prevent
-GPU hardware bilinear filtering from bleeding external client stroke pixels inward across fractional
-boundaries, the fragment shader pushes texture sampling coordinates inward along the boundary normal,
-leaving edge transitions completely clean.
+so the corner the crop keeps always covers it. The straight-edge cut, the margin snapping and the inward sampling are alignment mechanisms; their
+decisions and measurements live in `decoration-alignment.md`.
 
 The clip's cut and the shadow's cutout are the same line: both are the body's edge, and they have
 to land on the same physical phase. This extension owns both ends of that line, so a gap opening
 between them is a defect in us, not a rounding artefact to live with. The edge is derived twice
 today - the clip effect computes it on every paint, the shadow actor on every relayout - but both
-build it with `clipFrameFor` in `lib/snap.js`, which requires the buffer's phase as an argument.
-The shadow actor passes zero there and carries the real phase as its own translation, so the two
-meet on one physical position without either site re-deriving the correction.
-`resolveClipTarget`
+build it with `clipFrameFor` in `lib/snap.js`, which requires the phase of the frame it derives.
+The clip targets the Wayland surface container, whose own transform carries the buffer's phase, so
+its local frame is phase-free; the shadow actor passes zero and carries the same phase as its
+translation. Both therefore meet on one physical position, and the phase stays out of the FBO's
+box rounding that clipping the window actor used to disturb at 1.25x. `resolveClipTarget`
 (`lib/clipTarget.js`) reports that container strategy together with the actor; when it cannot
 identify the container it falls back to the window actor and the clip folds the phase into its
 geometry instead, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md`

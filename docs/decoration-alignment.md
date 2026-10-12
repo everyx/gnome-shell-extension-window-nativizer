@@ -251,7 +251,8 @@ To solve this at the root:
    second time, broadening the edge into a 2px blurry fringe. The AA ramp is therefore strictly
    restricted to the corner arcs, while straight edges preserve 100% clean content alpha. Single-pass
    GPU screen-space rasterization keeps
-   the straight edge sharp and jitter-free at all subpixel positions.
+   the straight edge sharp and jitter-free at all subpixel positions. This is the one home of that
+   decision; `architecture.md` and `decoration-model.md` only point here.
 2. **Symmetric Device Grid Phase Locking**:
    The clip frame snaps to the same physical grid phase as the shadow cutlines, which also snap to
    the physical grid. `resolveClipTarget` (`lib/clipTarget.js`) picks the Wayland surface container
@@ -265,6 +266,7 @@ To solve this at the root:
    one derivation of both local edges, and the shadow actor carries the phase as its own
    translation. On this container path, this guarantees:
    - Zero phase drift between the clip mask and the 8-slice shadow cutout across all monitor DPI scales;
+   - The clip's cut and the shadow's cutout land on one physical pixel, with no hairline between them;
    - Obsolete client-drawn border rings outside the client frame are strictly excluded
      from the clipped body without fractional outward expansion;
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
