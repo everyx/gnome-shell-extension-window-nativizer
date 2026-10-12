@@ -706,12 +706,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.drawClip).toBeFalse();
     });
 
-    it('probes the screenshot path once per overview entry, not per reconcile', () => {
+    it('asks the safety probe once per shaped texture, never after our own mask can poison it', () => {
         const harness = setupMaskHarness();
 
         harness.deco.setOverviewMode(true);
         const afterEntry = harness.probeCalls();
-        expect(afterEntry).toBeGreaterThan(0);
+        expect(afterEntry).toBe(1);
 
         // Reconciles while the overview is open must reuse the answer: the probe is the one
         // thing here that reads a texture back from the GPU.
@@ -719,27 +719,28 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         harness.deco.setOverviewMode(true);
         expect(harness.probeCalls()).toBe(afterEntry);
 
-        // A fresh entry asks again.
+        // A fresh entry must reuse it too. Once our mask is on the shaped texture, the probe's
+        // own early-out answers NULL forever, so asking again would only read our own mask.
         harness.deco.setOverviewMode(false);
         harness.deco.setOverviewMode(true);
-        expect(harness.probeCalls()).toBe(afterEntry + 1);
+        expect(harness.probeCalls()).toBe(afterEntry);
     });
 
-    it('re-probes when a workspace move or a resize rebuilds the card, then caches again', () => {
+    it('reuses the probe answer when a workspace move or a resize rebuilds the card', () => {
         const harness = setupMaskHarness();
         harness.deco.setOverviewMode(true);
         const afterEntry = harness.probeCalls();
 
-        // Both rebuild the card, and the client's buffer may have moved with it, so the answer
-        // is asked again - and the rebuilt card's own reconciles reuse it.
+        // Both rebuild the card; the shaped texture is the same one the answer was taken from,
+        // so the safety decision is reused while the mask itself is rebuilt.
         for (const signal of ['workspace-changed', 'size-changed']) {
             const handler = harness.windowSignals.find(s => s.signal === signal);
             expect(handler).toBeDefined();
             handler.cb();
-            expect(harness.probeCalls()).toBe(afterEntry + 1 + ['workspace-changed', 'size-changed'].indexOf(signal));
+            expect(harness.probeCalls()).toBe(afterEntry);
 
             harness.deco.setOverviewMode(true);
-            expect(harness.probeCalls()).toBe(afterEntry + 1 + ['workspace-changed', 'size-changed'].indexOf(signal));
+            expect(harness.probeCalls()).toBe(afterEntry);
         }
     });
 

@@ -119,10 +119,10 @@ export class OverviewDecoration {
      */
     setMode(inOverview, readings = {}) {
         const wanted = Boolean(inOverview);
-        // A fresh overview entry re-asks whether masking is safe; reconciles within one entry
-        // reuse the answer, so the probe reads a texture at most once per entry.
-        if (wanted !== this._inOverview)
-            this._probe = null;
+        // The probe's answer is cached per shaped texture, not per entry: once this window wears
+        // our mask the probe's own early-out can never answer anything but NULL again, so a fresh
+        // entry must reuse the first answer rather than ask a texture our mask has already moved
+        // (see `_maskWouldChangeDesktop`).
         this._inOverview = wanted;
 
         this._canMask = this.canApplyMask({
@@ -161,6 +161,9 @@ export class OverviewDecoration {
     /** Drops every overview visual and hook: the overview ended, or the decoration is going away. */
     drop() {
         this._inOverview = false;
+        // A new shaped texture for the same window starts a new probe history; the decoration
+        // keeps no answer across its own teardown.
+        this._probe = null;
         this._release();
     }
 
@@ -210,16 +213,22 @@ export class OverviewDecoration {
      * Probes whether masking this window would move a path the desktop can see, so the overview
      * can leave that window alone instead. See `overviewMask.maskWouldChangeScreenshot`.
      *
+     * Cached on the shaped texture's identity and never invalidated by a mode change: the answer
+     * must come from before our mask ever touched the slot, because afterwards the probe's own
+     * `should_get_via_offscreen()` early-out makes it answer NULL deterministically. The cache is
+     * dropped only with the decoration (`drop()`); a replaced shaped texture is a new key.
+     *
      * @returns {boolean}
      */
     _maskWouldChangeDesktop() {
-        if (this._probe === null) {
-            const probe = this._OverviewMask?.maskWouldChangeScreenshot;
-            this._probe = probe
-                ? Boolean(probe(getWindowActor(this._win)?.get_texture?.() ?? null))
-                : true;
-        }
-        return this._probe;
+        const stex = getWindowActor(this._win)?.get_texture?.() ?? null;
+        if (this._probe && this._probe.stex === stex)
+            return this._probe.wouldChange;
+
+        const probe = this._OverviewMask?.maskWouldChangeScreenshot;
+        const wouldChange = probe ? Boolean(probe(stex)) : true;
+        this._probe = {stex, wouldChange};
+        return wouldChange;
     }
 
     /**
@@ -321,8 +330,9 @@ export class OverviewDecoration {
     _refresh() {
         if (!this._inOverview)
             return;
-        // The card, or the client's buffer, changed: ask the probe again.
-        this._probe = null;
+        // The card, or the client's buffer, changed, so the old geometry is retired and a fresh
+        // mask built. The safety answer is not re-asked: `_maskWouldChangeDesktop` already
+        // cached it for this shaped texture, and a re-probe now would only read our own mask.
         this._clearMask();
         if (this._canMask && !this._maskWouldChangeDesktop())
             this._applyMask();

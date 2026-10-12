@@ -4,6 +4,7 @@
  */
 
 import {roundedMaskBytes} from '../src/effects/overviewMaskBytes.js';
+import {probeWouldChangeScreenshot} from '../src/effects/overviewMaskProbe.js';
 
 /** @returns {number} Alpha of the pixel at (x, y) */
 function alpha(mask, x, y) {
@@ -74,5 +75,54 @@ describe('roundedMaskBytes', () => {
         const mask = roundedMaskBytes(geometry({radius: 0.25}));
         expect(alpha(mask, 1, 1)).toBe(255);
         expect(alpha(mask, 0, 0)).toBe(0);
+    });
+});
+
+describe('maskWouldChangeScreenshot', () => {
+    it('never calls the 50-era get_image(), and probes only paint_to_bitmap', () => {
+        let getImageCalls = 0;
+        let paintCalls = 0;
+
+        // A pre-51 shaped texture: get_image() exists, paint_to_bitmap() does not. Calling the
+        // old member with a NULL surface aborts the process from GJS's marshaller, so the probe
+        // must call nothing and answer "unsafe" instead.
+        const legacy = {
+            get_image() {
+                getImageCalls++;
+                return {tag: 'surface'};
+            },
+        };
+        expect(probeWouldChangeScreenshot(legacy, {clip: {}, format: 0})).toBeTrue();
+        expect(getImageCalls).toBe(0);
+
+        // A 51+ shaped texture: paint_to_bitmap() is the probe, and get_image() is never reached.
+        const modern = {
+            get_image() {
+                getImageCalls++;
+                return {tag: 'surface'};
+            },
+            paint_to_bitmap() {
+                paintCalls++;
+                return {tag: 'bitmap'};
+            },
+        };
+        expect(probeWouldChangeScreenshot(modern, {clip: {}, format: 0})).toBeTrue();
+        expect(paintCalls).toBe(1);
+        expect(getImageCalls).toBe(0);
+    });
+
+    it('reads the NULL bitmap as the offscreen path already in use, so the mask is safe', () => {
+        // Every NULL branch leaves the screenshot path where the mask would put it (or there is
+        // no content to move), so it is a "does not change" answer, not a refusal.
+        expect(probeWouldChangeScreenshot({paint_to_bitmap: () => null}, {clip: {}, format: 0}))
+            .toBeFalse();
+    });
+
+    it('treats a missing or throwing probe as unsafe', () => {
+        expect(probeWouldChangeScreenshot(null, {clip: {}, format: 0})).toBeTrue();
+        expect(probeWouldChangeScreenshot(undefined, {clip: {}, format: 0})).toBeTrue();
+        expect(probeWouldChangeScreenshot(
+            {paint_to_bitmap: () => { throw new Error('boom'); }}, {clip: {}, format: 0}))
+            .toBeTrue();
     });
 });
