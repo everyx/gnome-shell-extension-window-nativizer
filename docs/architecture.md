@@ -152,16 +152,14 @@ the shadow comes from the same actor and there is no visible body to leave squar
 the body falls back to the whole actor, so window content is never dropped. The client-painted
 ring is kept unless the ring we draw is ours.
 
-The corner is a distance field. To keep straight edges crisp under fractional scaling, the 1px
-anti-alias ramp is confined strictly to the corner arcs, so straight edges keep full content
-alpha and do not blur when the compositor resamples the offscreen a second time; the model and
-the measurements are in `decoration-alignment.md`. A 1px inner outline is drawn half a physical
+The corner is a distance field; the anti-alias ramp is confined strictly to the corner arcs and
+the straight edge is cut hard, with the model and the measurements in `decoration-alignment.md`. A 1px inner outline is drawn half a physical
 pixel inside the body, and a zero alpha disables it - which is how overview suppresses it. For flat ringless windows (such as WeChat) that paint client-side rectangular borders right up to the actor boundary, a 1px safe inward inset (`FLAT_SAFE_INSET`) excises the client-drawn rectangular border outside the body, allowing the native Adwaita inner outline and box shadow to decorate the entire perimeter consistently without double lines or corner seam artifacts.
 
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
 by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
-use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which takes the buffer's phase as a required input, so a caller cannot derive the edge without saying which phase it is on. The shadow actor supplies that phase as its own translation instead, and that shared derivation is what keeps the two equal. The target and its phase strategy are one report (`resolveClipTarget`, `lib/clipTarget.js`); its window-actor fallback folds the phase back into the clip's geometry, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md` owns the model, that residual limitation and the measurements. Under fractional scaling, the fragment
+use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which requires the phase of the frame it derives. The clip targets the Wayland surface container (see `lib/clipTarget.js`), whose own transform carries the buffer's subpixel phase, so its local frame is phase-free; the shadow actor passes zero and carries the same phase as its translation. That keeps the phase out of the offscreen FBO's box rounding, where clipping the window actor used to leave the hard straight-edge cut a physical pixel inside the frame at 1.25x. The target and its phase strategy are one report (`resolveClipTarget`, `lib/clipTarget.js`); its window-actor fallback folds the phase back into the clip's geometry, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md` owns the model, that residual limitation and the measurements. Under fractional scaling, the fragment
 shader pushes texture sampling coordinates inward along the boundary normal
 (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
 sampling external stroke bleed on both straight edges and corner arcs.
