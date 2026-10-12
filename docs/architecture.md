@@ -212,8 +212,10 @@ pipeline. The GJS uniform setter is probed once per session for the two signatur
 ## Effects — the shadow actor
 
 One shadow actor per drawn shadow, a sibling below the window actor in the window group. Clutter
-constraints and property bindings sync its padded rect and carry the map/close/minimize
-animations with no JS per frame.
+bindings carry the map/close/minimize animations and a bind constraint keeps its padded size on the
+window; its position is derived from the window's transform (position, scale, pivot) so the cutout
+lands on the window's visual box at any scale, rather than a layout offset that ignores the actor's
+own scale. The sync is signal-driven and runs no JS per frame.
 
 The shadow is cast by the body, not the actor: the ring between buffer and frame is stored per
 side (null meaning the whole actor), and the cast rect is computed from the actor's live size on

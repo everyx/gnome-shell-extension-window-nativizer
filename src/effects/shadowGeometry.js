@@ -62,7 +62,7 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
 /**
  * The shadow actor's translation for a window actor: the window actor's own translation plus the
  * subpixel offset, so the shadow keeps the window's animation while its cutout lands on the same
- * physical phase as the buffer. `ShadowActor._syncTranslation` writes this, then assigns only the
+ * physical phase as the buffer. `ShadowActor._syncGeometry` writes this, then assigns only the
  * axes that moved; keeping the composition here lets it be asserted without a Clutter actor.
  *
  * @param {{translation_x?: number, translation_y?: number}} windowActor
@@ -73,6 +73,37 @@ export function shadowTranslation(windowActor, offset) {
     return {
         x: (windowActor?.translation_x ?? 0) + offset.x,
         y: (windowActor?.translation_y ?? 0) + offset.y,
+    };
+}
+
+/**
+ * The shadow actor's layout position for a window actor under a Clutter scale/pivot transform.
+ *
+ * SHADOW_PAD is baked into the shadow actor twice: its layout box is the window's frame expanded
+ * by PAD, and its own local cutout starts PAD in from that box. At scale 1 the two cancel; under a
+ * scale applied about a pivot they do not, because the layout offset is in parent space and the
+ * local one is scaled by the actor's own transform. The transformed cutout then lands
+ * `PAD * (1 - scale) * (1 - 2 * pivot)` away from the window's visual box - visible as bare
+ * desktop through a MosaicWM-style miniaturise (scale 0.5, pivot 0 leaves half a pad).
+ *
+ * Deriving the layout position from the window actor's transform rather than from its layout box
+ * cancels the two pads at any scale and pivot: the shadow expands about the same pivot as the
+ * window, so the only term that has to move is its origin.
+ *
+ * @param {{x?, y?, scale_x?, scale_y?, pivot_point?}} windowActor
+ * @param {number} [pad=SHADOW_PAD]
+ * @returns {{x: number, y: number}} Layout position for the shadow actor
+ */
+export function shadowLayoutPosition(windowActor, pad = SHADOW_PAD) {
+    const x = windowActor?.x ?? 0;
+    const y = windowActor?.y ?? 0;
+    const scaleX = windowActor?.scale_x ?? 1;
+    const scaleY = windowActor?.scale_y ?? 1;
+    const pivotX = windowActor?.pivot_point?.x ?? 0;
+    const pivotY = windowActor?.pivot_point?.y ?? 0;
+    return {
+        x: x - pad * (scaleX + 2 * pivotX * (1 - scaleX)),
+        y: y - pad * (scaleY + 2 * pivotY * (1 - scaleY)),
     };
 }
 

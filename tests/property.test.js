@@ -15,7 +15,7 @@ import {
     snapSliceBoxesInto,
 } from '../src/lib/snap.js';
 import {frameFromInsets, insetsFromRects} from '../src/lib/frame.js';
-import {shadowGeometry, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
+import {shadowGeometry, shadowLayoutPosition, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
 import {EFFECT_PADDING_EXTRA} from '../src/lib/clutterEffectPadding.generated.js';
 import {
     RESIZE_BAND,
@@ -202,6 +202,85 @@ describe('property: shadowGeometry', () => {
                     expect(s).toBeLessThanOrEqual(1);
                 }
             }
+        }
+    });
+
+    /**
+     * The Clutter transform of a local point: layout position plus translation, then a scale
+     * about the pivot (a fraction of the actor's own size).
+     * @param {{x:number,y:number,width:number,height:number,translation_x?:number,translation_y?:number,scale_x?:number,scale_y?:number,pivot_point?:{x:number,y:number}}} actor
+     * @param {number} u @param {number} v
+     * @returns {{x:number,y:number}}
+     */
+    function transformPoint(actor, u, v) {
+        const px = (actor.pivot_point?.x ?? 0) * actor.width;
+        const py = (actor.pivot_point?.y ?? 0) * actor.height;
+        return {
+            x: actor.x + (actor.translation_x ?? 0) + px + (actor.scale_x ?? 1) * (u - px),
+            y: actor.y + (actor.translation_y ?? 0) + py + (actor.scale_y ?? 1) * (v - py),
+        };
+    }
+
+    it('keeps the scaled cutout on the window box for any scale, pivot and translation', () => {
+        const rng = mulberry32(0x0ff5e7);
+        for (let i = 0; i < ITER; i++) {
+            const width = range(rng, 40, 900);
+            const height = range(rng, 40, 900);
+            const windowActor = {
+                x: range(rng, -500, 500),
+                y: range(rng, -500, 500),
+                width,
+                height,
+                translation_x: range(rng, -60, 60),
+                translation_y: range(rng, -60, 60),
+                scale_x: range(rng, 0.2, 3),
+                scale_y: range(rng, 0.2, 3),
+                pivot_point: {x: range(rng, -0.5, 1.5), y: range(rng, -0.5, 1.5)},
+            };
+            const shadowActor = {
+                ...windowActor,
+                // The layout size the bind constraint gives it: the window plus a pad a side.
+                width: width + 2 * SHADOW_PAD,
+                height: height + 2 * SHADOW_PAD,
+            };
+            const position = shadowLayoutPosition(windowActor);
+            // The actor's layout position is the constraint's `window - PAD`; the derived position
+            // is applied as a translation on top of it, which is what avoids the allocation
+            // warning on a resize. The two compose to `shadowLayoutPosition`.
+            const baseX = windowActor.x - SHADOW_PAD;
+            const baseY = windowActor.y - SHADOW_PAD;
+            shadowActor.x = baseX;
+            shadowActor.y = baseY;
+            shadowActor.translation_x = windowActor.translation_x + (position.x - baseX);
+            shadowActor.translation_y = windowActor.translation_y + (position.y - baseY);
+
+            // The shadow's local cutout is [PAD, PAD + window size]; transformed, it must sit on
+            // the window's transformed body box. The translation is shared, so it cancels.
+            const windowTL = transformPoint(windowActor, 0, 0);
+            const windowBR = transformPoint(windowActor, width, height);
+            const cutTL = transformPoint(shadowActor, SHADOW_PAD, SHADOW_PAD);
+            const cutBR = transformPoint(shadowActor, SHADOW_PAD + width, SHADOW_PAD + height);
+
+            expect(cutTL.x).toBeCloseTo(windowTL.x, 6);
+            expect(cutTL.y).toBeCloseTo(windowTL.y, 6);
+            expect(cutBR.x).toBeCloseTo(windowBR.x, 6);
+            expect(cutBR.y).toBeCloseTo(windowBR.y, 6);
+        }
+    });
+
+    it('leaves the layout position bit-identical at scale 1 for any pivot', () => {
+        const rng = mulberry32(0x1dea);
+        for (let i = 0; i < ITER; i++) {
+            const windowActor = {
+                x: range(rng, -500, 500),
+                y: range(rng, -500, 500),
+                scale_x: 1,
+                scale_y: 1,
+                pivot_point: {x: rng(), y: rng()},
+            };
+            const position = shadowLayoutPosition(windowActor);
+            expect(position.x).toBe(windowActor.x - SHADOW_PAD);
+            expect(position.y).toBe(windowActor.y - SHADOW_PAD);
         }
     });
 });
