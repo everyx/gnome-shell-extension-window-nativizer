@@ -540,3 +540,28 @@ scan (19 rays sampled every 5° from top to left shoulder) verifies both minimum
 and monotonic radial/tangential color transitions, ensuring zero dark stroke bleed, notch artifacts,
 or subpixel phase jitter.
 
+## Two rules the edge work generalised
+
+Both were learned by getting them wrong in the edge work above, and neither is specific to this
+decoration.
+
+**A value defined on the far side of a rasterisation boundary must not be folded into geometry
+that crosses it.** Carry it in the representation the compositor already uses, at the layer where
+it is defined. The subpixel phase is the instance: § Resolution: Symmetric Device Grid Phase
+Locking & Pure Gaussian Shadow records the phase folded into the clip's computed frame, living
+across the offscreen FBO's integer-grid boundary where the grid rounding could not keep it, and
+attaching the clip to the container carries the phase around the FBO instead of through it. The
+rule is that move in general form, not the phase: a value whose definition lives across a
+rasterisation boundary has to travel in the compositor's own representation of it, at the layer
+that owns it.
+
+**An invariant between two of our own computations does not prove correctness against the system
+we composite into.** The clip's cut and the shadow's cutout derive from one function on one
+physical phase (`clipFrameFor`), and that invariant held while both edges were wrong relative to
+the FBO's rasterisation. What has to hold is "our edge lands where the compositor rasterises it",
+and it has to be checked per subpixel phase **and per scale**: the defect was invisible at 4/3,
+whose phase steps never reach ±0.5 physical px, and visible at 1.25, a stock preset. Two things
+follow. A scale set is part of the test surface, not a sample of it. And a guard that only rejects
+one direction of artefact is half a guard - the straight-edge probe asserted only a downward
+threshold, so a seam brighter than the shadow passed unseen.
+
