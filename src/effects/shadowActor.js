@@ -8,11 +8,11 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowLayout, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowLayout, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {findMetaWindow, getWindowSubpixelOffset} from '../platform/window.js';
+import {findMetaWindow} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
@@ -35,6 +35,9 @@ export const ShadowActor = GObject.registerClass({
         this._container = container;
         this._insets = null;
         this._scale = 1.0;
+        // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
+        // mirror is the safe default until the decoration reports the real strategy.
+        this._phaseInTransform = false;
         this._fade = new ShadowFadeStateMachine({
             now: () => GLib.get_monotonic_time() / 1000,
         });
@@ -50,7 +53,14 @@ export const ShadowActor = GObject.registerClass({
         this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
-        this._subpixelSignals = ['x', 'y', 'translation-x', 'translation-y'].map(prop =>
+        // `x`/`y` and the translations move the shadow with the window. `allocation` is also
+        // needed because the applied phase is read from the surface container's cached transform,
+        // and Mutter only invalidates it on the window actor's allocation change: synced on
+        // position alone the read held the previous position's phase indefinitely (measured at
+        // 1.25x: the shadow stayed one x behind while the clip painted the new phase, opening the
+        // straight-edge hairline). On allocation the invalidation handler runs first, so the read
+        // is the phase the clip paints with.
+        this._subpixelSignals = ['x', 'y', 'translation-x', 'translation-y', 'allocation'].map(prop =>
             windowActor.connect(`notify::${prop}`, () => this._syncTranslation()));
         this._syncTranslation();
 
@@ -62,22 +72,36 @@ export const ShadowActor = GObject.registerClass({
     /**
      * Synchronizes translation with windowActor while compensating Mutter Wayland subpixel offset.
      *
-     * Every assignment notifies and queues a relayout, and this runs on each x/y/translation
-     * change - a resize fires two of those per frame, and each call writes both axes, so half of
-     * these assignments would restate a value that did not move. Only write what changed: the
-     * four signals firing twice per frame is what this method's cost is made of (293 calls over
-     * one window's 150-step resize, ~27us of shell CPU per call in the assignments and the
-     * relayout they queue).
+     * Every assignment notifies and queues a relayout, and this runs on each position, allocation
+     * and translation change - a resize fires several per frame, and each call writes both axes,
+     * so half of these assignments would restate a value that did not move. Only write what
+     * changed: the signals firing twice per frame is what this method's cost is made of (293 calls
+     * over one window's 150-step resize, ~27us of shell CPU per call in the assignments and the
+     * relayout they queue; the allocation signal adds one more to that set).
      */
     _syncTranslation() {
         if (!this._windowActor)
             return;
-        const offset = getWindowSubpixelOffset(findMetaWindow(this._windowActor));
+        const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform);
         const {x, y} = shadowTranslation(this._windowActor, offset);
         if (this.translation_x !== x)
             this.translation_x = x;
         if (this.translation_y !== y)
             this.translation_y = y;
+    }
+
+    /**
+     * Follows the resolved clip target's phase strategy so both cuts read one source. Flips when
+     * the container becomes identified or refused, and re-syncs the translation the shadow already
+     * carries so the strategy change is not deferred to the next position change.
+     * @param {boolean} phaseInTransform - True when the clip target carries the phase in its transform
+     */
+    setPhaseInTransform(phaseInTransform) {
+        const next = Boolean(phaseInTransform);
+        if (this._phaseInTransform === next)
+            return;
+        this._phaseInTransform = next;
+        this._syncTranslation();
     }
 
     /** @returns {boolean} Whether a cross-fade animation is currently active */

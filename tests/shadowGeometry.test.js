@@ -3,11 +3,11 @@
  * Run: pnpm test
  */
 
-import {shadowCastRect, shadowGeometry, shadowLayout, shadowSlices, shadowTranslation, SHADOW_PAD}
+import {shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
-import {getWindowSubpixelOffset} from '../src/platform/window.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/window.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';
 
@@ -322,4 +322,123 @@ describe('shadowLayout', () => {
         expect(second.slices).toEqual(shadowSlices(shadowGeometry(12), second.cast.width, second.cast.height));
     });
 
+});
+
+describe('shadowPhaseOffset (the shadow cuts on the clip target\'s phase source)', () => {
+    /**
+     * Installs a one-monitor display for the callback so the mirror resolves a known phase.
+     * @param {number} scale
+     * @param {Function} run
+     * @returns {*}
+     */
+    function withDisplay(scale, run) {
+        const original = globalThis.global;
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => scale,
+                get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            },
+        };
+        try {
+            return run();
+        } finally {
+            globalThis.global = original;
+        }
+    }
+
+    const matrix = ({tx = 0, ty = 0, sx = 1, sy = 1} = {}) => ({
+        get_x_translation: () => tx,
+        get_y_translation: () => ty,
+        get_x_scale: () => sx,
+        get_y_scale: () => sy,
+    });
+
+    /**
+     * A Wayland window whose surface container is the only non-foreign child and whose cached
+     * transform carries `applied` as the phase Mutter applied (on top of the container's layout
+     * origin). The displayed mirror phase comes from actor.x.
+     * @param {number} scale
+     * @param {number} actorX
+     * @param {{x: number, y: number}} applied
+     * @returns {object} The fake Meta.Window
+     */
+    function phaseWindow(scale, actorX, applied = null) {
+        return withDisplay(scale, () => {
+            const container = {x: 0, y: 0, width: 500, height: 400, translation_x: 0, translation_y: 0};
+            if (applied) {
+                container.get_transform = () => matrix({
+                    tx: container.x + applied.x,
+                    ty: container.y + applied.y,
+                });
+            }
+            const actor = {x: actorX, y: 0, get_children: () => [container]};
+            return {
+                get_client_type: () => 0, // WAYLAND
+                get_compositor_private: () => actor,
+                get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            };
+        });
+    }
+
+    it('reads back exactly the phase the mirror predicts when the transform carries it', () => {
+        // The container path relies on the target's transform carrying the buffer phase; the read
+        // must recover precisely that number, or both cuts move together to a wrong place.
+        const scale = 1.25;
+        withDisplay(scale, () => {
+            const win = phaseWindow(scale, 241, {x: -0.2, y: 0});
+            const mirror = getWindowSubpixelOffset(win);
+            const applied = getAppliedSubpixelPhase(win);
+
+            expect(mirror.x).toBeCloseTo(-0.2, 6);
+            expect(applied.x).toBeCloseTo(mirror.x, 6);
+            expect(applied.y).toBeCloseTo(mirror.y, 6);
+            // The shadow's chosen source on the container path is that applied read.
+            expect(shadowPhaseOffset(win, true)).toEqual(applied);
+        });
+    });
+
+    it('uses the applied phase, not the mirror, when a drag has the two a frame apart', () => {
+        // shadowPhaseOffset on the container path is the drift check: the transform is what was
+        // painted and must win, even though the mirror reads a different (leading) value.
+        const scale = 1.25;
+        withDisplay(scale, () => {
+            const win = phaseWindow(scale, 241, {x: 0.8, y: 0});
+            const mirror = getWindowSubpixelOffset(win);
+
+            expect(getAppliedSubpixelPhase(win)).toEqual({x: 0.8, y: 0});
+            expect(shadowPhaseOffset(win, true)).toEqual({x: 0.8, y: 0});
+            expect(mirror.x).not.toBeCloseTo(0.8, 6);
+
+            // On the fallback path the clip folds the mirror into its frame, so the shadow keeps
+            // the mirror too, even though a container transform is readable.
+            expect(shadowPhaseOffset(win, false)).toEqual(mirror);
+        });
+    });
+
+    it('falls back to the mirror when the applied read is unavailable', () => {
+        // No get_transform (or a non-unit scale, ambiguous container, non-Wayland client): the
+        // read answers null and the documented fallback is the mirror.
+        const scale = 1.25;
+        withDisplay(scale, () => {
+            const win = phaseWindow(scale, 241);
+            const mirror = getWindowSubpixelOffset(win);
+
+            expect(getAppliedSubpixelPhase(win)).toBeNull();
+            expect(shadowPhaseOffset(win, true)).toEqual(mirror);
+            expect(shadowPhaseOffset(win, false)).toEqual(mirror);
+        });
+    });
+
+    it('falls back to the mirror for a non-finite applied read', () => {
+        // A half-torn-down container can hand back a NaN transform; it must not reach the actor.
+        const scale = 1.25;
+        withDisplay(scale, () => {
+            const win = phaseWindow(scale, 241, {x: NaN, y: NaN});
+            const mirror = getWindowSubpixelOffset(win);
+
+            expect(getAppliedSubpixelPhase(win)).toBeNull();
+            expect(shadowPhaseOffset(win, true)).toEqual(mirror);
+        });
+    });
 });

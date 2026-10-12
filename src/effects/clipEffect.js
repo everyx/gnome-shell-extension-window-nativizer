@@ -9,7 +9,8 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
-import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
+import {clipFrameForTarget} from '../lib/clipTarget.js';
+import {findMetaWindow} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
@@ -96,6 +97,10 @@ export const RoundedClipEffect = GObject.registerClass({
 
         // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
+        // The target's phase strategy: the Wayland surface container carries the phase in its
+        // own transform (the default), every fallback target does not. setPhaseInTransform()
+        // flips it for the fallback; see resolveClipTarget in lib/clipTarget.js.
+        this._phaseInTransform = true;
         this._radius = undefined;
         this._outline = undefined;
         this._outlineVec = [0, 0, 0, 0];
@@ -179,6 +184,20 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
+     * Selects the phase strategy for the resolved clip target. Invalidates the cached frame when
+     * it flips, so the next paint recomputes uFrame from the new phase.
+     * @param {boolean} phaseInTransform - True when the target's own transform carries the phase
+     */
+    setPhaseInTransform(phaseInTransform) {
+        const next = Boolean(phaseInTransform);
+        if (this._phaseInTransform === next)
+            return;
+        this._phaseInTransform = next;
+        this._paint.frame.width = -1;
+        this.queue_repaint();
+    }
+
+    /**
      * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
      * @param {object} node
      * @param {object} paintContext
@@ -191,16 +210,20 @@ export const RoundedClipEffect = GObject.registerClass({
             return;
 
         const scale = this._scale ?? 1.0;
-        // The clip targets the Wayland surface container (see resolveClipTarget), whose own
-        // transform carries the buffer's subpixel phase; the offscreen FBO paints the container's
-        // local content, so the phase is not a term in this actor-local frame and the body edge is
-        // the plain snapped body. The shadow actor carries the same phase as a translation, so the
-        // clip's cut and the shadow's cutout still land on one physical line - both derive their
-        // local edge from clipFrameFor. Folding the phase in here would double it: clipping the
-        // window actor instead put the phase in a child transform that the FBO's box rounding
-        // could not keep, and at 1.25 the hard straight-edge cut then fell a full physical pixel
-        // inside the frame, leaving a bright hairline over the shadow.
-        const frame = clipFrameFor({width, height}, this._insets, scale, ZERO_PHASE);
+        // The frame's phase comes from the resolved target (see resolveClipTarget). A Wayland
+        // surface container carries the buffer's subpixel phase in its own transform, so the
+        // offscreen FBO paints container-local content and the body edge is the plain snapped
+        // body - that is what keeps the phase out of the FBO's box rounding, where clipping the
+        // window actor used to leave the hard straight-edge cut a physical pixel inside the frame
+        // at 1.25x. On the fallback the phase lives in a child transform the FBO cannot keep, so
+        // the clip folds the window's subpixel offset into its geometry, exactly where the shadow
+        // actor carries the same offset as a translation. Both paths derive from clipFrameFor, so
+        // the clip's cut and the shadow's cutout still land on one physical line.
+        // The container path needs no window lookup: its phase is already in the target's own
+        // transform, so only the fallback resolves and folds the window's subpixel offset.
+        const win = this._phaseInTransform ? null : findMetaWindow(actor);
+        const frame = clipFrameForTarget({width, height}, this._insets, scale,
+            {phaseInTransform: this._phaseInTransform}, win);
         const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
         if (changes.scale !== undefined) {

@@ -48,6 +48,8 @@ export class WindowDecoration {
 
         this.clip = null;
         this.clipTarget = null;
+        // The resolved target's phase strategy; the clip effect reads it at attach/repin time.
+        this.clipPhaseInTransform = true;
         this.clipInsets = null;
         this.drawClip = false;
         // The resolved ring plan for the current pass; null until the first apply().
@@ -127,7 +129,8 @@ export class WindowDecoration {
      * @param {import('./detector.js').WindowActions} params.actions
      * @param {object} params.inputs
      * @param {Clutter.Actor} [params.actor] - Window actor
-     * @param {Clutter.Actor} [params.target] - Resolved clip target actor
+     * @param {{actor: Clutter.Actor, phaseInTransform: boolean}} [params.target] - A
+     *        resolveClipTarget() result; resolved from the window when omitted
      * @param {boolean} [params.inOverview=false]
      */
     apply({actions, inputs, actor = null, target = null, inOverview = false, forceOverviewCorners = false}) {
@@ -137,7 +140,9 @@ export class WindowDecoration {
 
         this._forceOverviewCorners = Boolean(forceOverviewCorners);
 
-        const clipTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
+        const resolvedTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
+        const clipTarget = resolvedTarget?.actor ?? null;
+        this.clipPhaseInTransform = resolvedTarget?.phaseInTransform ?? false;
         const rawInsets = inputs.insets;
         const scale = inputs?.monitorScale ?? 1.0;
 
@@ -227,6 +232,10 @@ export class WindowDecoration {
                 this.clipTarget?.add_effect?.(this.clip);
             }
         }
+        // The target's identity and its phase strategy are one report, so a re-pin also re-states
+        // the strategy; the effect's setter is a no-op while it is unchanged.
+        if (this.clip)
+            this.clip.setPhaseInTransform?.(this.clipPhaseInTransform);
         this.clipInsets = this.clip ? insets : null;
         // Only a clip appearing or going away changes the overview's options. While the overview
         // is open, apply() syncs the rest once the style is current.
@@ -312,6 +321,9 @@ export class WindowDecoration {
 
         this._syncClipParams();
         if (this.shadow) {
+            // Both cuts read the same phase source: the shadow follows the clip's resolved target
+            // strategy (see shadowPhaseOffset).
+            this.shadow.setPhaseInTransform?.(this.clipPhaseInTransform);
             this.shadow.setScale?.(scale);
             this.shadow.setShadowInsets?.(insets);
             this.shadow.setShadowStyle?.({
