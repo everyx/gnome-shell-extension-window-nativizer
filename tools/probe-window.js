@@ -42,6 +42,9 @@ const applicationId = GLib.getenv('WINDOW_NATIVIZER_APP_ID') ??
     (native
         ? 'dev.windownativizer.native'
         : (backdrop ? 'dev.windownativizer.backdrop' : 'dev.windownativizer.probe'));
+// WINDOW_NATIVIZER_TITLE names the window when a test needs a subject that cannot be confused
+// with another probe's default title (e.g. the e2e's red hairline subject beside a decorated one).
+const customTitle = GLib.getenv('WINDOW_NATIVIZER_TITLE') || null;
 
 let Adw = null;
 if (native)
@@ -66,7 +69,7 @@ app.connect('activate', () => {
     const Window = native ? Adw.ApplicationWindow : Gtk.ApplicationWindow;
     const win = new Window({
         application: app,
-        title: native ? 'window-nativizer native' : (backdrop ? 'window-nativizer backdrop' : 'window-nativizer probe'),
+        title: customTitle ?? (native ? 'window-nativizer native' : (backdrop ? 'window-nativizer backdrop' : 'window-nativizer probe')),
         default_width: sizeW,
         default_height: sizeH,
     });

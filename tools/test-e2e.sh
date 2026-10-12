@@ -17,14 +17,16 @@ PICK_REPLY="$STATE_DIR/pick-reply.txt"
 # run the full matrix: both 1.0 and 1.33 fractional scale sessions must pass all checks.
 if [[ $# -eq 0 && -z "${WINDOW_NATIVIZER_SCALE:-}" ]]; then
     echo "================================================================"
-    echo " Starting E2E Matrix for $UUID across scales (1.0, 1.33)"
+    echo " Starting E2E Matrix for $UUID across scales (1.0, 1.25, 1.33)"
     echo "================================================================"
     "$0" 1.0
+    echo ""
+    "$0" 1.25
     echo ""
     "$0" 1.33
     echo ""
     echo "================================================================"
-    echo ">> [test-e2e] Matrix PASSED: All checks passed at 1.0x and 1.33x!"
+    echo ">> [test-e2e] Matrix PASSED: All checks passed at 1.0x, 1.25x and 1.33x!"
     echo "================================================================"
     exit 0
 fi
@@ -253,8 +255,8 @@ CHECK_RESULT="$(shell_eval '
     const actors = global.get_window_actors();
     if (actors.length === 0) return JSON.stringify({error: "no window actor found"});
     const winActor = actors[0];
-    const effects = winActor.get_effects().map(e => e.toString());
-    const hasClip = effects.some(e => e.includes("RoundedClipEffect"));
+    const hasClip = [winActor, ...(winActor.get_children?.() ?? [])]
+        .some(a => a.get_effects?.().some(e => e.toString().includes("RoundedClipEffect")));
 
     const parent = winActor.get_parent();
     const children = parent ? parent.get_children().map(c => c.toString()) : [];
@@ -953,6 +955,22 @@ for _ in $(seq 1 40); do
     sleep 0.25
 done
 
+# A second subject with a saturated body: against the red body the shadow-to-body transition
+# has a green channel that the hairline breaks, which is what makes a *bright* seam visible to
+# the probe. The GTK3 subject's body is theme grey, close enough to a hairline's grey that the
+# pixel alone cannot tell them apart, so the bright check reads this window. It sits clear of the
+# GTK3 subject so the two do not occlude each other; x 900..903 has the same subpixel phases as
+# 240..243 because both ranges start on a multiple of the phase period.
+"$DEV" app env WINDOW_NATIVIZER_BODY=#ff0000 WINDOW_NATIVIZER_SIZE=600x450 \
+    WINDOW_NATIVIZER_APP_ID=dev.windownativizer.e2e-red WINDOW_NATIVIZER_TITLE=E2E-Red \
+    gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+RED_PHASE_PID=$!
+for _ in $(seq 1 40); do
+    has_red="$(shell_eval 'global.get_window_actors().some(a => a.meta_window?.get_title() === "E2E-Red") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$has_red" = "1" ] && break
+    sleep 0.25
+done
+
 for test_x in 240 241 242 243; do
     shell_eval "
     (() => {
@@ -961,6 +979,17 @@ for test_x in 240 241 242 243; do
         if (target) {
             target.visible = true;
             moveResizeFrame(target.meta_window, $test_x, 200, 600, 450);
+            target.meta_window.activate(global.get_current_time());
+        }
+    })()
+    " >/dev/null
+    shell_eval "
+    (() => {
+        const actors = global.get_window_actors();
+        const target = actors.find(a => a.meta_window?.get_title() === 'E2E-Red');
+        if (target) {
+            target.visible = true;
+            moveResizeFrame(target.meta_window, $((test_x + 660)), 200, 600, 450);
             target.meta_window.activate(global.get_current_time());
         }
     })()
@@ -983,10 +1012,28 @@ for test_x in 240 241 242 243; do
         });
     })()
     ')"
-    rm -f /tmp/window-nativizer-phase.png
+    RED_POS="$(shell_eval '
+    (() => {
+        const actors = global.get_window_actors();
+        const target = actors.find(a => a.meta_window?.get_title() === "E2E-Red");
+        if (!target) return JSON.stringify({error: "no red window"});
+        const w = target.meta_window;
+        const f = w.get_frame_rect();
+        const s = global.display.get_monitor_scale(w.get_monitor());
+        return JSON.stringify({
+            x: f.x,
+            left: Math.round(f.x * s),
+            midy: Math.round((f.y + f.height / 2) * s),
+            scale: s
+        });
+    })()
+    ')"
+    rm -f /tmp/window-nativizer-phase.png /tmp/window-nativizer-red.png
     gdbus call --address "$EDGE_PHASE_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
         --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-phase.png >/dev/null 2>&1
-    if ! python3 - "$PHASE_POS" "$test_x" <<'PYEOF'
+    gdbus call --address "$EDGE_PHASE_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+        --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-red.png >/dev/null 2>&1
+    if ! python3 - "$PHASE_POS" "$test_x" "$RED_POS" <<'PYEOF'
 import json, math, re, sys
 from PIL import Image
 
@@ -997,7 +1044,14 @@ pos = json.loads(match.group(0))
 if "error" in pos:
     sys.exit(f"target error: {pos}")
 test_x = sys.argv[2]
+red_match = re.search(r'\{.*\}', sys.argv[3].replace('\\', ''), re.S)
+if not red_match:
+    sys.exit("invalid red position")
+red = json.loads(red_match.group(0))
+if "error" in red:
+    sys.exit(f"red target error: {red}")
 im = Image.open('/tmp/window-nativizer-phase.png').convert('RGB')
+rim = Image.open('/tmp/window-nativizer-red.png').convert('RGB')
 s = pos.get('scale', 1.0)
 cx, cy = pos['left'], pos['top']
 
@@ -1011,6 +1065,23 @@ straight_min = min(straight_row)
 # A pixel strictly darker than 185 represents an anomalous dark seam/stroke bleed artifact.
 if straight_min < 185:
     sys.exit(f"dark straight edge seam detected: min intensity {straight_min} < 185 in edge profile {straight_row}")
+
+# 1b. Bright straight edge check on the red subject's left edge: the body is (255,0,0), the
+# backdrop green is 255 and the darkest shadow green is ~200. A clean cut is a single step from
+# shadow to body, so the last green sample before the body stays at the shadow's darkest level.
+# The 1.25x hairline is a neutral (245) pixel there: its green rebounds toward white before the
+# body, which is the signature the downward-only check above cannot see.
+rleft, rmidy = red['left'], red['midy']
+red_col = [rim.getpixel((x, rmidy))[1] for x in range(rleft - 8, rleft + 8)]
+body_at = next((i for i, g in enumerate(red_col) if g < 64), None)
+if body_at is None:
+    sys.exit(f"red straight edge: body not reached in profile {red_col}")
+pre_body = red_col[body_at - 1]
+shadow_min = min(red_col[:body_at])
+if shadow_min < 185:
+    sys.exit(f"red straight edge dark seam: {shadow_min} < 185 in profile {red_col}")
+if pre_body - shadow_min > 25 or pre_body > 225:
+    sys.exit(f"bright straight edge hairline at 1.25x: pre-body green {pre_body} vs shadow {shadow_min} in profile {red_col}")
 
 # 2. Continuous Radial Ray Scan across entire corner arc from top shoulder to left shoulder:
 # Arc center is at (cx + 15*s, cy + 15*s), radius is 15*s:
@@ -1060,7 +1131,7 @@ for i in range(len(ray_mins) - 1):
         sys.exit(f"tangential corner discontinuity detected between deg={deg_curr} ({min_curr}) and deg={deg_next} ({min_next}): step {tangential_step} > 25")
 
 corner_overall_min = min(m for _, m, _ in ray_mins)
-print(f"DEBUG: test_x={test_x} f.x={pos.get('x')} straight_px={px} straight_min={straight_min} corner_min={corner_overall_min} (rays 0..90 deg: {[m for _, m, _ in ray_mins]})")
+print(f"DEBUG: test_x={test_x} f.x={pos.get('x')} straight_px={px} straight_min={straight_min} corner_min={corner_overall_min} red_left={red['left']} red_pre_green={pre_body} red_shadow_min={shadow_min} red_profile_green={red_col} (rays 0..90 deg: {[m for _, m, _ in ray_mins]})")
 PYEOF
     then
         echo "!! Straight edge or corner dark dip artifact detected at phase x=$test_x!"
@@ -1075,21 +1146,23 @@ shell_eval '
     global.get_window_actors().forEach(a => {
         const t = a.meta_window?.get_title() || "";
         const c = a.meta_window?.get_wm_class() || "";
-        if (t === "GTK3 CSD Probe" || c.toLowerCase().includes("backdrop")) {
+        if (t === "GTK3 CSD Probe" || t === "E2E-Red" || c.toLowerCase().includes("backdrop")) {
             a.meta_window?.delete(global.get_current_time());
         }
     });
 })()
 ' >/dev/null || true
 for _ in $(seq 1 40); do
-    remains="$(shell_eval 'global.get_window_actors().some(a => { const t = a.meta_window?.get_title() || ""; const c = a.meta_window?.get_wm_class() || ""; return t === "GTK3 CSD Probe" || c.toLowerCase().includes("backdrop"); }) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
+    remains="$(shell_eval 'global.get_window_actors().some(a => { const t = a.meta_window?.get_title() || ""; const c = a.meta_window?.get_wm_class() || ""; return t === "GTK3 CSD Probe" || t === "E2E-Red" || c.toLowerCase().includes("backdrop"); }) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
     [ "$remains" = "0" ] && break
     sleep 0.1
 done
 kill "$BACKDROP_PHASE_PID" 2>/dev/null || true
 [ -n "$GTK3_PHASE_PID" ] && kill "$GTK3_PHASE_PID" 2>/dev/null || true
+[ -n "$RED_PHASE_PID" ] && kill "$RED_PHASE_PID" 2>/dev/null || true
 wait "$BACKDROP_PHASE_PID" 2>/dev/null || true
 [ -n "$GTK3_PHASE_PID" ] && wait "$GTK3_PHASE_PID" 2>/dev/null || true
+[ -n "$RED_PHASE_PID" ] && wait "$RED_PHASE_PID" 2>/dev/null || true
 
 
 if [[ "$EDGE_PHASE_CHECK" -ne 1 ]]; then
@@ -1174,7 +1247,9 @@ OVERVIEW_STATE="$(shell_eval '
     const target = actors.find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
     if (!target) return JSON.stringify({error: "window not found"});
 
-    const getClip = () => target.get_effects().find(e => e.toString().includes("RoundedClipEffect"));
+    const getClip = () => [target, ...(target.get_children?.() ?? [])]
+        .map(a => a.get_effects?.().find(e => e.toString().includes("RoundedClipEffect")))
+        .find(Boolean);
     const initialClip = getClip();
     const initialEnabled = initialClip ? initialClip.get_enabled() : null;
 
