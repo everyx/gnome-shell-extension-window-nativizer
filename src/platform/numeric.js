@@ -1,9 +1,15 @@
 /**
  * Upstream-numeric primitives.
  *
- * These exist only to reproduce a C rounding rule from Mutter/GSK in JavaScript, and are
- * shared by `lib/snap.js` (GSK grid snapping) and `platform/window.js` (the Mutter subpixel
- * phase). One home so the two mirrors cannot drift apart into subtly different formulas.
+ * These reproduce C rounding rules from Mutter/GSK in JavaScript, and are shared by
+ * `lib/snap.js` (GSK grid snapping) and `platform/window.js` (the Mutter subpixel phase). One
+ * home so the two mirrors cannot drift apart into subtly different formulas.
+ *
+ * `roundHalfAwayFromZero` and `snapDirection`'s FLOOR/CEIL branches are exact mirrors of their
+ * upstream. `snapDirection`'s ROUND branch is a deliberate adaptation: GSK evaluates
+ * `roundf (value + GSK_SNAP_EPSILON)` on the raw value, which biases negative coordinates
+ * toward zero, while we need f(-x) = -f(x) so the two edges of a body snap alike. See the
+ * JSDoc below and docs/decoration-alignment.md.
  *
  * GI-free: this module is plain math, imported by platform and business code alike.
  */
@@ -41,8 +47,16 @@ export function roundHalfAwayFromZero(value) {
 
 /**
  * Snap a single 1D scalar value on the grid according to direction.
- * Matches `gsk_rect_snap_direction` (gskrectprivate.h) with strict origin-odd symmetry: the
- * ROUND branch is the sign-split `roundf` form, so an exact half moves away from zero.
+ *
+ * FLOOR and CEIL are exact mirrors of `gsk_rect_snap_direction` (gskrectprivate.h):
+ * `floorf (value + GSK_SNAP_EPSILON)` and `ceilf (value - GSK_SNAP_EPSILON)`.
+ *
+ * ROUND deliberately departs from GSK, whose branch is `roundf (value + GSK_SNAP_EPSILON)`:
+ * the epsilon lands on the raw value, so for value = -1.5 it yields `roundf(-1.499)` = -1,
+ * biasing negative coordinates toward zero and making the rule asymmetric. We round the
+ * magnitude and reapply the sign instead, so f(-x) = -f(x) holds and the two edges of a body
+ * snap alike. tests/snap.test.js pins both the deviation and the symmetry property; see
+ * docs/decoration-alignment.md for the A/B decision and its reopen trigger.
  *
  * @param {number} value
  * @param {number} [direction=SnapDirection.ROUND]

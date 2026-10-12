@@ -15,6 +15,7 @@ import {
     getPhysicalMonitorScale,
     resolveMonitorBounds,
 } from '../src/lib/window.js';
+import {snapDirection, SNAP_EPSILON} from '../src/platform/numeric.js';
 
 function createMockBox() {
     return {
@@ -63,17 +64,46 @@ describe('snapCoordToGrid direction modes', () => {
         expect(snapCoordToGrid(5.2, 1.0, SnapDirection.CEIL)).toBe(6);
     });
 
-    it('handles ROUND properly with symmetric rounding matching C99 roundf', () => {
+    it('rounds exact halves away from zero: origin-odd ROUND, unlike GSK\'s raw-value epsilon', () => {
         expect(snapCoordToGrid(5.4, 1.0, SnapDirection.ROUND)).toBe(5);
         expect(snapCoordToGrid(5.6, 1.0, SnapDirection.ROUND)).toBe(6);
         expect(snapCoordToGrid(5.0, 1.0, SnapDirection.ROUND)).toBe(5);
-        // Half boundaries round strictly away from zero matching C99 roundf
+        // Half boundaries round strictly away from zero. GSK would instead evaluate
+        // roundf(value + GSK_SNAP_EPSILON) and send -1.5 to -1; see the deviation spec below.
         expect(snapCoordToGrid(1.5, 1.0, SnapDirection.ROUND)).toBe(2);
         expect(snapCoordToGrid(-1.5, 1.0, SnapDirection.ROUND)).toBe(-2);
         expect(snapCoordToGrid(1.501, 1.0, SnapDirection.ROUND)).toBe(2);
         expect(snapCoordToGrid(-1.501, 1.0, SnapDirection.ROUND)).toBe(-2);
         expect(snapCoordToGrid(1.4, 1.0, SnapDirection.ROUND)).toBe(1);
         expect(snapCoordToGrid(-1.4, 1.0, SnapDirection.ROUND)).toBe(-1);
+    });
+});
+
+describe('ROUND deviates from GSK deliberately (origin-odd symmetry)', () => {
+    it('sends a negative exact half away from zero, where GSK sends it toward zero', () => {
+        // GSK's gsk_rect_snap_direction adds the epsilon to the raw value:
+        //   roundf(-1.5 + GSK_SNAP_EPSILON) = roundf(-1.499) = -1.
+        // Ours rounds the magnitude and reapplies the sign:
+        //   -Math.round(1.5 + SNAP_EPSILON) = -Math.round(1.501) = -2.
+        // We keep -2 because an origin-odd rule is what lets the two edges of a body snap alike.
+        expect(snapDirection(-1.5, SnapDirection.ROUND)).toBe(-2);
+        expect(snapDirection(1.5, SnapDirection.ROUND)).toBe(2);
+    });
+
+    it('is origin-odd across the epsilon boundary, the property GSK\'s raw-value epsilon loses', () => {
+        // Exact halves and both sides of the half: value +- SNAP_EPSILON brackets the boundary
+        // that decides the rounding. GSK's raw-value epsilon makes the two sides disagree in
+        // sign; f(-x) = -f(x) is the property our body edges rely on.
+        const matrix = [0, 34.6667, -34.6667];
+        for (const half of [0.5, 1.5, 2.5, 12.5, 100.5]) {
+            matrix.push(half - SNAP_EPSILON, half, half + SNAP_EPSILON);
+            matrix.push(-half + SNAP_EPSILON, -half, -half - SNAP_EPSILON);
+        }
+
+        for (const value of matrix) {
+            expect(snapDirection(-value, SnapDirection.ROUND))
+                .toBe(-snapDirection(value, SnapDirection.ROUND));
+        }
     });
 });
 

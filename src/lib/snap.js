@@ -1,6 +1,8 @@
 /**
  * GTK4 / GSK Grid Snapping Utilities.
- * Implements physical pixel grid alignment matching GTK 4.24 GskRectSnap.
+ * Reproduces GTK 4.24 GskRectSnap physical pixel grid alignment; FLOOR and CEIL mirror
+ * `gsk_rect_snap_direction` exactly, while ROUND is a deliberate origin-odd adaptation of GSK's
+ * raw-value epsilon (see `snapDirection` in `platform/numeric.js`).
  * Snapping rects and cutlines eliminates fractional scaling seams and blur.
  */
 
@@ -23,7 +25,8 @@ export const SnapRule = Object.freeze({
 
 /**
  * Snap a logical 1D coordinate to the physical device pixel grid.
- * Matches gsk_rect_snap_to_grid scalar projection.
+ * Matches gsk_rect_snap_to_grid scalar projection (the ROUND edge carries snapDirection's
+ * deliberate origin-odd deviation from GSK).
  * @param {number} value - Logical coordinate
  * @param {number} scale - Physical scale factor (e.g. 1.0, 1.25, 1.5, 2.0)
  * @param {number} [direction=SnapDirection.ROUND]
@@ -49,7 +52,8 @@ function snapRuleGetDirection(rule, side) {
 
 /**
  * Snap a rectangle to the physical pixel grid.
- * Matches gsk_rect_snap_to_grid in gskrectprivate.h.
+ * Matches gsk_rect_snap_to_grid in gskrectprivate.h except for the documented ROUND deviation
+ * in snapDirection.
  * @param {{x: number, y: number, width: number, height: number}} rect
  * @param {number} scale - Device scale factor
  * @param {number} [rule=SnapRule.ROUND] - Composite snapping rule
