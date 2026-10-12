@@ -1,15 +1,10 @@
 # The Shell / Mutter API surface we depend on
 
-Audited against the newest patch release of every GNOME line from 45 to 51, with each declaration
-below extracted from a clone at that tag instead of read by hand. The extraction and its result are
-recorded in `tools/shell-api.json`, together with the tag and commit each one came from;
-`tools/audit-shell-api.mjs` re-derives them, and [development.md](development.md) describes when to
-run it.
-
-> [!NOTE]
-> **Runtime Baseline**: The runtime execution baseline of this extension is strictly GNOME 50–51. Historical
-> API entries for GNOME 45–49 are retained in the audit record (`tools/shell-api.json`) and the table below
-> strictly as a static reference for upstream API evolution and historical regressions.
+Audited against the newest patch release of both GNOME lines this extension supports, 50 and 51, with
+each declaration below extracted from a clone at that tag instead of read by hand. The extraction and
+its result are recorded in `tools/shell-api.json`, together with the tag and commit each one came
+from; `tools/audit-shell-api.mjs` re-derives them, and [development.md](development.md) describes when
+to run it.
 
 While GNOME 51 aligns the Mutter API
 version to `'51'` (packaging `Meta-51`, `Shell-51`, and `Clutter-51` typelibs instead of `18`),
@@ -26,78 +21,72 @@ Anything here that stops being true is an upstream compatibility break, not an i
 <!-- shell-api-table:start -->
 | Used | Status | Notes |
 |---|---|---|
-| `win.is_client_decorated()` | 45–46 / 47–51 absent | [why](shell-api.md#is_client_decorated) |
-| `global.display.set_cursor()` | 45–49 / 50–51 absent | [why](shell-api.md#display_set_cursor) |
-| `win.get_client_type()` | 45–51 stable | [why](shell-api.md#get_client_type) |
-| `win.get_window_type()` | 45–51 stable | [why](shell-api.md#get_window_type) |
-| `win.is_maximized()` | 45–48 absent / 49–51 | [why](shell-api.md#is_maximized) |
-| `win.get_maximized()` | 45–48 / 49–51 absent | [why](shell-api.md#get_maximized) |
-| `win.is_fullscreen()` | 45–51 stable | [why](shell-api.md#is_fullscreen) |
-| `win.get_tile_match()` | 45–51 stable | [why](shell-api.md#get_tile_match) |
-| `win.get_pid()` | 45–51 stable | [why](shell-api.md#get_pid) |
-| `win.get_frame_rect()` | 45–51 stable | [why](shell-api.md#get_frame_rect) |
-| `win.get_buffer_rect()` | 45–51 stable | [why](shell-api.md#get_buffer_rect) |
-| `win.allows_resize()` | 45–51 stable | [why](shell-api.md#allows_resize) |
-| `win.get_monitor()` | 45–51 stable | [why](shell-api.md#get_monitor) |
-| `win.begin_grab_op()` | 45 / 46–48 / 49–51 | [why](shell-api.md#begin_grab_op) |
-| `win.get_compositor_private()` | 45–51 stable | [why](shell-api.md#get_compositor_private) |
-| `win.is_hidden()` | 45–51 stable | [why](shell-api.md#is_hidden) |
-| `win.is_attached_dialog()` | 45–51 stable | [why](shell-api.md#is_attached_dialog) |
-| `win.get_transient_for()` | 45–51 stable | [why](shell-api.md#get_transient_for) |
-| `win.located_on_workspace()` | 45–51 stable | [why](shell-api.md#located_on_workspace) |
-| `win.is_on_all_workspaces()` | 45–51 stable | [why](shell-api.md#is_on_all_workspaces) |
-| `win.decorated` | 45–51 stable | [why](shell-api.md#decorated) |
-| `win.maximized_vertically` | 45–51 stable | [why](shell-api.md#maximized_vertically) |
-| `win.maximized_horizontally` | 45–51 stable | [why](shell-api.md#maximized_horizontally) |
-| `win.minimized` | 45–51 stable | [why](shell-api.md#minimized) |
-| `global.display.get_monitor_geometry(i)` | 45–51 stable | [why](shell-api.md#get_monitor_geometry) |
-| `global.display.get_monitor_scale(i)` | 45–51 stable | [why](shell-api.md#get_monitor_scale) |
-| `global.display.get_n_monitors()` | 45–51 stable | [why](shell-api.md#get_n_monitors) |
-| `global.display.get_tab_list()` | 45–51 stable | [why](shell-api.md#get_tab_list) |
-| `global.backend.get_monitor_manager()` | 45–51 stable | [why](shell-api.md#get_monitor_manager) |
-| `actor.set_cursor_type()` | 45–49 absent / 50–51 | [why](shell-api.md#set_cursor_type) |
-| `global.window_group.set_child_above_sibling()` | 45–51 stable | [why](shell-api.md#set_child_above_sibling) |
-| `global.window_group.set_child_below_sibling()` | 45–51 stable | [why](shell-api.md#set_child_below_sibling) |
-| `actor.get_transform()` | 45–51 stable | [why](shell-api.md#actor_get_transform) |
-| `new Clutter.BindConstraint()` | 45–51 stable | [why](shell-api.md#bind_constraint_new) |
-| `effect.set_enabled()` | 45–51 stable | [why](shell-api.md#actor_meta_set_enabled) |
-| `Clutter.ActorMeta:enabled` | 45 / 46–51 | [why](shell-api.md#actor_meta_enabled) |
-| `effect.get_actor()` | 45–51 stable | [why](shell-api.md#actor_meta_get_actor) |
-| `Clutter.OffscreenEffect:vfunc_paint_target()` | 45–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
-| `effect.set_uniform_float()` | 45–50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
-| `pipeline.set_uniform_float()` | 45–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
-| `stex.paint_to_bitmap()` | 45–50 absent / 51 | [why](shell-api.md#shaped_texture_paint_to_bitmap) |
-| `stex.get_image()` | 45–50 / 51 absent | [why](shell-api.md#shaped_texture_get_image) |
-| `Cogl.PixelFormat` | 45–51 stable | [why](shell-api.md#cogl_pixel_format) |
-| `Clutter.CursorType` | 45–49 absent / 50–51 | [why](shell-api.md#clutter_cursor_type) |
-| `effect.set_uniform_float() [Shell.GLSLEffect]` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
-| `backend.get_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_sprite) |
-| `backend.get_pointer_sprite()` | 45–48 absent / 49–51 | [why](shell-api.md#backend_get_pointer_sprite) |
-| `seat.get_pointer()` | 45–48 / 49–51 absent | [why](shell-api.md#seat_get_pointer) |
-| `backend.get_default_seat()` | 45–51 stable | [why](shell-api.md#backend_get_default_seat) |
-| `Meta-<api> / Shell-<api> typelibs` | 45 / 46 / 47 / 48 / 49 / 50 / 51 | [why](shell-api.md#mutter_api_version) |
-| `Shell.GLSLEffect` | 45–50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
-| `Shell.WindowTracker.get_default()` | 45–51 stable | [why](shell-api.md#window_tracker_get_default) |
-| `St.BoxLayout:vertical` | 45 / 46–47 / 48–50 / 51 absent | [why](shell-api.md#st_box_layout_vertical) |
-| `St.SystemColorScheme` | 45–51 stable | [why](shell-api.md#st_system_color_scheme) |
-| `St.Settings:enable-animations` | 45 / 46–51 | [why](shell-api.md#st_settings_enable_animations) |
-| `St.Settings:color-scheme` | 45 / 46–51 | [why](shell-api.md#st_settings_color_scheme) |
-| `St.Settings.get()` | 45–51 stable | [why](shell-api.md#st_settings_get) |
-| `Main.overview` | 45–51 stable | [why](shell-api.md#main_overview) |
-| `Main.uiGroup` | 45–51 stable | [why](shell-api.md#main_ui_group) |
-| `Main.overview.visible` | 45–51 stable | [why](shell-api.md#overview_visible) |
+| `win.get_client_type()` | 50–51 stable | [why](shell-api.md#get_client_type) |
+| `win.get_window_type()` | 50–51 stable | [why](shell-api.md#get_window_type) |
+| `win.is_maximized()` | 50–51 stable | [why](shell-api.md#is_maximized) |
+| `win.is_fullscreen()` | 50–51 stable | [why](shell-api.md#is_fullscreen) |
+| `win.get_tile_match()` | 50–51 stable | [why](shell-api.md#get_tile_match) |
+| `win.get_pid()` | 50–51 stable | [why](shell-api.md#get_pid) |
+| `win.get_frame_rect()` | 50–51 stable | [why](shell-api.md#get_frame_rect) |
+| `win.get_buffer_rect()` | 50–51 stable | [why](shell-api.md#get_buffer_rect) |
+| `win.allows_resize()` | 50–51 stable | [why](shell-api.md#allows_resize) |
+| `win.get_monitor()` | 50–51 stable | [why](shell-api.md#get_monitor) |
+| `win.begin_grab_op()` | 50–51 stable | [why](shell-api.md#begin_grab_op) |
+| `win.get_compositor_private()` | 50–51 stable | [why](shell-api.md#get_compositor_private) |
+| `win.is_hidden()` | 50–51 stable | [why](shell-api.md#is_hidden) |
+| `win.is_attached_dialog()` | 50–51 stable | [why](shell-api.md#is_attached_dialog) |
+| `win.get_transient_for()` | 50–51 stable | [why](shell-api.md#get_transient_for) |
+| `win.located_on_workspace()` | 50–51 stable | [why](shell-api.md#located_on_workspace) |
+| `win.is_on_all_workspaces()` | 50–51 stable | [why](shell-api.md#is_on_all_workspaces) |
+| `win.decorated` | 50–51 stable | [why](shell-api.md#decorated) |
+| `win.maximized_vertically` | 50–51 stable | [why](shell-api.md#maximized_vertically) |
+| `win.maximized_horizontally` | 50–51 stable | [why](shell-api.md#maximized_horizontally) |
+| `win.minimized` | 50–51 stable | [why](shell-api.md#minimized) |
+| `global.display.get_monitor_geometry(i)` | 50–51 stable | [why](shell-api.md#get_monitor_geometry) |
+| `global.display.get_monitor_scale(i)` | 50–51 stable | [why](shell-api.md#get_monitor_scale) |
+| `global.display.get_n_monitors()` | 50–51 stable | [why](shell-api.md#get_n_monitors) |
+| `global.display.get_tab_list()` | 50–51 stable | [why](shell-api.md#get_tab_list) |
+| `global.backend.get_monitor_manager()` | 50–51 stable | [why](shell-api.md#get_monitor_manager) |
+| `actor.set_cursor_type()` | 50–51 stable | [why](shell-api.md#set_cursor_type) |
+| `global.window_group.set_child_above_sibling()` | 50–51 stable | [why](shell-api.md#set_child_above_sibling) |
+| `global.window_group.set_child_below_sibling()` | 50–51 stable | [why](shell-api.md#set_child_below_sibling) |
+| `actor.get_transform()` | 50–51 stable | [why](shell-api.md#actor_get_transform) |
+| `new Clutter.BindConstraint()` | 50–51 stable | [why](shell-api.md#bind_constraint_new) |
+| `effect.set_enabled()` | 50–51 stable | [why](shell-api.md#actor_meta_set_enabled) |
+| `Clutter.ActorMeta:enabled` | 50–51 stable | [why](shell-api.md#actor_meta_enabled) |
+| `effect.get_actor()` | 50–51 stable | [why](shell-api.md#actor_meta_get_actor) |
+| `Clutter.OffscreenEffect:vfunc_paint_target()` | 50–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
+| `effect.set_uniform_float()` | 50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
+| `pipeline.set_uniform_float()` | 50–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
+| `stex.paint_to_bitmap()` | 50 absent / 51 | [why](shell-api.md#shaped_texture_paint_to_bitmap) |
+| `Cogl.PixelFormat` | 50–51 stable | [why](shell-api.md#cogl_pixel_format) |
+| `Clutter.CursorType` | 50–51 stable | [why](shell-api.md#clutter_cursor_type) |
+| `effect.set_uniform_float() [Shell.GLSLEffect]` | 50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
+| `backend.get_sprite()` | 50–51 stable | [why](shell-api.md#backend_get_sprite) |
+| `backend.get_pointer_sprite()` | 50–51 stable | [why](shell-api.md#backend_get_pointer_sprite) |
+| `backend.get_default_seat()` | 50–51 stable | [why](shell-api.md#backend_get_default_seat) |
+| `Meta-<api> / Shell-<api> typelibs` | 50 / 51 | [why](shell-api.md#mutter_api_version) |
+| `Shell.GLSLEffect` | 50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
+| `Shell.WindowTracker.get_default()` | 50–51 stable | [why](shell-api.md#window_tracker_get_default) |
+| `St.BoxLayout:vertical` | 50 / 51 absent | [why](shell-api.md#st_box_layout_vertical) |
+| `St.SystemColorScheme` | 50–51 stable | [why](shell-api.md#st_system_color_scheme) |
+| `St.Settings:enable-animations` | 50–51 stable | [why](shell-api.md#st_settings_enable_animations) |
+| `St.Settings:color-scheme` | 50–51 stable | [why](shell-api.md#st_settings_color_scheme) |
+| `St.Settings.get()` | 50–51 stable | [why](shell-api.md#st_settings_get) |
+| `Main.overview` | 50–51 stable | [why](shell-api.md#main_overview) |
+| `Main.uiGroup` | 50–51 stable | [why](shell-api.md#main_ui_group) |
+| `Main.overview.visible` | 50–51 stable | [why](shell-api.md#overview_visible) |
 <!-- shell-api-table:end -->
 
-## Evolution across GNOME 45–51
+## Evolution across GNOME 50–51
 
-Five upstream watersheds fall in this range - the shader base class, the maximize query, the grab
-operation signature, the per-actor cursor, and the Mutter typelib naming. With the runtime baseline
-elevated to GNOME 50+, the grab signature, maximize query, and per-actor cursor target modern upstream
-APIs directly without pre-50 shims; the shader base class continues to bridge GNOME 50 (`Shell.GLSLEffect`)
-and 51 (`Clutter.ShaderEffect`), and the typelib binds dynamically via `gi://Meta`.
-What changed and what the extension does about it is described where each call
-appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
-computed rather than remembered.
+Two upstream watersheds fall in this range - the shader base class and the Mutter typelib naming -
+and the shader base class continues to bridge both: GNOME 50 (`Shell.GLSLEffect`) and 51
+(`Clutter.ShaderEffect`), with the typelib binding dynamically via `gi://Meta`. The grab operation
+signature and the maximize query already target the modern upstream APIs on this baseline, and the
+per-actor cursor is resolved by capability rather than by a version. What changed and what the
+extension does about it is described where each call appears in [shell-api.md](shell-api.md); which
+of the two lines share which shape is in the table above, computed rather than remembered.
 
 ## Re-checking the mirrored monitor scan on a Mutter bump
 
@@ -129,7 +118,7 @@ GNOME Shell 51 migration guide lists additional upstream breaking changes that w
 - **`disable()` cannot be async**: In GNOME 51, returning a Promise from `Extension.disable()` throws an error. The extension's `disable()` is completely synchronous.
 - **`Clutter.get_default_backend()` dropped**: `Clutter.get_default_backend()` was removed upstream. Our codebase avoids it entirely: the dispatch obtains the backend from `stage.get_context().get_backend()` or `global.backend`.
 - **`St.ButtonMask` enum renames**: Not used by this extension.
-- **`St.BoxLayout:vertical` property removed** (deprecated since 48): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
+- **`St.BoxLayout:vertical` property removed** (in 51): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
 - **`Gio.DBus.makeProxyWrapper()` returns class needing `new`**: Not used (our IPC uses `Gio.DBusExportedObject` / standard GDBus proxy).
 
 What GJS cannot see at all — the window geometry scale, Mutter's own shadow gates —
@@ -190,6 +179,6 @@ defect that fires on a normal path has to be dealt with here rather than worked 
 - **Never instantiate long-lived GObjects at JS module scope.** EGO-X-004 rejects
   module-scope GObjects (e.g. `Gio.Cancellable`); tie their lifecycle strictly to session or instance boundaries.
 - **Signals that may not exist are connected in "safe" mode.** Window- and
-  actor-level signals vary across the audited 45–51 lines (the runtime itself is 50–51), and the object can be unmanaged while we
+  actor-level signals vary across the audited 50–51 lines, and the object can be unmanaged while we
   connect, so a failure there is expected and swallowed. A failure on a global
   signal is not: it means an API assumption is wrong.

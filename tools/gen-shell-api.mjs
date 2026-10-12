@@ -4,7 +4,7 @@
  * tools/shell-api.json, linking every row to its prose in docs/shell-api.md.
  *
  * Design: the table's facts are derived, never typed. The hand-written version of this table had
- * four wrong rows - the grab-op row gave 45 the signature 46 introduced, two rows named
+ * four wrong rows - the hand-written table gave one line the signature its successor introduced, two rows named
  * Clutter.Effect for slots that live on Clutter.ActorMeta and Clutter.OffscreenEffect, and
  * St.BoxLayout:vertical was attributed to St.Widget - and nothing could notice, because a fact
  * typed into prose has no reader that can disagree with it. Here the status column is computed

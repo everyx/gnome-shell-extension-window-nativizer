@@ -24,13 +24,8 @@ docks) in the eligibility checks, the rule fingerprints and the inspector picker
 
 ## is_maximized
 
-`win.is_maximized()` - the canonical query from GNOME 49, returning a boolean directly. The extension
-reads it via optional chaining `Boolean(win?.is_maximized?.())`.
-
-## get_maximized
-
-`win.get_maximized()` - historical 45–48 spelling returning a `MetaMaximizeFlags` bitmask. Retained
-in the audit record for historical tracking; the extension no longer calls it at runtime.
+`win.is_maximized()` - the canonical boolean query, read via optional chaining
+`Boolean(win?.is_maximized?.())` so a host that lacks it answers false instead of throwing.
 
 ## is_fullscreen
 
@@ -71,10 +66,8 @@ resolved per monitor, so this is read before either.
 
 ## begin_grab_op
 
-`win.begin_grab_op()` - three shapes across upstream history: 45 took `(op, device, sequence, time)`,
-46–48 added `pos_hint`, and 49–51 replaced device and sequence with `sprite`. With the runtime
-baseline elevated to GNOME 50+, the extension directly calls the modern 4-argument sprite signature
-`(op, sprite, time, pos_hint)`.
+`win.begin_grab_op()` - the 50-51 signature `(op, sprite, time, pos_hint)`. The extension calls it
+behind a capability probe, so a line whose signature changes again gets no grab rather than a crash.
 
 ## get_compositor_private
 
@@ -110,13 +103,6 @@ sticky window is not filtered out by the workspace it happens to report.
 `win.decorated` - the policy flag from `mwm_decorated` (default TRUE), not proof of a live frame.
 The real frame test is `priv->frame != NULL` (`meta_window_x11_is_ssd`); consumed here as "has frame
 decorations (SSD)".
-
-## is_client_decorated
-
-`win.is_client_decorated()` - declared in 45 and 46, removed in 47. The extension does not call it.
-The hand-written version of this table recorded it as "does not exist - a GTK concept with no
-counterpart in Meta.Window", which was wrong: Mutter had it and dropped it. It stays as an audited
-entry because a negative claim is the kind nobody ever re-checks.
 
 ## maximized_vertically
 
@@ -154,16 +140,11 @@ chaining, and the only place the extension asks for a scale.
 
 `global.backend.get_monitor_manager()` - read for the monitor layout, through optional chaining.
 
-## display_set_cursor
-
-`global.display.set_cursor()` - declared from 45 to 49, gone in 50, when the cursor became
-actor-level (`Clutter.Actor:set_cursor_type`) and seat-level. The extension does not call it. The
-hand-written table called it non-existent, which is true only from 50 on.
-
 ## set_cursor_type
 
-`actor.set_cursor_type()` - per-actor cursor, introduced in Clutter 50.
-The extension runs on 50-51, so the pre-50 shape it guards against never arrives.
+`actor.set_cursor_type()` - the per-actor cursor the resize band sets for each edge. Resolved by
+capability in `platform/actorCursor.js`, so an actor that lacks the method gets no cursor rather
+than a throw.
 
 ## set_child_above_sibling
 
@@ -213,7 +194,7 @@ cited as if it were the API. The extension calls the method and never reads the 
 ## offscreen_effect_paint_target
 
 `Clutter.OffscreenEffect:vfunc_paint_target()` - the hook the clip effect reads the live actor
-size in. It inherits the slot through `Shell.GLSLEffect` (45-50) or `Clutter.ShaderEffect` (51),
+size in. It inherits the slot through `Shell.GLSLEffect` (50) or `Clutter.ShaderEffect` (51),
 both offscreen effects. The shell's own `FadeEffect` (`messageList.js`) uses the same hook.
 
 ## clutter_set_uniform_float
@@ -235,11 +216,6 @@ requested clip. The extension passes a 1x1 clip, so probing a window that is not
 costs one pixel - and the attached mask cannot be detached from GJS afterwards, which is why the
 question is worth asking before touching it.
 
-## shaped_texture_get_image
-
-`shapedTexture.get_image()` - the GNOME 50 spelling of the same probe (`paint_to_bitmap` from 51).
-It shares the early-out, so the platform seam can call either.
-
 ## cogl_pixel_format
 
 `Cogl.PixelFormat` - the format the probe asks for (`RGBA_8888`); the mask builder uses `A_8`, the
@@ -248,16 +224,13 @@ single-channel layout Mutter's own mask slot expects.
 ## clutter_cursor_type
 
 `Clutter.CursorType` - the cursor `Clutter.Actor.set_cursor_type` takes, and the reason this row exists
-is where it is read rather than what it does. It arrives in 50 with the method, and the resize band's
-directions used to be resolved into a **module-level table** of its members: on 45-49 the table threw
-while the extension was being loaded, so the shell reported the whole extension as failed
-(`TypeError: (intermediate value).CursorType is undefined`). Resolving a direction is now a lookup
-behind a capability check in `platform/actorCursor.js`, and a line without the enum gets no cursor
-instead of no extension.
+is where it is read rather than what it does. It arrives in 50 with the method; the resize band's
+directions are resolved by lookup behind a capability check in `platform/actorCursor.js`, so a line
+without the enum gets no cursor instead of an exception while the extension is loading.
 
 ## shell_glsl_set_uniform_float
 
-`effect.set_uniform_float()` on `Shell.GLSLEffect` - the 45-50 uniform upload. The per-line
+`effect.set_uniform_float()` on `Shell.GLSLEffect` - the GNOME 50 uniform upload. The per-line
 shader base class behind `platform/shaderEffect.js` is one seam of the unified platform library.
 
 ## backend_get_sprite
@@ -270,27 +243,22 @@ event via `backend.get_sprite(stage, event)`.
 `backend.get_pointer_sprite()` - fallback method on GNOME 50+ when `get_sprite` is unavailable,
 called via `backend.get_pointer_sprite(stage)`.
 
-## seat_get_pointer
-
-`seat.get_pointer()` - historical 45–48 pointer device resolution. Retained in the audit record;
-the extension no longer calls it at runtime.
-
 ## backend_get_default_seat
 
-`backend.get_default_seat()` - historical 45–48 seat resolution. Retained in the audit record;
-the extension no longer calls it at runtime.
+`backend.get_default_seat()` - the 50-51 seat resolution, available for the pointer chain the grab
+op uses.
 
 ## shell_glsl_effect_h
 
-`Shell.GLSLEffect` - the shader base class on 45-50. 51 removed it in favour of
+`Shell.GLSLEffect` - the GNOME 50 shader base class. 51 removed it in favour of
 `Clutter.ShaderEffect`, and with it `shell_glsl_effect_set_uniform_float`.
 
 ## mutter_api_version
 
-`libmutter_api_version` in Mutter's `meson.build` - what the typelibs are called. It runs 13 to 16
-across 45-48, is 17 on 49 and 18 on 50, and becomes 51 when Mutter aligns the number to the release.
-The extension never names a version: `import gi://Meta` binds whatever the host ships, which is why
-this is recorded - to keep the typelib names quoted in prose from drifting.
+`libmutter_api_version` in Mutter's `meson.build` - what the typelibs are called. It is 18 on 50 and
+becomes 51 when Mutter aligns the number to the release. The extension never names a version:
+`import gi://Meta` binds whatever the host ships, which is why this is recorded - to keep the typelib
+names quoted in prose from drifting.
 
 ## window_tracker_get_default
 
@@ -300,9 +268,9 @@ tearing down.
 
 ## st_box_layout_vertical
 
-`St.BoxLayout:vertical` - deprecated in 48, removed in 51. The migration guide attributes the
-removal to `St.Widget`; upstream it is declared on `St.BoxLayout`. The extension does not use it
-either way, and the entry is recorded so the attribution stays corrected.
+`St.BoxLayout:vertical` - removed in 51. The migration guide attributes the removal to `St.Widget`;
+upstream it is declared on `St.BoxLayout`. The extension does not use it either way, and the entry
+is recorded so the attribution stays corrected.
 
 ## st_system_color_scheme
 

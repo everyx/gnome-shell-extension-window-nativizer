@@ -5,65 +5,10 @@
         "gnome-shell": "https://gitlab.gnome.org/GNOME/gnome-shell"
     },
     "majors": [
-        45,
-        46,
-        47,
-        48,
-        49,
         50,
         51
     ],
     "audited": {
-        "45": {
-            "mutter": {
-                "tag": "45.7",
-                "commit": "706f7921bf2f99b44dfff000c28e89f12afc1a63"
-            },
-            "gnome-shell": {
-                "tag": "45.10",
-                "commit": "a5fa6111153068ec65ab88f206bfa1b6685c759f"
-            }
-        },
-        "46": {
-            "mutter": {
-                "tag": "46.9",
-                "commit": "fe8d2be3f90f89f286c89b164c94a4f86552bc97"
-            },
-            "gnome-shell": {
-                "tag": "46.10",
-                "commit": "49fa85b2fead489d5c1ce50ecaf28a114c831f1e"
-            }
-        },
-        "47": {
-            "mutter": {
-                "tag": "47.10",
-                "commit": "9bea38e3341bc2b0f1525b44619e5193bb7816dd"
-            },
-            "gnome-shell": {
-                "tag": "47.10",
-                "commit": "6b25145b7f746403d7b0fccd2bf0e8c8fadf39fc"
-            }
-        },
-        "48": {
-            "mutter": {
-                "tag": "48.8",
-                "commit": "6145511b9b0f9b597b620d869855bfe61d045c96"
-            },
-            "gnome-shell": {
-                "tag": "48.8",
-                "commit": "efadeecbe6ad5cefd68d1fbb7f20991efaec8cf3"
-            }
-        },
-        "49": {
-            "mutter": {
-                "tag": "49.8",
-                "commit": "b220e70ba6366cff828c6961e8a41a396d65aa47"
-            },
-            "gnome-shell": {
-                "tag": "49.10",
-                "commit": "444a5f5938cf7cd9d37e4dae0c60b7283f8c7117"
-            }
-        },
         "50": {
             "mutter": {
                 "tag": "50.5",
@@ -87,40 +32,6 @@
     },
     "surface": [
         {
-            "id": "is_client_decorated",
-            "member": "win.is_client_decorated()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "src/meta/window.h",
-            "sym": "meta_window_is_client_decorated",
-            "decl": {
-                "45": "META_EXPORT gboolean meta_window_is_client_decorated (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_is_client_decorated (MetaWindow *window);",
-                "47": null,
-                "48": null,
-                "49": null,
-                "50": null,
-                "51": null
-            }
-        },
-        {
-            "id": "display_set_cursor",
-            "member": "global.display.set_cursor()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "src/meta/display.h",
-            "sym": "meta_display_set_cursor",
-            "decl": {
-                "45": "META_EXPORT void meta_display_set_cursor (MetaDisplay *display, MetaCursor cursor);",
-                "46": "META_EXPORT void meta_display_set_cursor (MetaDisplay *display, MetaCursor cursor);",
-                "47": "META_EXPORT void meta_display_set_cursor (MetaDisplay *display, MetaCursor cursor);",
-                "48": "META_EXPORT void meta_display_set_cursor (MetaDisplay *display, MetaCursor cursor);",
-                "49": "META_EXPORT void meta_display_set_cursor (MetaDisplay *display, MetaCursor cursor);",
-                "50": null,
-                "51": null
-            }
-        },
-        {
             "id": "get_client_type",
             "member": "win.get_client_type()",
             "repo": "mutter",
@@ -128,11 +39,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_client_type",
             "decl": {
-                "45": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
-                "46": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
-                "47": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
-                "48": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
-                "49": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
                 "50": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);",
                 "51": "META_EXPORT MetaWindowClientType meta_window_get_client_type (MetaWindow *window);"
             }
@@ -145,11 +51,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_window_type",
             "decl": {
-                "45": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
-                "46": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
-                "47": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
-                "48": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
-                "49": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
                 "50": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);",
                 "51": "META_EXPORT MetaWindowType meta_window_get_window_type (MetaWindow *window);"
             }
@@ -162,30 +63,8 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_is_maximized",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": "META_EXPORT gboolean meta_window_is_maximized (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_is_maximized (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_is_maximized (MetaWindow *window);"
-            }
-        },
-        {
-            "id": "get_maximized",
-            "member": "win.get_maximized()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "src/meta/window.h",
-            "sym": "meta_window_get_maximized",
-            "decl": {
-                "45": "META_EXPORT MetaMaximizeFlags meta_window_get_maximized (MetaWindow *window);",
-                "46": "META_EXPORT MetaMaximizeFlags meta_window_get_maximized (MetaWindow *window);",
-                "47": "META_EXPORT MetaMaximizeFlags meta_window_get_maximized (MetaWindow *window);",
-                "48": "META_EXPORT MetaMaximizeFlags meta_window_get_maximized (MetaWindow *window);",
-                "49": null,
-                "50": null,
-                "51": null
             }
         },
         {
@@ -196,11 +75,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_is_fullscreen",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
-                "47": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
-                "48": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
-                "49": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_is_fullscreen (MetaWindow *window);"
             }
@@ -213,11 +87,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_tile_match",
             "decl": {
-                "45": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
-                "46": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
-                "47": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
-                "48": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
-                "49": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
                 "50": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);",
                 "51": "META_EXPORT MetaWindow *meta_window_get_tile_match (MetaWindow *window);"
             }
@@ -230,11 +99,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_pid",
             "decl": {
-                "45": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
-                "46": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
-                "47": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
-                "48": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
-                "49": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
                 "50": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);",
                 "51": "META_EXPORT pid_t meta_window_get_pid (MetaWindow *window);"
             }
@@ -247,11 +111,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_frame_rect",
             "decl": {
-                "45": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "46": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "47": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "48": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "49": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
                 "50": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);",
                 "51": "META_EXPORT void meta_window_get_frame_rect (const MetaWindow *window, MtkRectangle *rect);"
             }
@@ -264,11 +123,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_buffer_rect",
             "decl": {
-                "45": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "46": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "47": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "48": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
-                "49": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
                 "50": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);",
                 "51": "META_EXPORT void meta_window_get_buffer_rect (const MetaWindow *window, MtkRectangle *rect);"
             }
@@ -281,11 +135,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_allows_resize",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
-                "47": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
-                "48": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
-                "49": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_allows_resize (MetaWindow *window);"
             }
@@ -298,11 +147,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_monitor",
             "decl": {
-                "45": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
-                "46": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
-                "47": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
-                "48": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
-                "49": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
                 "50": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);",
                 "51": "META_EXPORT int meta_window_get_monitor (MetaWindow *window);"
             }
@@ -315,11 +159,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_begin_grab_op",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterInputDevice *device, ClutterEventSequence *sequence, guint32 timestamp);",
-                "46": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterInputDevice *device, ClutterEventSequence *sequence, guint32 timestamp, graphene_point_t *pos_hint);",
-                "47": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterInputDevice *device, ClutterEventSequence *sequence, guint32 timestamp, graphene_point_t *pos_hint);",
-                "48": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterInputDevice *device, ClutterEventSequence *sequence, guint32 timestamp, graphene_point_t *pos_hint);",
-                "49": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterSprite *sprite, guint32 timestamp, graphene_point_t *pos_hint);",
                 "50": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterSprite *sprite, guint32 timestamp, graphene_point_t *pos_hint);",
                 "51": "META_EXPORT gboolean meta_window_begin_grab_op (MetaWindow *window, MetaGrabOp op, ClutterSprite *sprite, guint32 timestamp, graphene_point_t *pos_hint);"
             }
@@ -332,11 +171,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_compositor_private",
             "decl": {
-                "45": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
-                "46": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
-                "47": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
-                "48": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
-                "49": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
                 "50": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);",
                 "51": "META_EXPORT GObject *meta_window_get_compositor_private (MetaWindow *window);"
             }
@@ -349,11 +183,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_is_hidden",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
-                "47": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
-                "48": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
-                "49": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_is_hidden (MetaWindow *window);"
             }
@@ -366,11 +195,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_is_attached_dialog",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
-                "47": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
-                "48": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
-                "49": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_is_attached_dialog (MetaWindow *window);"
             }
@@ -383,11 +207,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_get_transient_for",
             "decl": {
-                "45": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
-                "46": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
-                "47": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
-                "48": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
-                "49": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
                 "50": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);",
                 "51": "META_EXPORT MetaWindow *meta_window_get_transient_for (MetaWindow *window);"
             }
@@ -400,11 +219,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_located_on_workspace",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
-                "46": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
-                "47": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
-                "48": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
-                "49": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
                 "50": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);",
                 "51": "META_EXPORT gboolean meta_window_located_on_workspace (MetaWindow *window, MetaWorkspace *workspace);"
             }
@@ -417,11 +231,6 @@
             "file": "src/meta/window.h",
             "sym": "meta_window_is_on_all_workspaces",
             "decl": {
-                "45": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
-                "46": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
-                "47": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
-                "48": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
-                "49": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
                 "50": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);",
                 "51": "META_EXPORT gboolean meta_window_is_on_all_workspaces (MetaWindow *window);"
             }
@@ -434,11 +243,6 @@
             "file": "src/core/window.c",
             "sym": "decorated",
             "decl": {
-                "45": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "46": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "47": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "48": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "49": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "50": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "51": "g_param_spec_boolean (\"decorated\", NULL, NULL, TRUE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);"
             }
@@ -451,11 +255,6 @@
             "file": "src/core/window.c",
             "sym": "maximized-vertically",
             "decl": {
-                "45": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "46": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "47": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "48": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "49": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "50": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "51": "g_param_spec_boolean (\"maximized-vertically\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);"
             }
@@ -468,11 +267,6 @@
             "file": "src/core/window.c",
             "sym": "maximized-horizontally",
             "decl": {
-                "45": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "46": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "47": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "48": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "49": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "50": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "51": "g_param_spec_boolean (\"maximized-horizontally\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);"
             }
@@ -485,11 +279,6 @@
             "file": "src/core/window.c",
             "sym": "minimized",
             "decl": {
-                "45": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "46": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "47": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "48": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
-                "49": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "50": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);",
                 "51": "g_param_spec_boolean (\"minimized\", NULL, NULL, FALSE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);"
             }
@@ -502,11 +291,6 @@
             "file": "src/meta/display.h",
             "sym": "meta_display_get_monitor_geometry",
             "decl": {
-                "45": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
-                "46": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
-                "47": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
-                "48": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
-                "49": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
                 "50": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);",
                 "51": "META_EXPORT void meta_display_get_monitor_geometry (MetaDisplay *display, int monitor, MtkRectangle *geometry);"
             }
@@ -519,11 +303,6 @@
             "file": "src/meta/display.h",
             "sym": "meta_display_get_monitor_scale",
             "decl": {
-                "45": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
-                "46": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
-                "47": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
-                "48": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
-                "49": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
                 "50": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);",
                 "51": "META_EXPORT float meta_display_get_monitor_scale (MetaDisplay *display, int monitor);"
             }
@@ -536,11 +315,6 @@
             "file": "src/meta/display.h",
             "sym": "meta_display_get_n_monitors",
             "decl": {
-                "45": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
-                "46": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
-                "47": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
-                "48": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
-                "49": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
                 "50": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);",
                 "51": "META_EXPORT int meta_display_get_n_monitors (MetaDisplay *display);"
             }
@@ -553,11 +327,6 @@
             "file": "src/meta/display.h",
             "sym": "meta_display_get_tab_list",
             "decl": {
-                "45": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
-                "46": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
-                "47": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
-                "48": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
-                "49": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
                 "50": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);",
                 "51": "META_EXPORT GList* meta_display_get_tab_list (MetaDisplay *display, MetaTabList type, MetaWorkspace *workspace);"
             }
@@ -570,11 +339,6 @@
             "file": "src/meta/meta-backend.h",
             "sym": "meta_backend_get_monitor_manager",
             "decl": {
-                "45": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
-                "46": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
-                "47": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
-                "48": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
-                "49": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
                 "50": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);",
                 "51": "META_EXPORT MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);"
             }
@@ -587,11 +351,6 @@
             "file": "clutter/clutter/clutter-actor.h",
             "sym": "clutter_actor_set_cursor_type",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": null,
                 "50": "CLUTTER_EXPORT void clutter_actor_set_cursor_type (ClutterActor *actor, ClutterCursorType cursor_type);",
                 "51": "CLUTTER_EXPORT void clutter_actor_set_cursor_type (ClutterActor *actor, ClutterCursorType cursor_type);"
             }
@@ -604,11 +363,6 @@
             "file": "clutter/clutter/clutter-actor.h",
             "sym": "clutter_actor_set_child_above_sibling",
             "decl": {
-                "45": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "46": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "47": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "48": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "49": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
                 "50": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
                 "51": "CLUTTER_EXPORT void clutter_actor_set_child_above_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);"
             }
@@ -621,11 +375,6 @@
             "file": "clutter/clutter/clutter-actor.h",
             "sym": "clutter_actor_set_child_below_sibling",
             "decl": {
-                "45": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "46": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "47": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "48": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
-                "49": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
                 "50": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);",
                 "51": "CLUTTER_EXPORT void clutter_actor_set_child_below_sibling (ClutterActor *self, ClutterActor *child, ClutterActor *sibling);"
             }
@@ -638,11 +387,6 @@
             "file": "clutter/clutter/clutter-actor.h",
             "sym": "clutter_actor_get_transform",
             "decl": {
-                "45": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
-                "46": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
-                "47": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
-                "48": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
-                "49": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
                 "50": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
                 "51": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);"
             }
@@ -655,11 +399,6 @@
             "file": "clutter/clutter/clutter-bind-constraint.h",
             "sym": "clutter_bind_constraint_new",
             "decl": {
-                "45": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
-                "46": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
-                "47": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
-                "48": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
-                "49": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
                 "50": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);",
                 "51": "CLUTTER_EXPORT ClutterConstraint * clutter_bind_constraint_new (ClutterActor *source, ClutterBindCoordinate coordinate, gfloat offset);"
             }
@@ -672,11 +411,6 @@
             "file": "clutter/clutter/clutter-actor-meta.h",
             "sym": "clutter_actor_meta_set_enabled",
             "decl": {
-                "45": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
-                "46": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
-                "47": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
-                "48": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
-                "49": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
                 "50": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);",
                 "51": "CLUTTER_EXPORT void clutter_actor_meta_set_enabled (ClutterActorMeta *meta, gboolean is_enabled);"
             }
@@ -689,11 +423,6 @@
             "file": "clutter/clutter/clutter-actor-meta.c",
             "sym": "enabled",
             "decl": {
-                "45": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, CLUTTER_PARAM_READWRITE);",
-                "46": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);",
-                "47": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);",
-                "48": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);",
-                "49": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);",
                 "50": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);",
                 "51": "g_param_spec_boolean (\"enabled\", NULL, NULL, TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);"
             }
@@ -706,11 +435,6 @@
             "file": "clutter/clutter/clutter-actor-meta.h",
             "sym": "clutter_actor_meta_get_actor",
             "decl": {
-                "45": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
-                "46": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
-                "47": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
-                "48": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
-                "49": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
                 "50": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);",
                 "51": "CLUTTER_EXPORT ClutterActor * clutter_actor_meta_get_actor (ClutterActorMeta *meta);"
             }
@@ -723,11 +447,6 @@
             "file": "clutter/clutter/clutter-offscreen-effect.h",
             "sym": "paint_target",
             "decl": {
-                "45": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
-                "46": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
-                "47": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
-                "48": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
-                "49": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
                 "50": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);",
                 "51": "(* paint_target) (ClutterOffscreenEffect *effect, ClutterPaintNode *node, ClutterPaintContext *paint_context);"
             }
@@ -740,11 +459,6 @@
             "file": "clutter/clutter/clutter-shader-effect.h",
             "sym": "clutter_shader_effect_set_uniform_float",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": null,
                 "50": null,
                 "51": "CLUTTER_EXPORT void clutter_shader_effect_set_uniform_float (ClutterShaderEffect *effect, const gchar *name, int n_components, int total_count, const gfloat *value);"
             }
@@ -757,11 +471,6 @@
             "file": "cogl/cogl/cogl-pipeline-state.h",
             "sym": "cogl_pipeline_set_uniform_float",
             "decl": {
-                "45": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
-                "46": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
-                "47": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
-                "48": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
-                "49": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
                 "50": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);",
                 "51": "COGL_EXPORT void cogl_pipeline_set_uniform_float (CoglPipeline *pipeline, int uniform_location, int n_components, int count, const float *value);"
             }
@@ -774,30 +483,8 @@
             "file": "src/meta/meta-shaped-texture.h",
             "sym": "meta_shaped_texture_paint_to_bitmap",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": null,
                 "50": null,
                 "51": "META_EXPORT CoglBitmap * meta_shaped_texture_paint_to_bitmap (MetaShapedTexture *stex, MtkRectangle *clip, CoglPixelFormat format);"
-            }
-        },
-        {
-            "id": "shaped_texture_get_image",
-            "member": "stex.get_image()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "src/meta/meta-shaped-texture.h",
-            "sym": "meta_shaped_texture_get_image",
-            "decl": {
-                "45": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "46": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "47": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "48": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "49": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "50": "META_EXPORT cairo_surface_t * meta_shaped_texture_get_image (MetaShapedTexture *stex, MtkRectangle *clip);",
-                "51": null
             }
         },
         {
@@ -808,11 +495,6 @@
             "file": "cogl/cogl/cogl-pixel-format.h",
             "sym": "COGL_PIXEL_FORMAT_A_8",
             "decl": {
-                "45": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
-                "46": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
-                "47": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
-                "48": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
-                "49": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
                 "50": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,",
                 "51": "COGL_PIXEL_FORMAT_A_8           = 1 | COGL_A_BIT,"
             }
@@ -825,11 +507,6 @@
             "file": "clutter/clutter/clutter-enums.h",
             "sym": "CLUTTER_CURSOR_DEFAULT",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": null,
                 "50": "CLUTTER_CURSOR_DEFAULT,",
                 "51": "CLUTTER_CURSOR_DEFAULT,"
             }
@@ -842,11 +519,6 @@
             "file": "src/shell-glsl-effect.h",
             "sym": "shell_glsl_effect_set_uniform_float",
             "decl": {
-                "45": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
-                "46": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
-                "47": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
-                "48": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
-                "49": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
                 "50": "void shell_glsl_effect_set_uniform_float (ShellGLSLEffect *effect, int uniform, int n_components, int total_count, const float *value);",
                 "51": null
             }
@@ -859,11 +531,6 @@
             "file": "clutter/clutter/clutter-backend.h",
             "sym": "clutter_backend_get_sprite",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);",
                 "50": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);",
                 "51": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_sprite (ClutterBackend *backend, ClutterStage *stage, const ClutterEvent *for_event);"
             }
@@ -876,30 +543,8 @@
             "file": "clutter/clutter/clutter-backend.h",
             "sym": "clutter_backend_get_pointer_sprite",
             "decl": {
-                "45": null,
-                "46": null,
-                "47": null,
-                "48": null,
-                "49": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);",
                 "50": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);",
                 "51": "CLUTTER_EXPORT ClutterSprite * clutter_backend_get_pointer_sprite (ClutterBackend *backend, ClutterStage *stage);"
-            }
-        },
-        {
-            "id": "seat_get_pointer",
-            "member": "seat.get_pointer()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "clutter/clutter/clutter-seat.h",
-            "sym": "clutter_seat_get_pointer",
-            "decl": {
-                "45": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
-                "46": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
-                "47": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
-                "48": "CLUTTER_EXPORT ClutterInputDevice * clutter_seat_get_pointer (ClutterSeat *seat);",
-                "49": null,
-                "50": null,
-                "51": null
             }
         },
         {
@@ -910,11 +555,6 @@
             "file": "clutter/clutter/clutter-backend.h",
             "sym": "clutter_backend_get_default_seat",
             "decl": {
-                "45": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
-                "46": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
-                "47": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
-                "48": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
-                "49": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
                 "50": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
                 "51": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);"
             }
@@ -927,11 +567,6 @@
             "file": "meson.build",
             "sym": "libmutter_api_version",
             "decl": {
-                "45": "libmutter_api_version = '13'",
-                "46": "libmutter_api_version = '14'",
-                "47": "libmutter_api_version = '15'",
-                "48": "libmutter_api_version = '16'",
-                "49": "libmutter_api_version = '17'",
                 "50": "libmutter_api_version = '18'",
                 "51": "libmutter_api_version = '51'"
             }
@@ -944,11 +579,6 @@
             "file": "src/shell-glsl-effect.h",
             "sym": null,
             "decl": {
-                "45": "present",
-                "46": "present",
-                "47": "present",
-                "48": "present",
-                "49": "present",
                 "50": "present",
                 "51": null
             }
@@ -961,11 +591,6 @@
             "file": "src/shell-window-tracker.h",
             "sym": "shell_window_tracker_get_default",
             "decl": {
-                "45": "ShellWindowTracker* shell_window_tracker_get_default(void);",
-                "46": "ShellWindowTracker* shell_window_tracker_get_default(void);",
-                "47": "ShellWindowTracker* shell_window_tracker_get_default(void);",
-                "48": "ShellWindowTracker* shell_window_tracker_get_default(void);",
-                "49": "ShellWindowTracker* shell_window_tracker_get_default(void);",
                 "50": "ShellWindowTracker* shell_window_tracker_get_default(void);",
                 "51": "ShellWindowTracker* shell_window_tracker_get_default(void);"
             }
@@ -978,11 +603,6 @@
             "file": "src/st/st-box-layout.c",
             "sym": "vertical",
             "decl": {
-                "45": "g_param_spec_boolean (\"vertical\", \"Vertical\", \"Whether the layout should be vertical, rather\" \"than horizontal\", FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);",
-                "46": "g_param_spec_boolean (\"vertical\", NULL, NULL, FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);",
-                "47": "g_param_spec_boolean (\"vertical\", NULL, NULL, FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);",
-                "48": "g_param_spec_boolean (\"vertical\", NULL, NULL, FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);",
-                "49": "g_param_spec_boolean (\"vertical\", NULL, NULL, FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);",
                 "50": "g_param_spec_boolean (\"vertical\", NULL, NULL, FALSE, ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);",
                 "51": null
             }
@@ -995,11 +615,6 @@
             "file": "src/st/st-settings.h",
             "sym": "ST_SYSTEM_COLOR_SCHEME",
             "decl": {
-                "45": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
-                "46": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
-                "47": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
-                "48": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
-                "49": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
                 "50": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,",
                 "51": "ST_SYSTEM_COLOR_SCHEME_DEFAULT = G_DESKTOP_COLOR_SCHEME_DEFAULT,"
             }
@@ -1012,11 +627,6 @@
             "file": "src/st/st-settings.c",
             "sym": "enable-animations",
             "decl": {
-                "45": "g_param_spec_boolean (\"enable-animations\", \"Enable animations\", \"Enable animations\", TRUE, ST_PARAM_READABLE);",
-                "46": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
-                "47": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
-                "48": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
-                "49": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
                 "50": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);",
                 "51": "g_param_spec_boolean (\"enable-animations\", NULL, NULL, TRUE, ST_PARAM_READABLE);"
             }
@@ -1029,11 +639,6 @@
             "file": "src/st/st-settings.c",
             "sym": "color-scheme",
             "decl": {
-                "45": "g_param_spec_enum (\"color-scheme\", \"Color scheme\", \"Color scheme\", ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
-                "46": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
-                "47": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
-                "48": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
-                "49": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
                 "50": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);",
                 "51": "g_param_spec_enum (\"color-scheme\", NULL, NULL, ST_TYPE_SYSTEM_COLOR_SCHEME, ST_SYSTEM_COLOR_SCHEME_DEFAULT, ST_PARAM_READABLE);"
             }
@@ -1046,11 +651,6 @@
             "file": "src/st/st-settings.h",
             "sym": "st_settings_get",
             "decl": {
-                "45": "StSettings * st_settings_get (void);",
-                "46": "StSettings * st_settings_get (void);",
-                "47": "StSettings * st_settings_get (void);",
-                "48": "StSettings * st_settings_get (void);",
-                "49": "StSettings * st_settings_get (void);",
                 "50": "StSettings * st_settings_get (void);",
                 "51": "StSettings * st_settings_get (void);"
             }
@@ -1063,11 +663,6 @@
             "file": "js/ui/main.js",
             "sym": "overview",
             "decl": {
-                "45": "export let overview = null;",
-                "46": "export let overview = null;",
-                "47": "export let overview = null;",
-                "48": "export let overview = null;",
-                "49": "export let overview = null;",
                 "50": "export let overview = null;",
                 "51": "export let overview = null;"
             }
@@ -1080,11 +675,6 @@
             "file": "js/ui/main.js",
             "sym": "uiGroup",
             "decl": {
-                "45": "export let uiGroup = null;",
-                "46": "export let uiGroup = null;",
-                "47": "export let uiGroup = null;",
-                "48": "export let uiGroup = null;",
-                "49": "export let uiGroup = null;",
                 "50": "export let uiGroup = null;",
                 "51": "export let uiGroup = null;"
             }
@@ -1097,11 +687,6 @@
             "file": "js/ui/overview.js",
             "sym": "visible",
             "decl": {
-                "45": "",
-                "46": "",
-                "47": "",
-                "48": "",
-                "49": "",
                 "50": "",
                 "51": ""
             }

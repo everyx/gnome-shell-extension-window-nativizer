@@ -691,7 +691,7 @@ scaling with high visual fidelity: when downscaled below 0.5x, if `create_mipmap
 it switches its minification filter to `COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST` (bilinear
 mipmapped filtering), ensuring sharp and alias-free thumbnails.
 
-However, our clip effect subclasses a shader effect (which inherits `Clutter.ShaderEffect` on GNOME 51+ or `Shell.GLSLEffect` on 45–50, deriving from `Clutter.OffscreenEffect`).
+However, our clip effect subclasses a shader effect (which inherits `Clutter.ShaderEffect` on GNOME 51+ or `Shell.GLSLEffect` on 50, deriving from `Clutter.OffscreenEffect`).
 When an effect redirects an actor's subtree to an offscreen FBO texture, the actor preview in the
 overview clones this FBO texture instead of sampling directly from `MetaShapedTexture`.
 In `Clutter.OffscreenEffect` (`ensure_pipeline_filter_for_scale()` in Mutter's
@@ -744,13 +744,14 @@ the mask:
   (`should_get_via_offscreen()` returns false) would have that path moved to an actor render by
   the mask — a different window screenshot, again for the rest of the session.
 
-The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (`get_image()`
-through GNOME 50) returns NULL from Mutter's own early-out while the offscreen path is already in
-use, and a 1x1 clip keeps the readback to a single pixel when it is not. A window that fails either
-test shows a **square, sharp** thumbnail instead — the clip is suspended, so nothing renders through
-the FBO. The `force-overview-corners` setting (off by default) keeps the legacy offscreen clip for
-those windows instead: rounded, and blurrier. The clip never touches the mask slot, so the desktop
-is left exactly as Mutter had it either way.
+The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (51+) returns NULL
+from Mutter's own early-out while the offscreen path is already in use, and a 1x1 clip keeps the
+readback to a single pixel when it is not. GNOME 50 has no probe whose NULL return is safe to
+marshal - its `get_image()` aborts the process through GJS - so there the decoration calls nothing
+and refuses the mask. A window the probe refuses shows a **square, sharp** thumbnail instead — the
+clip is suspended, so nothing renders through the FBO. The `force-overview-corners` setting (off by
+default) keeps the legacy offscreen clip for those windows instead: rounded, and blurrier. The clip
+never touches the mask slot, so the desktop is left exactly as Mutter had it either way.
 
 Upstream has no native window rounded-clip to fall back on —
 `Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only
