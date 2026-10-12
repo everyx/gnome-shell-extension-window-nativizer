@@ -32,6 +32,7 @@ import {
     getWindowDisplayTitle,
     getWindowFromActor,
     findMetaWindow,
+    getSurfaceContainer,
     getWindowSubpixelOffset
 } from '../src/platform/window.js';
 import {
@@ -803,6 +804,27 @@ describe('platform', () => {
         });
     });
 
+    describe('getSurfaceContainer', () => {
+        const St = {Widget: class {}};
+
+        it('returns the only non-foreign child', () => {
+            const container = {x: 3, y: -2, width: 800, height: 600};
+            expect(getSurfaceContainer({get_children: () => [container]}, St)).toBe(container);
+        });
+
+        it('excludes an injected foreign St.Widget', () => {
+            const foreign = new St.Widget();
+            const container = {x: 0, y: 0, width: 800, height: 600};
+            expect(getSurfaceContainer({get_children: () => [foreign, container]}, St)).toBe(container);
+        });
+
+        it('answers null when the tree is ambiguous, so the caller keeps a zero container offset', () => {
+            const background = {x: 0, y: 0, width: 800, height: 600};
+            const container = {x: 3, y: 0, width: 800, height: 600};
+            expect(getSurfaceContainer({get_children: () => [background, container]}, St)).toBeNull();
+        });
+    });
+
     describe('getWindowSubpixelOffset', () => {
         let originalGlobal;
 
@@ -814,97 +836,172 @@ describe('platform', () => {
             globalThis.global = originalGlobal;
         });
 
-        it('returns zero offset on null or undefined window or actor', () => {
-            expect(getWindowSubpixelOffset(null, null)).toEqual({x: 0, y: 0});
-            expect(getWindowSubpixelOffset({get_client_type: () => 0}, null)).toEqual({x: 0, y: 0});
-            expect(getWindowSubpixelOffset(null, {x: 100, y: 100})).toEqual({x: 0, y: 0});
+        // The phase belongs to the window's compositor actor, so every fake window points at the
+        // one it owns: a caller can no longer hand in a different actor and derive a different edge.
+        const waylandWin = (actor, monitorIndex = 0, frame = null) => ({
+            get_client_type: () => 0, // WAYLAND
+            get_monitor: () => monitorIndex,
+            get_compositor_private: () => actor,
+            ...(frame ? {get_frame_rect: () => frame} : {}),
+        });
+
+        const displayFor = monitors => ({
+            display: {
+                get_n_monitors: () => monitors.length,
+                get_monitor_scale: index => monitors[index].scale,
+                get_monitor_geometry: index => monitors[index].geometry,
+            },
+        });
+
+        const monitor = scale => displayFor([
+            {scale, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+        ]);
+
+        // Two monitors side by side: a 1.0 monitor on the left, a fractional-scale one on the
+        // right. Exercises both the highest-scale pick and the round rule at the shared edge.
+        const mixedScaleDisplay = scale => displayFor([
+            {scale: 1.0, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+            {scale, geometry: {x: 1920, y: 0, width: 1920, height: 1080}},
+        ]);
+
+        it('returns zero offset on a null window', () => {
+            expect(getWindowSubpixelOffset(null)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(undefined)).toEqual({x: 0, y: 0});
         });
 
         it('returns zero offset for non-Wayland windows', () => {
             const x11Win = {
                 get_client_type: () => 1, // X11
                 get_monitor: () => 0,
+                get_compositor_private: () => ({x: 242, y: 200}),
             };
-            const actor = {x: 242, y: 200};
-            expect(getWindowSubpixelOffset(x11Win, actor)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(x11Win)).toEqual({x: 0, y: 0});
+        });
+
+        it('returns zero offset when the window has no compositor actor', () => {
+            expect(getWindowSubpixelOffset(waylandWin(null))).toEqual({x: 0, y: 0});
         });
 
         it('returns zero offset on invalid monitor index', () => {
-            const win = {
-                get_client_type: () => 0, // WAYLAND
-                get_monitor: () => -1,
-            };
-            const actor = {x: 242, y: 200};
-            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(waylandWin({x: 242, y: 200}, -1))).toEqual({x: 0, y: 0});
         });
 
         it('returns zero offset on integer scale factors', () => {
-            globalThis.global = {
-                display: {
-                    get_n_monitors: () => 1,
-                    get_monitor_scale: () => 1.0,
-                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
-                },
-            };
-            const win = {
-                get_client_type: () => 0,
-                get_monitor: () => 0,
-            };
             const actor = {x: 242, y: 200};
-            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+            const win = waylandWin(actor);
+            globalThis.global = monitor(1.0);
+            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
 
-            globalThis.global.display.get_monitor_scale = () => 2.0;
-            expect(getWindowSubpixelOffset(win, actor)).toEqual({x: 0, y: 0});
+            globalThis.global = monitor(2.0);
+            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
         });
 
         it('calculates subpixel grid offset correctly across 4 phases under 1.33x scale', () => {
-            const scale = 4 / 3; // 1.3333333333333333
-            globalThis.global = {
-                display: {
-                    get_n_monitors: () => 1,
-                    get_monitor_scale: () => scale,
-                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
-                },
-            };
-            const win = {
-                get_client_type: () => 0,
-                get_monitor: () => 0,
-            };
+            const actor = {x: 240, y: 200};
+            const win = waylandWin(actor);
+            globalThis.global = monitor(4 / 3); // 1.3333333333333333
 
             // Phase x=240: 240 * 4/3 = 320.0 -> offset = 0
-            const offset240 = getWindowSubpixelOffset(win, {x: 240, y: 200});
-            expect(Math.abs(offset240.x)).toBeLessThan(0.001);
+            expect(Math.abs(getWindowSubpixelOffset(win).x)).toBeLessThan(0.001);
 
             // Phase x=241: 241 * 4/3 = 321.333 -> round = 321 -> adj = 240.75 -> offset = -0.25
-            const offset241 = getWindowSubpixelOffset(win, {x: 241, y: 200});
-            expect(Math.abs(offset241.x - (-0.25))).toBeLessThan(0.001);
+            actor.x = 241;
+            expect(Math.abs(getWindowSubpixelOffset(win).x - (-0.25))).toBeLessThan(0.001);
 
             // Phase x=242: 242 * 4/3 = 322.667 -> round = 323 -> adj = 242.25 -> offset = +0.25
-            const offset242 = getWindowSubpixelOffset(win, {x: 242, y: 200});
-            expect(Math.abs(offset242.x - 0.25)).toBeLessThan(0.001);
+            actor.x = 242;
+            expect(Math.abs(getWindowSubpixelOffset(win).x - 0.25)).toBeLessThan(0.001);
 
             // Phase x=243: 243 * 4/3 = 324.0 -> offset = 0
-            const offset243 = getWindowSubpixelOffset(win, {x: 243, y: 200});
-            expect(Math.abs(offset243.x)).toBeLessThan(0.001);
+            actor.x = 243;
+            expect(Math.abs(getWindowSubpixelOffset(win).x)).toBeLessThan(0.001);
         });
 
-        it('includes actor translation in subpixel offset calculations', () => {
+        it('ignores actor translation, matching the layout-coordinate phase in Mutter', () => {
             const scale = 4 / 3;
-            globalThis.global = {
-                display: {
-                    get_n_monitors: () => 1,
-                    get_monitor_scale: () => scale,
-                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
-                },
-            };
-            const win = {
-                get_client_type: () => 0,
-                get_monitor: () => 0,
-            };
+            globalThis.global = monitor(scale);
+            const plain = getWindowSubpixelOffset(waylandWin({x: 240, y: 200}));
+            const translated = getWindowSubpixelOffset(
+                waylandWin({x: 240, y: 200, translation_x: 2, translation_y: 2}));
 
-            // x=240 but translation_x=2 -> effective x=242 -> offset = +0.25
-            const offset = getWindowSubpixelOffset(win, {x: 240, y: 200, translation_x: 2, translation_y: 0});
-            expect(Math.abs(offset.x - 0.25)).toBeLessThan(0.001);
+            // Mutter applies the translation outside this term, so an animation moving the actor
+            // must not move the phase we cut on. x=240 -> 320.0 -> 0; y=200 -> 266.667 -> +0.25.
+            expect(translated).toEqual(plain);
+            expect(plain.x).toBeCloseTo(0, 6);
+            expect(plain.y).toBeCloseTo(0.25, 6);
+        });
+
+        it('equals Mutter arithmetic over the window actor plus the surface container', () => {
+            const scale = 4 / 3;
+            globalThis.global = monitor(scale);
+            const container = {x: 3, y: -2, width: 800, height: 600};
+            const actor = {x: 238, y: 202, get_children: () => [container]};
+            const win = waylandWin(actor);
+
+            // abs = layout(windowActor) + layout(surfaceContainer); no translation term.
+            const rel = {x: actor.x + container.x, y: actor.y + container.y};
+            const expected = {
+                x: Math.round(rel.x * scale) / scale - rel.x,
+                y: Math.round(rel.y * scale) / scale - rel.y,
+            };
+            expect(getWindowSubpixelOffset(win)).toEqual(expected);
+            // 241 * 4/3 = 321.333 -> -0.25; 200 * 4/3 = 266.667 -> +0.25. Both axes exercised.
+            expect(expected.x).toBeCloseTo(-0.25, 6);
+            expect(expected.y).toBeCloseTo(0.25, 6);
+        });
+
+        it('moves the phase when the surface container offset moves', () => {
+            const scale = 4 / 3;
+            globalThis.global = monitor(scale);
+            const at = containerX => getWindowSubpixelOffset(waylandWin({
+                x: 238, y: 200, get_children: () => [{x: containerX, y: 0}],
+            }));
+            // window 238 + container 3 = 241 -> -0.25; 238 + 4 = 242 -> +0.25. The container is
+            // part of the layout sum, so its offset changes the phase.
+            expect(at(3).x).toBeCloseTo(-0.25, 6);
+            expect(at(4).x).toBeCloseTo(0.25, 6);
+        });
+
+        it('picks the highest-scale monitor intersecting the frame, not the main monitor', () => {
+            globalThis.global = mixedScaleDisplay(1.5);
+            // The frame straddles both monitors; get_monitor() reports main monitor 0, whose
+            // scale is 1.0 and whose phase is zero. The highest-scale intersecting one is 1.
+            const actor = {x: 1921, y: 0};
+            const win = waylandWin(actor, 0, {x: 1900, y: 0, width: 200, height: 100});
+
+            // rel = 1921 - 1920 = 1; 1 * 1.5 = 1.5 -> round 2 -> 2/1.5 - 1 = 1/3.
+            expect(getWindowSubpixelOffset(win).x).toBeCloseTo(1 / 3, 6);
+        });
+
+        it('rounds negative halves away from zero, matching roundf rather than Math.round', () => {
+            globalThis.global = mixedScaleDisplay(1.25);
+            // A window straddling the shared edge: the frame intersects both monitors, so the
+            // higher-scale (right) monitor wins. The actor at x=1910 puts relX at 1910 - 1920
+            // = -10, and -10 * 1.25 = -12.5 is an exact half. roundf snaps to -13, so the offset
+            // is -13/1.25 - (-10) = -0.4; Math.round would snap to -12 and return +0.4.
+            const straddle = {x: 1900, y: -10, width: 200, height: 100};
+            const negative = waylandWin({x: 1910, y: -2}, 0, straddle);
+            expect(getWindowSubpixelOffset(negative).x).toBeCloseTo(-0.4, 6);
+            expect(getWindowSubpixelOffset(negative).y).toBeCloseTo(-0.4, 6);
+            expect(getWindowSubpixelOffset(negative).x).not.toBeCloseTo(0.4, 6);
+
+            // The positive mirror is unchanged: relX = +10 -> +12.5 -> roundf 13 -> +0.4, the
+            // same value Math.round produces, so positive coordinates keep their output.
+            const positive = waylandWin(
+                {x: 1930, y: 2}, 0, {x: 1925, y: -10, width: 200, height: 100});
+            expect(getWindowSubpixelOffset(positive).x).toBeCloseTo(0.4, 6);
+            expect(getWindowSubpixelOffset(positive).y).toBeCloseTo(0.4, 6);
+        });
+
+        it('agrees with Math.round on the 4/3 path, where no product lands on a half', () => {
+            const scale = 4 / 3;
+            globalThis.global = monitor(scale);
+            // relX = -1 -> -4/3 = -1.333...; roundf and Math.round both snap to -1, so the
+            // helper leaves the verified 4/3 path untouched.
+            const win = waylandWin({x: -1, y: 0});
+            const mathRoundOffset = Math.round(-1 * scale) / scale - (-1);
+            expect(getWindowSubpixelOffset(win).x).toBeCloseTo(mathRoundOffset, 6);
+            expect(getWindowSubpixelOffset(win).x).toBeCloseTo(0.25, 6);
         });
 
         it('defends against exceptions and returns zero offset', () => {
@@ -913,7 +1010,7 @@ describe('platform', () => {
                     throw new Error('Compositor window destroyed');
                 },
             };
-            expect(getWindowSubpixelOffset(throwingWin, {x: 100, y: 100})).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(throwingWin)).toEqual({x: 0, y: 0});
         });
     });
 });

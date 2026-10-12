@@ -3,7 +3,7 @@
  */
 
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
-import {getMonitorScale, getMonitorGeometry} from './display.js';
+import {getMonitorScale, getMonitorGeometry, getMonitorCount} from './display.js';
 
 /**
  * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
@@ -382,23 +382,175 @@ export function getWindowTileMatch(win) {
 }
 
 /**
- * Computes Mutter Wayland subpixel grid alignment offset for an actor.
- * Matches surface_container_apply_transform in Mutter (meta-window-actor-wayland.c:143-154).
+ * Checks whether an actor is an injected foreign UI widget (e.g. from Blur my Shell).
+ *
+ * The check lives here, not in `lib/clipTarget.js`, because the clip-target resolver and the
+ * subpixel phase reader both need the same answer and the platform layer may not import from
+ * `lib/` (see tools/check-platform-boundary.mjs); `clipTarget.js` re-exports it.
+ *
+ * @param {object|null} child
+ * @param {object|null} [St]
+ * @returns {boolean}
+ */
+export function isForeignWidget(child, St = null) {
+    if (!child)
+        return false;
+
+    const StWidget = St?.Widget ?? globalThis?.St?.Widget;
+    if (StWidget && child instanceof StWidget)
+        return true;
+
+    const constructorName = child.constructor?.name;
+    if (constructorName && (constructorName.startsWith('St_') || constructorName === 'StWidget'))
+        return true;
+
+    return false;
+}
+
+/**
+ * Resolves the actor Mutter positions as the window's Wayland surface container.
+ *
+ * `surface_container_apply_transform` computes the subpixel phase from the container's layout
+ * position inside the window actor - `get_x(windowActor) + get_x(surfaceContainer)` - and
+ * `do_sync_geometry` moves that container for letterboxed fullscreen windows, so a reader that
+ * wants the phase has to read this actor, not the window actor. The container's type
+ * (`MetaSurfaceContainerActorWayland`) is private: it is absent from `meta-window-actor.h` and
+ * from the GIR sources, so it is not reachable from GJS and cannot be type-checked. Identity is
+ * inferred from the actor tree instead: the window actor's non-foreign child. The background
+ * actor Mutter inserts is not an St.Widget, so an ambiguous tree (more than one non-foreign
+ * child) answers null and the caller treats the container offset as zero.
+ *
+ * @param {object|null} actor - The window actor
+ * @param {object|null} [St]
+ * @returns {object|null} Surface container actor, or null when it cannot be identified
+ */
+export function getSurfaceContainer(actor, St = null) {
+    try {
+        const children = actor?.get_children?.() ?? [];
+        const nonForeign = children.filter(child => !isForeignWidget(child, St));
+        return nonForeign.length === 1 ? nonForeign[0] : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Rounds to the nearest integer with an exact half resolved away from zero, matching C's
+ * `roundf`. `Math.round` cannot stand in: it resolves an exact half toward +Infinity, so on a
+ * negative half the two differ by one snapped integer - `roundf(-12.5)` is -13 while
+ * `Math.round(-12.5)` is -12. That is a clipped-edge mismatch against the transform Mutter
+ * applies, so the subpixel phase has to use this rule.
+ *
+ * @param {number} value
+ * @returns {number}
+ */
+function roundHalfAwayFromZero(value) {
+    return value < 0 ? -Math.floor(-value + 0.5) : Math.floor(value + 0.5);
+}
+
+/**
+ * Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`.
+ * @param {{x:number,y:number,width:number,height:number}} a
+ * @param {{x:number,y:number,width:number,height:number}} b
+ * @returns {boolean}
+ */
+function rectanglesOverlap(a, b) {
+    const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+    const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    return width > 0 && height > 0;
+}
+
+/**
+ * The highest-scale logical monitor whose layout rect intersects the window's frame.
+ *
+ * This is `meta_window_get_highest_scale_monitor` rebuilt from public API: that getter only
+ * returns the private `window->highest_scale_monitor` pointer (window-private.h) and is not in
+ * the typelib, so the rule behind it -
+ * `meta_monitor_manager_get_highest_scale_monitor_from_rect`, max scale over intersecting
+ * logical monitors - is re-run here from the public frame rect and monitor geometry. Mutter
+ * caches the result on the window and refreshes it on monitor and frame changes, while this runs
+ * per read, so the two can disagree for a frame around a move or hotplug; that is the one
+ * approximation in the term.
+ *
+ * When the frame rect is unreadable this returns `win.get_monitor()`, the main monitor, which is
+ * what Mutter stores when the frame size is not positive. That fallback keeps the correction on
+ * the single-monitor path instead of dropping it to zero, which is the only path the reporter
+ * verified; returning {x: 0, y: 0} would regress it. When the frame is valid but no monitor
+ * intersects it, it returns -1; Mutter stores NULL there and its transform does nothing.
+ *
+ * @param {object|null} win - Meta.Window
+ * @returns {number} Logical monitor index, or -1
+ */
+function resolveHighestScaleMonitorIndex(win) {
+    const frame = getWindowFrameRect(win);
+    if (!frame || !(frame.width > 0) || !(frame.height > 0))
+        return typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
+
+    let bestIndex = -1;
+    let bestScale = 0;
+    const count = getMonitorCount();
+    for (let i = 0; i < count; i++) {
+        const geom = getMonitorGeometry(i);
+        if (!geom || !rectanglesOverlap(geom, frame))
+            continue;
+        const scale = getMonitorScale(i);
+        if (scale > bestScale) {
+            bestScale = scale;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+/**
+ * Computes the Wayland subpixel phase Mutter applies to a window's surface container.
+ *
+ * The arithmetic is `surface_container_apply_transform`
+ * (meta-window-actor-wayland.c:130-147), term for term:
+ *
+ *   monitor  = meta_window_get_highest_scale_monitor (window)
+ *   scale    = meta_logical_monitor_get_scale (monitor)
+ *   rect     = meta_logical_monitor_get_layout (monitor)
+ *   abs_x    = clutter_actor_get_x (windowActor) + clutter_actor_get_x (surfaceContainer)
+ *   rel_x    = abs_x - rect.x
+ *   x_off    = roundf (rel_x * scale) / scale - rel_x
+ *
+ * Two terms are reconstructed rather than read, because their C symbols are not introspectable:
+ * the highest-scale monitor (see resolveHighestScaleMonitorIndex) and the surface container (see
+ * getSurfaceContainer). Both note what is exact and what is approximated where they are defined.
+ *
+ * The window's `translation_x/y` is deliberately not a term. Mutter computes the phase from
+ * layout coordinates and the base transform carries the translation separately, so animations
+ * move the window off the grid on purpose; folding the translation in would move our cut while
+ * the buffer was somewhere else.
+ *
+ * The snap uses `roundf`'s rule, not JavaScript's `Math.round`. `Math.round` sends an exact half
+ * toward +Infinity while `roundf` sends it away from zero, so on a negative half they differ by
+ * one snapped integer: at 1.25, `relX = -2` gives -2.5, where `roundf` snaps to -3 and
+ * `Math.round` stays at -2, a 0.8 logical px (one physical px) difference in the offset. An
+ * earlier revision claimed this could not happen; that holds on the 4/3 path, where an integer
+ * times 4/3 never ends in .5, but not in general - on a 1.25 monitor negative halves are
+ * reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5. `roundHalfAwayFromZero` below
+ * encodes `roundf`'s rule and leaves the 4/3 path unchanged.
+ *
  * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or invalid monitors.
  *
  * @param {object|null} win - Meta.Window
- * @param {object|null} actor - Clutter.Actor (windowActor)
  * @returns {{x: number, y: number}}
  */
-export function getWindowSubpixelOffset(win, actor) {
-    if (!win || !actor)
+export function getWindowSubpixelOffset(win) {
+    if (!win)
         return {x: 0, y: 0};
 
     try {
         if (getWindowClientType(win) !== WindowClientType.WAYLAND)
             return {x: 0, y: 0};
 
-        const monitorIndex = typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
+        const actor = getWindowActor(win);
+        if (!actor)
+            return {x: 0, y: 0};
+
+        const monitorIndex = resolveHighestScaleMonitorIndex(win);
         if (monitorIndex < 0)
             return {x: 0, y: 0};
 
@@ -410,14 +562,16 @@ export function getWindowSubpixelOffset(win, actor) {
         const monitorX = geom?.x ?? 0;
         const monitorY = geom?.y ?? 0;
 
-        // In GNOME Shell, windowActor is a direct child of windowGroup (origin at 0, 0).
-        const actorX = (actor.x ?? 0) + (actor.translation_x ?? 0);
-        const actorY = (actor.y ?? 0) + (actor.translation_y ?? 0);
-        const relX = actorX - monitorX;
-        const relY = actorY - monitorY;
+        // Layout coordinates only: the window actor's position plus the surface container's
+        // position inside it (zero when the container cannot be identified).
+        const container = getSurfaceContainer(actor);
+        const absX = (actor.x ?? 0) + (container?.x ?? 0);
+        const absY = (actor.y ?? 0) + (container?.y ?? 0);
+        const relX = absX - monitorX;
+        const relY = absY - monitorY;
 
-        const adjRelX = Math.round(relX * scale) / scale;
-        const adjRelY = Math.round(relY * scale) / scale;
+        const adjRelX = roundHalfAwayFromZero(relX * scale) / scale;
+        const adjRelY = roundHalfAwayFromZero(relY * scale) / scale;
 
         return {
             x: adjRelX - relX,
