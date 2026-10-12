@@ -28,6 +28,7 @@ import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
+    extractPhaseProperties,
 } from './pick.js';
 import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
@@ -299,7 +300,11 @@ export class InspectorService {
             // The suggested-rule queries read the process cache; start the read at this request
             // boundary so they stay side-effect free.
             this._manager?.classifier?.probeAdwaitaLook(getWindowPid(win));
-            const properties = extractWindowProperties(win, resolveWindowIdentity(win));
+            const properties = {
+                ...extractWindowProperties(win, resolveWindowIdentity(win)),
+                // Diagnostics only: the phase we mirror next to the phase Mutter actually applied.
+                ...extractPhaseProperties(win),
+            };
 
             // Display only, not used in rule identity matching.
             const title = getWindowDisplayTitle(win);

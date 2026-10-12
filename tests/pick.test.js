@@ -10,7 +10,7 @@ import {
     chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/rules.js';
 import {
-    WindowClientType, buildRuleKeyFromProperties, extractWindowProperties,
+    WindowClientType, buildRuleKeyFromProperties, extractWindowProperties, extractPhaseProperties,
 } from '../src/lib/pick.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
@@ -225,3 +225,62 @@ describe('chooseWindowIdentity', () => {
     });
 });
 
+describe('extractPhaseProperties', () => {
+    let originalGlobal;
+
+    beforeEach(() => {
+        originalGlobal = globalThis.global;
+    });
+
+    afterEach(() => {
+        globalThis.global = originalGlobal;
+    });
+
+    const matrix = (tx, ty) => ({
+        get_x_translation: () => tx,
+        get_y_translation: () => ty,
+        get_x_scale: () => 1,
+        get_y_scale: () => 1,
+    });
+
+    it('carries both phases as strings for a stubbed container', () => {
+        // 4/3 monitor at the origin: actor x=241 -> mirror -0.25, actor y=200 -> mirror 0.25. The
+        // container sits at 0 and its cached transform carries the same phase, so the two agree.
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => 4 / 3,
+                get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            },
+        };
+        const container = {x: 0, y: 0, get_transform: () => matrix(-0.25, 0.25)};
+        const win = {
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            get_compositor_private: () => ({x: 241, y: 200, get_children: () => [container]}),
+        };
+
+        const fields = extractPhaseProperties(win);
+        expect(fields.mirrorPhaseX).toBe('-0.25');
+        expect(fields.mirrorPhaseY).toBe('0.25');
+        expect(fields.appliedPhaseX).toBe('-0.25');
+        expect(fields.appliedPhaseY).toBe('0.25');
+    });
+
+    it('says a non-Wayland client is not applicable', () => {
+        const fields = extractPhaseProperties({get_client_type: () => WindowClientType.X11});
+        expect(fields.appliedPhaseX).toBe('n/a');
+        expect(fields.appliedPhaseY).toBe('n/a');
+    });
+
+    it('says an unreadable container is unavailable and never throws', () => {
+        const win = {
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            get_compositor_private: () => ({x: 0, y: 0, get_children: () => []}),
+        };
+        expect(() => extractPhaseProperties(win)).not.toThrow();
+        expect(extractPhaseProperties(win).appliedPhaseX).toBe('unavailable');
+        expect(extractPhaseProperties(win).appliedPhaseY).toBe('unavailable');
+    });
+});

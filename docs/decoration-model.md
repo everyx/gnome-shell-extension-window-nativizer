@@ -611,6 +611,12 @@ lives in an unvendored file - so it is also re-checked by hand on a Mutter bump:
 `meta_window_find_highest_scale_monitor_from_frame_rect` (`window.c`) and that manager function and
 confirm the scan still matches, as `docs/shell-compatibility.md` records.
 
+A readback exists for diagnostics only. `getAppliedSubpixelPhase` (`src/platform/window.js`) reads
+the cached transform back so the pick reply can show the applied phase beside the mirror. It is not
+the production source - the clip and the shadow still call `getWindowSubpixelOffset` - and it does
+not change the reopen condition above; it exists so a user can see on a mixed-DPI multi-monitor
+machine where the mirrored monitor scan cannot be exercised locally.
+
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating

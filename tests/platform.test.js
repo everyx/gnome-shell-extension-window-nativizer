@@ -33,7 +33,8 @@ import {
     getWindowFromActor,
     findMetaWindow,
     getSurfaceContainer,
-    getWindowSubpixelOffset
+    getWindowSubpixelOffset,
+    getAppliedSubpixelPhase
 } from '../src/platform/window.js';
 import {
     getDisplay,
@@ -1044,5 +1045,58 @@ describe('platform', () => {
             expect(getWindowSubpixelOffset(throwingWin)).toEqual({x: 0, y: 0});
         });
     });
-});
 
+    describe('getAppliedSubpixelPhase', () => {
+        const matrix = ({tx = 0, ty = 0, sx = 1, sy = 1} = {}) => ({
+            get_x_translation: () => tx,
+            get_y_translation: () => ty,
+            get_x_scale: () => sx,
+            get_y_scale: () => sy,
+        });
+
+        const waylandWin = children => ({
+            get_client_type: () => 0, // WAYLAND
+            get_compositor_private: () => ({x: 240, y: 200, get_children: () => children}),
+        });
+
+        it('subtracts the container layout origin from the cached matrix translation', () => {
+            const container = {
+                x: 3, y: -2, translation_x: 1, translation_y: 0.5,
+                get_transform: () => matrix({tx: 4.25, ty: -1.25}),
+            };
+            // 4.25 - (3 + 1) = 0.25; -1.25 - (-2 + 0.5) = 0.25.
+            expect(getAppliedSubpixelPhase(waylandWin([container]))).toEqual({x: 0.25, y: 0.25});
+        });
+
+        it('answers null for a non-Wayland client', () => {
+            const win = waylandWin([{x: 0, y: 0, get_transform: () => matrix()}]);
+            win.get_client_type = () => 1; // X11
+            expect(getAppliedSubpixelPhase(win)).toBeNull();
+        });
+
+        it('answers null when the actor or the container cannot be identified', () => {
+            expect(getAppliedSubpixelPhase(null)).toBeNull();
+            expect(getAppliedSubpixelPhase({get_client_type: () => 0})).toBeNull();
+            expect(getAppliedSubpixelPhase(waylandWin([]))).toBeNull();
+            // Two non-foreign children are ambiguous, so the container offset stays unresolved.
+            const first = {x: 0, y: 0, get_transform: () => matrix()};
+            const second = {x: 0, y: 0, get_transform: () => matrix()};
+            expect(getAppliedSubpixelPhase(waylandWin([first, second]))).toBeNull();
+        });
+
+        it('refuses a transform whose scale is not 1 (the geometry_scale child transform)', () => {
+            const container = {x: 0, y: 0, get_transform: () => matrix({sx: 2, sy: 2})};
+            expect(getAppliedSubpixelPhase(waylandWin([container]))).toBeNull();
+        });
+
+        it('answers null, without throwing, when the transform cannot be read', () => {
+            expect(getAppliedSubpixelPhase(waylandWin([{x: 0, y: 0}]))).toBeNull();
+            expect(getAppliedSubpixelPhase(waylandWin([{x: 0, y: 0, get_transform: () => null}]))).toBeNull();
+            expect(getAppliedSubpixelPhase(waylandWin([{x: 0, y: 0, get_transform: () => ({})}]))).toBeNull();
+            expect(getAppliedSubpixelPhase(waylandWin([{
+                x: 0, y: 0,
+                get_transform: () => { throw new Error('actor gone'); },
+            }]))).toBeNull();
+        });
+    });
+});

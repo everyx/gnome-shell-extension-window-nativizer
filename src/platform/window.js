@@ -575,3 +575,64 @@ export function getWindowSubpixelOffset(win) {
     }
 }
 
+/**
+ * Reads the subpixel phase Mutter actually applied to a Wayland window's surface container.
+ *
+ * Diagnostics only, never the production source: the clip and the shadow keep cutting on the
+ * mirrored phase from `getWindowSubpixelOffset`, because that mirror is spec-pinned while this
+ * read leans on where Mutter caches the phase - a private implementation detail. Read
+ * `docs/decoration-model.md`'s "Why the phase is mirrored rather than read" for the full
+ * trade-off and its reopen condition; this reader exists so a user can compare the two on a
+ * mixed-DPI multi-monitor machine, where the mirror's unguarded monitor scan cannot be exercised.
+ *
+ * `surface_container_apply_transform` (meta-window-actor-wayland.c) folds the phase into the
+ * container's transform with `graphene_matrix_translate`; `ensure_valid_actor_transform` caches
+ * that matrix on the actor and `clutter_actor_get_transform` reads it back. The matrix also
+ * carries the container's layout origin (its `x`/`y` plus `translation_x`/`translation_y`) and no
+ * ancestor position, so subtracting the layout origin from the matrix translation leaves the
+ * applied phase. The window actor's `geometry_scale` child transform scales the matrix, which
+ * would scale that translation and make the subtraction meaningless, so a non-unit scale answers
+ * null rather than a wrong number.
+ *
+ * A caller may stub the container and matrix as plain objects exposing `get_transform()` and the
+ * Graphene accessors. Every unavailable case - a non-Wayland client, a missing actor or container,
+ * an unreadable matrix, a non-unit scale, or a throw - answers null; it never throws at the pick
+ * reply and never claims a fake zero.
+ *
+ * @param {object|null} win - Meta.Window
+ * @returns {{x: number, y: number}|null} Applied phase, or null when it cannot be read
+ */
+export function getAppliedSubpixelPhase(win) {
+    try {
+        if (!win || getWindowClientType(win) !== WindowClientType.WAYLAND)
+            return null;
+
+        const actor = getWindowActor(win);
+        if (!actor)
+            return null;
+
+        const container = getSurfaceContainer(actor);
+        if (!container || typeof container.get_transform !== 'function')
+            return null;
+
+        const matrix = container.get_transform();
+        if (!matrix ||
+            typeof matrix.get_x_translation !== 'function' ||
+            typeof matrix.get_y_translation !== 'function')
+            return null;
+
+        // `geometry_scale` is the only writer of the surface container's ancestor child
+        // transform; a scale that is not 1 means the translation carries it too.
+        const scaleX = typeof matrix.get_x_scale === 'function' ? matrix.get_x_scale() : 1;
+        const scaleY = typeof matrix.get_y_scale === 'function' ? matrix.get_y_scale() : 1;
+        if (Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001)
+            return null;
+
+        return {
+            x: matrix.get_x_translation() - ((container.x ?? 0) + (container.translation_x ?? 0)),
+            y: matrix.get_y_translation() - ((container.y ?? 0) + (container.translation_y ?? 0)),
+        };
+    } catch {
+        return null;
+    }
+}

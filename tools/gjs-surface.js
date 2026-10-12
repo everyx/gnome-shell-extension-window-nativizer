@@ -90,6 +90,9 @@ const SURFACE = [
         members: ['DEFAULT', 'CROSSHAIR', 'N_RESIZE', 'NW_RESIZE']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', params: ['child', 'sibling']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_below_sibling', params: ['child', 'sibling']},
+    // platform/window.js reads the applied subpixel phase back through this. The C out-parameter
+    // is a return value in GJS, so the call takes no arguments.
+    {ns: 'Clutter', cls: 'Actor', member: 'get_transform', arity: 0},
     {ns: 'Clutter', cls: 'ActorMeta', member: 'get_actor', arity: 0},
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},

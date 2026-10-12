@@ -175,6 +175,16 @@ The extension runs on 50-51, so the pre-50 shape it guards against never arrives
 `global.window_group.set_child_below_sibling()` - re-pins the shadow below its window actor, in the
 same place.
 
+## actor_get_transform
+
+`actor.get_transform()` - reads back the transform Clutter cached on an actor. The extension calls
+it in `platform/window.js` for the pick diagnostics only, to show the subpixel phase Mutter actually
+applied to a Wayland window's surface container beside the mirrored one (`getWindowSubpixelOffset`);
+the clip and the shadow keep cutting on the mirror, which `docs/decoration-model.md` records. The C
+prototype's out-parameter is a `Graphene.Matrix`, which GJS returns, so the call takes no argument;
+the accessors used to read it (`get_x_translation`, `get_y_translation`, `get_x_scale`, `get_y_scale`)
+are Graphene's, not Mutter's, and are deliberately not recorded in `tools/shell-api.json`.
+
 ## bind_constraint_new
 
 `new Clutter.BindConstraint()` - binds the shadow actor and the band to the window actor's position
