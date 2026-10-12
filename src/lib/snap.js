@@ -5,14 +5,11 @@
  */
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
+import {snapDirection, SnapDirection} from '../platform/numeric.js';
 
-export const SNAP_EPSILON = 0.001;
-
-export const SnapDirection = Object.freeze({
-    FLOOR: 1,
-    CEIL: 2,
-    ROUND: 3,
-});
+// Re-exported for the public snap API; the definitions live with the other upstream-numeric
+// primitives in platform/numeric.js.
+export {SNAP_EPSILON, SnapDirection} from '../platform/numeric.js';
 
 /**
  * Composite 32-bit snap rules, matching GTK's GSK_RECT_SNAP_* macros.
@@ -23,28 +20,6 @@ export const SnapRule = Object.freeze({
     GROW: 0x01020201,   // top: FLOOR, right: CEIL, bottom: CEIL, left: FLOOR
     ROUND: 0x03030303,  // top: ROUND, right: ROUND, bottom: ROUND, left: ROUND
 });
-
-/**
- * Snap a single 1D scalar value on the grid according to direction.
- * Matches gsk_rect_snap_direction (gskrectprivate.h) with strict origin-odd symmetry.
- * @param {number} value
- * @param {number} [direction=SnapDirection.ROUND]
- * @returns {number}
- */
-function snapDirection(value, direction = SnapDirection.ROUND) {
-    switch (direction) {
-    case SnapDirection.FLOOR:
-        return Math.floor(value + SNAP_EPSILON);
-    case SnapDirection.CEIL:
-        return Math.ceil(value - SNAP_EPSILON);
-    case SnapDirection.ROUND:
-        return value >= 0
-            ? Math.round(value + SNAP_EPSILON)
-            : -Math.round(-value + SNAP_EPSILON);
-    default:
-        return value;
-    }
-}
 
 /**
  * Snap a logical 1D coordinate to the physical device pixel grid.

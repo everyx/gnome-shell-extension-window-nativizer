@@ -4,6 +4,7 @@
 
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
 import {getMonitorScale, getMonitorGeometry, getMonitorCount} from './display.js';
+import {roundHalfAwayFromZero} from './numeric.js';
 
 /**
  * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
@@ -435,20 +436,6 @@ export function getSurfaceContainer(actor, St = null) {
 }
 
 /**
- * Rounds to the nearest integer with an exact half resolved away from zero, matching C's
- * `roundf`. `Math.round` cannot stand in: it resolves an exact half toward +Infinity, so on a
- * negative half the two differ by one snapped integer - `roundf(-12.5)` is -13 while
- * `Math.round(-12.5)` is -12. That is a clipped-edge mismatch against the transform Mutter
- * applies, so the subpixel phase has to use this rule.
- *
- * @param {number} value
- * @returns {number}
- */
-function roundHalfAwayFromZero(value) {
-    return value < 0 ? -Math.floor(-value + 0.5) : Math.floor(value + 0.5);
-}
-
-/**
  * Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`.
  * @param {{x:number,y:number,width:number,height:number}} a
  * @param {{x:number,y:number,width:number,height:number}} b
@@ -530,8 +517,9 @@ function resolveHighestScaleMonitorIndex(win) {
  * `Math.round` stays at -2, a 0.8 logical px (one physical px) difference in the offset. An
  * earlier revision claimed this could not happen; that holds on the 4/3 path, where an integer
  * times 4/3 never ends in .5, but not in general - on a 1.25 monitor negative halves are
- * reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5. `roundHalfAwayFromZero` below
- * encodes `roundf`'s rule and leaves the 4/3 path unchanged.
+ * reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5. The shared
+ * `roundHalfAwayFromZero` (`platform/numeric.js`) encodes `roundf`'s rule and leaves the 4/3
+ * path unchanged.
  *
  * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or invalid monitors.
  *

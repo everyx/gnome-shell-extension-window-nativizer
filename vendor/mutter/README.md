@@ -12,6 +12,9 @@ Authoritative source for window management and shadow decorations, vendored from
     derived 2px top/left origin; do not edit the generated file directly). The file lives
     under `clutter/` upstream but is vendored flat here, like the others.
   - `meta-window-actor-x11.c` preserves `has_shadow` decision logic as the basis for window decoration detection.
+  - `meta-window-actor-wayland.c` (src/compositor) preserves `surface_container_apply_transform`, the
+    Wayland subpixel phase, as the basis for `getWindowSubpixelOffset` in `src/platform/window.js`.
+    `tools/check-upstream-mirrors.mjs` asserts that arithmetic rather than generating from it.
   - `window.h` provides authoritative `MetaWindowType` enum definition to prevent enum drift.
 - `research/mutter` is an uncommitted clone kept only for reading; this directory is the
   committed source of truth, at the COMMIT above.
