@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowLayout, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -42,6 +42,10 @@ export const ShadowActor = GObject.registerClass({
             now: () => GLib.get_monotonic_time() / 1000,
         });
 
+        // The bind constraint pins the actor at `window - PAD`; the position derived from the
+        // window's transform (below) is applied as a translation on top of it, because assigning
+        // `x`/`y` on an actor that still needs an allocation trips Clutter's "can't update stage
+        // views ... needs an allocation" warning on every resize frame.
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
             [Clutter.BindCoordinate.Y, -SHADOW_PAD],
@@ -53,16 +57,17 @@ export const ShadowActor = GObject.registerClass({
         this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
-        // `x`/`y` and the translations move the shadow with the window. `allocation` is also
-        // needed because the applied phase is read from the surface container's cached transform,
-        // and Mutter only invalidates it on the window actor's allocation change: synced on
-        // position alone the read held the previous position's phase indefinitely (measured at
-        // 1.25x: the shadow stayed one x behind while the clip painted the new phase, opening the
-        // straight-edge hairline). On allocation the invalidation handler runs first, so the read
-        // is the phase the clip paints with.
-        this._subpixelSignals = ['x', 'y', 'translation-x', 'translation-y', 'allocation'].map(prop =>
-            windowActor.connect(`notify::${prop}`, () => this._syncTranslation()));
-        this._syncTranslation();
+        // `x`/`y`, the translations, the actor scale and the pivot all move the shadow's cutout.
+        // `allocation` is also needed because the applied phase is read from the surface
+        // container's cached transform, and Mutter only invalidates it on the window actor's
+        // allocation change: synced on position alone the read held the previous position's phase
+        // indefinitely (measured at 1.25x: the shadow stayed one x behind while the clip painted
+        // the new phase, opening the straight-edge hairline). On allocation the invalidation
+        // handler runs first, so the read is the phase the clip paints with.
+        this._geometrySignals = ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y',
+            'pivot-point', 'allocation'].map(prop =>
+            windowActor.connect(`notify::${prop}`, () => this._syncGeometry()));
+        this._syncGeometry();
 
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
@@ -70,24 +75,36 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Synchronizes translation with windowActor while compensating Mutter Wayland subpixel offset.
+     * Synchronizes the shadow's derived position and translation with the window actor.
      *
-     * Every assignment notifies and queues a relayout, and this runs on each position, allocation
-     * and translation change - a resize fires several per frame, and each call writes both axes,
-     * so half of these assignments would restate a value that did not move. Only write what
-     * changed: the signals firing twice per frame is what this method's cost is made of (293 calls
-     * over one window's 150-step resize, ~27us of shell CPU per call in the assignments and the
-     * relayout they queue; the allocation signal adds one more to that set).
+     * The layout position is the bind constraint's `window - PAD`. The position that puts the
+     * scaled cutout on the window's visual box is `shadowLayoutPosition`, and the difference
+     * between the two is carried as a translation: a layout-space offset is in parent space and
+     * ignores the actor's own scale, which is what left the cutout a pivot-dependent pad off the
+     * window (see shadowLayoutPosition). The translation also carries the window's own translation
+     * plus Mutter's Wayland subpixel offset.
+     *
+     * Every assignment notifies and queues a relayout, and this runs on each position, allocation,
+     * translation, scale and pivot change - a resize fires several per frame, and each call writes
+     * both axes and both translations, so half of these assignments would restate a value that did
+     * not move. Only write what changed: the signals firing twice per frame is what this method's
+     * cost is made of (293 calls over one window's 150-step resize, ~27us of shell CPU per call in
+     * the assignments and the relayout they queue; the allocation signal adds one more to that set).
      */
-    _syncTranslation() {
+    _syncGeometry() {
         if (!this._windowActor)
             return;
         const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform);
+        const position = shadowLayoutPosition(this._windowActor);
+        const baseX = (this._windowActor.x ?? 0) - SHADOW_PAD;
+        const baseY = (this._windowActor.y ?? 0) - SHADOW_PAD;
         const {x, y} = shadowTranslation(this._windowActor, offset);
-        if (this.translation_x !== x)
-            this.translation_x = x;
-        if (this.translation_y !== y)
-            this.translation_y = y;
+        const nextX = x + position.x - baseX;
+        const nextY = y + position.y - baseY;
+        if (this.translation_x !== nextX)
+            this.translation_x = nextX;
+        if (this.translation_y !== nextY)
+            this.translation_y = nextY;
     }
 
     /**
@@ -101,7 +118,7 @@ export const ShadowActor = GObject.registerClass({
         if (this._phaseInTransform === next)
             return;
         this._phaseInTransform = next;
-        this._syncTranslation();
+        this._syncGeometry();
     }
 
     /** @returns {boolean} Whether a cross-fade animation is currently active */
@@ -136,7 +153,7 @@ export const ShadowActor = GObject.registerClass({
     setScale(scale) {
         if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale) {
             this._scale = scale;
-            this._syncTranslation();
+            this._syncGeometry();
             this.queue_relayout();
         }
     }
@@ -273,14 +290,14 @@ export const ShadowActor = GObject.registerClass({
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
-        for (const sid of this._subpixelSignals ?? []) {
+        for (const sid of this._geometrySignals ?? []) {
             try {
                 this._windowActor?.disconnect?.(sid);
             } catch {
                 // Ignore.
             }
         }
-        this._subpixelSignals = [];
+        this._geometrySignals = [];
         try {
             this._windowActor.disconnect(this._destroyId);
         } catch {

@@ -169,8 +169,10 @@ are Graphene's, not Mutter's, and are deliberately not recorded in `tools/shell-
 
 ## bind_constraint_new
 
-`new Clutter.BindConstraint()` - binds the shadow actor and the band to the window actor's position
-and size, so their geometry follows a resize without a JS tick.
+`new Clutter.BindConstraint()` - binds the resize band to the window actor's position and size, so
+its geometry follows a resize without a JS tick. The shadow binds only its size: its position has
+to account for the actor's scale and pivot, which a fixed offset cannot (see
+`shadowLayoutPosition` in `effects/shadowGeometry.js`).
 
 ## actor_meta_set_enabled
 

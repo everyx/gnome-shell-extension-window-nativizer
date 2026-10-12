@@ -601,10 +601,10 @@ Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform
 because the clip's local frame is phase-free and the shadow actor is a sibling that must translate
 by that same value explicitly. Both cuts then follow one source. The read only reflects a move once
 Mutter has invalidated the cached transform, which it does on the window actor's allocation change,
-so `ShadowActor` syncs on `notify::allocation` as well as position and translation - on position
-alone the read held the previous position's phase indefinitely (measured at 1.25x: the shadow
-stayed one x behind while the clip painted the new phase, and the straight-edge probe caught the
-hairline it opened). The mirror (`getWindowSubpixelOffset`) is the fallback for every case the read
+so `ShadowActor` syncs on `notify::allocation` as well as position, translation, scale and pivot -
+on position alone the read held the previous position's phase indefinitely (measured at 1.25x: the
+shadow stayed one x behind while the clip painted the new phase, and the straight-edge probe caught
+the hairline it opened). The mirror (`getWindowSubpixelOffset`) is the fallback for every case the read
 cannot answer - a non-Wayland client, an ambiguous container, a non-unit matrix scale, a
 non-finite transform - and remains the primary source on the fallback path, where the clip folds it
 into its frame. Reading the same transform the clip paints with is also what keeps the two cuts
