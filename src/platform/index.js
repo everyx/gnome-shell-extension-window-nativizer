@@ -27,7 +27,8 @@ export {
     getWindowTileMatch,
     getWindowFromActor,
     findMetaWindow,
-    getWindowSubpixelOffset
+    getWindowSubpixelOffset,
+    getAppliedSubpixelPhase
 } from './window.js';
 
 export {

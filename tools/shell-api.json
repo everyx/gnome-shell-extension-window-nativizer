@@ -631,6 +631,23 @@
             }
         },
         {
+            "id": "actor_get_transform",
+            "member": "actor.get_transform()",
+            "repo": "mutter",
+            "kind": "fn",
+            "file": "clutter/clutter/clutter-actor.h",
+            "sym": "clutter_actor_get_transform",
+            "decl": {
+                "45": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "46": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "47": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "48": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "49": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "50": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);",
+                "51": "CLUTTER_EXPORT void clutter_actor_get_transform (ClutterActor *self, graphene_matrix_t *transform);"
+            }
+        },
+        {
             "id": "bind_constraint_new",
             "member": "new Clutter.BindConstraint()",
             "repo": "mutter",

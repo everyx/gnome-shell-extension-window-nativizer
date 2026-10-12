@@ -11,6 +11,11 @@ import {
     readWindow,
     isWindowReading,
 } from './window.js';
+import {
+    getWindowSubpixelOffset,
+    getAppliedSubpixelPhase,
+    getWindowClientType,
+} from '../platform/window.js';
 
 export {WindowClientType};
 
@@ -61,4 +66,37 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
     }
 
     return props;
+}
+
+/**
+ * Builds the pick reply's subpixel-phase diagnostic fields, so a user can compare the phase we
+ * cut on with the phase Mutter actually applied.
+ *
+ * The mirror is `getWindowSubpixelOffset`; the applied phase is read back from the surface
+ * container's cached transform (`getAppliedSubpixelPhase`). The reply is an `a{ss}` map, so every
+ * field is a string, and an unreadable applied phase says so rather than claiming a zero. This
+ * runs only when a user asks for the pick, never on the clip/shadow render path.
+ *
+ * @param {object|null} win - Meta.Window
+ * @returns {Record<string,string>} mirrorPhaseX/Y and appliedPhaseX/Y
+ */
+export function extractPhaseProperties(win) {
+    const mirror = getWindowSubpixelOffset(win);
+    const properties = {
+        mirrorPhaseX: String(mirror.x),
+        mirrorPhaseY: String(mirror.y),
+    };
+
+    // The applied transform only exists for a Wayland surface container; the mirror's own doc
+    // answers zero for X11, so the applied side says not-applicable instead of echoing that zero.
+    if (getWindowClientType(win) !== WindowClientType.WAYLAND) {
+        properties.appliedPhaseX = 'n/a';
+        properties.appliedPhaseY = 'n/a';
+        return properties;
+    }
+
+    const applied = getAppliedSubpixelPhase(win);
+    properties.appliedPhaseX = applied ? String(applied.x) : 'unavailable';
+    properties.appliedPhaseY = applied ? String(applied.y) : 'unavailable';
+    return properties;
 }

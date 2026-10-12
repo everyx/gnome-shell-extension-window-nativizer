@@ -58,6 +58,7 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `actor.set_cursor_type()` | 45–49 absent / 50–51 | [why](shell-api.md#set_cursor_type) |
 | `global.window_group.set_child_above_sibling()` | 45–51 stable | [why](shell-api.md#set_child_above_sibling) |
 | `global.window_group.set_child_below_sibling()` | 45–51 stable | [why](shell-api.md#set_child_below_sibling) |
+| `actor.get_transform()` | 45–51 stable | [why](shell-api.md#actor_get_transform) |
 | `new Clutter.BindConstraint()` | 45–51 stable | [why](shell-api.md#bind_constraint_new) |
 | `effect.set_enabled()` | 45–51 stable | [why](shell-api.md#actor_meta_set_enabled) |
 | `Clutter.ActorMeta:enabled` | 45 / 46–51 | [why](shell-api.md#actor_meta_enabled) |
@@ -114,6 +115,13 @@ When bumping Mutter, re-read both functions and confirm the scan in
 frame is unreadable. The rule is not machine-guarded because that file is not vendored, so this is a
 manual step by necessity; `docs/decoration-model.md` records the same re-check at the phase mirror's
 reopen condition.
+
+The pick reply makes the gap observable: on a mixed-DPI multi-monitor machine with the extension
+enabled, run the pick (prefs or `PickWindow` on `org.gnome.Shell.Extensions.WindowNativizer`) on a
+decorated Wayland window that straddles two differently-scaled monitors and compare `mirrorPhaseX/Y`
+with `appliedPhaseX/Y`. They agree when the scan is right; a mismatch is what a
+`resolveHighestScaleMonitorIndex` re-check is for. The single-monitor dev session cannot exercise
+this, which is exactly why the reply carries both.
 
 ## Additional GNOME 51 upstream changes audited
 

@@ -89,6 +89,10 @@ const SURFACE = [
     {id: 'set_cursor_type', member: 'actor.set_cursor_type()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor.h', sym: 'clutter_actor_set_cursor_type'},
     {id: 'set_child_above_sibling', member: 'global.window_group.set_child_above_sibling()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor.h', sym: 'clutter_actor_set_child_above_sibling'},
     {id: 'set_child_below_sibling', member: 'global.window_group.set_child_below_sibling()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor.h', sym: 'clutter_actor_set_child_below_sibling'},
+    // The applied subpixel phase is read back from the surface container's cached transform
+    // (clutter_actor_get_transform, an out-parameter that GJS returns). Diagnostic only; the
+    // mirror stays the production source.
+    {id: 'actor_get_transform', member: 'actor.get_transform()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor.h', sym: 'clutter_actor_get_transform'},
     {id: 'bind_constraint_new', member: 'new Clutter.BindConstraint()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-bind-constraint.h', sym: 'clutter_bind_constraint_new'},
     {id: 'actor_meta_set_enabled', member: 'effect.set_enabled()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-actor-meta.h', sym: 'clutter_actor_meta_set_enabled'},
     {id: 'actor_meta_enabled', member: 'Clutter.ActorMeta:enabled', repo: 'mutter', kind: 'prop', file: 'clutter/clutter/clutter-actor-meta.c', sym: 'enabled'},
