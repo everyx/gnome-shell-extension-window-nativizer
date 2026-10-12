@@ -593,9 +593,10 @@ leaving edge transitions completely clean.
 The clip's cut and the shadow's cutout are the same line: both are the body's edge, and they have
 to land on the same physical phase. This extension owns both ends of that line, so a gap opening
 between them is a defect in us, not a rounding artefact to live with. The edge is derived twice
-today - the clip effect computes it on every paint, the shadow actor on every relayout - and only
-both applying the same subpixel compensation holds the two together, so a change to one has to be
-made to the other.
+today - the clip effect computes it on every paint, the shadow actor on every relayout - but both
+build it with `clipFrameFor` in `lib/snap.js`, which requires the buffer's phase as an argument.
+The shadow actor passes zero there and carries the real phase as its own translation, so the two
+meet on one physical position without either site re-deriving the correction.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
