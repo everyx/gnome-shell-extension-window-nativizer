@@ -605,7 +605,11 @@ because the mirror is already spec-pinned (the `getWindowSubpixelOffset` guard i
 result today; a cached read lags a frame during drags, so it would change verified behaviour;
 and it leans on *where* Mutter applies the phase - a private implementation detail, not a
 contract, in a churning upstream. Reopen only if either guard fails: it catches both failure
-modes.
+modes. One part of the mirror is not machine-guarded - the monitor scan in
+`resolveHighestScaleMonitorIndex`, because `meta_monitor_manager_get_highest_scale_monitor_from_rect`
+lives in an unvendored file - so it is also re-checked by hand on a Mutter bump: re-read
+`meta_window_find_highest_scale_monitor_from_frame_rect` (`window.c`) and that manager function and
+confirm the scan still matches, as `docs/shell-compatibility.md` records.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds

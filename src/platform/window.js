@@ -459,11 +459,16 @@ function rectanglesOverlap(a, b) {
  * per read, so the two can disagree for a frame around a move or hotplug; that is the one
  * approximation in the term.
  *
- * When the frame rect is unreadable this returns `win.get_monitor()`, the main monitor, which is
- * what Mutter stores when the frame size is not positive. That fallback keeps the correction on
- * the single-monitor path instead of dropping it to zero, which is the only path the reporter
- * verified; returning {x: 0, y: 0} would regress it. When the frame is valid but no monitor
- * intersects it, it returns -1; Mutter stores NULL there and its transform does nothing.
+ * A degenerate frame (unreadable, or a width/height that is not positive) returns -1, which
+ * `getWindowSubpixelOffset` maps to {x: 0, y: 0}. It used to return `win.get_monitor()` - the
+ * main monitor - as a third rule on top of upstream's two, but Mutter's two writers of the
+ * cached pointer already disagree: `meta_window_constructed` stores the current logical monitor
+ * (window.c:1250-1260), while `meta_window_update_monitor` stores `window->monitor`, the last
+ * resolved main monitor (window.c:4195-4199). `surface_container_apply_transform`
+ * (meta-window-actor-wayland.c:130) applies no phase at all when that pointer is NULL, so
+ * mirroring either path buys nothing once a decoration is live - and a degenerate frame means
+ * exactly that it is not (the measurement is in the commit message). The valid-frame,
+ * no-intersecting-monitor case was already -1 for the same reason.
  *
  * @param {object|null} win - Meta.Window
  * @returns {number} Logical monitor index, or -1
@@ -471,7 +476,7 @@ function rectanglesOverlap(a, b) {
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
     if (!frame || !(frame.width > 0) || !(frame.height > 0))
-        return typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
+        return -1;
 
     let bestIndex = -1;
     let bestScale = 0;

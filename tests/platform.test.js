@@ -838,11 +838,13 @@ describe('platform', () => {
 
         // The phase belongs to the window's compositor actor, so every fake window points at the
         // one it owns: a caller can no longer hand in a different actor and derive a different edge.
+        // The frame defaults to the full monitor so the arithmetic specs exercise the monitor scan;
+        // only a spec that supplies a frame tests the degenerate/unreadable case.
         const waylandWin = (actor, monitorIndex = 0, frame = null) => ({
             get_client_type: () => 0, // WAYLAND
             get_monitor: () => monitorIndex,
             get_compositor_private: () => actor,
-            ...(frame ? {get_frame_rect: () => frame} : {}),
+            get_frame_rect: () => frame ?? {x: 0, y: 0, width: 1920, height: 1080},
         });
 
         const displayFor = monitors => ({
@@ -884,6 +886,35 @@ describe('platform', () => {
 
         it('returns zero offset on invalid monitor index', () => {
             expect(getWindowSubpixelOffset(waylandWin({x: 242, y: 200}, -1))).toEqual({x: 0, y: 0});
+        });
+
+        // The fallback to win.get_monitor() is gone, so a frame the scan cannot read resolves to
+        // -1, and a valid frame whose scan finds no monitor does the same. Both must stay {0,0} and
+        // must not reach for the window's own monitor index.
+        it('returns zero offset for a degenerate frame, without the monitor fallback', () => {
+            globalThis.global = monitor(4 / 3);
+            let monitorAsked = false;
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_monitor: () => { monitorAsked = true; return 0; },
+                get_compositor_private: () => ({x: 242, y: 200}),
+                get_frame_rect: () => ({x: 0, y: 0, width: 0, height: 0}),
+            };
+            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+            expect(monitorAsked).toBeFalse();
+        });
+
+        it('returns zero offset when the frame rect is unreadable, without the monitor fallback', () => {
+            globalThis.global = monitor(4 / 3);
+            let monitorAsked = false;
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_monitor: () => { monitorAsked = true; return 0; },
+                get_compositor_private: () => ({x: 242, y: 200}),
+                get_frame_rect: () => { throw new Error('window destroyed'); },
+            };
+            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+            expect(monitorAsked).toBeFalse();
         });
 
         it('returns zero offset on integer scale factors', () => {

@@ -98,6 +98,23 @@ What changed and what the extension does about it is described where each call
 appears in [shell-api.md](shell-api.md); which versions share which shape is in the table above,
 computed rather than remembered.
 
+## Re-checking the mirrored monitor scan on a Mutter bump
+
+`tools/check-upstream-mirrors.mjs` pins the phase arithmetic to the vendored
+`meta-window-actor-wayland.c`, but `resolveHighestScaleMonitorIndex` (`src/platform/window.js`) also
+re-runs the monitor-selection rule behind `meta_window_get_highest_scale_monitor`: max scale over
+the logical monitors whose layout rect intersects the window frame. That rule lives in
+`meta_monitor_manager_get_highest_scale_monitor_from_rect` (`meta-monitor-manager.c`), which is not
+vendored, so the check cannot assert it; `meta_window_find_highest_scale_monitor_from_frame_rect`
+(`window.c`) is the only path that reaches it from the window side.
+
+When bumping Mutter, re-read both functions and confirm the scan in
+`resolveHighestScaleMonitorIndex` still matches: the same positive-area intersection test, the same
+"highest scale wins" pick (a tie keeps the earlier index), and -1 when no monitor intersects or the
+frame is unreadable. The rule is not machine-guarded because that file is not vendored, so this is a
+manual step by necessity; `docs/decoration-model.md` records the same re-check at the phase mirror's
+reopen condition.
+
 ## Additional GNOME 51 upstream changes audited
 
 GNOME Shell 51 migration guide lists additional upstream breaking changes that were audited for applicability:
