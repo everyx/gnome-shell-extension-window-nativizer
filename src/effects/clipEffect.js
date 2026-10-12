@@ -9,9 +9,8 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
-import {clipFrameFor} from '../lib/snap.js';
+import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
-import {findMetaWindow, getWindowSubpixelOffset} from '../platform/window.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -192,14 +191,16 @@ export const RoundedClipEffect = GObject.registerClass({
             return;
 
         const scale = this._scale ?? 1.0;
-        // Mutter draws a Wayland surface at the integer physical grid, so the buffer the shader
-        // samples is offset from the actor by the subpixel remainder. clipFrameFor folds that
-        // same phase in - the one the shadow actor carries as a translation - so the clip's cut
-        // and the shadow's cutout stay on one line. Snapping actor-local alone would cut the
-        // hard straight edge up to half a physical pixel off that buffer, and the stage resampler
-        // then renders the straddled output pixel at partial alpha - a transparent line along it.
-        const frame = clipFrameFor({width, height}, this._insets, scale,
-            getWindowSubpixelOffset(findMetaWindow(actor)));
+        // The clip targets the Wayland surface container (see resolveClipTarget), whose own
+        // transform carries the buffer's subpixel phase; the offscreen FBO paints the container's
+        // local content, so the phase is not a term in this actor-local frame and the body edge is
+        // the plain snapped body. The shadow actor carries the same phase as a translation, so the
+        // clip's cut and the shadow's cutout still land on one physical line - both derive their
+        // local edge from clipFrameFor. Folding the phase in here would double it: clipping the
+        // window actor instead put the phase in a child transform that the FBO's box rounding
+        // could not keep, and at 1.25 the hard straight-edge cut then fell a full physical pixel
+        // inside the frame, leaving a bright hairline over the shadow.
+        const frame = clipFrameFor({width, height}, this._insets, scale, ZERO_PHASE);
         const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
         if (changes.scale !== undefined) {

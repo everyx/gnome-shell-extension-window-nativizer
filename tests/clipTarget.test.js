@@ -105,14 +105,23 @@ describe('clipTarget', () => {
             expect(resolveClipTarget(win, null, mockSt)).toBeNull();
         });
 
-        describe('Fast path (no foreign widgets injected - zero side effects)', () => {
-            it('returns window actor on Wayland', () => {
+        describe('Wayland surface container target (keeps the subpixel phase out of the FBO)', () => {
+            it('returns the surface container on Wayland, not the window actor', () => {
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND});
                 const surface = new MockSurfaceActor();
                 const actor = createMockActor({children: [surface]});
 
                 const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(actor);
+                expect(target).toBe(surface);
+                expect(target).not.toBe(actor);
+            });
+
+            it('falls back to the window actor when the container geometry is incompatible', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
+                const surfaceWithOffset = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 12, y: 12, width: 476, height: 376});
+                const actor = createMockActor({children: [surfaceWithOffset]});
+
+                expect(resolveClipTarget(win, actor, mockSt)).toBe(actor);
             });
 
             it('returns first child on XWayland when surface child exists', () => {

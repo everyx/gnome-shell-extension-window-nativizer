@@ -1,9 +1,15 @@
 /**
  * Resolves target actor for RoundedClipEffect.
  *
- * Normal target: MetaWindowActor (Wayland) or first child (XWayland). When foreign
- * extensions (e.g. Blur my Shell) inject an St.Widget inside MetaWindowActor,
- * bypasses it to attach to the surface container to preserve offscreen sampling.
+ * A Wayland window's surface container is the target whenever its geometry is a plain match for
+ * the buffer. The container's own transform carries the subpixel phase Mutter applies, and an
+ * offscreen effect on the container paints its local content, so the phase stays out of the
+ * FBO's box rounding; clipping the window actor instead puts the phase in a child transform the
+ * FBO cannot keep, which is what leaves a hairline at 1.25x. Foreign widgets (e.g. Blur my
+ * Shell) sit beside the container in the same tree, so the same non-foreign child is chosen
+ * either way; an X11 surface is already the window actor's first child and is returned by the
+ * default path. Anything unreadable or geometrically incompatible falls back to the window
+ * actor, which still rounds the corners, just without the subpixel guarantee.
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
@@ -66,15 +72,9 @@ export function resolveClipTarget(win, actor, St = null) {
     if (!children || children.length === 0)
         return defaultTarget;
 
-    const hasForeign = children.some(child => isForeignWidget(child, St));
-    if (!hasForeign)
-        return defaultTarget;
-
     const surfaceContainer = children.find(child => !isForeignWidget(child, St));
-
-    if (surfaceContainer && !isCompatibleSurfaceGeometry(surfaceContainer, win))
+    if (!surfaceContainer || !isCompatibleSurfaceGeometry(surfaceContainer, win))
         return defaultTarget;
 
-    // Fall back to default target when no compatible surface container is available.
-    return surfaceContainer ?? defaultTarget;
+    return surfaceContainer;
 }
