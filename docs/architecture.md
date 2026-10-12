@@ -29,7 +29,8 @@ tested without a session; the processes only gather inputs and apply results.
 | `effects/clipParams.js` | the clip effect's upload decisions: which uniforms changed and when the cached frame is stale (pure) |
 | `effects/overviewMaskBytes.js` | the overview corner mask's A_8 bytes, split from the Cogl upload (pure) |
 | `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
-| `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51 |
+| `platform/numeric.js` | the GI-free upstream-numeric primitives the C mirrors share: C `roundf` and GSK's `gsk_rect_snap_direction` (pure) |
+| `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51, plus the shared numeric core |
 
 ## The two processes
 

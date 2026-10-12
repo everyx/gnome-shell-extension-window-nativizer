@@ -598,6 +598,15 @@ build it with `clipFrameFor` in `lib/snap.js`, which requires the buffer's phase
 The shadow actor passes zero there and carries the real phase as its own translation, so the two
 meet on one physical position without either site re-deriving the correction.
 
+**Why the phase is mirrored rather than read.** Mutter caches the transform it applied on the
+surface container, so GJS could read the phase back instead of recomputing it. It does not,
+because the mirror is already spec-pinned (the `getWindowSubpixelOffset` guard in
+`tools/check-upstream-mirrors.mjs` and the e2e subpixel-phase guard), so reading changes no
+result today; a cached read lags a frame during drags, so it would change verified behaviour;
+and it leans on *where* Mutter applies the phase - a private implementation detail, not a
+contract, in a churning upstream. Reopen only if either guard fails: it catches both failure
+modes.
+
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating

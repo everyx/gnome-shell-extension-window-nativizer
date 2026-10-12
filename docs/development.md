@@ -270,6 +270,9 @@ An introspectable fact written in markdown is merely an unverified, rotting cach
 
 1. **Machine-verified layer (`tests/`)**: High churn, zero drift. All concrete parameters, edge cases,
    and geometric formulas live in executable unit tests (`pnpm test`). If code shifts, tests fail immediately.
+   When a function's contract is "equals upstream function F", the spec names F and pins the boundary
+   cases that distinguish the rule - negatives and exact halves. `tests/snap.test.js`'s direction
+   boundary values are the model: they are what a `Math.round` stand-in would fail.
 2. **In-code comments layer (JSDoc & inline)**: Co-located with code, high locality. Carries local "Why",
    counter-intuitive workarounds, and non-obvious traps. Omits restatements of code syntax or trivial types.
    Kept in the same file and reviewed in the same git diff as the code change.

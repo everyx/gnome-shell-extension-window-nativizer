@@ -15,6 +15,9 @@ from upstream GTK.
   - `gtkwindow.c` (gtk/) defines `RESIZE_HANDLE_SIZE` and `RESIZE_HANDLE_CORNER_SIZE`, the CSD
     input-region geometry. `tools/gen-gtk.mjs` extracts them into
     `src/lib/gtkRules.generated.js`.
+  - `gskrectprivate.h` (gsk/) defines `GSK_SNAP_EPSILON` and `gsk_rect_snap_direction`, the grid
+    snap rule mirrored by `src/platform/numeric.js` and re-exported through `src/lib/snap.js`.
+    `tools/check-upstream-mirrors.mjs` asserts that rule rather than generating from it.
 - `research/gtk` is an uncommitted clone kept only for reading; this directory is the committed
   source of truth, at the COMMIT above.
 - Update instructions:
