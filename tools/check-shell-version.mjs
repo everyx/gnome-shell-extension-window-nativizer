@@ -11,7 +11,7 @@
  * tools/shell-api.json has recorded it, with the tag and commit the audit read. Before this check
  * existed the claim had no reader at all.
  *
- * The lower bound stays a judgement and is not checked: the record covers 45-51, the manifest claims
+ * The lower bound stays a judgement and is not checked: the record covers 50-51, the manifest claims
  * a subset of it, and choosing that subset is the human act described in docs/development.md
  * § Upstream API audit.
  *

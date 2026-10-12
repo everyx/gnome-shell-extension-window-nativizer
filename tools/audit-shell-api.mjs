@@ -10,9 +10,9 @@
  * is the record a reviewer and a checker can both read.
  *
  * What counts as "exists" is the *public header*, not the implementation: GJS only reaches
- * symbols the introspection scanner sees. meta_window_is_maximized is defined in
- * src/core/window.c from 48 on but only declared in src/meta/window.h from 49, so it is not
- * callable from JS until 49 - the distinction is the whole reason this file reads headers.
+ * symbols the introspection scanner sees. A symbol can be defined in the implementation before the
+ * header declares it, and it is not callable from JS until the declaration lands - the distinction
+ * is the whole reason this file reads headers.
  *
  * research/ is an uncommitted clone (see .gitignore) kept for exactly this kind of reading.
  * A missing tag is reported with the git fetch command that would fix it.
@@ -32,7 +32,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'tools', 'shell-api.json');
 const RESEARCH = path.join(ROOT, 'research');
 
-const MAJORS = [45, 46, 47, 48, 49, 50, 51];
+const MAJORS = [50, 51];
 const SOURCES = {
     mutter: 'https://gitlab.gnome.org/GNOME/mutter',
     'gnome-shell': 'https://gitlab.gnome.org/GNOME/gnome-shell',
@@ -54,12 +54,9 @@ const SOURCES = {
  */
 const SURFACE = [
     // Meta.Window - the window itself
-    {id: 'is_client_decorated', member: 'win.is_client_decorated()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_is_client_decorated'},
-    {id: 'display_set_cursor', member: 'global.display.set_cursor()', repo: 'mutter', kind: 'fn', file: 'src/meta/display.h', sym: 'meta_display_set_cursor'},
     {id: 'get_client_type', member: 'win.get_client_type()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_get_client_type'},
     {id: 'get_window_type', member: 'win.get_window_type()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_get_window_type'},
     {id: 'is_maximized', member: 'win.is_maximized()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_is_maximized'},
-    {id: 'get_maximized', member: 'win.get_maximized()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_get_maximized'},
     {id: 'is_fullscreen', member: 'win.is_fullscreen()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_is_fullscreen'},
     {id: 'get_tile_match', member: 'win.get_tile_match()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_get_tile_match'},
     {id: 'get_pid', member: 'win.get_pid()', repo: 'mutter', kind: 'fn', file: 'src/meta/window.h', sym: 'meta_window_get_pid'},
@@ -101,19 +98,16 @@ const SURFACE = [
     {id: 'clutter_set_uniform_float', member: 'effect.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'clutter_shader_effect_set_uniform_float'},
     {id: 'cogl_pipeline_set_uniform_float', member: 'pipeline.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-state.h', sym: 'cogl_pipeline_set_uniform_float'},
     // The shaped texture's screenshot probe: the overview asks shapeTexture.paint_to_bitmap()
-    // (get_image() through 50) whether masking a window would move its desktop screenshot to
-    // the offscreen path. Both spellings share the early-out the probe relies on.
+    // whether masking a window would move its desktop screenshot to the offscreen path. It is
+    // resolved by capability, so no version keyed on a major decides whether it is called.
     {id: 'shaped_texture_paint_to_bitmap', member: 'stex.paint_to_bitmap()', repo: 'mutter', kind: 'fn', file: 'src/meta/meta-shaped-texture.h', sym: 'meta_shaped_texture_paint_to_bitmap'},
-    {id: 'shaped_texture_get_image', member: 'stex.get_image()', repo: 'mutter', kind: 'fn', file: 'src/meta/meta-shaped-texture.h', sym: 'meta_shaped_texture_get_image'},
     {id: 'cogl_pixel_format', member: 'Cogl.PixelFormat', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pixel-format.h', sym: 'COGL_PIXEL_FORMAT_A_8'},
     // The cursor enum the resize band's directions resolve to. It arrives in 50 with
-    // set_cursor_type, and it is recorded because of how it is read: a module-level table of its
-    // members is what kept the extension from loading on 45-49 (see platform/actorCursor.js).
+    // set_cursor_type; it is recorded because of how it is read (see platform/actorCursor.js).
     {id: 'clutter_cursor_type', member: 'Clutter.CursorType', repo: 'mutter', kind: 'enum', file: 'clutter/clutter/clutter-enums.h', sym: 'CLUTTER_CURSOR_DEFAULT'},
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
     {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
-    {id: 'seat_get_pointer', member: 'seat.get_pointer()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-seat.h', sym: 'clutter_seat_get_pointer'},
     {id: 'backend_get_default_seat', member: 'backend.get_default_seat()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_default_seat'},
     // Build-time facts the typelib naming depends on
     {id: 'mutter_api_version', member: 'Meta-<api> / Shell-<api> typelibs', repo: 'mutter', kind: 'const', file: 'meson.build', sym: 'libmutter_api_version'},

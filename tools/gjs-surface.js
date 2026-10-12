@@ -12,8 +12,8 @@
  *   - Properties and methods are not the same thing. GJS installs a get/set accessor pair for
  *     every GObject property and separately exposes the C accessors as methods when the header
  *     declares them - Clutter.ActorMeta has both an `enabled` property and a set_enabled method.
- *   - (skip) annotations and private headers leave a symbol declared but unreachable. Meta.Display
- *     declares no get_default_seat in any of 45-51, and the prototype agrees: undefined.
+ *   - (skip) annotations and private headers leave a symbol declared but unreachable. The audited
+ *     lines each declare the members the extension calls, and the prototype agrees.
  *
  * The assertion boundary is the boundary of what the code assumes. Existence is asserted for
  * everything the extension calls, because it is the cheapest check with the widest reach. Shape is
@@ -60,8 +60,8 @@ const SURFACE = [
     {ns: 'Meta', cls: 'Window', member: 'get_buffer_rect', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'allows_resize', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'get_monitor', arity: 0},
-    // The shape is platform/grabOp.js's: 45 takes a device and a sequence, 46-48 add pos_hint, 49-51
-    // take a sprite. Asserting one of them here is the mistake this entry used to make.
+    // platform/grabOp.js calls the 50-51 sprite signature; the shape is the platform seam's, so
+    // only existence is asserted here - asserting one shape is the mistake this entry used to make.
     {ns: 'Meta', cls: 'Window', member: 'begin_grab_op'},
     {ns: 'Meta', cls: 'Window', member: 'get_compositor_private', arity: 0},
     {ns: 'Meta', cls: 'Window', member: 'is_hidden', arity: 0},
@@ -83,9 +83,8 @@ const SURFACE = [
     // Clutter
     // The cursor call and its enum are platform/actorCursor.js's: both arrive in 50.
     {ns: 'Clutter', cls: 'Actor', member: 'set_cursor_type', optional: true},
-    // The enum that call takes. It arrives in the same release, and the code reads it behind a
-    // capability check - 45-49 have neither, and reading it while a module was evaluated is what
-    // stopped the extension loading there.
+    // The enum that call takes. The code reads it behind a capability check, so a line without the
+    // enum gets no cursor rather than an exception while the extension is loading.
     {ns: 'Clutter', cls: 'CursorType', enum: true, optional: true,
         members: ['DEFAULT', 'CROSSHAIR', 'N_RESIZE', 'NW_RESIZE']},
     {ns: 'Clutter', cls: 'Actor', member: 'set_child_above_sibling', params: ['child', 'sibling']},
@@ -97,19 +96,16 @@ const SURFACE = [
     {ns: 'Clutter', cls: 'OffscreenEffect', member: 'vfunc_paint_target', vfunc: true},
     {ns: 'Clutter', cls: 'BindConstraint', class: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_default_seat', optional: true},
-    {ns: 'Clutter', cls: 'Seat', member: 'get_pointer', optional: true},
-    // What platform/grabOp.js dispatches on: 49-51 have the sprite pair, 45-48 reach the pointer
-    // through the seat. Either way the dispatch picks the shape, so only existence is asserted.
+    // What platform/grabOp.js dispatches on: the 50-51 sprite pair. Only existence is asserted.
     {ns: 'Clutter', cls: 'Backend', member: 'get_sprite', optional: true},
     {ns: 'Clutter', cls: 'Backend', member: 'get_pointer_sprite', optional: true},
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
     // The overview's mask probe asks the shaped texture whether masking this window would move
-    // its desktop screenshot off the direct-read path. 51 renamed it get_image -> paint_to_bitmap.
+    // its desktop screenshot off the direct-read path. The member is resolved by capability.
     {ns: 'Meta', cls: 'ShapedTexture', class: true},
     {ns: 'Meta', cls: 'ShapedTexture', member: 'paint_to_bitmap', arity: 2, optional: true},
-    {ns: 'Meta', cls: 'ShapedTexture', member: 'get_image', arity: 1, optional: true},
     {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['RGBA_8888', 'A_8']},
     // gnome-shell, only reachable from inside the shell
     // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
@@ -134,9 +130,9 @@ const SURFACE = [
  */
 const GROUPS = [
     {name: 'a uniform upload path', members: [['Shell', 'GLSLEffect', 'set_uniform_float'], ['Clutter', 'ShaderEffect', 'set_uniform_float']]},
-    // 45-48 reach the pointer through the seat, 49-51 through a sprite. The grab dispatch needs one
-    // of the three, and a shell with none of them could not start a resize at all.
-    {name: 'a pointer source for the grab', members: [['Clutter', 'Backend', 'get_sprite'], ['Clutter', 'Backend', 'get_pointer_sprite'], ['Clutter', 'Backend', 'get_default_seat']]},
+    // 50-51 reach the pointer through a sprite. The grab dispatch needs one of the pair, and a
+    // shell with neither could not start a resize at all.
+    {name: 'a pointer source for the grab', members: [['Clutter', 'Backend', 'get_sprite'], ['Clutter', 'Backend', 'get_pointer_sprite']]},
 ];
 
 let failed = 0;
@@ -349,7 +345,7 @@ if (platform) {
             fail(`platform ${what}`, `the seam selected ${value === undefined ? 'nothing' : typeof value}, which is not callable`);
     };
     seam('ShaderEffect', platform.ShaderEffect);
-    // The selected base class may define the upload itself (Shell.GLSLEffect, 45-50) or inherit
+    // The selected base class may define the upload itself (Shell.GLSLEffect, 50) or inherit
     // Mutter's native one (Clutter.ShaderEffect, 51), so this reaches through the chain either way.
     seam('ShaderEffect.set_uniform_float', platform.ShaderEffect?.prototype?.set_uniform_float);
     seam('beginWindowGrabOp', platform.beginWindowGrabOp);

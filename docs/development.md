@@ -43,8 +43,8 @@ a comment here explains the line it sits on, and the reasoning goes in `docs/`.
 
 **What a stub may stand for, and what only pixels settle.** A stub may only stand for something the
 type declares. `tests/platform.test.js` used to stub `display.get_default_seat`, a method
-`Meta.Display` has not declared in any of 45-51, so the test passed while the code path resolved
-nothing and the resize band stayed silently inert on 45-48. The names the code may rely on are in
+`Meta.Display` has never declared, so the test passed while the code path resolved nothing and the
+resize band stayed silently inert. The names the code may rely on are in
 `tools/shell-api.json`, `tools/gjs-surface.js` proves them against a real shell, and a stub for a
 name neither has is a test for a shell that does not exist. The same honesty applies one level up: a
 resolved style is what was asked for, not what was drawn, so whether anything renders is settled by
@@ -95,7 +95,7 @@ optional-method probes) rather than on a version number, so a matrix would buy "
 start" at seven builds per push, while the failure it would catch - a declaration we rely on and a
 line no longer has - is what the record answers already.
 
-The lower bound stays a decision nothing derives: the record covers 45-51, `shell-version` claims a
+The lower bound stays a decision nothing derives: the record covers 50-51, `shell-version` claims a
 subset of it, and which subset is a choice made by hand while auditing a new line. release-please
 owns only the manifest's `$.version-name` (`release-please-config.json`).
 
