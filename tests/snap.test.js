@@ -271,7 +271,9 @@ describe('snapSliceBoxes', () => {
         expect(returned).toBe(existingBoxes);
         expect(existingBoxes[0].x).toBe(10.4);
         expect(existingBoxes[0].y).toBe(20.0);
-        expect(existingBoxes[0].width).toBeCloseTo(29.6, 4);
+        // The span is the corner reach itself, so the corner texture is not rescaled: 30 at
+        // every scale. Snapping the inner cutline on its own used to yield 29.6 here.
+        expect(existingBoxes[0].width).toBeCloseTo(30.0, 4);
     });
 
     it('prefers box.init when available to eliminate 32-bit float rounding seams', () => {

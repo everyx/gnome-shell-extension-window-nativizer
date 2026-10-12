@@ -5,7 +5,7 @@
 
 import {shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
-import {clipFrameFor, snapActorBodyFrame} from '../src/lib/snap.js';
+import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/window.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
@@ -440,5 +440,43 @@ describe('shadowPhaseOffset (the shadow cuts on the clip target\'s phase source)
             expect(getAppliedSubpixelPhase(win)).toBeNull();
             expect(shadowPhaseOffset(win, true)).toEqual(mirror);
         });
+    });
+});
+
+describe('shadow slice destination span (one derivation from the UV span)', () => {
+    // The corner/edge texture shows `c / buffer` of the bake (shadowSlices), so the destination
+    // quad must span exactly `c` logical px. Snapping both cutlines on its own re-derived the
+    // span, scaling the bake by up to ~0.6% instead of mapping 1:1: at 1.25x the corner came out
+    // 71.2 px for a 71 px UV span, 71.33 at 1.5x and 71.43 at 1.75x. This pins the agreement and
+    // would catch a regression to per-cutline snapping.
+    const cornerSpanFor = (index, slices, rects, buffer, axis) => {
+        const s = axis === 'x' ? [slices[index].s1, slices[index].s2] : [slices[index].t1, slices[index].t2];
+        const r = axis === 'x' ? [rects[index].x1, rects[index].x2] : [rects[index].y1, rects[index].y2];
+        return {uv: (s[1] - s[0]) * buffer, dest: r[1] - r[0]};
+    };
+
+    it('maps every corner span 1:1 across the scale matrix', () => {
+        const geometry = shadowGeometry(ADWAITA_STYLE.window.radius);
+        // Full-size casts only: below two corners the monotonic clamp in snapSliceRects can pull the
+        // far cutline in to stop an inversion, which is a deliberate degenerate-size guard rather
+        // than the rescale this spec pins (the crop for that case is covered in shadowSlices).
+        const casts = [
+            {x: 0.25, y: 0.2, width: 400, height: 300},
+            {x: 12.4, y: -3.6, width: 652, height: 502},
+        ];
+        for (const cast of casts) {
+            const slices = shadowSlices(geometry, cast.width, cast.height);
+            for (const scale of [1.0, 1.25, 4 / 3, 1.5, 1.75, 2.0]) {
+                const rects = snapSliceRects(cast, geometry.corner, scale);
+                for (const index of [0, 1, 2, 3]) {
+                    for (const axis of ['x', 'y']) {
+                        const {uv, dest} = cornerSpanFor(index, slices, rects, geometry.buffer, axis);
+                        expect(uv)
+                            .withContext(`slice ${index} ${axis} cast ${JSON.stringify(cast)} scale ${scale}`)
+                            .toBeCloseTo(dest, 6);
+                    }
+                }
+            }
+        }
     });
 });
