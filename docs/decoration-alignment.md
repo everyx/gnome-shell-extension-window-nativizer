@@ -262,7 +262,16 @@ To solve this at the root:
 3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes
-   are snapped to the physical grid using GTK 4.24's `gsk_rect_snap_to_grid` rules.
+   are snapped to the physical grid using GTK 4.24's `gsk_rect_snap_to_grid` rules. FLOOR and
+   CEIL mirror `gsk_rect_snap_direction` exactly; ROUND is a deliberate adaptation. GSK's branch
+   evaluates `roundf (value + GSK_SNAP_EPSILON)` on the raw value, so `-1.5` becomes
+   `roundf(-1.499) = -1` - biasing negative coordinates toward zero and breaking sign symmetry.
+   We round the magnitude and reapply the sign instead, because the two edges of a body must snap
+   alike (`f(-x) = -f(x)`); `tests/snap.test.js` pins both the deviation and the symmetry.
+   - **Decision (A vs B)**: option A was to adopt GSK's raw-value epsilon exactly. Rejected - it
+     changes desktop rendering on negative coordinates with no bug behind it, and gives up the
+     origin-odd symmetry. Option B (documented deviation) is in force. Reopen A only if a visible
+     1-physical-pixel artifact appears at negative coordinates.
 5. **Symmetric Physical Margin Snapping**:
    GTK3 CSD windows (e.g. Meld) render a 1px border stroke (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`).
    Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), independent
