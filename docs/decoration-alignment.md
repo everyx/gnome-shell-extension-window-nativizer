@@ -270,8 +270,9 @@ To solve this at the root:
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
 
    The resolver also has a real fallback: an ambiguous actor tree, a container whose geometry does
-   not match the buffer, an unreadable buffer or allocation, or, on X11, the first non-foreign
-   child when no unique container can be identified. There the phase
+   not match the buffer, an unreadable buffer or allocation, a container whose local box is not
+   integer-aligned, or, on X11, the first non-foreign child when no unique container can be
+   identified. There the phase
    is not in the target's own transform, so the clip folds `getWindowSubpixelOffset` into its
    geometry again - the behaviour before the container path - while the shadow keeps the same offset
    as a translation. Both cuts still share `clipFrameFor` and still meet on one physical line, but
@@ -281,6 +282,17 @@ To solve this at the root:
    fraction of a pixel off the buffer everywhere, which is worse than a boundary that can still
    part at the one phase where the FBO rounds across it. The straight-edge claim in `README.md`
    therefore describes the container path.
+
+   The box check is a precondition, not a fix. Clutter's offscreen origin only equals the shader's
+   `EFFECT_PADDING_ORIGIN` constant on an integer-aligned actor box (`clutterEffectPadding.generated.js`
+   warns this and `tools/gen-clutter.mjs` derives the constant from the upstream rule); a fractional
+   box can move the origin by a logical pixel, which no constant could express. Deriving the origin
+   from the box at runtime is deferred, because no reachable path produces a fractional box today:
+   the surface width Mutter stores is an `int` (`meta_wayland_surface_get_width`; `MetaShapedTexture`'s
+   `update_size` truncates a viewport source and divides the buffer by an integer scale), and the
+   container is sized from it. Measured in the nested session at 1.25x: a GTK4 Wayland window's
+   container is 440x340 (buffer 550x425) and an XWayland window's is 220x170, both integer. The
+   guard therefore only keeps the clip off a box the shader cannot express, on the safe fallback.
 3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes

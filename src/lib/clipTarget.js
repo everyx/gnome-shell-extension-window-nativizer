@@ -9,10 +9,11 @@
  * FBO cannot keep, which is what leaves a hairline at 1.25x. Foreign widgets (e.g. Blur my
  * Shell) sit beside the container in the same tree, and Mutter's fullscreen background actor is
  * not an St.Widget either, so an ambiguous tree fails the uniqueness rule and falls back to the
- * window actor; an X11 surface is already the window actor's first child and is returned by the
- * default path. Every fallback keeps the phase in a child transform, so the clip folds the
- * window's subpixel offset into its geometry (`clipFrameForTarget`) exactly where the shadow
- * actor carries it as a translation.
+ * window actor. On X11 the surface is the window actor's first non-foreign child - a foreign
+ * widget injected ahead of it is skipped rather than taking the clip - and when no such child
+ * exists the window actor is the fallback, never an unverified widget. Every fallback keeps the
+ * phase in a child transform, so the clip folds the window's subpixel offset into its geometry
+ * (`clipFrameForTarget`) exactly where the shadow actor carries it as a translation.
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
@@ -31,6 +32,24 @@ const CLIENT_TYPE_X11 = WindowClientType.X11;
 // the subpixel phase reader needs the same answer and platform may not import from lib/. Kept as
 // a re-export so this module's callers and specs still find it here.
 export {isForeignWidget};
+
+/**
+ * The X11 window actor's real surface actor: its first child that is not foreign.
+ *
+ * The first child is not automatically the surface: an external extension (e.g. Blur my Shell)
+ * can inject an St.Widget ahead of it. The choice reuses `isForeignWidget`, the same predicate
+ * the surface-container and phase readers use, so a widget the clip must not attach to is never
+ * picked. Returns null when every child is foreign, letting the caller fall back to the window
+ * actor rather than an unverified widget.
+ *
+ * @param {object|null} actor - The window actor
+ * @param {object|null} [St]
+ * @returns {object|null} The plain surface child, or null
+ */
+export function getX11SurfaceChild(actor, St = null) {
+    const children = actor?.get_children?.() ?? [];
+    return children.find(child => !isForeignWidget(child, St)) ?? null;
+}
 
 /**
  * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
@@ -64,9 +83,16 @@ export function isCompatibleSurfaceGeometry(candidate, win) {
     if (candW === undefined || candH === undefined || candW === 0 || candH === 0)
         return true;
 
-    if (Math.round(candX) !== 0 || Math.round(candY) !== 0 ||
-        Math.round(candW) !== Math.round(buffer.width) ||
-        Math.round(candH) !== Math.round(buffer.height))
+    // The container path's premise is that the container's local space IS the buffer's: the clip
+    // derives its frame with ZERO_PHASE, so a real offset in x/y moves the cut against the shadow's
+    // hole by exactly that offset - 0.4 logical px is half a physical pixel at 1.25x, the phase the
+    // two cuts are most likely to part on. Only float residue may pass, so the origin is compared
+    // against a tolerance instead of being rounded to zero; whether the box is integer-aligned is a
+    // separate concern (`isIntegerAlignedSurfaceBox`).
+    const ORIGIN_EPSILON = 1e-6;
+    if (Math.abs(candX) > ORIGIN_EPSILON || Math.abs(candY) > ORIGIN_EPSILON ||
+        Math.abs(candW - buffer.width) > ORIGIN_EPSILON ||
+        Math.abs(candH - buffer.height) > ORIGIN_EPSILON)
         return false;
 
     return true;
@@ -90,13 +116,39 @@ export function resolveClipTarget(win, actor, St = null) {
         return null;
 
     const isX11 = getWindowClientType(win) === CLIENT_TYPE_X11;
-    const defaultTarget = isX11 ? actor.get_first_child?.() ?? actor : actor;
+    // On X11 the surface actor is the first non-foreign child, not blindly the first child: a
+    // foreign St.Widget injected ahead of it must never take the clip.
+    const defaultTarget = isX11 ? getX11SurfaceChild(actor, St) ?? actor : actor;
 
     const surfaceContainer = getSurfaceContainer(actor, St);
-    if (surfaceContainer && isCompatibleSurfaceGeometry(surfaceContainer, win))
+    if (surfaceContainer && isCompatibleSurfaceGeometry(surfaceContainer, win) &&
+        isIntegerAlignedSurfaceBox(surfaceContainer))
         return {actor: surfaceContainer, phaseInTransform: true};
 
     return {actor: defaultTarget, phaseInTransform: false};
+}
+
+/**
+ * Whether a surface container's local box is integer-aligned, so Clutter's derived offscreen
+ * origin and size hold.
+ *
+ * The clip runs offscreen; Clutter sizes that FBO with `_clutter_actor_box_enlarge_for_effects`,
+ * whose 2px top/left origin is what that rule yields only on an integer-aligned box. `width`
+ * itself is `CLUTTER_NEARBYINT (box->x2 - box->x1)` there, so a fractional local width changes
+ * the rounded width and, through `ceilf (x2 + 0.75)`, can move the origin by a whole logical
+ * pixel (at 1.25x a fraction in [0.25, 0.5) yields 1 instead of 2) with no constant the shader's
+ * FBO_OFFSET could use. Such a container is refused and the clip falls back to the window actor,
+ * the same safe direction as a geometry mismatch. See `src/lib/clutterEffectPadding.generated.js`
+ * for the upstream rule and the derivation.
+ *
+ * @param {object|null} candidate
+ * @returns {boolean}
+ */
+export function isIntegerAlignedSurfaceBox(candidate) {
+    if (!candidate)
+        return false;
+    const {width, height} = candidate;
+    return Number.isInteger(width) && Number.isInteger(height);
 }
 
 /**

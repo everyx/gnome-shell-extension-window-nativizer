@@ -6,8 +6,10 @@
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {
     clipFrameForTarget,
+    getX11SurfaceChild,
     isForeignWidget,
     isCompatibleSurfaceGeometry,
+    isIntegerAlignedSurfaceBox,
     resolveClipTarget,
 } from '../src/lib/clipTarget.js';
 
@@ -111,11 +113,36 @@ describe('clipTarget', () => {
         });
     });
 
+    describe('isIntegerAlignedSurfaceBox', () => {
+        it('accepts integer boxes and rejects fractional or missing ones', () => {
+            expect(isIntegerAlignedSurfaceBox({width: 500, height: 400})).toBe(true);
+            expect(isIntegerAlignedSurfaceBox({width: 500.4, height: 400})).toBe(false);
+            expect(isIntegerAlignedSurfaceBox({width: 500, height: 400.5})).toBe(false);
+            expect(isIntegerAlignedSurfaceBox(null)).toBe(false);
+            expect(isIntegerAlignedSurfaceBox({})).toBe(false);
+        });
+    });
+
     describe('isCompatibleSurfaceGeometry', () => {
         const win = createMockWindow({buffer: {x: 100, y: 100, width: 500, height: 400}});
-
         it('accepts candidate starting at (0, 0) matching buffer width and height', () => {
             const candidate = {x: 0, y: 0, width: 500, height: 400};
+            expect(isCompatibleSurfaceGeometry(candidate, win)).toBe(true);
+        });
+
+        it('rejects a fractional x origin that would round to zero', () => {
+            // 0.4 logical px is half a physical pixel at 1.25x: near zero is not zero here.
+            const candidate = {x: 0.4, y: 0, width: 500, height: 400};
+            expect(isCompatibleSurfaceGeometry(candidate, win)).toBe(false);
+        });
+
+        it('rejects a fractional negative y origin that would round to zero', () => {
+            const candidate = {x: 0, y: -0.4, width: 500, height: 400};
+            expect(isCompatibleSurfaceGeometry(candidate, win)).toBe(false);
+        });
+
+        it('still accepts float residue at the origin', () => {
+            const candidate = {x: 1e-7, y: -1e-7, width: 500, height: 400};
             expect(isCompatibleSurfaceGeometry(candidate, win)).toBe(true);
         });
 
@@ -163,6 +190,29 @@ describe('clipTarget', () => {
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
                 const surfaceWithOffset = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 12, y: 12, width: 476, height: 376});
                 const actor = createMockActor({children: [surfaceWithOffset]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+
+            it('falls back to the window actor when the container box is not integer-aligned', () => {
+                // Clutter's offscreen origin/size only equal the shader's FBO_OFFSET/FBO_EXTRA when the
+                // actor box is integer-aligned; a fractional container width can move the origin by a
+                // logical pixel, which the shader cannot express, so the clip must not attach to it.
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
+                const fractional = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 0, y: 0, width: 500.4, height: 400});
+                const actor = createMockActor({children: [fractional]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+
+            it('falls back to the window actor when the container origin is a fractional offset', () => {
+                // 0.4 logical px is half a physical pixel at 1.25x - the phase the two cuts are most
+                // likely to part on. Rounding the origin to zero would accept it as aligned.
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
+                const offset = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 0.4, y: 0, width: 500, height: 400});
+                const actor = createMockActor({children: [offset]});
 
                 expect(resolveClipTarget(win, actor, mockSt))
                     .toEqual({actor, phaseInTransform: false});
@@ -259,7 +309,7 @@ describe('clipTarget', () => {
                     .toEqual({actor: surfaceActor, phaseInTransform: true});
             });
 
-            it('gracefully falls back to default target if only foreign widgets are present', () => {
+            it('gracefully falls back to the window actor if only foreign widgets are present', () => {
                 const winWayland = createMockWindow({clientType: WindowClientType.WAYLAND});
                 const blurWidget = new MockStWidget();
                 const actorWayland = createMockActor({children: [blurWidget]});
@@ -271,11 +321,30 @@ describe('clipTarget', () => {
                 const winX11 = createMockWindow({clientType: WindowClientType.X11});
                 const actorX11 = createMockActor({children: [blurWidget]});
 
-                // On XWayland the normal target is actor.get_first_child() ?? actor; with only a blur
-                // widget present that is the blur widget. The bypass is skipped (nothing to
-                // upgrade to), matching rounded-window-corners' unwrapActor().
+                // On XWayland the default is the first non-foreign child; with only a foreign blur
+                // widget present there is none, so the window actor is used. It must never be the
+                // widget: attaching the clip to a plugin's actor loses the window's clip.
                 expect(resolveClipTarget(winX11, actorX11, mockSt))
-                    .toEqual({actor: blurWidget, phaseInTransform: false});
+                    .toEqual({actor: actorX11, phaseInTransform: false});
+            });
+
+            it('never attaches the X11 clip to a foreign St.Widget when the surface actor is incompatible', () => {
+                const win = createMockWindow({clientType: WindowClientType.X11, buffer: {width: 550, height: 487}});
+                const blurWidget = new MockStWidget('BlurMyShellActor');
+                // The real surface is present but mid-resize, so its geometry does not match the buffer.
+                const surfaceMidResize = new MockSurfaceActor('MetaSurfaceActorX11', {x: 0, y: 0, width: 540, height: 480});
+                const actor = createMockActor({children: [blurWidget, surfaceMidResize]});
+
+                const target = resolveClipTarget(win, actor, mockSt);
+                expect(target.actor).not.toBe(blurWidget);
+                expect(target).toEqual({actor: surfaceMidResize, phaseInTransform: false});
+            });
+
+            it('skips a foreign first child and returns the plain surface child on X11', () => {
+                const blurWidget = new MockStWidget();
+                const surface = new MockSurfaceActor('MetaSurfaceActorX11');
+                expect(getX11SurfaceChild(createMockActor({children: [blurWidget, surface]}), mockSt)).toBe(surface);
+                expect(getX11SurfaceChild(createMockActor({children: [blurWidget]}), mockSt)).toBeNull();
             });
         });
     });
