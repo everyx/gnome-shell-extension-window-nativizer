@@ -254,11 +254,33 @@ To solve this at the root:
    the straight edge sharp and jitter-free at all subpixel positions.
 2. **Symmetric Device Grid Phase Locking**:
    The clip frame snaps to the same physical grid phase as the shadow cutlines, which also snap to
-   the physical grid. This guarantees:
+   the physical grid. `resolveClipTarget` (`lib/clipTarget.js`) picks the Wayland surface container
+   when it can identify it uniquely (`getSurfaceContainer`: exactly one non-foreign child) and its
+   geometry matches the buffer; the buffer's subpixel phase is that container's own transform, so
+   an offscreen effect on the container paints its local content and the hard straight-edge cut is
+   computed in the same coordinates as the buffer. Clipping the window actor instead leaves the
+   phase in a child transform, which the offscreen FBO's box rounding cannot keep; at 1.25x the cut
+   then fell a full physical pixel inside the frame and the backdrop showed through as a bright
+   hairline between the clip's cut and the shadow's cutout. `clipFrameFor` in `lib/snap.js` is the
+   one derivation of both local edges, and the shadow actor carries the phase as its own
+   translation. On this container path, this guarantees:
    - Zero phase drift between the clip mask and the 8-slice shadow cutout across all monitor DPI scales;
    - Obsolete client-drawn border rings outside the client frame are strictly excluded
      from the clipped body without fractional outward expansion;
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
+
+   The resolver also has a real fallback: an ambiguous actor tree, a container whose geometry does
+   not match the buffer, an unreadable buffer or allocation, or, on X11, the first non-foreign
+   child when no unique container can be identified. There the phase
+   is not in the target's own transform, so the clip folds `getWindowSubpixelOffset` into its
+   geometry again - the behaviour before the container path - while the shadow keeps the same offset
+   as a translation. Both cuts still share `clipFrameFor` and still meet on one physical line, but
+   the offscreen FBO's integer-grid box rounding can still part them by the hairline that clipping
+   the window actor left at 1.25x. We nevertheless keep the phase correction on the fallback,
+   because it is what keeps the cut aligned with the client content: without it the cut sits a
+   fraction of a pixel off the buffer everywhere, which is worse than a boundary that can still
+   part at the one phase where the FBO rounds across it. The straight-edge claim in `README.md`
+   therefore describes the container path.
 3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes

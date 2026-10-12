@@ -8,6 +8,7 @@
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
 
 // Padding in px, derived from maximum Gaussian reach over all shadow layers.
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
@@ -65,7 +66,7 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
  * axes that moved; keeping the composition here lets it be asserted without a Clutter actor.
  *
  * @param {{translation_x?: number, translation_y?: number}} windowActor
- * @param {{x: number, y: number}} offset - Subpixel phase from getWindowSubpixelOffset
+ * @param {{x: number, y: number}} offset - Subpixel phase the shadow cuts on
  * @returns {{x: number, y: number}}
  */
 export function shadowTranslation(windowActor, offset) {
@@ -73,6 +74,31 @@ export function shadowTranslation(windowActor, offset) {
         x: (windowActor?.translation_x ?? 0) + offset.x,
         y: (windowActor?.translation_y ?? 0) + offset.y,
     };
+}
+
+/**
+ * The subpixel phase the shadow must translate by, chosen by the same strategy as the clip.
+ *
+ * On the container path the clip's target carries the phase in its own transform and the clip's
+ * local frame is phase-free, so the shadow reads that applied transform back with
+ * `getAppliedSubpixelPhase` - one source for both cuts, so a drag cannot move one a frame before
+ * the other and a reconstructed monitor cannot name a different monitor than Mutter's cached
+ * pointer. On the fallback path the clip folds the mirrored phase into its own frame, so the
+ * shadow must use the same mirror. The read is not authoritative for every frame: whenever it is
+ * unavailable (non-Wayland, ambiguous container, non-unit matrix scale, or a throw) the mirror
+ * is the documented fallback, exactly as on the fallback path.
+ *
+ * @param {object|null} win - Meta.Window behind the shadow's window actor
+ * @param {boolean} phaseInTransform - The resolved clip target's strategy
+ * @returns {{x: number, y: number}}
+ */
+export function shadowPhaseOffset(win, phaseInTransform) {
+    if (phaseInTransform) {
+        const applied = getAppliedSubpixelPhase(win);
+        if (applied)
+            return applied;
+    }
+    return getWindowSubpixelOffset(win);
 }
 
 /**

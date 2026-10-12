@@ -117,8 +117,9 @@ boundary align to GTK 4.24's physical device-pixel grid:
 - **Actor-local snapping**: snapping is deliberately confined to the actor-local coordinate
   space. Cutlines stay geometrically invariant while the window moves, leaving stage translation
   entirely to the GPU transform. The trade-off is a subpixel phase offset on stage, in exchange
-  for eliminating subpixel shimmering/crawling and hot-path allocations during drags; the shadow
-  actor pays it back by folding that offset into its own translation (`getWindowSubpixelOffset`).
+  for eliminating subpixel shimmering/crawling and hot-path allocations during drags; the clip's
+  container target carries the offset in its own transform and the shadow actor pays it back by
+  folding the same phase into its translation (`shadowPhaseOffset`).
 - **Multi-monitor cache isolation**: a window can be rendered across displays of differing DPI,
   so snapped shadow boxes are cached per physical scale to prevent cache thrashing.
 - **Device-grid clip boundary**: the clip's body snaps to the same grid the shadow cutlines use,
@@ -160,7 +161,7 @@ pixel inside the body, and a zero alpha disables it - which is how overview supp
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
 by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
-use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which takes the buffer's phase as a required input, so a caller cannot derive the edge without saying which phase it is on. The shadow actor supplies that phase as its own translation instead, and that shared derivation is what keeps the two equal. Under fractional scaling, the fragment
+use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which takes the buffer's phase as a required input, so a caller cannot derive the edge without saying which phase it is on. The shadow actor supplies that phase as its own translation instead, and that shared derivation is what keeps the two equal. The target and its phase strategy are one report (`resolveClipTarget`, `lib/clipTarget.js`); its window-actor fallback folds the phase back into the clip's geometry, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md` owns the model, that residual limitation and the measurements. Under fractional scaling, the fragment
 shader pushes texture sampling coordinates inward along the boundary normal
 (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
 sampling external stroke bleed on both straight edges and corner arcs.

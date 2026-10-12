@@ -1089,6 +1089,15 @@ describe('platform', () => {
             expect(getAppliedSubpixelPhase(waylandWin([container]))).toBeNull();
         });
 
+        it('answers null for a non-finite transform instead of a NaN phase', () => {
+            // A half-torn-down container can hand back a NaN translation; assigning it to an
+            // actor's translation is a GLib critical, so the read must report unavailable.
+            const nan = {x: 0, y: 0, get_transform: () => matrix({tx: NaN, ty: 0})};
+            expect(getAppliedSubpixelPhase(waylandWin([nan]))).toBeNull();
+            const infinite = {x: 0, y: 0, get_transform: () => matrix({tx: 0, ty: Infinity})};
+            expect(getAppliedSubpixelPhase(waylandWin([infinite]))).toBeNull();
+        });
+
         it('answers null, without throwing, when the transform cannot be read', () => {
             expect(getAppliedSubpixelPhase(waylandWin([{x: 0, y: 0}]))).toBeNull();
             expect(getAppliedSubpixelPhase(waylandWin([{x: 0, y: 0, get_transform: () => null}]))).toBeNull();

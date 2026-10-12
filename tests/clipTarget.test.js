@@ -5,10 +5,54 @@
 
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {
+    clipFrameForTarget,
     isForeignWidget,
     isCompatibleSurfaceGeometry,
     resolveClipTarget,
 } from '../src/lib/clipTarget.js';
+
+const CLIP_SIZE = {width: 500, height: 400};
+const CLIP_INSETS = {left: 8, top: 8, right: 8, bottom: 8};
+const CLIP_SCALE = 1.25;
+
+/**
+ * Installs a one-monitor display at `scale` for the callback, so the subpixel phase
+ * getWindowSubpixelOffset resolves is a known number.
+ * @param {number} scale
+ * @param {Function} run
+ * @returns {*} The callback's return value
+ */
+function withDisplay(scale, run) {
+    const original = globalThis.global;
+    globalThis.global = {
+        display: {
+            get_n_monitors: () => 1,
+            get_monitor_scale: () => scale,
+            get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+        },
+    };
+    try {
+        return run();
+    } finally {
+        globalThis.global = original;
+    }
+}
+
+/**
+ * A Wayland window whose surface container sits at local (0,0) so it is geometry-compatible by
+ * default; the phase then comes from the window actor's stage position.
+ * @param {{actorX?: number, container?: object, children?: Array<object>}} [options]
+ * @returns {object}
+ */
+function phaseWindow({actorX = 0, container = {x: 0, y: 0, width: 500, height: 400}, children} = {}) {
+    const actor = {x: actorX, y: 0, get_children: () => children ?? [container]};
+    return {
+        get_client_type: () => WindowClientType.WAYLAND,
+        get_buffer_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
+        get_frame_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
+        get_compositor_private: () => actor,
+    };
+}
 
 class MockStWidget {
     constructor(name = 'BlurActor') {
@@ -106,14 +150,13 @@ describe('clipTarget', () => {
         });
 
         describe('Wayland surface container target (keeps the subpixel phase out of the FBO)', () => {
-            it('returns the surface container on Wayland, not the window actor', () => {
+            it('returns the surface container, whose own transform carries the phase', () => {
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND});
                 const surface = new MockSurfaceActor();
                 const actor = createMockActor({children: [surface]});
 
-                const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(surface);
-                expect(target).not.toBe(actor);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surface, phaseInTransform: true});
             });
 
             it('falls back to the window actor when the container geometry is incompatible', () => {
@@ -121,7 +164,26 @@ describe('clipTarget', () => {
                 const surfaceWithOffset = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 12, y: 12, width: 476, height: 376});
                 const actor = createMockActor({children: [surfaceWithOffset]});
 
-                expect(resolveClipTarget(win, actor, mockSt)).toBe(actor);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+
+            it('keeps the container when the buffer cannot be read (fail-open)', () => {
+                const win = {get_client_type: () => WindowClientType.WAYLAND, get_buffer_rect: () => null};
+                const surface = new MockSurfaceActor();
+                const actor = createMockActor({children: [surface]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surface, phaseInTransform: true});
+            });
+
+            it('keeps the container when it has no allocation yet (fail-open)', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
+                const unallocated = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {width: 0, height: 0});
+                const actor = createMockActor({children: [unallocated]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: unallocated, phaseInTransform: true});
             });
 
             it('returns first child on XWayland when surface child exists', () => {
@@ -129,16 +191,38 @@ describe('clipTarget', () => {
                 const surface = new MockSurfaceActor();
                 const actor = createMockActor({children: [surface]});
 
-                const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(surface);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surface, phaseInTransform: true});
             });
 
             it('falls back to window actor on XWayland when first child is missing', () => {
                 const win = createMockWindow({clientType: WindowClientType.X11});
                 const actor = createMockActor({children: []});
 
-                const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(actor);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+        });
+
+        describe('identification rule combinations (mirrors getSurfaceContainer)', () => {
+            it('falls back to the window actor when more than one non-foreign child is present', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
+                const surface = new MockSurfaceActor('MetaSurfaceContainerActorWayland');
+                const background = new MockSurfaceActor('MetaBackgroundActor');
+                const actor = createMockActor({children: [surface, background]});
+
+                // Mutter adds extra non-foreign children (the fullscreen background actor), so the
+                // container is only chosen when the tree is unambiguous.
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+
+            it('falls back to the window actor when every child is foreign', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
+                const actor = createMockActor({children: [new MockStWidget(), new MockStWidget()]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
             });
         });
 
@@ -149,10 +233,8 @@ describe('clipTarget', () => {
                 const surfaceContainer = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 0, y: 0, width: 500, height: 400});
                 const actor = createMockActor({children: [blurWidget, surfaceContainer]});
 
-                const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(surfaceContainer);
-                expect(target).not.toBe(actor);
-                expect(target).not.toBe(blurWidget);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surfaceContainer, phaseInTransform: true});
             });
 
             it('falls back to window actor on Wayland if surface container geometry is incompatible', () => {
@@ -162,9 +244,9 @@ describe('clipTarget', () => {
                 const surfaceWithOffset = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 12, y: 12, width: 476, height: 376});
                 const actor = createMockActor({children: [blurWidget, surfaceWithOffset]});
 
-                const target = resolveClipTarget(win, actor, mockSt);
                 // Incompatible coordinate space -> safe fallback to defaultTarget (actor)
-                expect(target).toBe(actor);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
             });
 
             it('bypasses blur widget and targets surface child on XWayland when geometry matches', () => {
@@ -173,9 +255,8 @@ describe('clipTarget', () => {
                 const surfaceActor = new MockSurfaceActor('MetaSurfaceActorX11', {x: 0, y: 0, width: 550, height: 487});
                 const actor = createMockActor({children: [blurWidget, surfaceActor]});
 
-                const target = resolveClipTarget(win, actor, mockSt);
-                expect(target).toBe(surfaceActor);
-                expect(target).not.toBe(blurWidget);
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surfaceActor, phaseInTransform: true});
             });
 
             it('gracefully falls back to default target if only foreign widgets are present', () => {
@@ -184,7 +265,8 @@ describe('clipTarget', () => {
                 const actorWayland = createMockActor({children: [blurWidget]});
 
                 // On Wayland, default target is actor
-                expect(resolveClipTarget(winWayland, actorWayland, mockSt)).toBe(actorWayland);
+                expect(resolveClipTarget(winWayland, actorWayland, mockSt))
+                    .toEqual({actor: actorWayland, phaseInTransform: false});
 
                 const winX11 = createMockWindow({clientType: WindowClientType.X11});
                 const actorX11 = createMockActor({children: [blurWidget]});
@@ -192,7 +274,53 @@ describe('clipTarget', () => {
                 // On XWayland the normal target is actor.get_first_child() ?? actor; with only a blur
                 // widget present that is the blur widget. The bypass is skipped (nothing to
                 // upgrade to), matching rounded-window-corners' unwrapActor().
-                expect(resolveClipTarget(winX11, actorX11, mockSt)).toBe(blurWidget);
+                expect(resolveClipTarget(winX11, actorX11, mockSt))
+                    .toEqual({actor: blurWidget, phaseInTransform: false});
+            });
+        });
+    });
+
+    describe('clipFrameForTarget (the actual frame the effect computes, per phase strategy)', () => {
+        it('uses the plain snapped frame when the target carries the phase in its transform', () => {
+            withDisplay(CLIP_SCALE, () => {
+                const win = phaseWindow({actorX: 0.5});
+                const target = resolveClipTarget(win, win.get_compositor_private(), mockSt);
+                expect(target.phaseInTransform).toBe(true);
+
+                // The container path ignores the window phase: the actor's own transform applies it
+                // outside the offscreen FBO. 0.5 * 1.25 rounds to 1 physical px, so the phase would
+                // be 0.3 logical px were it folded in - it is deliberately not.
+                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, target, win);
+                expect(frame).toEqual({x: 8, y: 8, width: 484, height: 384});
+            });
+        });
+
+        it('folds the window subpixel offset when the target does not carry the phase', () => {
+            withDisplay(CLIP_SCALE, () => {
+                // A size-mismatched container still identifies the phase term for
+                // getWindowSubpixelOffset, but fails the clip geometry check, so the clip falls back
+                // to the window actor - the path that must fold the offset into its own geometry.
+                const win = phaseWindow({
+                    actorX: 0.5,
+                    container: {x: 0, y: 0, width: 476, height: 376},
+                });
+                const target = resolveClipTarget(win, win.get_compositor_private(), mockSt);
+                expect(target.phaseInTransform).toBe(false);
+
+                // actor.x = 0.5, scale 1.25 -> 0.625 rounds to 1 -> 0.8 - 0.5 = 0.3 logical px.
+                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, target, win);
+                expect(frame.x).toBeCloseTo(8.3, 6);
+                expect(frame.y).toBeCloseTo(8, 6);
+                expect(frame.width).toBe(484);
+                expect(frame.height).toBe(384);
+            });
+        });
+
+        it('treats a missing target as the fallback path', () => {
+            withDisplay(CLIP_SCALE, () => {
+                const win = phaseWindow({actorX: 0.5});
+                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, null, win);
+                expect(frame.x).toBeCloseTo(8.3, 6);
             });
         });
     });

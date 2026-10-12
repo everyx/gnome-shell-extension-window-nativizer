@@ -73,9 +73,12 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
  * cut on with the phase Mutter actually applied.
  *
  * The mirror is `getWindowSubpixelOffset`; the applied phase is read back from the surface
- * container's cached transform (`getAppliedSubpixelPhase`). The reply is an `a{ss}` map, so every
- * field is a string, and an unreadable applied phase says so rather than claiming a zero. This
- * runs only when a user asks for the pick, never on the clip/shadow render path.
+ * container's cached transform (`getAppliedSubpixelPhase`). The applied read is also the
+ * production source on the container path (the shadow reads it too, see `shadowPhaseOffset`), so
+ * this reply is where a user compares the two when the mirror's monitor scan cannot be exercised
+ * locally. The reply is an `a{ss}` map, so every field is a string, and an unreadable applied
+ * phase says so rather than claiming a zero. This runs only when a user asks for the pick, never
+ * per frame.
  *
  * @param {object|null} win - Meta.Window
  * @returns {Record<string,string>} mirrorPhaseX/Y and appliedPhaseX/Y

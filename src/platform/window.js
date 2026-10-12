@@ -578,12 +578,13 @@ export function getWindowSubpixelOffset(win) {
 /**
  * Reads the subpixel phase Mutter actually applied to a Wayland window's surface container.
  *
- * Diagnostics only, never the production source: the clip and the shadow keep cutting on the
- * mirrored phase from `getWindowSubpixelOffset`, because that mirror is spec-pinned while this
- * read leans on where Mutter caches the phase - a private implementation detail. Read
- * `docs/decoration-model.md`'s "Why the phase is mirrored rather than read" for the full
- * trade-off and its reopen condition; this reader exists so a user can compare the two on a
- * mixed-DPI multi-monitor machine, where the mirror's unguarded monitor scan cannot be exercised.
+ * This is the production source on the container path. The clip's target carries the phase in its
+ * own transform, so the clip cuts a phase-free local frame and the shadow reads that same transform
+ * back to translate its cutout onto the same physical line; both cuts then follow one source.
+ * The mirror in `getWindowSubpixelOffset` is the fallback whenever this read is unavailable (a
+ * non-Wayland client, an ambiguous container, a non-unit matrix scale, or a throw) and stays the
+ * primary source on the clip's fallback path, where the clip folds the mirror into its own frame.
+ * Read `docs/decoration-model.md`'s "Where the phase comes from" for the trade-off.
  *
  * `surface_container_apply_transform` (meta-window-actor-wayland.c) folds the phase into the
  * container's transform with `graphene_matrix_translate`; `ensure_valid_actor_transform` caches
@@ -622,16 +623,23 @@ export function getAppliedSubpixelPhase(win) {
             return null;
 
         // `geometry_scale` is the only writer of the surface container's ancestor child
-        // transform; a scale that is not 1 means the translation carries it too.
+        // transform; a scale that is not 1 means the translation carries it too. A NaN scale (a
+        // half-initialised matrix during teardown) fails this comparison, but it would also make
+        // the subtraction below NaN, so the result is checked for finiteness at the end.
         const scaleX = typeof matrix.get_x_scale === 'function' ? matrix.get_x_scale() : 1;
         const scaleY = typeof matrix.get_y_scale === 'function' ? matrix.get_y_scale() : 1;
         if (Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001)
             return null;
 
-        return {
-            x: matrix.get_x_translation() - ((container.x ?? 0) + (container.translation_x ?? 0)),
-            y: matrix.get_y_translation() - ((container.y ?? 0) + (container.translation_y ?? 0)),
-        };
+        const x = matrix.get_x_translation() - ((container.x ?? 0) + (container.translation_x ?? 0));
+        const y = matrix.get_y_translation() - ((container.y ?? 0) + (container.translation_y ?? 0));
+        // A half-torn-down container can hand back a NaN transform; assigning it to an actor's
+        // translation is a GLib critical, so an unusable read is "unavailable" and takes the mirror
+        // fallback, exactly like a non-unit scale.
+        if (!Number.isFinite(x) || !Number.isFinite(y))
+            return null;
+
+        return {x, y};
     } catch {
         return null;
     }

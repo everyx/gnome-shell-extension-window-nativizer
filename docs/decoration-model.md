@@ -597,25 +597,36 @@ today - the clip effect computes it on every paint, the shadow actor on every re
 build it with `clipFrameFor` in `lib/snap.js`, which requires the buffer's phase as an argument.
 The shadow actor passes zero there and carries the real phase as its own translation, so the two
 meet on one physical position without either site re-deriving the correction.
+`resolveClipTarget`
+(`lib/clipTarget.js`) reports that container strategy together with the actor; when it cannot
+identify the container it falls back to the window actor and the clip folds the phase into its
+geometry instead, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md`
+owns that limitation and the model behind it.
 
-**Why the phase is mirrored rather than read.** Mutter caches the transform it applied on the
-surface container, so GJS could read the phase back instead of recomputing it. It does not,
-because the mirror is already spec-pinned (the `getWindowSubpixelOffset` guard in
-`tools/check-upstream-mirrors.mjs` and the e2e subpixel-phase guard), so reading changes no
-result today; a cached read lags a frame during drags, so it would change verified behaviour;
-and it leans on *where* Mutter applies the phase - a private implementation detail, not a
-contract, in a churning upstream. Reopen only if either guard fails: it catches both failure
-modes. One part of the mirror is not machine-guarded - the monitor scan in
-`resolveHighestScaleMonitorIndex`, because `meta_monitor_manager_get_highest_scale_monitor_from_rect`
-lives in an unvendored file - so it is also re-checked by hand on a Mutter bump: re-read
+**Where the phase comes from.** On the container path the phase is read back from the transform
+Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform/window.js`),
+because the clip's local frame is phase-free and the shadow actor is a sibling that must translate
+by that same value explicitly. Both cuts then follow one source. The read only reflects a move once
+Mutter has invalidated the cached transform, which it does on the window actor's allocation change,
+so `ShadowActor` syncs on `notify::allocation` as well as position and translation - on position
+alone the read held the previous position's phase indefinitely (measured at 1.25x: the shadow
+stayed one x behind while the clip painted the new phase, and the straight-edge probe caught the
+hairline it opened). The mirror (`getWindowSubpixelOffset`) is the fallback for every case the read
+cannot answer - a non-Wayland client, an ambiguous container, a non-unit matrix scale, a
+non-finite transform - and remains the primary source on the fallback path, where the clip folds it
+into its frame. Reading the same transform the clip paints with is also what keeps the two cuts
+together on a monitor change, where the mirror's reconstructed highest-scale monitor can name a
+different monitor than Mutter's cached pointer. `shadowPhaseOffset`
+(`src/effects/shadowGeometry.js`) is the one place that choice lives.
+
+The mirror is still spec-pinned: the `getWindowSubpixelOffset` guard in
+`tools/check-upstream-mirrors.mjs` and the e2e subpixel-phase guard keep it matching the upstream
+arithmetic it mirrors, and `getAppliedSubpixelPhase` is read back against it. One part of the
+mirror is not machine-guarded - the monitor scan in `resolveHighestScaleMonitorIndex`, because
+`meta_monitor_manager_get_highest_scale_monitor_from_rect` lives in an unvendored file - so it is
+also re-checked by hand on a Mutter bump: re-read
 `meta_window_find_highest_scale_monitor_from_frame_rect` (`window.c`) and that manager function and
 confirm the scan still matches, as `docs/shell-compatibility.md` records.
-
-A readback exists for diagnostics only. `getAppliedSubpixelPhase` (`src/platform/window.js`) reads
-the cached transform back so the pick reply can show the applied phase beside the mirror. It is not
-the production source - the clip and the shadow still call `getWindowSubpixelOffset` - and it does
-not change the reopen condition above; it exists so a user can see on a mixed-DPI multi-monitor
-machine where the mirrored monitor scan cannot be exercised locally.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
