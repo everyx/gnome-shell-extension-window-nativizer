@@ -7,30 +7,14 @@
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
-import {getWindowBufferRect, getWindowClientType} from '../platform/window.js';
+import {getWindowBufferRect, getWindowClientType, isForeignWidget} from '../platform/window.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;
 
-/**
- * Checks whether an actor is an injected foreign UI widget (e.g. from Blur my Shell).
- * @param {object|null} child
- * @param {object|null} [St]
- * @returns {boolean}
- */
-export function isForeignWidget(child, St = null) {
-    if (!child)
-        return false;
-
-    const StWidget = St?.Widget ?? globalThis?.St?.Widget;
-    if (StWidget && child instanceof StWidget)
-        return true;
-
-    const constructorName = child.constructor?.name;
-    if (constructorName && (constructorName.startsWith('St_') || constructorName === 'StWidget'))
-        return true;
-
-    return false;
-}
+// The surface-container identity and the foreign-widget test live in the platform seam, because
+// the subpixel phase reader needs the same answer and platform may not import from lib/. Kept as
+// a re-export so this module's callers and specs still find it here.
+export {isForeignWidget};
 
 /**
  * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.

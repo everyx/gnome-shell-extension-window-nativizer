@@ -11,6 +11,7 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {snapActorBodyFrame} from '../lib/snap.js';
 import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
+import {findMetaWindow, getWindowSubpixelOffset} from '../platform/window.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -192,6 +193,15 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const frame = snapActorBodyFrame({width, height}, this._insets, scale);
+        // Mutter draws a Wayland surface at the integer physical grid, so the buffer the shader
+        // samples is offset from the actor by the subpixel remainder. Snapping actor-local alone
+        // would cut the hard straight edge up to half a physical pixel off that buffer, and the
+        // stage resampler then renders the straddled output pixel at partial alpha - a transparent
+        // line along the edge. Fold the same translation the shadow actor uses into the frame so
+        // the cut lands on the output grid the buffer does.
+        const offset = getWindowSubpixelOffset(findMetaWindow(actor));
+        frame.x += offset.x;
+        frame.y += offset.y;
         const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
         if (changes.scale !== undefined) {

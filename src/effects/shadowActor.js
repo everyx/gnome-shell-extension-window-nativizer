@@ -12,7 +12,7 @@ import {shadowLayout, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {getWindowSubpixelOffset} from '../platform/window.js';
+import {findMetaWindow, getWindowSubpixelOffset} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
@@ -72,7 +72,7 @@ export const ShadowActor = GObject.registerClass({
     _syncTranslation() {
         if (!this._windowActor)
             return;
-        const offset = getWindowSubpixelOffset(this._windowActor.meta_window, this._windowActor);
+        const offset = getWindowSubpixelOffset(findMetaWindow(this._windowActor));
         const x = (this._windowActor.translation_x ?? 0) + offset.x;
         const y = (this._windowActor.translation_y ?? 0) + offset.y;
         if (this.translation_x !== x)

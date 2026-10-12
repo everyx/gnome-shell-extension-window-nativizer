@@ -590,6 +590,13 @@ GPU hardware bilinear filtering from bleeding external client stroke pixels inwa
 boundaries, the fragment shader pushes texture sampling coordinates inward along the boundary normal,
 leaving edge transitions completely clean.
 
+The clip's cut and the shadow's cutout are the same line: both are the body's edge, and they have
+to land on the same physical phase. This extension owns both ends of that line, so a gap opening
+between them is a defect in us, not a rounding artefact to live with. The edge is derived twice
+today - the clip effect computes it on every paint, the shadow actor on every relayout - and only
+both applying the same subpixel compensation holds the two together, so a change to one has to be
+made to the other.
+
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating

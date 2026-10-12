@@ -159,7 +159,7 @@ pixel inside the body, and a zero alpha disables it - which is how overview supp
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
 by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
-use, so the two stay in phase across fractional scales. Under fractional scaling, the fragment
+use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - and only the shared subpixel compensation holds the two together. Under fractional scaling, the fragment
 shader pushes texture sampling coordinates inward along the boundary normal
 (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
 sampling external stroke bleed on both straight edges and corner arcs.
