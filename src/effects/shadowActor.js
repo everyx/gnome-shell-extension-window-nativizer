@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowLayout, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowLayout, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -73,8 +73,7 @@ export const ShadowActor = GObject.registerClass({
         if (!this._windowActor)
             return;
         const offset = getWindowSubpixelOffset(findMetaWindow(this._windowActor));
-        const x = (this._windowActor.translation_x ?? 0) + offset.x;
-        const y = (this._windowActor.translation_y ?? 0) + offset.y;
+        const {x, y} = shadowTranslation(this._windowActor, offset);
         if (this.translation_x !== x)
             this.translation_x = x;
         if (this.translation_y !== y)

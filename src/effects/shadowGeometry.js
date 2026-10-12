@@ -7,7 +7,7 @@
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
-import {snapActorBodyFrame} from '../lib/snap.js';
+import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 
 // Padding in px, derived from maximum Gaussian reach over all shadow layers.
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
@@ -34,21 +34,44 @@ export function shadowGeometry(radius) {
 
 /**
  * Computes the cast rect from actor live size by snapping the body frame and expanding by SHADOW_PAD.
+ *
+ * The cast's hole is the clip's frame edge: both call `clipFrameFor` on the same body, so the two
+ * are one expression rather than two derivations that happen to agree. The phase is deliberately
+ * `ZERO_PHASE` here - the shadow actor carries it as a translation (`_syncTranslation`), which
+ * keeps the cast actor-local for drag invariance; only the translation can supply the correction.
+ *
  * @param {{width: number, height: number}} actorSize - Shadow actor's live size in px
  * @param {import('../lib/frame.js').Insets} [insets] - Ring the client declared, per side
  * @param {number} [scale=1.0] - Physical scale factor
  * @returns {{x:number,y:number,width:number,height:number}} Cast rect in actor coords
  */
 export function shadowCastRect(actorSize, insets, scale = 1.0) {
-    const body = snapActorBodyFrame({
+    const body = clipFrameFor({
         width: actorSize.width - SHADOW_PAD * 2,
         height: actorSize.height - SHADOW_PAD * 2,
-    }, insets, scale);
+    }, insets, scale, ZERO_PHASE);
     return {
         x: body.x,
         y: body.y,
         width: body.width + SHADOW_PAD * 2,
         height: body.height + SHADOW_PAD * 2,
+    };
+}
+
+/**
+ * The shadow actor's translation for a window actor: the window actor's own translation plus the
+ * subpixel offset, so the shadow keeps the window's animation while its cutout lands on the same
+ * physical phase as the buffer. `ShadowActor._syncTranslation` writes this, then assigns only the
+ * axes that moved; keeping the composition here lets it be asserted without a Clutter actor.
+ *
+ * @param {{translation_x?: number, translation_y?: number}} windowActor
+ * @param {{x: number, y: number}} offset - Subpixel phase from getWindowSubpixelOffset
+ * @returns {{x: number, y: number}}
+ */
+export function shadowTranslation(windowActor, offset) {
+    return {
+        x: (windowActor?.translation_x ?? 0) + offset.x,
+        y: (windowActor?.translation_y ?? 0) + offset.y,
     };
 }
 

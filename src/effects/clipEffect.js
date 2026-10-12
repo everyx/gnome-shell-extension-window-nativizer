@@ -9,7 +9,7 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
-import {snapActorBodyFrame} from '../lib/snap.js';
+import {clipFrameFor} from '../lib/snap.js';
 import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
 import {findMetaWindow, getWindowSubpixelOffset} from '../platform/window.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
@@ -192,16 +192,14 @@ export const RoundedClipEffect = GObject.registerClass({
             return;
 
         const scale = this._scale ?? 1.0;
-        const frame = snapActorBodyFrame({width, height}, this._insets, scale);
         // Mutter draws a Wayland surface at the integer physical grid, so the buffer the shader
-        // samples is offset from the actor by the subpixel remainder. Snapping actor-local alone
-        // would cut the hard straight edge up to half a physical pixel off that buffer, and the
-        // stage resampler then renders the straddled output pixel at partial alpha - a transparent
-        // line along the edge. Fold the same translation the shadow actor uses into the frame so
-        // the cut lands on the output grid the buffer does.
-        const offset = getWindowSubpixelOffset(findMetaWindow(actor));
-        frame.x += offset.x;
-        frame.y += offset.y;
+        // samples is offset from the actor by the subpixel remainder. clipFrameFor folds that
+        // same phase in - the one the shadow actor carries as a translation - so the clip's cut
+        // and the shadow's cutout stay on one line. Snapping actor-local alone would cut the
+        // hard straight edge up to half a physical pixel off that buffer, and the stage resampler
+        // then renders the straddled output pixel at partial alpha - a transparent line along it.
+        const frame = clipFrameFor({width, height}, this._insets, scale,
+            getWindowSubpixelOffset(findMetaWindow(actor)));
         const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
         if (changes.scale !== undefined) {

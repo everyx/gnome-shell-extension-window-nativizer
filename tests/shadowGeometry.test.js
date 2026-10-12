@@ -3,8 +3,11 @@
  * Run: pnpm test
  */
 
-import {shadowCastRect, shadowGeometry, shadowLayout, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
-import {snapActorBodyFrame} from '../src/lib/snap.js';
+import {shadowCastRect, shadowGeometry, shadowLayout, shadowSlices, shadowTranslation, SHADOW_PAD}
+    from '../src/effects/shadowGeometry.js';
+import {clipFrameFor, snapActorBodyFrame} from '../src/lib/snap.js';
+import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
+import {getWindowSubpixelOffset} from '../src/platform/window.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';
 
@@ -97,6 +100,112 @@ describe('shadowCastRect', () => {
         const expectedPhysWidth = Math.round(buffer.width * scale) - 2 * Math.round(25 * scale);
         const actualPhysWidth = Math.round((cast133x.width - SHADOW_PAD * 2) * scale);
         expect(actualPhysWidth).toBe(expectedPhysWidth);
+    });
+});
+
+describe('shadowTranslation', () => {
+    // ShadowActor itself is not unit-reachable here: it extends Clutter.Actor, and the Clutter
+    // typelib is not installed. Its _syncTranslation delegates the arithmetic to this pure
+    // function, so this is the composition that the actor's translation is written from.
+    it('puts the shadow at the window actor translation plus the subpixel offset', () => {
+        expect(shadowTranslation({translation_x: 4, translation_y: -3}, {x: 0.25, y: -0.25}))
+            .toEqual({x: 4.25, y: -3.25});
+    });
+
+    it('treats a missing window actor translation as zero', () => {
+        expect(shadowTranslation({}, {x: 0.25, y: -0.25})).toEqual({x: 0.25, y: -0.25});
+        expect(shadowTranslation(null, {x: 0.25, y: -0.25})).toEqual({x: 0.25, y: -0.25});
+    });
+});
+
+describe('clip cut and shadow cutout share one physical edge', () => {
+    const ring = (left, top, right, bottom) => ({left, top, right, bottom});
+
+    // The shadow actor is bound to the window actor grown by SHADOW_PAD per side.
+    const shadowActorFor = size => ({
+        width: size.width + SHADOW_PAD * 2,
+        height: size.height + SHADOW_PAD * 2,
+    });
+
+    // The phase the clip and the shadow actually resolve at a scale, read by walking the window
+    // actor across one logical pixel. The surface container carries a non-zero layout offset so
+    // the walk exercises the container term too. Integer scales contribute only zero.
+    const phasesFor = scale => {
+        const original = globalThis.global;
+        const container = {x: 0.5, y: 0, width: 1920, height: 1080};
+        const actor = {x: 0, y: 0, get_children: () => [container]};
+        const win = {
+            get_client_type: () => 0, // WAYLAND
+            get_monitor: () => 0,
+            get_compositor_private: () => actor,
+        };
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => scale,
+                get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            },
+        };
+        try {
+            const seen = [];
+            for (let x = 0; x < 8; x++) {
+                actor.x = x;
+                const phase = getWindowSubpixelOffset(win);
+                if (!seen.some(s => Math.abs(s.x - phase.x) < 1e-9 && Math.abs(s.y - phase.y) < 1e-9))
+                    seen.push(phase);
+            }
+            return seen;
+        } finally {
+            globalThis.global = original;
+        }
+    };
+
+    it('lands the clip frame edge on the shadow hole edge at every phase', () => {
+        const sizes = [
+            {width: 400, height: 300},
+            {width: 652, height: 502},
+        ];
+        const insetsCases = [
+            ring(0, 0, 0, 0),
+            FLAT_SAFE_INSET,
+            ring(25, 25, 25, 25),
+            ring(0, 24, 0, 24),
+        ];
+        const scales = [1.0, 1.25, 4 / 3, 2.0];
+        let worst = 0;
+
+        for (const size of sizes) {
+            for (const insets of insetsCases) {
+                for (const scale of scales) {
+                    for (const phase of phasesFor(scale)) {
+                        const clip = clipFrameFor(size, insets, scale, phase);
+                        const cast = shadowCastRect(shadowActorFor(size), insets, scale);
+                        // Shadow actor local -> window actor local: the bind constraint puts its
+                        // origin SHADOW_PAD out, the hole sits SHADOW_PAD back in, and the actor
+                        // translation carries the phase, so the PADs cancel and only the same
+                        // phase the clip folded in is left. Both edges are the window actor's body.
+                        const hole = {
+                            x: cast.x + phase.x,
+                            y: cast.y + phase.y,
+                            right: cast.x + cast.width - SHADOW_PAD * 2 + phase.x,
+                            bottom: cast.y + cast.height - SHADOW_PAD * 2 + phase.y,
+                        };
+                        const clipEdges = {x: clip.x, y: clip.y, right: clip.x + clip.width, bottom: clip.y + clip.height};
+                        const context = `size ${size.width}x${size.height} insets ${JSON.stringify(insets)} ` +
+                            `scale ${scale} phase ${JSON.stringify(phase)}`;
+                        for (const edge of ['x', 'y', 'right', 'bottom']) {
+                            const diff = Math.abs(clipEdges[edge] * scale - hole[edge] * scale);
+                            worst = Math.max(worst, diff);
+                            expect(diff).withContext(`${edge} ${context}`).toBeLessThanOrEqual(1e-6);
+                        }
+                    }
+                }
+            }
+        }
+
+        // One shared derivation: the disagreement is floating noise, not a physical fraction. A
+        // one-physical-pixel tolerance could not see the third-of-a-pixel gap this fix closes.
+        expect(worst).toBeLessThanOrEqual(1e-6);
     });
 });
 

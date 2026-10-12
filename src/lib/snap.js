@@ -154,6 +154,31 @@ export function snapActorBodyFrame(bufferSize, insets, scale) {
     };
 }
 
+/** The body already sits on its buffer's phase; no subpixel correction applies. */
+export const ZERO_PHASE = Object.freeze({x: 0, y: 0});
+
+/**
+ * The clip's body frame: `snapActorBodyFrame` folded onto the phase its buffer is drawn at.
+ *
+ * The clip's cut and the shadow's cutout are the same body edge and must land on the same
+ * physical phase, so the phase is a required input, not a correction a caller may leave unsaid.
+ *
+ * @param {{width: number, height: number}} actorSize - Actor size in logical px
+ * @param {import('./frame.js').Insets|null} [insets] - Ring margins per side
+ * @param {number} scale - Physical device scale
+ * @param {{x: number, y: number}} phase - Buffer's subpixel phase, logical px
+ * @returns {{x: number, y: number, width: number, height: number}}
+ */
+export function clipFrameFor(actorSize, insets, scale, phase) {
+    const frame = snapActorBodyFrame(actorSize, insets, scale);
+    return {
+        x: frame.x + phase.x,
+        y: frame.y + phase.y,
+        width: frame.width,
+        height: frame.height,
+    };
+}
+
 
 /**
  * Writes a Clutter.ActorBox in place. Prefers `init()` (the real box API) and falls
