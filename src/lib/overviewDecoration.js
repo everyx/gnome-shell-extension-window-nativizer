@@ -232,6 +232,10 @@ export class OverviewDecoration {
      * costs is imperceptible.
      */
     _applyMask() {
+        // The invariant: our rounded mask is only ever installed while the window is in the
+        // overview. A reconcile that arrives after the overview ended retires instead of rounding.
+        if (!this._inOverview)
+            return;
         if (this._stex || !this._canMask || this._maskWouldChangeDesktop())
             return;
 

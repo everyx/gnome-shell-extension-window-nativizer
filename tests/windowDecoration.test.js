@@ -154,8 +154,15 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         };
         const surface = {
             mask: null,
+            hasMask: false,
             set_mask_texture(texture) {
+                // GJS rejects a null mask ("Argument mask_texture may not be null"), so the only
+                // way to retire our mask is the neutral opaque one. Model both facts so a spec
+                // cannot pass by pretending the slot was detached.
+                if (texture === null || texture === undefined)
+                    throw new Error('Argument mask_texture may not be null');
                 this.mask = texture;
+                this.hasMask = true;
             },
             get_texture: () => ({
                 get_plane: () => ({get_context: () => ({})}),
@@ -734,6 +741,30 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             harness.deco.setOverviewMode(true);
             expect(harness.probeCalls()).toBe(afterEntry + 1 + ['workspace-changed', 'size-changed'].indexOf(signal));
         }
+    });
+
+    it('never rounds a window that has left the overview', () => {
+        const {mask, opaque, surface, deco, probeCalls} = setupMaskHarness();
+
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(mask);
+        const afterEntry = probeCalls();
+
+        // Leaving retires our rounded mask to Mutter's neutral opaque one, which is the only
+        // retirement GJS allows (`set_mask_texture` rejects null).
+        deco.setOverviewMode(false);
+        expect(surface.mask).toBe(opaque);
+        expect(surface.hasMask).toBeTrue();
+        expect(deco.overview.stateView.hasMask).toBeFalse();
+
+        // A reconcile after the exit, and the mask path invoked directly, must not round it
+        // again: the invariant is that the rounded mask is only installed in the overview.
+        deco.setOverviewMode(false);
+        deco.overview._applyMask();
+        deco.apply({actions: maximizedActions(), inputs: passInputs(), actor: mockActor});
+        expect(surface.mask).toBe(opaque);
+        expect(deco.overview.stateView.hasMask).toBeFalse();
+        expect(probeCalls()).toBe(afterEntry);
     });
 
     it('leaves XWayland windows square and sharp, never touching the mask slot', () => {
