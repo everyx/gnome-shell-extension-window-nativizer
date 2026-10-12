@@ -15,6 +15,7 @@ import Cogl from 'gi://Cogl';
 import Mtk from 'gi://Mtk';
 
 import {roundedMaskBytes} from './overviewMaskBytes.js';
+import {probeWouldChangeScreenshot} from './overviewMaskProbe.js';
 
 /** One reusable 1x1 opaque mask per Cogl context. */
 const opaqueMasks = new WeakMap();
@@ -28,28 +29,29 @@ const opaqueMasks = new WeakMap();
  * would keep taking the actor-render path — rounded corners, alpha channel — for the rest of
  * the session, which is a change the desktop can show.
  *
- * `paint_to_bitmap()` (51) / `get_image()` (50) answer exactly that question: they return NULL
- * before reading anything back while the offscreen path is already in use, and a 1x1 clip keeps
- * the readback to a single pixel when it is not. The probe therefore costs nothing for the
- * windows that are already offscreen (direct scanout buffers) and one pixel for the rest.
+ * `paint_to_bitmap()` answers exactly that question: it returns a `CoglBitmap*`, or `NULL` from
+ * one of Mutter's own early-outs. Every NULL branch means the screenshot path cannot move under
+ * this mask — no buffer and a zero destination size have no content to change, and the offscreen
+ * branch (`should_get_via_offscreen()`, which includes our own already-attached mask) is the one
+ * the mask would force — so `null` is read as "the screenshot does not change" and only a real
+ * bitmap (the direct-read path, which the mask would move) is a refusal. The 1x1 clip keeps the
+ * readback to a single pixel.
+ *
+ * The member is resolved by capability, not by a Shell version: 51 renamed `get_image()` to
+ * `paint_to_bitmap()` and changed its return from `cairo_surface_t*` to `CoglBitmap*`. The 50-era
+ * `get_image()` returns a `cairo_surface_t*`; when Mutter hands back NULL, GJS's marshaller trips
+ * `CairoSurface::from_c_ptr`'s assertion and aborts the process with an "uncatchable exception"
+ * that no `try`/`catch` can intercept. So when no safe probe member exists we call nothing and
+ * answer "unreadable ⇒ unsafe ⇒ do not mask".
  *
  * @param {object|null} shapedTexture - MetaShapedTexture, or null when unavailable
  * @returns {boolean} True when masking this window would change its desktop screenshot
  */
 export function maskWouldChangeScreenshot(shapedTexture) {
-    const clip = new Mtk.Rectangle({x: 0, y: 0, width: 1, height: 1});
-
-    try {
-        if (typeof shapedTexture?.paint_to_bitmap === 'function')
-            return Boolean(shapedTexture.paint_to_bitmap(clip, Cogl.PixelFormat.RGBA_8888));
-        if (typeof shapedTexture?.get_image === 'function')
-            return Boolean(shapedTexture.get_image(clip));
-    } catch {
-        // A texture that cannot be probed is not one to take the risk on.
-        return true;
-    }
-
-    return true;
+    return probeWouldChangeScreenshot(shapedTexture, {
+        clip: new Mtk.Rectangle({x: 0, y: 0, width: 1, height: 1}),
+        format: Cogl.PixelFormat.RGBA_8888,
+    });
 }
 
 /**
