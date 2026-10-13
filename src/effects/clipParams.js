@@ -26,6 +26,20 @@ export function outlineVector(outline) {
 }
 
 /**
+ * Whether a derived body frame can be painted without erasing the actor.
+ *
+ * A frame with a non-positive extent has no body. Compositing it is not a no-op: the clip shader's
+ * `inSquare` is 0 everywhere, so the offscreen effect draws nothing and the window reads as fully
+ * transparent while its sibling shadow actor keeps drawing. The caller suspends the clip instead.
+ *
+ * @param {{width:number,height:number}|null|undefined} frame
+ * @returns {boolean}
+ */
+export function isPaintableFrame(frame) {
+    return Boolean(frame) && frame.width > 0 && frame.height > 0;
+}
+
+/**
  * @param {{left:number,top:number,right:number,bottom:number}|null} a
  * @param {{left:number,top:number,right:number,bottom:number}|null} b
  * @returns {boolean}

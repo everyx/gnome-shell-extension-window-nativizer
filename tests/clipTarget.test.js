@@ -4,6 +4,7 @@
  */
 
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
+import {isPaintableFrame} from '../src/effects/clipParams.js';
 import {
     clipFrameForTarget,
     getX11SurfaceChild,
@@ -391,6 +392,48 @@ describe('clipTarget', () => {
                 const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, null, win);
                 expect(frame.x).toBeCloseTo(8.3, 6);
             });
+        });
+    });
+
+    describe('the clip body is paintable or the clip suspends, never erased', () => {
+        const insetsCases = [
+            {left: 0, top: 0, right: 0, bottom: 0},
+            {left: 1, top: 1, right: 1, bottom: 1},
+            {left: 25, top: 25, right: 25, bottom: 25},
+            // Outruns a small actor: `snapActorBodyFrame` falls back to the whole actor, which is
+            // still a positive body, so the clip paints instead of compositing nothing.
+            {left: 400, top: 400, right: 400, bottom: 400},
+            {left: 1000, top: 1000, right: 1000, bottom: 1000},
+        ];
+        const sizes = [
+            {width: 1, height: 1},
+            {width: 20, height: 100},
+            {width: 500, height: 400},
+            {width: 1920, height: 1080},
+        ];
+
+        it('paints a positive body for every positive actor, whatever the insets', () => {
+            for (const insets of insetsCases) {
+                for (const size of sizes) {
+                    // The container path (phase zero): the decision is exactly the derived body.
+                    const frame = clipFrameForTarget(size, insets, CLIP_SCALE,
+                        {phaseInTransform: true}, null);
+                    expect(isPaintableFrame(frame))
+                        .withContext(`size ${JSON.stringify(size)} insets ${JSON.stringify(insets)}`)
+                        .toBeTrue();
+                }
+            }
+        });
+
+        it('suspends rather than painting when the target has no extent', () => {
+            for (const size of [
+                {width: 0, height: 0},
+                {width: 0, height: 400},
+                {width: 500, height: 0},
+                {width: -1, height: 400},
+            ])
+                expect(isPaintableFrame(size)).withContext(JSON.stringify(size)).toBeFalse();
+            expect(isPaintableFrame(null)).toBeFalse();
         });
     });
 });
