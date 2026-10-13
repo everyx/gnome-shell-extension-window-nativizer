@@ -209,36 +209,10 @@ it rather than reimplementing it: going through `set_uniform_value` would drop v
 `pipeline.set_uniform_float()` - uploads the shadow's uniforms on the Cogl pipeline. GJS exposes two
 signatures for it, so the extension probes which one the host provides.
 
-## shaped_texture_paint_to_bitmap
-
-`shapedTexture.paint_to_bitmap()` - the overview's safety probe. It returns a `CoglBitmap*` (the
-direct-read screenshot path a mask would move), or NULL, and NULL has four causes GJS cannot tell
-apart:
-
-1. the shaped texture holds no buffer yet (`stex->texture == NULL`);
-2. `should_get_via_offscreen()` is true - a mask is already set (including the one we would
-   install), the plane is one Cogl cannot read back, a viewport is set, or the monitor transform is
-   not normal;
-3. the destination size is zero;
-4. the requested clip does not intersect the destination.
-
-The extension passes a 1x1 clip, so probing a window that is not already offscreen costs one pixel
-and cause 4 is unreachable while the destination is non-zero. Causes 1 and 3 are the ones that
-recover, and a NULL cannot say which cause it is, so the extension refuses to probe a bufferless
-texture or one whose window actor has no paint-able allocation (`isPaintableFrame`, the authority
-the clip uses) and takes the answer as a verdict only from a texture that has a buffer, a
-paint-ably allocated draw target, and that it has not modified; once taken, it is final for that
-texture - a same-size buffer swap does not re-open the question, because by then the mask is
-installed and the path has already moved. The remaining cause-2 branches - an unreadable plane, a
-viewport, a non-normal buffer transform, an already-set mask - have no getter on
-`Meta.ShapedTexture` and are not readable from GJS. The attached mask cannot be detached from GJS
-afterwards, which is why the question is worth asking before touching it. The general rules behind
-that scoping are in `decoration-alignment.md` § Four rules this work generalised.
-
 ## cogl_pixel_format
 
-`Cogl.PixelFormat` - the format the probe asks for (`RGBA_8888`); the mask builder uses `A_8`, the
-single-channel layout Mutter's own mask slot expects.
+`Cogl.PixelFormat` - the mask builder's `A_8`, the single-channel layout Mutter's own mask slot
+expects.
 
 ## clutter_cursor_type
 
@@ -330,7 +304,6 @@ window actor rather than inside the window's own actor tree.
 ## overview_visible
 
 `Main.overview.visible` - seeds the manager's overview mode on `enable()`. `showing`/`hidden`
-then hand every decoration its overview state: Wayland windows whose texture can host a mask suspend
-the clip effect and round through the shaped-texture mask, while XWayland windows - and the Wayland
-ones the mask probe rejects - show square previews, keeping the clip only when the force-corners
-preference is on.
+then hand every decoration its overview state: every Wayland window suspends the clip effect and
+rounds through the shaped-texture mask, while XWayland windows show square previews (the mask slot
+is Mutter's shape slot), keeping the clip only when the force-corners preference is on.

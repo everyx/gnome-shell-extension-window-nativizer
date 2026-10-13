@@ -4,7 +4,6 @@
  */
 
 import {roundedMaskBytes} from '../src/effects/overviewMaskBytes.js';
-import {probeWouldChangeScreenshot} from '../src/effects/overviewMaskProbe.js';
 
 /** @returns {number} Alpha of the pixel at (x, y) */
 function alpha(mask, x, y) {
@@ -75,61 +74,5 @@ describe('roundedMaskBytes', () => {
         const mask = roundedMaskBytes(geometry({radius: 0.25}));
         expect(alpha(mask, 1, 1)).toBe(255);
         expect(alpha(mask, 0, 0)).toBe(0);
-    });
-});
-
-describe('maskWouldChangeScreenshot', () => {
-    it('never calls the 50-era get_image(), and probes only paint_to_bitmap', () => {
-        let getImageCalls = 0;
-        let paintCalls = 0;
-
-        // A pre-51 shaped texture: get_image() exists, paint_to_bitmap() does not. Calling the
-        // old member with a NULL surface aborts the process from GJS's marshaller, so the probe
-        // must call nothing and answer "cannot tell".
-        const legacy = {
-            get_image() {
-                getImageCalls++;
-                return {tag: 'surface'};
-            },
-        };
-        expect(probeWouldChangeScreenshot(legacy, {clip: {}, format: 0})).toBeNull();
-        expect(getImageCalls).toBe(0);
-
-        // A 51+ shaped texture: paint_to_bitmap() is the probe, and get_image() is never reached.
-        const modern = {
-            get_image() {
-                getImageCalls++;
-                return {tag: 'surface'};
-            },
-            paint_to_bitmap() {
-                paintCalls++;
-                return {tag: 'bitmap'};
-            },
-        };
-        expect(probeWouldChangeScreenshot(modern, {clip: {}, format: 0})).toBeTrue();
-        expect(paintCalls).toBe(1);
-        expect(getImageCalls).toBe(0);
-    });
-
-    it('answers "would not change" for a NULL bitmap', () => {
-        // Only the caller can scope this: it refuses to take a verdict from a bufferless texture
-        // or one it has already modified, and then a NULL means the screenshot path cannot move
-        // under the mask. The probe itself cannot see either fact.
-        expect(probeWouldChangeScreenshot({paint_to_bitmap: () => null}, {clip: {}, format: 0}))
-            .toBeFalse();
-    });
-
-    it('reports "cannot tell" as null, never as a verdict', () => {
-        // A missing member: Shell 50 has no `paint_to_bitmap`, and calling `get_image()` there can
-        // abort the process. The answer is "cannot tell", which the caller must not cache.
-        expect(probeWouldChangeScreenshot(null, {clip: {}, format: 0})).toBeNull();
-        expect(probeWouldChangeScreenshot(undefined, {clip: {}, format: 0})).toBeNull();
-        expect(probeWouldChangeScreenshot({get_image: () => ({})}, {clip: {}, format: 0})).toBeNull();
-
-        // A throw on a line where the member exists is a readback that has not settled, not a
-        // "the screenshot would change": telling them apart is what keeps a transient failure
-        // from locking a window square forever.
-        expect(probeWouldChangeScreenshot(
-            {paint_to_bitmap: () => { throw new Error('boom'); }}, {clip: {}, format: 0})).toBeNull();
     });
 });

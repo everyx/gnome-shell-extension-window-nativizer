@@ -58,7 +58,6 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Clutter.OffscreenEffect:vfunc_paint_target()` | 50–51 stable | [why](shell-api.md#offscreen_effect_paint_target) |
 | `effect.set_uniform_float()` | 50 absent / 51 | [why](shell-api.md#clutter_set_uniform_float) |
 | `pipeline.set_uniform_float()` | 50–51 stable | [why](shell-api.md#cogl_pipeline_set_uniform_float) |
-| `stex.paint_to_bitmap()` | 50 absent / 51 | [why](shell-api.md#shaped_texture_paint_to_bitmap) |
 | `Cogl.PixelFormat` | 50–51 stable | [why](shell-api.md#cogl_pixel_format) |
 | `Clutter.CursorType` | 50–51 stable | [why](shell-api.md#clutter_cursor_type) |
 | `effect.set_uniform_float() [Shell.GLSLEffect]` | 50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
@@ -77,6 +76,15 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `Main.uiGroup` | 50–51 stable | [why](shell-api.md#main_ui_group) |
 | `Main.overview.visible` | 50–51 stable | [why](shell-api.md#overview_visible) |
 <!-- shell-api-table:end -->
+
+> **Removed probe.** An earlier version read `Meta.ShapedTexture.paint_to_bitmap()` (51; the
+> 50-era `get_image()` could abort GJS on a NULL) to decide whether masking an overview window
+> would move Mutter's screenshot off the direct-read path, and left a directly readable window
+> square when it would. That refusal protected a capture-level behaviour no user can perceive, at
+> the cost of a rounded preview the user can see, so it failed the project's standard: the
+> criterion is user-perceptible UI behaviour, and a capture or a window share is out of scope
+> because the decoration already changes what a capture shows. The probe and its capability record
+> are gone.
 
 ## Evolution across GNOME 50–51
 

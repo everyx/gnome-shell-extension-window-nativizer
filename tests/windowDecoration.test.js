@@ -137,15 +137,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
     /**
      * Wires the mask path up: a shaped-texture stand-in that records the mask, a preview
-     * container whose opacity can be observed, and the mask builders. The probe that decides
-     * whether masking a window is safe for its desktop screenshot is stubbed, so a test can put
-     * a window on either side of it.
+     * container whose opacity can be observed, and the mask builders. The stand-in also carries
+     * the pre-fix `paint_to_bitmap()` member, so a spec can pin that the decoration never reads
+     * the texture back now.
      *
      * @param {object} [options]
      * @param {number} [options.clientType=WindowClientType.WAYLAND]
      * @param {boolean} [options.drawClip=true]
      * @param {boolean} [options.drawShadow=false]
-     * @param {boolean} [options.maskWouldChangeScreenshot=false]
      * @param {boolean} [options.buildRoundedMaskReturnsNull=false]
      * @param {boolean} [options.forceOverviewCorners=false]
      * @param {boolean} [options.ringClear=false]
@@ -158,7 +157,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         drawShadow = false,
         ringClear = false,
         insets = {left: 0, top: 0, right: 0, bottom: 0},
-        maskWouldChangeScreenshot = false,
         buildRoundedMaskReturnsNull = false,
         forceOverviewCorners = false,
     } = {}) {
@@ -166,9 +164,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         const mask = {tag: 'rounded'};
         const opaque = {tag: 'opaque'};
-        let probeCalls = 0;
         let opaqueCalls = 0;
-        let probeAnswer = maskWouldChangeScreenshot;
         let bufferWidth = 800;
         let bufferHeight = 600;
         let buildReturnsNull = buildRoundedMaskReturnsNull;
@@ -178,14 +174,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 opaqueCalls++;
                 return opaque;
             },
-            maskWouldChangeScreenshot: () => {
-                probeCalls++;
-                return probeAnswer;
-            },
         };
-        const makeSurface = () => ({
+        const surface = {
             mask: null,
             hasMask: false,
+            // The pre-fix capability probe. It must never be called: its refusal was removed,
+            // and the mask now applies to every Wayland window.
+            paintCalls: 0,
+            paint_to_bitmap() {
+                this.paintCalls++;
+                return {tag: 'bitmap'};
+            },
             set_mask_texture(texture) {
                 // GJS rejects a null mask ("Argument mask_texture may not be null"), so the only
                 // way to retire our mask is the neutral opaque one. Model both facts so a spec
@@ -200,12 +199,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 get_width: () => bufferWidth,
                 get_height: () => bufferHeight,
             }),
-        });
-        const surface = makeSurface();
-        // The window actor's live shaped texture. A `MetaWindowActor` can be handed a new one;
-        // the probe verdict is keyed to the texture, so a spec can swap it to pin that.
-        let activeSurface = surface;
-        mockActor.get_texture = () => activeSurface;
+        };
+        mockActor.get_texture = () => surface;
 
         const makeContainer = () => ({
             opacity: 255,
@@ -278,18 +273,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         return {
-            mask, opaque, surface, makeSurface, container, makeContainer, windowSignals, shadowClones,
-            setShapedTexture: next => {
-                activeSurface = next;
-            },
-            probeCalls: () => probeCalls,
+            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones,
             opaqueCalls: () => opaqueCalls,
-            // Lets a spec stage the shaped texture's own state: a probe answer and the buffer the
-            // answer was read from. The real texture is one object across a buffer commit, so a
-            // spec that changes both models the same identity gaining a buffer.
-            setProbeAnswer: value => {
-                probeAnswer = value;
-            },
             setBuildReturnsNull: value => {
                 buildReturnsNull = value;
             },
@@ -342,7 +327,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasShadow: false,
             hasResizeBand: false,
             ring: null,
-            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false},
         });
     });
 
@@ -938,7 +923,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasShadow: false,
             hasResizeBand: false,
             ring: null,
-            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false, isProbed: false},
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false},
         });
     });
 
@@ -1039,158 +1024,82 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.drawClip).toBeFalse();
     });
 
-    it('asks the safety probe once per shaped texture, never after our own mask can poison it', () => {
-        const harness = setupMaskHarness();
-
-        harness.deco.setOverviewMode(true);
-        const afterEntry = harness.probeCalls();
-        expect(afterEntry).toBe(1);
-
-        // Reconciles while the overview is open must reuse the answer: the probe is the one
-        // thing here that reads a texture back from the GPU.
-        harness.deco.setOverviewMode(true);
-        harness.deco.setOverviewMode(true);
-        expect(harness.probeCalls()).toBe(afterEntry);
-
-        // A fresh entry must reuse it too. Once our mask is on the shaped texture, the probe's
-        // own early-out answers NULL forever, so asking again would only read our own mask.
-        harness.deco.setOverviewMode(false);
-        harness.deco.setOverviewMode(true);
-        expect(harness.probeCalls()).toBe(afterEntry);
-    });
-
-    it('reuses the probe answer when a workspace move or a resize rebuilds the card', () => {
+    it('re-applies the mask when a workspace move or a resize rebuilds the card', () => {
         const harness = setupMaskHarness();
         harness.deco.setOverviewMode(true);
-        const afterEntry = harness.probeCalls();
 
-        // Both rebuild the card; the shaped texture is the same one the answer was taken from,
-        // so the safety decision is reused while the mask itself is rebuilt.
+        // Both rebuild the card; the mask is retired and re-installed against it, with no
+        // readback of the shaped texture.
         for (const signal of ['workspace-changed', 'size-changed']) {
             const handler = harness.windowSignals.find(s => s.signal === signal);
             expect(handler).toBeDefined();
             handler.cb();
-            expect(harness.probeCalls()).toBe(afterEntry);
+            expect(harness.surface.mask).toBe(harness.mask);
 
             harness.deco.setOverviewMode(true);
-            expect(harness.probeCalls()).toBe(afterEntry);
+            expect(harness.surface.mask).toBe(harness.mask);
         }
+        expect(harness.surface.paintCalls).toBe(0);
     });
 
-    it('re-asks when the probe cannot tell, instead of locking the window square', () => {
-        // "Cannot tell" (the member is missing, or the readback threw) is not a verdict. Caching
-        // it is what made a transient failure a permanent square, so the next entry must ask again.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: null});
-
-        harness.deco.setOverviewMode(true);
-        expect(harness.probeCalls()).toBe(1);
-
-        harness.deco.setOverviewMode(false);
-        harness.deco.setOverviewMode(true);
-        expect(harness.probeCalls()).toBe(2);
-    });
-
-    it('takes no verdict from a bufferless texture, then decides once a buffer arrives', () => {
-        // The first Overview entry can race the client's first buffer. Mutter's NULL branch "no
-        // buffer yet" cannot be told apart from the others from GJS, so the window must stay
-        // square and store no verdict; the buffer's arrival is what earns a real observation.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: true});
+    it('defers a bufferless texture, then masks once a buffer arrives', () => {
+        // The first Overview entry can race the client's first buffer. A texture with no buffer
+        // has no shape to mask, so the window stays square this pass and nothing is cached; the
+        // buffer's arrival earns a fresh reconcile that installs the mask.
+        const harness = setupMaskHarness();
         harness.setBuffer(0, 0);
         harness.deco.setOverviewMode(true);
 
-        expect(harness.probeCalls()).toBe(0);
-        expect(harness.deco.overview.stateView.isProbed).toBeFalse();
         expect(harness.surface.hasMask).toBeFalse();
 
-        // The buffer arrives. The probe is taken once, on a real texture, and its verdict is
-        // final: this answer is "would change", so the window stays out of the mask slot.
         harness.setBuffer(800, 600);
         harness.deco.setOverviewMode(true);
 
-        expect(harness.probeCalls()).toBe(1);
-        expect(harness.deco.overview.stateView.isProbed).toBeTrue();
-        expect(harness.surface.hasMask).toBeFalse();
-        expect(harness.surface.mask).toBeNull();
+        expect(harness.surface.mask).toBe(harness.mask);
     });
 
-    it('takes no verdict from a buffered texture whose draw target is not paintably allocated', () => {
+    it('defers a texture whose draw target is not paintably allocated, then masks once it recovers', () => {
         // "Has a backing buffer" is not "the current draw target is valid": a valid buffer with a
-        // momentarily zero-sized draw target must not cache a NULL as a final "masking is safe",
-        // or the target's recovery would keep the stale verdict. The window actor's allocation is
-        // the readable authority for the draw target, so a zero allocation earns no verdict.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+        // momentarily zero-sized draw target must not be masked into. The window actor's
+        // allocation is the authority the clip uses, so a zero allocation defers, caches nothing,
+        // and the recovery installs the mask.
+        const harness = setupMaskHarness();
         mockActor.width = 0;
         mockActor.height = 0;
         harness.deco.setOverviewMode(true);
 
-        expect(harness.probeCalls()).toBe(0);
-        expect(harness.deco.overview.stateView.isProbed).toBeFalse();
         expect(harness.surface.hasMask).toBeFalse();
 
-        // The draw target recovers: the same buffered texture now earns one fresh observation,
-        // and its "safe" NULL installs the rounded mask.
         mockActor.width = 800;
         mockActor.height = 600;
         harness.deco.setOverviewMode(true);
 
-        expect(harness.probeCalls()).toBe(1);
-        expect(harness.deco.overview.stateView.isProbed).toBeTrue();
         expect(harness.surface.mask).toBe(harness.mask);
     });
 
-    it('re-probes when the window actor carries a new shaped texture (the verdict is keyed to it)', () => {
-        // The retained verdict belongs to the shaped texture, not to the decoration instance. A
-        // replaced texture is a different key that has never seen our mask, so it earns a fresh
-        // observation instead of inheriting an answer about the old buffer.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: true});
-        harness.deco.setOverviewMode(true);
-        const decided = harness.probeCalls();
-        expect(decided).toBe(1);
-        expect(harness.surface.hasMask).toBeFalse();
-
-        const replacement = harness.makeSurface();
-        harness.setShapedTexture(replacement);
-        harness.deco.setOverviewMode(true);
-
-        expect(harness.probeCalls()).toBe(decided + 1);
-    });
-
-    it('never re-probes a decided texture after our own mask has touched it', () => {
-        // The first probe is a NULL on a buffered texture, read before we touched anything:
-        // the "masking is safe" verdict, which installs the rounded mask.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+    it('keeps the mask through a different-sized buffer commit', () => {
+        const harness = setupMaskHarness();
         harness.deco.setOverviewMode(true);
         expect(harness.surface.mask).toBe(harness.mask);
-        const decided = harness.probeCalls();
-        expect(decided).toBe(1);
 
-        // The client commits a different-sized buffer; the card rebuild clears the mask first,
-        // which installs our opaque one and puts Mutter on the offscreen path. A re-probe here
-        // would read that mutation as a fresh "safe" NULL - the pre-fix code did exactly that.
-        // The verdict is final, so no probe is taken and the rounded mask is re-installed.
+        // The client commits a different-sized buffer; the card rebuild retires the mask and
+        // re-installs it against the new buffer. Nothing reads the texture back.
         harness.setBuffer(1600, 1200);
-        harness.setProbeAnswer(null);
         harness.windowSignals.find(s => s.signal === 'size-changed').cb();
 
-        expect(harness.probeCalls()).toBe(decided);
         expect(harness.surface.mask).toBe(harness.mask);
+        expect(harness.surface.paintCalls).toBe(0);
     });
 
-    it('keeps the verdict across drop(), so a re-entry cannot re-read a texture we masked', () => {
-        // Entering installs the rounded mask and records the verdict. drop() retires that mask
-        // through the opaque 1x1 - which has already moved Mutter off the direct-read path - and
-        // the same shaped texture is still there. A re-entry that re-probed it would read our own
-        // mutation, the contamination rule 4 forbids, so the verdict outlives the entry.
-        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+    it('re-installs the mask on re-entry after drop()', () => {
+        const harness = setupMaskHarness();
         harness.deco.setOverviewMode(true);
         expect(harness.surface.mask).toBe(harness.mask);
-        const decided = harness.probeCalls();
-        expect(decided).toBe(1);
 
+        // drop() retires the rounded mask through the opaque 1x1; a re-entry installs it again.
         harness.deco.overview.drop();
         harness.deco.setOverviewMode(true);
 
-        expect(harness.probeCalls()).toBe(decided);
         expect(harness.surface.mask).toBe(harness.mask);
     });
 
@@ -1279,11 +1188,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     });
 
     it('never rounds a window that has left the overview', () => {
-        const {mask, opaque, surface, deco, probeCalls} = setupMaskHarness();
+        const {mask, opaque, surface, deco} = setupMaskHarness();
 
         deco.setOverviewMode(true);
         expect(surface.mask).toBe(mask);
-        const afterEntry = probeCalls();
 
         // Leaving retires our rounded mask to Mutter's neutral opaque one, which is the only
         // retirement GJS allows (`set_mask_texture` rejects null).
@@ -1299,7 +1207,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco.apply({actions: maximizedActions(), inputs: passInputs(), actor: mockActor});
         expect(surface.mask).toBe(opaque);
         expect(deco.overview.stateView.hasMask).toBeFalse();
-        expect(probeCalls()).toBe(afterEntry);
     });
 
     it('leaves XWayland windows square and sharp, never touching the mask slot', () => {
@@ -1318,17 +1225,25 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(forced.surface.mask).toBeNull();
     });
 
-    it('skips the mask for a Wayland window whose desktop screenshot it would change', () => {
-        const {surface, deco} = setupMaskHarness({maskWouldChangeScreenshot: true});
+    it('masks a Wayland window whose shaped texture is directly readable', () => {
+        // The pre-fix code asked `paint_to_bitmap()` whether masking would move Mutter's
+        // screenshot path and left a directly readable texture square. That refusal is gone:
+        // the mask applies to every Wayland window, and nothing reads the texture back.
+        const {mask, surface, deco} = setupMaskHarness();
 
         deco.setOverviewMode(true);
-        expect(deco.clip.enabled).toBeFalse();
-        expect(surface.mask).toBeNull();
 
-        const forced = setupMaskHarness({maskWouldChangeScreenshot: true, forceOverviewCorners: true});
+        expect(deco.clip.enabled).toBeFalse();
+        expect(surface.mask).toBe(mask);
+        expect(surface.paintCalls).toBe(0);
+
+        // Forcing corners does not change it: the mask is the preferred path and it lands, so
+        // the forced legacy clip stays suspended.
+        const forced = setupMaskHarness({forceOverviewCorners: true});
         forced.deco.setOverviewMode(true);
-        expect(forced.deco.clip.enabled).toBeTrue();
-        expect(forced.surface.mask).toBeNull();
+        expect(forced.deco.clip.enabled).toBeFalse();
+        expect(forced.surface.mask).toBe(forced.mask);
+        expect(forced.surface.paintCalls).toBe(0);
     });
 
     it('applies the shaped-texture mask and the container-opacity bypass on Wayland', () => {

@@ -12,61 +12,11 @@
  */
 
 import Cogl from 'gi://Cogl';
-import Mtk from 'gi://Mtk';
 
 import {roundedMaskBytes} from './overviewMaskBytes.js';
-import {probeWouldChangeScreenshot} from './overviewMaskProbe.js';
 
 /** One reusable 1x1 opaque mask per Cogl context. */
 const opaqueMasks = new WeakMap();
-
-/**
- * Whether attaching the mask would move a path the desktop can see.
- *
- * Mutter reads a window's shaped texture directly for a window screenshot only while
- * `should_get_via_offscreen()` is false, and any non-null mask makes it true. The mask cannot
- * be detached from GJS (`set_mask_texture` rejects null), so for such a window the screenshot
- * would keep taking the actor-render path — rounded corners, alpha channel — for the rest of
- * the session, which is a change the desktop can show.
- *
- * `paint_to_bitmap()` answers exactly that question: it returns a `CoglBitmap*`, or `NULL`. A real
- * bitmap is the direct-read path the mask would move, so it is a refusal. NULL has four causes in
- * Mutter and GJS cannot tell them apart:
- *
- * 1. the shaped texture holds no buffer yet (`stex->texture == NULL`);
- * 2. `should_get_via_offscreen()` is true - a mask is already set (including our own), the plane
- *    is one Cogl cannot read back, a viewport is set, or the monitor transform is not normal;
- * 3. the destination size is zero (`dst_width == 0 || dst_height == 0`);
- * 4. the requested clip does not intersect the destination.
- *
- * Causes 2-4 mean the screenshot path cannot move under a mask at the moment of the probe, but
- * cause 1 is temporary (the same shaped texture gains a buffer later) and cause 3's practical form
- * is transient (a draw target with no paint-able allocation recovers). A probe cannot be trusted
- * after our own mask is set either, because that turns cause 2 on. So the caller excludes what it
- * can read - a buffer (cause 1) and a paint-ably allocated window actor (cause 3) - refuses to take
- * a verdict after our own mask (cause 2's mask branch), and keeps a verdict for the texture's life.
- * The other cause-2 branches (an unreadable plane, a viewport, a non-normal transform) have no
- * getter on `Meta.ShapedTexture`, so GJS cannot see them; the 1x1 clip keeps cause 4 unreachable
- * while the destination is non-zero, and keeps the readback to a single pixel.
- *
- * The member is resolved by capability, not by a Shell version: 51 renamed `get_image()` to
- * `paint_to_bitmap()` and changed its return from `cairo_surface_t*` to `CoglBitmap*`. The 50-era
- * `get_image()` returns a `cairo_surface_t*`; when Mutter hands back NULL, GJS's marshaller trips
- * `CairoSurface::from_c_ptr`'s assertion and aborts the process with an "uncatchable exception"
- * that no `try`/`catch` can intercept. So when no safe probe member exists we call nothing and
- * answer "cannot tell": the caller keeps the window square but must not cache that as a verdict.
- * On a line where the member does exist the call is safe, so a throw is likewise "cannot tell".
- *
- * @param {object|null} shapedTexture - MetaShapedTexture, or null when unavailable
- * @returns {boolean|null} True when masking would change the screenshot, false when it would not,
- *   null when the readback cannot tell
- */
-export function maskWouldChangeScreenshot(shapedTexture) {
-    return probeWouldChangeScreenshot(shapedTexture, {
-        clip: new Mtk.Rectangle({x: 0, y: 0, width: 1, height: 1}),
-        format: Cogl.PixelFormat.RGBA_8888,
-    });
-}
 
 /**
  * A 1x1 fully opaque mask. MetaShapedTexture rejects a null mask, so this is how

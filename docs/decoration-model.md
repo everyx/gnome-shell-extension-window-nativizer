@@ -744,38 +744,35 @@ Entering the overview, the manager tells every decoration, which:
 Leaving the overview, the mask is replaced by a 1x1 fully opaque texture (`set_mask_texture`
 rejects `null`) and the container opacity is restored; the clip effect is re-enabled.
 
-**Where the mask is not safe, the overview leaves it alone.** Two kinds of window cannot take
-the mask:
+**The acceptance standard is the user's screen.** A refusal to round a preview is admissible only
+when the user can perceive the problem it avoids. A screenshot or a window-level capture is not
+part of that test: our decoration already changes what a capture of a window shows, and that is
+simply what the decoration is. So the criterion for every branch below is a user-visible effect -
+a deformed window, or a missing rounded preview - never a capture-level difference.
 
-- **XWayland** keeps the window's shape in that same `mask_texture` slot, and Mutter rewrites
-  it from the shape on every surface sync. `set_mask_texture` cannot be undone from GJS (it
-  rejects `null`, and nothing else reaches the slot), so an overwritten slot would deform a shaped
-  window once the overview ends.
-- **A Wayland window whose shaped texture still serves Mutter's direct-read screenshot path**
-  (`should_get_via_offscreen()` returns false) would have that path moved to an actor render by
-  the mask — a different window screenshot, again for the rest of the session.
+**XWayland is the one refusal.** An XWayland window keeps the window's shape in that same
+`mask_texture` slot, and Mutter rewrites it from the shape on every surface sync.
+`set_mask_texture` cannot be undone from GJS (it rejects `null`, and nothing else reaches the
+slot), so an overwritten slot would deform a shaped window once the overview ends. That is a
+perceptible deformation, so the exclusion stays. Every Wayland window takes the mask.
 
-The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (51+) returns a
-bitmap, or NULL, and NULL has four causes GJS cannot tell apart - no buffer yet; the offscreen path
-already in use; a zero destination size; and a clip that misses the destination (the full list is
-in `shell-api.md` § shaped_texture_paint_to_bitmap). "No buffer yet" and a zero/non-paintable
-draw target are the causes that recover, so both earn no verdict: the decoration refuses to probe a
-bufferless texture or one whose window actor has no positive allocation (`isPaintableFrame`, the
-authority the clip uses). The remaining cause-2 branches (an unreadable plane, a viewport, a
-non-normal transform, an already-set mask) have no getter on `Meta.ShapedTexture` and are not
-readable from GJS, and the 1x1 clip makes cause 4 unreachable while the destination is non-zero.
-The answer is only meaningful on a texture that has a buffer, a paint-ably allocated draw target,
-and that we have not modified - our own mask turns the offscreen cause on - so the decoration takes
-a verdict once, on such a texture, and keeps it for that texture's life: a same-size buffer swap
-does not re-open the question, because by then the screenshot path has already moved and
-re-deciding could not un-move it. GNOME 50 has no probe whose NULL return is safe to marshal - its
-`get_image()` aborts the process through GJS - so there the decoration calls nothing and refuses
-the mask. A window the probe refuses shows a **square, sharp** thumbnail instead — the clip is
-suspended, so nothing renders through the FBO. The `force-overview-corners` setting (off by
-default) keeps the legacy offscreen clip for those windows instead: rounded, and blurrier. The clip
+**Not ready yet is not a refusal.** A window whose preview is built before the client's first
+buffer arrives has no shape to mask, and one whose window actor has no positive allocation has no
+draw target to mask into. Both mean "do not mask this pass, cache nothing": the next reconcile,
+after the buffer or the allocation arrives, installs it. Those are the only gates, and they read
+`_textureBufferKey` (a real texture size) and `isPaintableFrame` (the authority the clip uses).
+
+**Why the Wayland refusal was removed.** An earlier version refused the mask for a Wayland window
+whose shaped texture was still on Mutter's direct-read screenshot path, and showed it square. That
+protected a capture-level behaviour no user can perceive, at the cost of a rounded preview the user
+can see, so it failed the standard: the probe and its `shaped_texture_paint_to_bitmap` capability
+record were removed. Attaching the mask does force Mutter off that path for the rest of the
+session, and GJS cannot detach it (`set_mask_texture` rejects `null`), so a window-level capture or
+share of a masked window carries the transparent corners; under this standard that is not a cost,
+because it is the same kind of capture-level difference the decoration already makes. The
+`force-overview-corners` setting (off by default) still keeps the legacy offscreen clip for
+XWayland and for the fallback cases where the mask cannot be built: rounded, and blurrier. The clip
 never touches the mask slot, so the desktop is left exactly as Mutter had it either way.
-`decoration-alignment.md` § Four rules this work generalised has the general form: observations are
-tri-state, and an observation must not be taken after we have mutated the thing observed.
 
 Upstream has no native window rounded-clip to fall back on —
 `Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only

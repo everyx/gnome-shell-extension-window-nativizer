@@ -34,6 +34,11 @@ what an alpha channel means. Measured on a GTK3 window over a white backdrop: 53
 below full alpha with the extension enabled against 680 with it disabled, the top-left pixel
 reading `(0,0,0,0)` against `(250,250,251,255)`.
 
+That is how to read a capture faithfully, not the standard a behaviour is judged by: a behaviour is
+judged on the user's screen, and a capture-level difference is not a reason to withhold a
+user-visible behaviour (see `decoration-model.md` § Retaining rounded corners through the
+shaped-texture mask).
+
 ## The measurement that works
 
 A window with a **known body colour** over a **white backdrop**, profiled pixel by pixel
@@ -566,19 +571,19 @@ one direction of artefact is half a guard - the straight-edge probe asserted onl
 threshold, so a seam brighter than the shadow passed unseen.
 
 **Observations are tri-state.** When the value comes from an actor or an API we do not own,
-"missing or not yet arrived" is a state of its own, not a `false`. Mutter's `paint_to_bitmap()`
-answers a bitmap ("the screenshot path would move"), NULL (four causes GJS cannot tell apart -
-`shell-api.md` § shaped_texture_paint_to_bitmap), or nothing at all when the member is absent.
-Folding the third into either of the others caches a guess, and a guess is wrong for the rest of
-the session. The degradation for "we cannot tell yet" therefore has to be the one that leaves a
-display that is already correct alone - here the window stays square rather than wearing a mask we
-cannot vouch for - and it must not be final, so the observation is retried when the input settles.
+"missing or not yet arrived" is a state of its own, not a `false`. The overview mask's readiness
+gates are the surviving instance: a shaped texture with no buffer yet, or a window actor with no
+paint-able allocation, is neither "mask it" nor "refuse it" but "not this pass", and nothing is
+cached, so the buffer's or the allocation's arrival earns a fresh reconcile. Folding "not yet"
+into either of the others caches a guess, and a guess is wrong for the rest of the session. The
+rule's original instance - Mutter's `paint_to_bitmap()` returning a bitmap, NULL, or nothing at
+all - went with the removed probe described below.
 
 **An observation must not be taken after we have mutated the thing observed.** A probe read after
-our own change reports our change, not the original state. The overview probe is the instance: it
-decides whether installing the mask would move Mutter's screenshot path, and the answer is only
-meaningful on a texture that has a buffer and that we have not touched. Once a verdict exists for a
-shaped texture it is kept for that texture's life and never re-taken; a same-size buffer swap
-deliberately does not re-open the question, because by then the mask is installed and the path has
-already moved - re-deciding could not un-move it.
+our own change reports our change, not the original state. The overview probe was the instance: it
+decided whether installing the mask would move Mutter's screenshot path, and the answer was only
+meaningful on a texture we had not touched. That probe has since been removed - it protected a
+capture-level behaviour no user can perceive at the cost of a rounded preview the user can see, so
+it failed the standard that user-perceptible UI behaviour is the criterion and captures are out of
+scope (`decoration-model.md`) - but the rule outlives it.
 

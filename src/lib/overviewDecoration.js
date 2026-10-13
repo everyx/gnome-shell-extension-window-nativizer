@@ -41,7 +41,7 @@ export class OverviewDecoration {
     /**
      * @param {Meta.Window} win
      * @param {object} [options]
-     * @param {object} [options.OverviewMask] - {buildRoundedMask, maskWouldChangeScreenshot, opaqueMask}
+     * @param {object} [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
      * @param {Function} [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
      */
     constructor(win, options = {}) {
@@ -54,7 +54,6 @@ export class OverviewDecoration {
 
         this._inOverview = false;
         this._stex = null;
-        this._probe = null;
         this._container = null;
         this._containerDestroyId = 0;
         this._savedOpacity = 255;
@@ -85,7 +84,6 @@ export class OverviewDecoration {
             hasMask: Boolean(this._stex),
             hasShadow: Boolean(this._shadow),
             hasContainer: Boolean(this._container),
-            isProbed: this._probe !== null,
         };
     }
 
@@ -161,10 +159,10 @@ export class OverviewDecoration {
         }
 
         // Three ways a window can be shown in the overview. Rounded and sharp comes from the
-        // shaped-texture mask, and is only taken where it costs the desktop nothing; rounded and
-        // blurry is the legacy offscreen clip, kept when the user forces corners; neither leaves
-        // the thumbnail square, and as sharp as an undecorated window.
-        const maskable = this._canMask && !this._maskWouldChangeDesktop();
+        // shaped-texture mask, and every Wayland window takes it; rounded and blurry is the
+        // legacy offscreen clip, kept when the user forces corners; neither leaves the thumbnail
+        // square, and as sharp as an undecorated window.
+        const maskable = this._canMask && this._maskReady();
         this._syncHooks();
         // A mask is only one of the ways to round the preview; whether it actually landed decides
         // the mode, so a builder that declined still lets the forced legacy clip take over.
@@ -184,10 +182,6 @@ export class OverviewDecoration {
     /** Drops every overview visual and hook: the overview ended, or the decoration is going away. */
     drop() {
         this._inOverview = false;
-        // The probe verdict is kept. It belongs to the shaped texture, not to this entry: retiring
-        // the mask through the opaque 1x1 has already put the desktop on the offscreen path, so a
-        // later entry on the same texture that re-probed would read our own mutation (rule 4). A
-        // replaced shaped texture is a different key and earns a fresh observation.
         this._release();
     }
 
@@ -234,10 +228,10 @@ export class OverviewDecoration {
     }
 
     /**
-     * Reads the shaped texture's own buffer state. A NULL probe answer is only meaningful on a
-     * texture that has a buffer: "no buffer yet" is one of the branches NULL can mean, and GJS
-     * cannot tell it apart from the others. A texture with no buffer earns no verdict, so the
-     * caller uses this to refuse to probe one.
+     * Reads the shaped texture's own buffer state. A window whose preview is built before the
+     * client's first buffer arrives has no shape to mask, so this distinguishes "no buffer yet"
+     * from the buffered case that can take one. Nothing is cached: the buffer's arrival earns a
+     * fresh pass.
      *
      * @param {object|null} stex - MetaShapedTexture, or a stand-in in a spec
      * @returns {string|null} A key for the buffer the texture holds, or null when it holds none yet
@@ -254,70 +248,17 @@ export class OverviewDecoration {
     }
 
     /**
-     * Probes whether masking this window would move a path the desktop can see, so the overview
-     * can leave that window alone instead. See `overviewMask.maskWouldChangeScreenshot`.
-     *
-     * The observation is only meaningful on a texture we have not modified, that has a buffer,
-     * and whose draw target is paintably allocated. Mutter's NULL has several causes that GJS
-     * cannot tell apart - "no buffer yet" and "the draw target is degenerate" among them - so this
-     * refuses to take a verdict from a bufferless texture (`_textureBufferKey` returns null) or from
-     * one whose window actor has no positive allocation (`isPaintableFrame`, the authority the clip
-     * already uses), and, once a verdict is recorded for a shaped texture, never probes it again. A
-     * `true` answer is a real bitmap: the direct-read path the mask would move, a refusal final for
-     * this texture's life. A `false` answer is a NULL read on a buffered, allocated, unmodified
-     * texture: "masking is safe", also final. A same-size buffer swap deliberately does not re-open
-     * the question - by then the mask is installed and the screenshot path already moved, so
-     * re-deciding could not un-move it. A "cannot tell" (`null`: the member is missing, or the
-     * readback threw) is never cached: one transient failure must not lock a window square for the
-     * rest of the session.
-     *
-     * The remaining NULL causes are not readable from GJS: `Meta.ShapedTexture` exposes no getter
-     * for an already-set mask, an unreadable plane, a viewport or a non-normal buffer transform,
-     * and no getter for its own zero destination size. They are conditions under which Mutter
-     * already keeps the screenshot off the direct-read path, and the 1x1 clip makes the
-     * clip-misses-the-destination cause unreachable once the destination is non-zero; the window
-     * actor's allocation is the readable proxy for a degenerate draw target.
-     *
-     * The verdict is kept for the shaped texture's life, across a `drop()`; a replaced shaped
-     * texture is a new key and is probed afresh. Retiring the mask through the opaque 1x1 has
-     * already moved Mutter's screenshot path, so re-asking the same texture would read our own
-     * mutation, which rule 4 forbids.
+     * Whether the shaped texture is ready to take a mask this pass. Neither missing branch is a
+     * refusal: a texture with no buffer yet, and a window actor without a positive allocation,
+     * both mean "not this pass", with nothing cached, so the buffer's or the allocation's
+     * arrival earns a fresh reconcile. `isPaintableFrame` is the same authority the clip uses.
      *
      * @returns {boolean}
      */
-    _maskWouldChangeDesktop() {
+    _maskReady() {
         const actor = getWindowActor(this._win);
         const stex = actor?.get_texture?.() ?? null;
-        // A settled verdict is final. Our mask can only be installed after one (see below), so a
-        // later probe on this texture would read our change, not the original state.
-        if (this._probe && this._probe.stex === stex)
-            return this._probe.wouldChange;
-
-        // No buffer yet, or no paintably allocated draw target: a NULL here would be
-        // indistinguishable from the other causes and would speak for a state that can recover.
-        // Leave the window square this pass, cache nothing, and let the buffer or the allocation
-        // arriving earn a fresh observation.
-        if (this._textureBufferKey(stex) === null || !isPaintableFrame(actor))
-            return true;
-
-        const probe = this._OverviewMask?.maskWouldChangeScreenshot;
-        const answer = probe ? probe(stex) : null;
-        if (answer === true) {
-            // A real bitmap: the direct-read path the mask would move. Final for this texture.
-            this._probe = {stex, wouldChange: true};
-            return true;
-        }
-        if (answer === false) {
-            // A NULL on a buffered, unmodified texture: masking is safe, and final. Keeping the
-            // verdict is what stops a later reconcile - after our opaque mask has moved the
-            // texture offscreen - from reading its own mutation as fresh evidence.
-            this._probe = {stex, wouldChange: false};
-            return false;
-        }
-
-        // Cannot tell. Keep this pass safe (square) but leave the cache empty so a later reconcile
-        // can ask a texture that has settled. The window is only square until the next entry.
-        return true;
+        return this._textureBufferKey(stex) !== null && isPaintableFrame(actor);
     }
 
     /**
@@ -341,7 +282,7 @@ export class OverviewDecoration {
         // Already wearing the mask (a reconcile with no card change): the outcome is unchanged.
         if (this._stex)
             return true;
-        if (!this._canMask || this._maskWouldChangeDesktop())
+        if (!this._canMask || !this._maskReady())
             return false;
 
         const buildRoundedMask = this._OverviewMask?.buildRoundedMask;

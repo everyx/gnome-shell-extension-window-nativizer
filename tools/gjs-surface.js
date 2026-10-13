@@ -102,12 +102,8 @@ const SURFACE = [
     // Cogl - the shadow pipeline, whose uniform call the code probes for two signatures
     {ns: 'Cogl', cls: 'Pipeline', class: true},
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
-    // The overview's mask probe asks the shaped texture whether masking this window would move
-    // its desktop screenshot off the direct-read path. The member is resolved by capability.
-    {ns: 'Meta', cls: 'ShapedTexture', class: true},
-    {ns: 'Meta', cls: 'ShapedTexture', member: 'paint_to_bitmap', arity: 2, optional: true,
-        versionDependent: 'shaped_texture_paint_to_bitmap'},
-    {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['RGBA_8888', 'A_8']},
+    // The overview mask's A_8 layout, and the single-channel mask slot Mutter expects.
+    {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['A_8']},
     // gnome-shell, only reachable from inside the shell
     // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
     // Clutter.ShaderEffect in 51. The uniform upload is the seam's, so no shape is pinned here -
