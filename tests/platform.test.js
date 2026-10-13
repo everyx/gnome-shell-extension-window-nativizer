@@ -885,8 +885,14 @@ describe('platform', () => {
             expect(getWindowSubpixelOffset(waylandWin(null))).toEqual({x: 0, y: 0});
         });
 
-        it('returns zero offset on invalid monitor index', () => {
-            expect(getWindowSubpixelOffset(waylandWin({x: 242, y: 200}, -1))).toEqual({x: 0, y: 0});
+        it('answers unknown when no display can report the monitor count, not zero', () => {
+            // No display (a torn-down or unreachable compositor) means the count is unreadable,
+            // which is unknown, not a confirmed empty scan. The window's own monitor index is no
+            // longer a term in the scan, so passing an invalid one changes nothing. This spec used
+            // to pin the old substitution - an absent display folded into 0 monitors and then a
+            // zero phase - and changed with the strict read, as flagged in the commit body.
+            globalThis.global = {};
+            expect(getWindowSubpixelOffset(waylandWin({x: 242, y: 200}, -1))).toBeNull();
         });
 
         // The fallback to win.get_monitor() is gone, so a frame the scan cannot read resolves to
@@ -1015,6 +1021,37 @@ describe('platform', () => {
                 {scale: 1.5, geometry: null},
             ]);
             const win = waylandWin({x: 1900, y: 0}, 0, {x: 1900, y: 0, width: 200, height: 100});
+            expect(getWindowSubpixelOffset(win)).toBeNull();
+        });
+
+        it('answers unknown when an intersecting monitor scale is unreadable, not zero', () => {
+            // A 125% monitor whose geometry reads fine but whose scale momentarily throws: the old
+            // `getMonitorScale` fallback is 1.0 (an integer scale), so the mirror answered a
+            // definite zero offset while Mutter applied the fractional phase - a wrong phase, not
+            // an absent one, against both cuts. The scan cannot confirm the scale, so it surfaces
+            // unknown and the consumers keep their last good phase.
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_scale: () => { throw new Error('scale went away'); },
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                },
+            };
+            const win = waylandWin({x: 242, y: 200});
+            expect(getWindowSubpixelOffset(win)).toBeNull();
+        });
+
+        it('answers unknown when the monitor count is unreadable, not zero', () => {
+            // An unreadable count used to be 0: the scan was skipped and answered -1 ("no
+            // overlap"), which the mirror maps to {0, 0}. The count is unknown, not zero monitors.
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => { throw new Error('display went away'); },
+                    get_monitor_scale: () => 1.25,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                },
+            };
+            const win = waylandWin({x: 242, y: 200});
             expect(getWindowSubpixelOffset(win)).toBeNull();
         });
 

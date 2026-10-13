@@ -46,23 +46,48 @@ export function getMonitorManager() {
 
 /**
  * Returns the count of connected monitors.
- * @returns {number}
+ *
+ * The historical default is 0, which callers that only want a loop bound can keep. A caller that
+ * must tell "no monitors" apart from "the count could not be read" passes `{strict: true}` and
+ * gets `null` for the latter; see `resolveHighestScaleMonitorIndex`, where an unreadable count
+ * used to skip the scan and answer "no overlap".
+ *
+ * @param {object} [options={}]
+ * @param {boolean} [options.strict=false] - Answer null instead of 0 when the count is unreadable
+ * @returns {number|null}
  */
-export function getMonitorCount() {
+export function getMonitorCount({strict = false} = {}) {
     const display = getDisplay();
     try {
-        return typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : 0;
+        if (typeof display?.get_n_monitors === 'function') {
+            const count = display.get_n_monitors();
+            if (Number.isFinite(count) && count >= 0)
+                return count;
+        }
     } catch {
-        return 0;
+        // Display went away.
     }
+    return strict ? null : 0;
 }
 
 /**
  * Reads fractional or integer monitor scale from Meta.Display.
+ *
+ * The historical default is 1.0 (an integer scale). A caller that must not fold an unreadable
+ * scale into 1.0 passes `{strict: true}` and gets `null`; see
+ * `resolveHighestScaleMonitorIndex`, where a momentarily unreadable scale on a fractional
+ * monitor would otherwise become a definite integer and a zero offset.
+ *
+ * The strict option follows the same shape as `getWindowFrameRect`'s `throwOnError`: the same
+ * read with a different failure mode, rather than a parallel helper every caller has to pick
+ * between.
+ *
  * @param {number} monitorIndex
- * @returns {number}
+ * @param {object} [options={}]
+ * @param {boolean} [options.strict=false] - Answer null instead of the 1.0 fallback
+ * @returns {number|null}
  */
-export function getMonitorScale(monitorIndex) {
+export function getMonitorScale(monitorIndex, {strict = false} = {}) {
     const display = getDisplay();
     try {
         const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
@@ -74,7 +99,7 @@ export function getMonitorScale(monitorIndex) {
     } catch {
         // Display or index went away.
     }
-    return 1.0;
+    return strict ? null : 1.0;
 }
 
 /**

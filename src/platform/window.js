@@ -472,12 +472,14 @@ function rectanglesOverlap(a, b) {
  *
  * An unreadable monitor geometry is not a non-overlapping one: the scan cannot rule it out of
  * the intersection, so it answers null ("unknown") rather than skip the monitor and possibly
- * answer -1. That keeps "no overlap" and "cannot tell" apart; the caller keeps the last good
- * phase for the unknown case instead of collapsing to zero.
+ * answer -1. The count and the scale come from strict reads for the same reason: `getMonitorCount`
+ * would fold a failed read into 0 (an empty scan, read as "no overlap") and `getMonitorScale` into
+ * 1.0 (an integer scale, read as a zero offset), so both unknowns are surfaced as null here. The
+ * strict reads are scoped to this resolver; the helpers keep their defaults for every other caller.
  *
  * @param {object|null} win - Meta.Window
  * @returns {number|null} Logical monitor index, -1 when no readable monitor overlaps, or null
- *          when a monitor geometry read failed
+ *          when the count, a monitor geometry, or an intersecting monitor scale is unreadable
  */
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
@@ -486,7 +488,11 @@ function resolveHighestScaleMonitorIndex(win) {
 
     let bestIndex = -1;
     let bestScale = 0;
-    const count = getMonitorCount();
+    // An unreadable count is "unknown", not "no monitors": folding it into 0 would skip the scan
+    // and answer -1, which the mirror maps to a zero phase.
+    const count = getMonitorCount({strict: true});
+    if (count === null)
+        return null;
     for (let i = 0; i < count; i++) {
         const geom = getMonitorGeometry(i);
         // An unreadable geometry cannot be ruled out of the intersection, so the scan cannot
@@ -495,7 +501,12 @@ function resolveHighestScaleMonitorIndex(win) {
             return null;
         if (!rectanglesOverlap(geom, frame))
             continue;
-        const scale = getMonitorScale(i);
+        // A strict read: an unreadable scale is "unknown", not the integer 1.0. On a fractional
+        // monitor the fallback would pick it as an integer and return a zero offset while Mutter
+        // applies a real phase; the caller keeps its last good phase for the null instead.
+        const scale = getMonitorScale(i, {strict: true});
+        if (scale === null)
+            return null;
         if (scale > bestScale) {
             bestScale = scale;
             bestIndex = i;
@@ -537,8 +548,9 @@ function resolveHighestScaleMonitorIndex(win) {
  * path unchanged.
  *
  * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or a frame no readable monitor
- * overlaps, and null when the monitor scan cannot complete because a geometry read failed. The
- * phase's two consumers keep their last good value on null, so both cuts stay on one line.
+ * overlaps, and null when the monitor scan cannot complete - an unreadable count, a failed
+ * geometry read, or an unreadable scale on an intersecting monitor. The phase's two consumers
+ * keep their last good value on null, so both cuts stay on one line.
  *
  * @param {object|null} win - Meta.Window
  * @returns {{x: number, y: number}|null} Applied offset, or null when it cannot be computed
@@ -563,7 +575,9 @@ export function getWindowSubpixelOffset(win) {
         if (monitorIndex < 0)
             return {x: 0, y: 0};
 
-        const scale = getMonitorScale(monitorIndex);
+        const scale = getMonitorScale(monitorIndex, {strict: true});
+        if (scale === null)
+            return null;
         if (!(scale > 0) || !Number.isFinite(scale) || Math.abs(scale - Math.round(scale)) < 0.001)
             return {x: 0, y: 0};
 
