@@ -11,6 +11,8 @@ import {
 } from '../src/lib/rules.js';
 import {
     WindowClientType, buildRuleKeyFromProperties, extractWindowProperties, extractPhaseProperties,
+    extractDiagnosticProperties, cachedNativeLikeCorners, parseDebugFlag,
+    DIAGNOSTIC_DECORATION_KEYS, INSPECTOR_DBUS_IFACE_XML,
 } from '../src/lib/pick.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
@@ -320,5 +322,174 @@ describe('extractPhaseProperties', () => {
         const fields = extractPhaseProperties(win);
         expect(fields.mirrorPhaseX).toBe('unknown');
         expect(fields.mirrorPhaseY).toBe('unknown');
+    });
+});
+
+/** An X11 window with every live getter the diagnostic extraction reads. */
+function diagnosticWin(overrides = {}) {
+    return {
+        get_wm_class: () => 'com.tencent.wechat',
+        get_window_type: () => WindowType.NORMAL,
+        get_client_type: () => WindowClientType.X11,
+        get_transient_for: () => null,
+        allows_resize: () => true,
+        is_attached_dialog: () => false,
+        get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+        get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+        get_compositor_private: () => ({x: 0, y: 0, width: 800, height: 600}),
+        ...overrides,
+    };
+}
+
+describe('extractDiagnosticProperties', () => {
+    it('adds the desktop-side diagnostics when asked', () => {
+        const view = {
+            clipTargetType: 'ClutterActor',
+            clipTargetName: '',
+            phaseInTransform: true,
+            clipFrame: [0, 0, 800, 600],
+            clipInsets: {left: 0, top: 0, right: 0, bottom: 0},
+            clipScale: 1.25,
+            clipEnabled: true,
+            clipSuspended: false,
+        };
+        const props = extractDiagnosticProperties(diagnosticWin(), {diagnosticsView: view});
+
+        expect(props.mirrorPhaseX).toBe('0');
+        expect(props.appliedPhaseX).toBe('n/a');
+        expect(props.frameRect).toBe('{"x":0,"y":0,"width":800,"height":600}');
+        expect(props.bufferRect).toBe('{"x":0,"y":0,"width":800,"height":600}');
+        expect(props.windowActorAllocation).toBe('{"x":0,"y":0,"width":800,"height":600}');
+        expect(props.clipTargetType).toBe('ClutterActor');
+        expect(props.clipTargetName).toBe('');
+        expect(props.phaseInTransform).toBe('true');
+        expect(props.clipFrame).toBe('[0,0,800,600]');
+        expect(props.clipInsets).toBe('{"left":0,"top":0,"right":0,"bottom":0}');
+        expect(props.clipScale).toBe('1.25');
+        expect(props.clipEnabled).toBe('true');
+        expect(props.clipSuspended).toBe('false');
+    });
+
+    it('renders an untracked window with explicit unavailable clip values', () => {
+        const props = extractDiagnosticProperties(diagnosticWin(), null);
+        for (const key of DIAGNOSTIC_DECORATION_KEYS)
+            expect(props[key]).toBe('unavailable');
+        // The window-side reads are still live even with no decoration.
+        expect(props.bufferRect).not.toBe('unavailable');
+    });
+
+    it('never throws when the live decoration view throws', () => {
+        const deco = {get diagnosticsView() { throw new Error('torn down'); }};
+        expect(() => extractDiagnosticProperties(diagnosticWin(), deco)).not.toThrow();
+        expect(extractDiagnosticProperties(diagnosticWin(), deco).clipEnabled).toBe('unavailable');
+    });
+});
+
+describe('extractDiagnosticProperties read isolation', () => {
+    // One read per logical group, so each can be made to throw on its own.
+    const groupReads = () => ({
+        phases: () => ({mirrorPhaseX: '1', mirrorPhaseY: '2', appliedPhaseX: 'n/a', appliedPhaseY: 'n/a'}),
+        frameRect: () => ({x: 1, y: 2, width: 3, height: 4}),
+        bufferRect: () => ({x: 5, y: 6, width: 7, height: 8}),
+        actor: () => ({x: 9, y: 10, width: 11, height: 12}),
+    });
+    const boom = () => { throw new Error('read failed'); };
+
+    it('keeps every other group when the phase read throws', () => {
+        const props = extractDiagnosticProperties({}, null, {...groupReads(), phases: boom});
+        expect(props.mirrorPhaseX).toBe('unavailable');
+        expect(props.frameRect).toBe('{"x":1,"y":2,"width":3,"height":4}');
+        expect(props.bufferRect).toBe('{"x":5,"y":6,"width":7,"height":8}');
+        expect(props.windowActorAllocation).toBe('{"x":9,"y":10,"width":11,"height":12}');
+    });
+
+    it('keeps every other group when the frame-rect read throws', () => {
+        const props = extractDiagnosticProperties({}, null, {...groupReads(), frameRect: boom});
+        expect(props.frameRect).toBe('unavailable');
+        expect(props.mirrorPhaseX).toBe('1');
+        expect(props.bufferRect).toBe('{"x":5,"y":6,"width":7,"height":8}');
+        expect(props.windowActorAllocation).toBe('{"x":9,"y":10,"width":11,"height":12}');
+    });
+
+    it('keeps every other group when the buffer-rect read throws', () => {
+        const props = extractDiagnosticProperties({}, null, {...groupReads(), bufferRect: boom});
+        expect(props.bufferRect).toBe('unavailable');
+        expect(props.frameRect).toBe('{"x":1,"y":2,"width":3,"height":4}');
+        expect(props.windowActorAllocation).toBe('{"x":9,"y":10,"width":11,"height":12}');
+    });
+
+    it('keeps every other group when the actor read throws', () => {
+        const props = extractDiagnosticProperties({}, null, {...groupReads(), actor: boom});
+        expect(props.windowActorAllocation).toBe('unavailable');
+        expect(props.frameRect).toBe('{"x":1,"y":2,"width":3,"height":4}');
+        expect(props.bufferRect).toBe('{"x":5,"y":6,"width":7,"height":8}');
+    });
+});
+
+describe('parseDebugFlag', () => {
+    it('rejects a call with no argument instead of reading it as the quiet pick', () => {
+        expect(parseDebugFlag([]).valid).toBeFalse();
+        expect(parseDebugFlag(null).valid).toBeFalse();
+        expect(parseDebugFlag([undefined]).valid).toBeFalse();
+    });
+
+    it('rejects a non-boolean argument', () => {
+        expect(parseDebugFlag(['yes']).valid).toBeFalse();
+        expect(parseDebugFlag([{}]).valid).toBeFalse();
+        expect(parseDebugFlag([1]).valid).toBeFalse();
+    });
+
+    it('reads `false` as the quiet interactive pick', () => {
+        expect(parseDebugFlag([false])).toEqual({valid: true, diagnostics: false});
+    });
+
+    it('reads `true` as diagnostics on the same interactive pick', () => {
+        expect(parseDebugFlag([true])).toEqual({valid: true, diagnostics: true});
+    });
+});
+
+describe('cachedNativeLikeCorners', () => {
+    it('reads the cached classification without starting a probe', () => {
+        let probed = 0;
+        const classifier = {adwaitaLook: () => true, probeAdwaitaLook: () => { probed++; }};
+        expect(cachedNativeLikeCorners(classifier, 42)).toBe('true');
+        expect(cachedNativeLikeCorners(classifier, 42)).toBe('true');
+        expect(probed).toBe(0);
+    });
+
+    it('reports unknown when the classifier has no cached answer yet', () => {
+        expect(cachedNativeLikeCorners({adwaitaLook: () => null}, 42)).toBe('unknown');
+        expect(cachedNativeLikeCorners({adwaitaLook: () => undefined}, 42)).toBe('unknown');
+    });
+
+    it('reports cannotTell when there is no classifier to ask', () => {
+        expect(cachedNativeLikeCorners(null, 42)).toBe('cannotTell');
+        expect(cachedNativeLikeCorners({}, 42)).toBe('cannotTell');
+    });
+
+    it('keeps a cached negative distinct from no answer', () => {
+        expect(cachedNativeLikeCorners({adwaitaLook: () => false}, 42)).toBe('false');
+    });
+});
+
+describe('diagnostic vocabulary', () => {
+    it('keeps unavailable, unknown, n/a and cannotTell distinct', () => {
+        // `unavailable`: a reachable read that did not return.
+        expect(extractDiagnosticProperties(diagnosticWin(), null).clipEnabled).toBe('unavailable');
+        // `n/a`: the applied phase does not exist for a non-Wayland client.
+        expect(extractPhaseProperties(diagnosticWin()).appliedPhaseX).toBe('n/a');
+        // `unknown`: the classifier has no landed answer yet.
+        expect(cachedNativeLikeCorners({adwaitaLook: () => null}, 42)).toBe('unknown');
+        // `cannotTell`: there is no classifier to ask.
+        expect(cachedNativeLikeCorners(null, 42)).toBe('cannotTell');
+        // The four tokens are all different, so a consumer cannot fold one into another.
+        expect(new Set(['unavailable', 'unknown', 'n/a', 'cannotTell']).size).toBe(4);
+    });
+});
+
+describe('PickWindow D-Bus interface', () => {
+    it('declares the required boolean under the original method name', () => {
+        expect(INSPECTOR_DBUS_IFACE_XML).toContain('name="PickWindow"');
+        expect(INSPECTOR_DBUS_IFACE_XML).toContain('type="b" direction="in" name="debug"');
     });
 });

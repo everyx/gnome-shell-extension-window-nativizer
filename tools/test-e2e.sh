@@ -2159,7 +2159,7 @@ PICK_BUS="$(get_dbus_bus)"
 PICK_IFACE="org.gnome.Shell.Extensions.WindowNativizer"
 PICK_PATH="/org/gnome/Shell/Extensions/WindowNativizer"
 ( gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" --object-path "$PICK_PATH" \
-        --method "$PICK_IFACE".PickWindow > "$PICK_REPLY" 2>&1; echo $? >> "$PICK_REPLY" ) &
+        --method "$PICK_IFACE".PickWindow false > "$PICK_REPLY" 2>&1; echo $? >> "$PICK_REPLY" ) &
 PICK_BG=$!
 # Prove the pick is genuinely in flight before disabling: no reply yet, and the picker overlay
 # on screen. Without this a pick that already returned would pass, exercising nothing.
@@ -2230,7 +2230,7 @@ fi
 PICK_FAULT=$(mktemp)
 for attempt in 1 2; do
     timeout 20 gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" \
-        --object-path "$PICK_PATH" --method "$PICK_IFACE".PickWindow > "$PICK_FAULT" 2>&1 || true
+        --object-path "$PICK_PATH" --method "$PICK_IFACE".PickWindow false > "$PICK_FAULT" 2>&1 || true
     if grep -qi 'BUSY\|already in progress' "$PICK_FAULT"; then
         echo "!! Attempt $attempt was refused as BUSY instead of being answered: $(cat "$PICK_FAULT")"
         rm -f "$PICK_FAULT"
@@ -2259,6 +2259,74 @@ if ! check_fields "$PICK_AFTERMATH" '{"leftovers": 0, "pending": false, "pickabl
     exit 1
 fi
 echo ">> Failed picker: no overlay left on the stage, invocation answered, next pick not refused."
+
+# The boolean argument is the compatibility boundary now that there is no non-interactive path.
+# A call that forgot the argument is refused at the bus; `false` is the quiet interactive pick and
+# must put the picker on screen. Diagnostics ride the same gesture, so there is no separate
+# non-interactive call to exercise here; their fields are pinned by the unit specs.
+echo ">> [test-e2e] PickWindow argument contract..."
+PICK_COMPAT=$(mktemp)
+
+ARGS_RC=0
+timeout 20 gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" \
+    --object-path "$PICK_PATH" --method "$PICK_IFACE".PickWindow > "$PICK_COMPAT" 2>&1 || ARGS_RC=$?
+if [[ "$ARGS_RC" -eq 0 ]]; then
+    echo "!! PickWindow answered without its required boolean argument: $(cat "$PICK_COMPAT")"
+    rm -f "$PICK_COMPAT"
+    exit 1
+fi
+
+# `false` is valid and stays interactive: the picker overlay must come on screen. It is cancelled
+# by disabling the extension, exactly as the earlier in-flight case answers an interrupted pick.
+rm -f "$PICK_REPLY"
+( gdbus call --address "$PICK_BUS" --dest "$PICK_IFACE" --object-path "$PICK_PATH" \
+        --method "$PICK_IFACE".PickWindow false > "$PICK_REPLY" 2>&1; echo $? >> "$PICK_REPLY" ) &
+PICK_BG=$!
+PICK_COMPAT_PENDING=0
+for _ in $(seq 1 120); do
+    if tail -1 "$PICK_REPLY" 2>/dev/null | grep -q '^[0-9]\+$'; then
+        echo "!! The quiet pick returned before it could be interrupted; there was nothing to cancel!"
+        kill "$PICK_BG" 2>/dev/null || true
+        rm -f "$PICK_COMPAT"
+        exit 1
+    fi
+    OVERLAY_STATE="$(shell_eval '
+    (async () => {
+        const Main = await import("resource:///org/gnome/shell/ui/main.js");
+        const up = Main.uiGroup.get_children().some(c => c.name === "WindowNativizerInspectorOverlay");
+        return JSON.stringify({overlay: up});
+    })()
+    ')"
+    if check_fields "$OVERLAY_STATE" '{"overlay": true}'; then
+        PICK_COMPAT_PENDING=1
+        break
+    fi
+    sleep 0.05
+done
+if [[ "$PICK_COMPAT_PENDING" -ne 1 ]]; then
+    echo "!! The quiet pick never came on screen, so \`false\` is not interactive!"
+    kill "$PICK_BG" 2>/dev/null || true
+    rm -f "$PICK_COMPAT"
+    exit 1
+fi
+"$DEV" ext disable "$UUID" >/dev/null
+PICK_COMPAT_ANSWERED=0
+for _ in $(seq 1 60); do
+    if tail -1 "$PICK_REPLY" 2>/dev/null | grep -q '^[0-9]\+$'; then
+        PICK_COMPAT_ANSWERED=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$PICK_COMPAT_ANSWERED" -ne 1 || "$(tail -1 "$PICK_REPLY")" -ne 0 ]]; then
+    echo "!! The quiet pick was not answered cleanly on disable: $(cat "$PICK_REPLY" 2>/dev/null)"
+    kill "$PICK_BG" 2>/dev/null || true
+    rm -f "$PICK_COMPAT"
+    exit 1
+fi
+"$DEV" ext enable "$UUID" >/dev/null
+rm -f "$PICK_COMPAT"
+echo ">> PickWindow with no argument is refused; \`false\` is the interactive pick (overlay shown, answered on disable)."
 
 # The preferences window is a separate GTK4 process and nothing else here opens it. Its stderr still
 # lands in $LOG - the shell spawns it - so a markup or JS error in prefs.js is visible only to a case

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 16:07+0800\n"
+"POT-Creation-Date: 2026-10-13 20:16+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -183,148 +183,148 @@ msgid "Picked from the window “%s”"
 msgstr "選取自視窗「%s」"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:80
+#: src/prefs.js:82
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs.js:160
+#: src/prefs.js:162
 msgid "Revert to the automatic decision"
 msgstr "還原為自動判斷"
 
-#: src/prefs.js:254
+#: src/prefs.js:256
 msgid "Window Pick Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:256
+#: src/prefs.js:258
 msgid "A window is already being picked"
 msgstr "視窗選取正在進行"
 
-#: src/prefs.js:257
+#: src/prefs.js:259
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "無法連線至 Window Nativizer 擴充套件——擴充套件未啟用"
 
-#: src/prefs.js:269
+#: src/prefs.js:271
 msgid "No correction added: this window could not be identified"
 msgstr "未新增修正：無法識別這個視窗"
 
-#: src/prefs.js:290
+#: src/prefs.js:292
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "未新增修正：擴充套件沒有回應——請重新啟動工作階段後再次選取"
 
-#: src/prefs.js:298
+#: src/prefs.js:300
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未新增修正：這條修正對此類視窗不會有任何效果"
 
-#: src/prefs.js:316
+#: src/prefs.js:318
 msgid "No correction added: it could not be saved"
 msgstr "未新增修正：修正未能儲存"
 
-#: src/prefs.js:328
+#: src/prefs.js:330
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:329
+#: src/prefs.js:331
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已為 %s 新增修正：%s"
 
-#: src/prefs.js:339
+#: src/prefs.js:341
 msgid "The correction takes effect once the window is restored"
 msgstr "視窗還原後修正生效"
 
-#: src/prefs.js:352
+#: src/prefs.js:354
 msgid "No corrections to export"
 msgstr "沒有可匯出的修正規則"
 
-#: src/prefs.js:364
+#: src/prefs.js:366
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已將 %d 條修正規則匯出至剪貼簿"
 
-#: src/prefs.js:390
+#: src/prefs.js:392
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪貼簿為空或不包含文字"
 
-#: src/prefs.js:426 src/prefs.js:448
+#: src/prefs.js:428 src/prefs.js:450
 msgid "All rules in clipboard are already up to date"
 msgstr "剪貼簿中的所有規則已是最新"
 
-#: src/prefs.js:435 src/prefs.js:458
+#: src/prefs.js:437 src/prefs.js:460
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功匯入 %d 條規則"
 
-#: src/prefs.js:465
+#: src/prefs.js:467
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "匯入失敗：%s"
 
-#: src/prefs.js:477
+#: src/prefs.js:479
 msgid "Pick window…"
 msgstr "選取視窗…"
 
-#: src/prefs.js:480
+#: src/prefs.js:482
 msgid "The correction applies to every window of its kind"
 msgstr "這條修正對此類所有視窗生效"
 
-#: src/prefs.js:485
+#: src/prefs.js:487
 msgid "Import from Clipboard"
 msgstr "從剪貼簿匯入"
 
-#: src/prefs.js:486
+#: src/prefs.js:488
 msgid "Export to Clipboard"
 msgstr "匯出至剪貼簿"
 
-#: src/prefs.js:492 src/prefs.js:495
+#: src/prefs.js:494 src/prefs.js:497
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs.js:507
+#: src/prefs.js:509
 msgid "Corrections"
 msgstr "誤判修正"
 
-#: src/prefs.js:508
+#: src/prefs.js:510
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按視窗種類生效；開關修正其中一個軸的自動判斷"
 
-#: src/prefs.js:544
+#: src/prefs.js:546
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
 
-#: src/prefs.js:614
+#: src/prefs.js:616
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:620
+#: src/prefs.js:622
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:621
+#: src/prefs.js:623
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
 
-#: src/prefs.js:626
+#: src/prefs.js:628
 msgid "Prioritize crisp text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:627
+#: src/prefs.js:629
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr "在分數縮放的顯示器上跳過圓角，以保持文字清晰（陰影不受影響）"
 
-#: src/prefs.js:633
+#: src/prefs.js:635
 msgid "Force overview corners on every window"
 msgstr "強制所有視窗顯示概覽圓角"
 
-#: src/prefs.js:634
+#: src/prefs.js:636
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"

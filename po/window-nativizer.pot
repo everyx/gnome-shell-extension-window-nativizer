@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 16:07+0800\n"
+"POT-Creation-Date: 2026-10-13 20:16+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -186,150 +186,150 @@ msgid "Picked from the window “%s”"
 msgstr ""
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:80
+#: src/prefs.js:82
 msgid "Close"
 msgstr ""
 
-#: src/prefs.js:160
+#: src/prefs.js:162
 msgid "Revert to the automatic decision"
 msgstr ""
 
-#: src/prefs.js:254
+#: src/prefs.js:256
 msgid "Window Pick Failed"
 msgstr ""
 
-#: src/prefs.js:256
+#: src/prefs.js:258
 msgid "A window is already being picked"
 msgstr ""
 
-#: src/prefs.js:257
+#: src/prefs.js:259
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:269
+#: src/prefs.js:271
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:290
+#: src/prefs.js:292
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:298
+#: src/prefs.js:300
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
-#: src/prefs.js:316
+#: src/prefs.js:318
 msgid "No correction added: it could not be saved"
 msgstr ""
 
-#: src/prefs.js:328
+#: src/prefs.js:330
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr ""
 
-#: src/prefs.js:329
+#: src/prefs.js:331
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:339
+#: src/prefs.js:341
 msgid "The correction takes effect once the window is restored"
 msgstr ""
 
-#: src/prefs.js:352
+#: src/prefs.js:354
 msgid "No corrections to export"
 msgstr ""
 
-#: src/prefs.js:364
+#: src/prefs.js:366
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs.js:390
+#: src/prefs.js:392
 msgid "Clipboard is empty or does not contain text"
 msgstr ""
 
-#: src/prefs.js:426 src/prefs.js:448
+#: src/prefs.js:428 src/prefs.js:450
 msgid "All rules in clipboard are already up to date"
 msgstr ""
 
-#: src/prefs.js:435 src/prefs.js:458
+#: src/prefs.js:437 src/prefs.js:460
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs.js:465
+#: src/prefs.js:467
 #, javascript-format
 msgid "Import failed: %s"
 msgstr ""
 
-#: src/prefs.js:477
+#: src/prefs.js:479
 msgid "Pick window…"
 msgstr ""
 
-#: src/prefs.js:480
+#: src/prefs.js:482
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:485
+#: src/prefs.js:487
 msgid "Import from Clipboard"
 msgstr ""
 
-#: src/prefs.js:486
+#: src/prefs.js:488
 msgid "Export to Clipboard"
 msgstr ""
 
-#: src/prefs.js:492 src/prefs.js:495
+#: src/prefs.js:494 src/prefs.js:497
 msgid "More actions"
 msgstr ""
 
-#: src/prefs.js:507
+#: src/prefs.js:509
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:508
+#: src/prefs.js:510
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr ""
 
-#: src/prefs.js:544
+#: src/prefs.js:546
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
-#: src/prefs.js:614
+#: src/prefs.js:616
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:620
+#: src/prefs.js:622
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:621
+#: src/prefs.js:623
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:626
+#: src/prefs.js:628
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:627
+#: src/prefs.js:629
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr ""
 
-#: src/prefs.js:633
+#: src/prefs.js:635
 msgid "Force overview corners on every window"
 msgstr ""
 
-#: src/prefs.js:634
+#: src/prefs.js:636
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
