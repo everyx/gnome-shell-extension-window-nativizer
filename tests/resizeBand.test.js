@@ -434,6 +434,15 @@ describe('computeResizeBands', () => {
             .toEqual(emptyBands());
     });
 
+    it('distinguishes "do not clip" from "bounds could not be read"', () => {
+        const frame = rect(100, 50, 400, 300);
+        // No bounds is the actor's no-surface-clip case: the strips keep their full extent.
+        expect(computeResizeBands({frame}).top).not.toBeNull();
+        // Unknown bounds must drop every strip. Writing them at full extent is how a window
+        // flush against an edge grew a reactive strip onto the neighbouring monitor.
+        expect(computeResizeBands({frame, bounds: null, boundsUnknown: true})).toEqual(emptyBands());
+    });
+
     it('is 12 logical pixels deep at a fractional scale too', () => {
         const frame = rect(100, 50, 400, 300);
         const whole = computeResizeBands({frame, scale: 1});
@@ -556,6 +565,15 @@ describe('computeResizeBandsInto', () => {
         expect(computeResizeBandsInto(into, {frame: null})).toBeTrue();
         expect(into).toEqual(emptyBands());
         expect(computeResizeBandsInto(into, {frame: null})).toBeFalse();
+    });
+
+    it('clears every region when the bounds could not be read, and stays cleared', () => {
+        const into = emptyBands();
+        computeResizeBandsInto(into, {frame});
+        expect(into.top).not.toBeNull();
+        expect(computeResizeBandsInto(into, {frame, boundsUnknown: true})).toBeTrue();
+        expect(into).toEqual(emptyBands());
+        expect(computeResizeBandsInto(into, {frame, boundsUnknown: true})).toBeFalse();
     });
 
     it('matches computeResizeBands for a clipped frame and for an unusable scale', () => {

@@ -393,6 +393,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.resizeBand.geometry).not.toBeNull();
         expect(deco.resizeBand.geometry.scale).toBe(2);
 
+        // A readable monitor carries its rect and is clipped to it.
+        mockWin.get_monitor = () => 0;
+        deco._syncResizeBand(true, {...inputs, monitorScale: 1}, insets, mockActor);
+        expect(deco.resizeBand.geometry.boundsUnknown).toBeFalse();
+        expect(deco.resizeBand.geometry.bounds).toEqual({x: 0, y: 0, width: 1920, height: 1080});
+
+        // The same window once the monitor index goes stale: unknown, so the band drops this pass
+        // instead of writing strips at full extent onto a neighbouring monitor.
+        mockWin.get_monitor = () => 99;
+        deco._syncResizeBand(true, {...inputs, monitorScale: 3}, insets, mockActor);
+        expect(deco.resizeBand.geometry.bounds).toBeNull();
+        expect(deco.resizeBand.geometry.boundsUnknown).toBeTrue();
+
         // Remove band
         deco._syncResizeBand(false, inputs, insets, mockActor);
         expect(deco.hasResizeBand).toBeFalse();
