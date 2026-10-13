@@ -3,6 +3,7 @@ import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {evaluateWindowActions} from '../src/lib/detector.js';
+import {computeResizeBands, emptyBands} from '../src/lib/resizeBand.js';
 
 describe('WindowDecoration (lifecycle and orchestration)', () => {
     let mockWin;
@@ -159,7 +160,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 return probeAnswer;
             },
         };
-        const surface = {
+        const makeSurface = () => ({
             mask: null,
             hasMask: false,
             set_mask_texture(texture) {
@@ -176,8 +177,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 get_width: () => bufferWidth,
                 get_height: () => bufferHeight,
             }),
-        };
-        mockActor.get_texture = () => surface;
+        });
+        const surface = makeSurface();
+        // The window actor's live shaped texture. A `MetaWindowActor` can be handed a new one;
+        // the probe verdict is keyed to the texture, so a spec can swap it to pin that.
+        let activeSurface = surface;
+        mockActor.get_texture = () => activeSurface;
 
         const makeContainer = () => ({
             opacity: 255,
@@ -250,7 +255,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         return {
-            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones,
+            mask, opaque, surface, makeSurface, container, makeContainer, windowSignals, shadowClones,
+            setShapedTexture: next => {
+                activeSurface = next;
+            },
             probeCalls: () => probeCalls,
             opaqueCalls: () => opaqueCalls,
             // Lets a spec stage the shaped texture's own state: a probe answer and the buffer the
@@ -441,6 +449,92 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.scale).toBe(1.5);
         expect(deco.shadow.scale).toBe(1.5);
         expect(deco.resizeBand.geometry.scale).toBe(1.5);
+    });
+
+    it('keeps the 1.25 last-good scale across a null read, not the 1.0 identity', () => {
+        // The reviewer's exact case: an initialised-on-construction cache updated only by a usable
+        // read, so 1.25 survives a null. A constructor-only `_scale = 1.0` fallback would return
+        // 1.0 here, and a correct fractional display would jump and back on every read failure.
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const insets = {left: 10, top: 10, right: 10, bottom: 10};
+
+        deco.apply({actions, inputs: {insets, monitorScale: 1.25}, actor: mockActor});
+        deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
+
+        expect(deco._resolveScale({monitorScale: null})).toBe(1.25);
+        expect(deco.clip.params.scale).toBe(1.25);
+        expect(deco.shadow.scale).toBe(1.25);
+        expect(deco.resizeBand.geometry.scale).toBe(1.25);
+    });
+
+    it('clears every resize band while the monitor bounds cannot be read', () => {
+        // A window flush against the right edge of monitor 0. Its strips reach RESIZE_BAND past
+        // the edge: with readable bounds they are clipped at the monitor, but reading the
+        // unreadable null as the pure function's "do not clip" would write them full-extent onto
+        // the neighbouring monitor, where they swallow its clicks.
+        const frame = {x: 1815, y: 100, width: 100, height: 300};
+        const hazard = computeResizeBands({frame, bounds: null, boundsUnknown: false});
+        expect(hazard.top.x + hazard.top.width).toBe(1927);
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const insets = {left: 8, top: 8, right: 8, bottom: 8};
+
+        mockWin.get_monitor = () => 99; // stale: resolveMonitorBounds answers null
+        deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
+
+        const geo = deco.resizeBand.geometry;
+        expect(geo.bounds).toBeNull();
+        expect(geo.boundsUnknown).toBeTrue();
+        expect(computeResizeBands({frame, bounds: geo.bounds, boundsUnknown: geo.boundsUnknown}))
+            .toEqual(emptyBands());
+    });
+
+    it('rebuilds the resize bands once the monitor bounds are readable again', () => {
+        const frame = {x: 1815, y: 100, width: 100, height: 300};
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const insets = {left: 8, top: 8, right: 8, bottom: 8};
+
+        mockWin.get_monitor = () => 99;
+        deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
+        const cleared = deco.resizeBand.geometry;
+        expect(computeResizeBands({frame, bounds: cleared.bounds, boundsUnknown: cleared.boundsUnknown}))
+            .toEqual(emptyBands());
+
+        // The monitor comes back: the rect is readable and the strips are rebuilt, clipped at the
+        // edge, so edge resizing works again.
+        mockWin.get_monitor = () => 0;
+        deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
+        const restored = deco.resizeBand.geometry;
+        expect(restored.boundsUnknown).toBeFalse();
+        const bands = computeResizeBands({frame, bounds: restored.bounds, boundsUnknown: restored.boundsUnknown});
+        expect(bands.right).toEqual({x: 1915, y: 100, width: 5, height: 300});
+        expect(bands.top.x + bands.top.width).toBe(1920);
     });
 
     it('keeps the last good clip target while the container is unallocated, then re-verifies', () => {
@@ -913,6 +1007,23 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(harness.probeCalls()).toBe(1);
         expect(harness.deco.overview.stateView.isProbed).toBeTrue();
         expect(harness.surface.mask).toBe(harness.mask);
+    });
+
+    it('re-probes when the window actor carries a new shaped texture (the verdict is keyed to it)', () => {
+        // The retained verdict belongs to the shaped texture, not to the decoration instance. A
+        // replaced texture is a different key that has never seen our mask, so it earns a fresh
+        // observation instead of inheriting an answer about the old buffer.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: true});
+        harness.deco.setOverviewMode(true);
+        const decided = harness.probeCalls();
+        expect(decided).toBe(1);
+        expect(harness.surface.hasMask).toBeFalse();
+
+        const replacement = harness.makeSurface();
+        harness.setShapedTexture(replacement);
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(decided + 1);
     });
 
     it('never re-probes a decided texture after our own mask has touched it', () => {
