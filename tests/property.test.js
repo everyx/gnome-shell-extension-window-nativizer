@@ -9,10 +9,12 @@
 
 import {
     SnapDirection,
+    clipFrameFor,
     snapActorBodyFrame,
     snapCoordToGrid,
     snapRectToGrid,
     snapSliceBoxesInto,
+    ZERO_PHASE,
 } from '../src/lib/snap.js';
 import {frameFromInsets, insetsFromRects} from '../src/lib/frame.js';
 import {shadowGeometry, shadowLayoutPosition, shadowSlices, SHADOW_PAD} from '../src/effects/shadowGeometry.js';
@@ -221,11 +223,26 @@ describe('property: shadowGeometry', () => {
         };
     }
 
-    it('keeps the scaled cutout on the window box for any scale, pivot and translation', () => {
+    // Tiled windows are drawn square (radius 0); focused ones carry the Adwaita corner. The ring a
+    // client declares is a margin per side. Both are style inputs to the cutout, so they are fuzzed
+    // rather than assumed away: the diagnosis cancelled the insets by hand, and this pins it.
+    const BODY_INSETS = [0, 1, 4, 12];
+    const BODY_RADII = [0, 15];
+    const PHYSICAL_SCALES = [1, 1.25, 4 / 3, 2];
+
+    it('keeps the scaled cutout on the window body for any scale, pivot, translation, insets and radius', () => {
         const rng = mulberry32(0x0ff5e7);
         for (let i = 0; i < ITER; i++) {
             const width = range(rng, 40, 900);
             const height = range(rng, 40, 900);
+            const inset = pick(rng, BODY_INSETS);
+            const radius = pick(rng, BODY_RADII);
+            const insets = {left: inset, top: inset, right: inset, bottom: inset};
+            // The physical scale only snaps the declared insets to the device grid; the body it
+            // derives cancels out of the transform identically at any scale, which is fuzzed too.
+            const physicalScale = pick(rng, PHYSICAL_SCALES);
+            const body = clipFrameFor({width, height}, insets, physicalScale, ZERO_PHASE);
+
             const windowActor = {
                 x: range(rng, -500, 500),
                 y: range(rng, -500, 500),
@@ -254,17 +271,22 @@ describe('property: shadowGeometry', () => {
             shadowActor.translation_x = windowActor.translation_x + (position.x - baseX);
             shadowActor.translation_y = windowActor.translation_y + (position.y - baseY);
 
-            // The shadow's local cutout is [PAD, PAD + window size]; transformed, it must sit on
-            // the window's transformed body box. The translation is shared, so it cancels.
-            const windowTL = transformPoint(windowActor, 0, 0);
-            const windowBR = transformPoint(windowActor, width, height);
-            const cutTL = transformPoint(shadowActor, SHADOW_PAD, SHADOW_PAD);
-            const cutBR = transformPoint(shadowActor, SHADOW_PAD + width, SHADOW_PAD + height);
+            // The shadow's local cutout is the body, one PAD in from its layout box; transformed, it
+            // must sit on the window's transformed `clipFrameFor` body box. The translation is
+            // shared, so it cancels.
+            const bodyTL = transformPoint(windowActor, body.x, body.y);
+            const bodyBR = transformPoint(windowActor, body.x + body.width, body.y + body.height);
+            const cutTL = transformPoint(shadowActor, SHADOW_PAD + body.x, SHADOW_PAD + body.y);
+            const cutBR = transformPoint(shadowActor, SHADOW_PAD + body.x + body.width,
+                SHADOW_PAD + body.y + body.height);
 
-            expect(cutTL.x).toBeCloseTo(windowTL.x, 6);
-            expect(cutTL.y).toBeCloseTo(windowTL.y, 6);
-            expect(cutBR.x).toBeCloseTo(windowBR.x, 6);
-            expect(cutBR.y).toBeCloseTo(windowBR.y, 6);
+            const context = `inset ${inset} radius ${radius} physical ${physicalScale} ` +
+                `scale ${windowActor.scale_x}/${windowActor.scale_y} ` +
+                `pivot ${JSON.stringify(windowActor.pivot_point)}`;
+            expect(Math.abs(cutTL.x - bodyTL.x)).withContext(`x ${context}`).toBeLessThanOrEqual(1e-6);
+            expect(Math.abs(cutTL.y - bodyTL.y)).withContext(`y ${context}`).toBeLessThanOrEqual(1e-6);
+            expect(Math.abs(cutBR.x - bodyBR.x)).withContext(`x2 ${context}`).toBeLessThanOrEqual(1e-6);
+            expect(Math.abs(cutBR.y - bodyBR.y)).withContext(`y2 ${context}`).toBeLessThanOrEqual(1e-6);
         }
     });
 

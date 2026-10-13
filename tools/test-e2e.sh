@@ -777,6 +777,129 @@ if [[ "$RING_MATCHED" -ne 1 ]]; then
 fi
 echo ">> Tiled ring pixel verified at the layer alpha."
 
+# (b2) The reporter's case: a window actor under a persistent Clutter scale, the shape a MosaicWM
+# miniature leaves (its MiniatureEnforceEffect re-applies pivot/scale/translation every paint). The
+# shadow cutout is derived from the window actor's transform, so at pivot (0,0) the ring must stay on
+# the actor's visual frame edge for any scale. Drive the actor the way the miniature does - pivot,
+# scale and translation - and translate the frame origin back so that edge stays on frame.x and this
+# samples the same column as the check above. Read the scale back from the same session as the
+# screenshot, and require the shadow to darken the frame.x - 1 column rather than leave it bare
+# desktop: a cutout left on the unscaled layout box drifts by PAD*(1-scale) and opens exactly that
+# gap. scale_x is printed so the run states which transform it proved.
+shell_eval '
+(() => {
+    const winActor = global.get_window_actors()[0];
+    if (winActor) {
+        global._windowNativizerE2eRingSaved = {
+            pivot: [winActor.pivot_point.x, winActor.pivot_point.y],
+            scale: [winActor.scale_x, winActor.scale_y],
+            translation: [winActor.translation_x, winActor.translation_y],
+        };
+    }
+})()
+' >/dev/null
+
+SCALED_RING_STATE=""
+SCALED_RING_APPLY=""
+SCALED_RING_MATCHED=0
+for _ in $(seq 1 20); do
+    # Re-apply every attempt: Mutter can drop a scale set from JS on the next allocation, which is
+    # why the miniature enforces its own each paint.
+    SCALED_RING_APPLY="$(shell_eval '
+    (() => {
+        const winActor = global.get_window_actors()[0];
+        if (!winActor) return JSON.stringify({error: "no actor"});
+        const f = winActor.meta_window.get_frame_rect();
+        // Scale about the actor origin, then put the frame origin back where it was so the visual
+        // edge stays on frame.x (a raw tile offset would move it, and frame.x would stop naming the
+        // column the ring belongs on).
+        winActor.set_pivot_point(0, 0);
+        winActor.set_scale(1.3333, 1.3333);
+        winActor.translation_x = (f.x - winActor.x) * (1 - 1.3333);
+        winActor.translation_y = (f.y - winActor.y) * (1 - 1.3333);
+        return JSON.stringify({applyScaleX: winActor.scale_x, applyTx: winActor.translation_x,
+            actorX: winActor.x, frameX: f.x});
+    })()
+    ')"
+    rm -f /tmp/window-nativizer-scaled-ring.png
+    gdbus call --address "$RING_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+        --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-scaled-ring.png >/dev/null 2>&1
+    # Read the transform back after the screenshot: a scale that did not survive the frame would make
+    # the column check pass for the wrong reason, because scale 1 puts the cutout there too.
+    SCALED_RING_STATE="$(shell_eval '
+    (() => {
+        const winActor = global.get_window_actors()[0];
+        if (!winActor) return JSON.stringify({error: "no actor"});
+        const w = winActor.meta_window;
+        const f = w.get_frame_rect();
+        const s = global.display.get_monitor_scale(w.get_monitor());
+        return JSON.stringify({
+            scaleX: winActor.scale_x,
+            scaleY: winActor.scale_y,
+            pivotX: winActor.pivot_point.x,
+            frameX: f.x,
+            left: Math.round(f.x * s),
+            y: Math.round((f.y + Math.floor(f.height / 2)) * s),
+            scale: s,
+        });
+    })()
+    ')"
+    if python3 - "$SCALED_RING_STATE" <<'PYEOF'
+import json, re, sys
+from PIL import Image
+
+reply = sys.argv[1]
+match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+if not match:
+    sys.exit(f"no geometry in reply: {reply!r}")
+g = json.loads(match.group(0))
+if "error" in g:
+    sys.exit(f"scaled-ring geometry error: {g}")
+scale = g['scaleX']
+if abs(scale - 1.3333) > 1e-3:
+    sys.exit(f"window actor scale did not survive the screenshot frame: scale_x={scale}")
+im = Image.open('/tmp/window-nativizer-scaled-ring.png').convert('RGB')
+x, y = g['left'], g['y']
+# A clean reference well beyond SHADOW_PAD's reach at this display scale, so a cutout displaced by
+# the pad cannot move the reference with it.
+ref = im.getpixel((max(2, x - 80), y))
+ring = im.getpixel((x - 1, y))
+# The ring is the tiled layer darkening the backdrop. A cutout left on the unscaled layout box
+# leaves x-1 as bare desktop, i.e. equal to the reference.
+darkened = ref[1] - ring[1] >= 2 and ref[2] - ring[2] >= 2
+print(f"scale_x={scale:.4f} scale_y={g['scaleY']:.4f} pivot_x={g['pivotX']} "
+      f"frame.x={g['frameX']} left={x} ref={ref} ring(x-1)={ring} darkened={darkened}")
+sys.exit(0 if darkened else 1)
+PYEOF
+    then
+        SCALED_RING_MATCHED=1
+        break
+    fi
+    sleep 0.1
+done
+echo ">> Scaled ring apply: $SCALED_RING_APPLY"
+echo ">> Scaled ring: $SCALED_RING_STATE"
+if [[ "$SCALED_RING_MATCHED" -ne 1 ]]; then
+    echo "!! The shadow cutout did not stay on the scaled window's visual edge at frame.x - 1"
+    exit 1
+fi
+echo ">> Scaled ring pixel verified within 1 px of frame.x under a MosaicWM-style scale."
+
+# Restore the actor's transform so the checks that follow see the state they expect.
+shell_eval '
+(() => {
+    const winActor = global.get_window_actors()[0];
+    const saved = global._windowNativizerE2eRingSaved;
+    if (winActor && saved) {
+        winActor.set_scale(saved.scale[0], saved.scale[1]);
+        winActor.translation_x = saved.translation[0];
+        winActor.translation_y = saved.translation[1];
+        winActor.set_pivot_point(saved.pivot[0], saved.pivot[1]);
+        delete global._windowNativizerE2eRingSaved;
+    }
+})()
+' >/dev/null
+
 
 # The tiled ring is drawn by the shadow actor, and that actor was once gated on "has shadow" - which
 # a tiled window does not have, so the ring was never drawn. Assert the actor is attached for a tiled
