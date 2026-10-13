@@ -116,6 +116,40 @@ describe('window inspection (readWindow)', () => {
         expect(reading.wmClass).toBe('custom_override');
     });
 
+    it('carries an unreadable monitor scale as null, not the 1.0 identity', () => {
+        // The reading is the seam every consumer sees: the detector's clip decision and the
+        // geometry consumers all read this field, so a null here is "cannot read this pass".
+        // Folding in the 1.0 integer default would pin a fractional display to the wrong scale;
+        // the helper's own specs live in snap.test.js, this one pins the field consumers read.
+        const mockWin = {
+            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+            get_monitor: () => 0,
+        };
+        const hadGlobal = 'global' in globalThis;
+        const oldGlobal = globalThis.global;
+        try {
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_scale: () => {
+                        throw new Error('monitor scale went away');
+                    },
+                },
+            };
+            expect(readWindow(mockWin).monitorScale).toBeNull();
+
+            // The real read is unchanged: a readable fractional scale is what the reading carries.
+            globalThis.global.display.get_monitor_scale = () => 1.25;
+            expect(readWindow(mockWin).monitorScale).toBe(1.25);
+        } finally {
+            if (hadGlobal)
+                globalThis.global = oldGlobal;
+            else
+                delete globalThis.global;
+        }
+    });
+
     it('marks hasValidGeometry false when dimensions are zero or negative', () => {
         const zeroWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 0, height: 0}),
