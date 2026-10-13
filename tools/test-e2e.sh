@@ -1438,8 +1438,8 @@ echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 wit
 
 # (f2) The suite passed with the square-in-overview regression because it never looked at a
 # pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. Pin
-# the user-visible fact: a Wayland window whose probe is readable wears the rounded mask, so a
-# corner of its overview preview shows the desktop/shadow while the body centre shows the body.
+# the user-visible fact: a Wayland window wears the rounded mask, so a corner of its overview
+# preview shows the desktop/shadow while the body centre shows the body.
 echo ">> [test-e2e] Verifying the overview preview is rounded, not square (pixel evidence)..."
 OVERVIEW_BOX="$(shell_eval '
 (async () => {
@@ -1497,7 +1497,7 @@ if middle - corner < 20:
     sys.exit("overview preview corner is not cut: the shape is square, not masked")
 PYEOF
 then
-    echo "!! Overview preview is square: the probe refused to mask a readable Wayland window!"
+    echo "!! Overview preview is square: a Wayland window did not wear the rounded mask!"
     exit 1
 fi
 echo ">> Overview preview verified: the masked Wayland window's corner is cut (rounded, not square)."

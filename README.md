@@ -56,7 +56,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips the rounded corners of apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); the resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
 - **No double shadows**: Identifies existing compositor shadows, clears a declared ring only when the ring we draw is ours, and otherwise supplements only what is missing
-- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; XWayland windows, and the few Wayland windows the mask would reseat, cannot have both there, so the quality-first default leaves them square and sharp — their corners can be forced on if the quality is the part you would rather trade
+- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; every Wayland window gets the rounded mask, while XWayland windows — whose shape shares Mutter's mask slot and would deform if we overwrote it — stay square and sharp unless you force their corners on through the legacy clip
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection

@@ -61,7 +61,7 @@ export class WindowDecoration {
         this._style = null;
         this._scale = 1.0;
         // The manager's "force corners" setting for this pass; handed to the overview, which
-        // picks the legacy offscreen clip over the mask when masking is unsafe.
+        // picks the legacy offscreen clip over the mask for XWayland and the fallback cases.
         this._forceOverviewCorners = false;
 
         this.shadow = null;
@@ -98,7 +98,7 @@ export class WindowDecoration {
      *   hasShadow: boolean,
      *   hasResizeBand: boolean,
      *   ring: {insets: object|null, clear: boolean, erase: boolean}|null,
-     *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasContainer: boolean, isProbed: boolean},
+     *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasContainer: boolean},
      * }}
      */
     get stateView() {
@@ -245,8 +245,8 @@ export class WindowDecoration {
      *
      * The overview's own visuals live in `this.overview`; this only hands it the readings it
      * cannot take for itself, then keeps the desktop clip in step with the choice it made. The
-     * mask replaces the clip while it is safe, the legacy offscreen clip stays when the user
-     * forces corners, and on exit the clip comes back.
+     * mask replaces the clip for every Wayland window, the legacy offscreen clip stays for
+     * XWayland or when the user forces corners, and on exit the clip comes back.
      *
      * @param {boolean} inOverview
      */

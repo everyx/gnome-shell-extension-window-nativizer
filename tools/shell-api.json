@@ -476,18 +476,6 @@
             }
         },
         {
-            "id": "shaped_texture_paint_to_bitmap",
-            "member": "stex.paint_to_bitmap()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "src/meta/meta-shaped-texture.h",
-            "sym": "meta_shaped_texture_paint_to_bitmap",
-            "decl": {
-                "50": null,
-                "51": "META_EXPORT CoglBitmap * meta_shaped_texture_paint_to_bitmap (MetaShapedTexture *stex, MtkRectangle *clip, CoglPixelFormat format);"
-            }
-        },
-        {
             "id": "cogl_pixel_format",
             "member": "Cogl.PixelFormat",
             "repo": "mutter",

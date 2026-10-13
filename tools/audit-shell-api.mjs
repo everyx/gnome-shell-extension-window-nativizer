@@ -97,10 +97,6 @@ const SURFACE = [
     {id: 'offscreen_effect_paint_target', member: 'Clutter.OffscreenEffect:vfunc_paint_target()', repo: 'mutter', kind: 'vfunc', file: 'clutter/clutter/clutter-offscreen-effect.h', sym: 'paint_target'},
     {id: 'clutter_set_uniform_float', member: 'effect.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-shader-effect.h', sym: 'clutter_shader_effect_set_uniform_float'},
     {id: 'cogl_pipeline_set_uniform_float', member: 'pipeline.set_uniform_float()', repo: 'mutter', kind: 'fn', file: 'cogl/cogl/cogl-pipeline-state.h', sym: 'cogl_pipeline_set_uniform_float'},
-    // The shaped texture's screenshot probe: the overview asks shapeTexture.paint_to_bitmap()
-    // whether masking a window would move its desktop screenshot to the offscreen path. It is
-    // resolved by capability, so no version keyed on a major decides whether it is called.
-    {id: 'shaped_texture_paint_to_bitmap', member: 'stex.paint_to_bitmap()', repo: 'mutter', kind: 'fn', file: 'src/meta/meta-shaped-texture.h', sym: 'meta_shaped_texture_paint_to_bitmap'},
     {id: 'cogl_pixel_format', member: 'Cogl.PixelFormat', repo: 'mutter', kind: 'enum', file: 'cogl/cogl/cogl-pixel-format.h', sym: 'COGL_PIXEL_FORMAT_A_8'},
     // The cursor enum the resize band's directions resolve to. It arrives in 50 with
     // set_cursor_type; it is recorded because of how it is read (see platform/actorCursor.js).

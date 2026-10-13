@@ -170,7 +170,7 @@ guards its uniform uploads with dirty checks, so a static repaint uploads nothin
 changes only the pipeline state that actually moved.
 
 In overview the clip is suspended and the corner comes from an A_8 mask on Mutter's shaped
-texture: what the mask can round, what it cannot, and how that is decided are in
+texture: every Wayland window rounds through it, while XWayland and the fallback cases are in
 `decoration-model.md`. During a window's close transition, Clutter property bindings keep the
 shadow actor in step with the window actor until it is destroyed.
 
