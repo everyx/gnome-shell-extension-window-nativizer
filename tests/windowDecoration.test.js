@@ -443,6 +443,51 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.resizeBand.geometry.scale).toBe(1.5);
     });
 
+    it('keeps the last good clip target while the container is unallocated, then re-verifies', () => {
+        const container = {x: 0, y: 0, width: 0, height: 0};
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1};
+
+        // First pass: the container is not allocated, so the choice defers with no earlier target
+        // and the window actor - always present and verified - is the fallback.
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(mockActor);
+        expect(deco.clipPhaseInTransform).toBeFalse();
+
+        // The container allocates; the next apply (the manager's notify::allocation re-run)
+        // re-verifies and targets the container.
+        container.width = 800;
+        container.height = 600;
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(container);
+        expect(deco.clipPhaseInTransform).toBeTrue();
+
+        // It loses its allocation again: the clip keeps its last good target (the container)
+        // rather than re-pinning to the window actor for the pass.
+        container.width = 0;
+        container.height = 0;
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(container);
+        expect(deco.clipPhaseInTransform).toBeTrue();
+    });
+
     it('applies style and synchronizes full tri-axis in apply()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,

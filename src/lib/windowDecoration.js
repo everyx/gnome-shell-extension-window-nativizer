@@ -144,8 +144,20 @@ export class WindowDecoration {
         this._forceOverviewCorners = Boolean(forceOverviewCorners);
 
         const resolvedTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
-        const clipTarget = resolvedTarget?.actor ?? null;
-        this.clipPhaseInTransform = resolvedTarget?.phaseInTransform ?? false;
+        // A container that has not allocated yet defers the target choice: keep the target the clip
+        // is already on rather than attach it to an unverified actor. With no earlier target, the
+        // window actor - always present and verified - is the fallback. The manager watches the
+        // container's notify::allocation and re-runs this resolution once it settles.
+        if (resolvedTarget?.defer) {
+            if (!this.clipTarget) {
+                this.clipTarget = winActor;
+                this.clipPhaseInTransform = false;
+            }
+        } else {
+            this.clipTarget = resolvedTarget?.actor ?? null;
+            this.clipPhaseInTransform = resolvedTarget?.phaseInTransform ?? false;
+        }
+        const clipTarget = this.clipTarget;
         const rawInsets = inputs.insets;
         const scale = this._resolveScale(inputs);
 
