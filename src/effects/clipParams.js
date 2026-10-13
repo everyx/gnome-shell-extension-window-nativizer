@@ -40,6 +40,27 @@ export function isPaintableFrame(frame) {
 }
 
 /**
+ * The size the clip derives its frame from, or null when there is no body to paint.
+ *
+ * The target's own allocation is preferred: normally it is the buffer. A Wayland surface
+ * container's allocation can read 0 while its surface child still paints at full size (a buffer
+ * swap while opening, a layout that has not settled), so a non-positive target read falls back to
+ * the window actor - the authority for whether the window has a body. Only when the window actor
+ * has no extent either is the target genuinely degenerate.
+ *
+ * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
+ * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
+ * @returns {{width:number,height:number}|null} Paint-able size, or null to suspend
+ */
+export function resolveClipSize(targetSize, windowActorSize) {
+    if (isPaintableFrame(targetSize))
+        return {width: targetSize.width, height: targetSize.height};
+    if (isPaintableFrame(windowActorSize))
+        return {width: windowActorSize.width, height: windowActorSize.height};
+    return null;
+}
+
+/**
  * @param {{left:number,top:number,right:number,bottom:number}|null} a
  * @param {{left:number,top:number,right:number,bottom:number}|null} b
  * @returns {boolean}

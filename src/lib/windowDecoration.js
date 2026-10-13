@@ -196,8 +196,12 @@ export class WindowDecoration {
         });
 
         if (this.clip) {
-            // The overview chose the outcome; on the desktop the clip is simply on.
-            this.clip.set_enabled(this.overview.inOverview ? mode === 'clip' : true);
+            // The overview chose the outcome; on the desktop the clip is simply on. `enabled` is
+            // computed once so a resume and its matching enable cannot disagree.
+            const enabled = this.overview.inOverview ? mode === 'clip' : true;
+            if (enabled)
+                this.clip.resume?.();
+            this.clip.set_enabled(enabled);
             this._syncClipParams();
         }
     }

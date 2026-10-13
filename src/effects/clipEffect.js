@@ -11,8 +11,8 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget} from '../lib/clipTarget.js';
-import {findMetaWindow} from '../platform/window.js';
-import {clipGeometryChanges, clipParamChanges, isPaintableFrame} from './clipParams.js';
+import {findMetaWindow, getWindowActor} from '../platform/window.js';
+import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -213,15 +213,24 @@ export const RoundedClipEffect = GObject.registerClass({
      */
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
-        const width = actor?.width ?? 0;
-        const height = actor?.height ?? 0;
-        // A target with no positive extent has no offscreen body to composite. Painting nothing is
-        // indistinguishable from an erased body - the sibling shadow actor still draws - so suspend
-        // the clip instead: disable the effect and let the actor paint directly. The allocation
-        // arriving re-syncs the decoration and re-enables it.
-        if (!isPaintableFrame({width, height})) {
-            this._suspend();
-            return;
+        const targetSize = {width: actor?.width ?? 0, height: actor?.height ?? 0};
+        // The window actor is the authority for whether the window has a body. A Wayland surface
+        // container's own allocation can read 0 while its surface child still paints at full size
+        // (a client swapping its buffer while opening, a layout that has not settled), so a
+        // non-positive target read falls back to the window actor instead of suspending. That also
+        // keeps the verdict stable across paints: the container's lagging read no longer toggles
+        // the clip between clipped and unclipped. Only when neither has an extent is the target
+        // genuinely degenerate, and then the clip suspends rather than compositing nothing while
+        // the sibling shadow actor keeps drawing.
+        let win = null;
+        let size = targetSize;
+        if (!isPaintableFrame(targetSize)) {
+            win = findMetaWindow(actor);
+            size = resolveClipSize(targetSize, getWindowActor(win));
+            if (!size) {
+                this._suspend();
+                return;
+            }
         }
         this._suspended = false;
 
@@ -235,18 +244,18 @@ export const RoundedClipEffect = GObject.registerClass({
         // the clip folds the window's subpixel offset into its geometry, exactly where the shadow
         // actor carries the same offset as a translation. Both paths derive from clipFrameFor, so
         // the clip's cut and the shadow's cutout still land on one physical line.
-        // The container path needs no window lookup: its phase is already in the target's own
-        // transform, so only the fallback resolves and folds the window's subpixel offset.
-        const win = this._phaseInTransform ? null : findMetaWindow(actor);
-        const frame = clipFrameForTarget({width, height}, this._insets, scale,
-            {phaseInTransform: this._phaseInTransform}, win);
+        // The container path needs no window lookup for its phase: it is already in the target's
+        // own transform. Only the fallback folds the window's subpixel offset into its geometry.
+        const phaseWin = this._phaseInTransform ? null : win ?? findMetaWindow(actor);
+        const frame = clipFrameForTarget(size, this._insets, scale,
+            {phaseInTransform: this._phaseInTransform}, phaseWin);
         // Backstop: if the derived body is not paint-able even for a positive actor (a future
         // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.
         if (!isPaintableFrame(frame)) {
             this._suspend();
             return;
         }
-        const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
+        const changes = clipGeometryChanges(this._paint, {scale, width: size.width, height: size.height, frame});
 
         if (changes.scale !== undefined) {
             this._scaleVec[0] = changes.scale;
@@ -278,17 +287,28 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
+     * Clears a suspend the reconcile has just overridden. `WindowDecoration.setOverviewMode`
+     * re-enables the clip on every desktop reconcile, possibly before the deferred disable a
+     * degenerate paint queued has run; clearing the flag here keeps that idle from disabling a
+     * target the reconcile judged paint-able. It is state, not a latch: a target still degenerate
+     * on its next paint suspends again.
+     */
+    resume() {
+        this._suspended = false;
+    }
+
+    /**
      * Suspends the clip after its target turned degenerate. Disabling the effect is what makes the
      * actor paint directly instead of through an offscreen target that would draw nothing; the
      * manager's next reconcile re-enables it (`WindowDecoration.setOverviewMode`).
      */
     _suspend() {
-        // Do not early-return on `_suspended`: `WindowDecoration.setOverviewMode` re-enables the
-        // effect on every reconcile, so a still-degenerate target must be able to suspend again on
-        // the paint that follows. The flag is state, not a latch.
-        this._suspended = true;
-        if (this._suspendPending)
+        // Only the transition schedules a disable. A healthy window never reaches here, and a
+        // still-degenerate target must not queue a disable per paint. The flag is state, not a
+        // latch: `resume()` and a valid paint both clear it, so a later paint can suspend again.
+        if (this._suspended)
             return;
+        this._suspended = true;
         this._suspendPending = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._suspendPending = false;

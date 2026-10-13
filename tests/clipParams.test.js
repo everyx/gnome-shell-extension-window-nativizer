@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {clipGeometryChanges, clipParamChanges, outlineVector} from '../src/effects/clipParams.js';
+import {clipGeometryChanges, clipParamChanges, outlineVector, resolveClipSize} from '../src/effects/clipParams.js';
 
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
 
@@ -83,6 +83,44 @@ describe('clipParamChanges', () => {
     it('leaves an invalid scale out of the decisions', () => {
         expect(clipParamChanges(state({scale: 1}), params({scale: 0})).changed).toBe(false);
         expect(clipParamChanges(state({scale: 1}), params({scale: Number.NaN})).changed).toBe(false);
+    });
+});
+
+describe('resolveClipSize', () => {
+    it('prefers the target read while it is usable', () => {
+        expect(resolveClipSize({width: 825, height: 960}, {width: 825, height: 960}))
+            .toEqual({width: 825, height: 960});
+        expect(resolveClipSize({width: 800, height: 600}, {width: 825, height: 960}))
+            .toEqual({width: 800, height: 600});
+    });
+
+    it('falls back to the window actor when the target read is not usable', () => {
+        // The Wayland surface container at 0x0 while the window actor is healthy: the container's
+        // surface child still paints at full size, so the window actor is the authority.
+        expect(resolveClipSize({width: 0, height: 0}, {width: 825, height: 960}))
+            .toEqual({width: 825, height: 960});
+        expect(resolveClipSize({width: 0, height: 960}, {width: 825, height: 960}))
+            .toEqual({width: 825, height: 960});
+        expect(resolveClipSize({width: 825, height: -1}, {width: 825, height: 960}))
+            .toEqual({width: 825, height: 960});
+    });
+
+    it('is degenerate only when neither the target nor the window actor has an extent', () => {
+        expect(resolveClipSize({width: 0, height: 0}, {width: 0, height: 0})).toBeNull();
+        expect(resolveClipSize(null, null)).toBeNull();
+        expect(resolveClipSize({width: 0, height: 0}, undefined)).toBeNull();
+    });
+
+    it('holds one verdict across successive paints for a healthy window, whatever the target reads', () => {
+        const windowActor = {width: 825, height: 960};
+        // The container's allocation read flaps 0 -> real -> 0 across paints (a buffer swap while
+        // opening, a lagging layout during a drag). The resolved size must not follow the unusable
+        // reads, so the clip neither suspends nor re-enables per paint.
+        for (const targetRead of [0, 825, 0, 0, 825]) {
+            const size = resolveClipSize(
+                {width: targetRead, height: targetRead ? 960 : 0}, windowActor);
+            expect(size).withContext(`target read ${targetRead}`).toEqual({width: 825, height: 960});
+        }
     });
 });
 
