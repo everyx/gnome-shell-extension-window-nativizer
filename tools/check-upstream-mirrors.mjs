@@ -29,6 +29,12 @@
  * bumping Mutter - UNGUARDED_RULE.recheck names where, and the note is printed on success too so
  * the duty does not live only in a doc.
  *
+ * One assumption lives outside the phase arithmetic: the shadow's phase read is only fresh
+ * because Mutter invalidates the surface container's cached transform on the window actor's
+ * allocation, before our ShadowActor connects its own handler. That wiring is asserted here too,
+ * scoped to meta_window_actor_wayland_init, so a Mutter bump that moves it fails loudly instead
+ * of the shadow silently holding a stale matrix.
+ *
  * Usage: node tools/check-upstream-mirrors.mjs [--check]
  *   --check: the only mode, accepted so the tool reads like the rest of the check-style chain.
  */
@@ -61,6 +67,7 @@ const SCOPES = {
     surface_container_apply_transform:
         'surface_container_apply_transform(ClutterActor*actor,graphene_matrix_t*matrix)',
     gsk_rect_snap_direction: 'gsk_rect_snap_direction(float',
+    meta_window_actor_wayland_init: 'meta_window_actor_wayland_init(MetaWindowActorWayland*self)',
 };
 
 /** Drop C comments, then all whitespace: matching is insensitive to formatting, not to tokens. */
@@ -171,6 +178,14 @@ const CHECKS = [
         needle: 'x_off=adj_rel_x-rel_x',
         mirror: 'getWindowSubpixelOffset (src/platform/window.js)',
         recheck: 're-check the sign of the translation folded into the shadow',
+    },
+    {
+        label: 'window-actor allocation invalidates the surface transform',
+        haystack: MUTTER,
+        scope: 'meta_window_actor_wayland_init',
+        needle: 'g_signal_connect_swapped(self,"notify::allocation",G_CALLBACK(clutter_actor_notify_transform_invalid),self->surface_container);',
+        mirror: 'ShadowActor syncs on notify::allocation (src/effects/shadowActor.js)',
+        recheck: 're-check that the window actor allocation still invalidates the surface container transform before our own handler runs; if it moves, the shadow reads a stale matrix',
     },
     {
         label: 'gsk_rect_snap_direction',

@@ -612,6 +612,17 @@ together on a monitor change, where the mirror's reconstructed highest-scale mon
 different monitor than Mutter's cached pointer. `shadowPhaseOffset`
 (`src/effects/shadowGeometry.js`) is the one place that choice lives.
 
+**The ordering that keeps the read fresh is an assumption, not something we own.**
+`ShadowActor`'s own `notify::allocation` handler sees a fresh transform only because Mutter
+connected the invalidation (`clutter_actor_notify_transform_invalid`) to the window actor's
+allocation in the actor's init, before the extension connects; the vendored
+`meta-window-actor-wayland.c` shows that order, and `tools/check-upstream-mirrors.mjs` asserts the
+wiring so a bump that moves it fails the style gate. It is a recorded boundary: if the wiring
+moves, or we connect earlier, the shadow's cutout trails the clip's cut by one frame - up to one
+physical pixel, the hairline the straight-edge probe caught at 1.25x when the read lagged a
+position. The fix, if it ever fires, is a settled-transform trigger on the surface container plus
+a `ShadowActor` harness that exercises the ordering; neither is built while the assertion holds.
+
 The mirror is still spec-pinned: the `getWindowSubpixelOffset` guard in
 `tools/check-upstream-mirrors.mjs` and the e2e subpixel-phase guard keep it matching the upstream
 arithmetic it mirrors, and `getAppliedSubpixelPhase` is read back against it. One part of the
