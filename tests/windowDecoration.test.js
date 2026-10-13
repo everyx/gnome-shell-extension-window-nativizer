@@ -16,6 +16,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         constructor() {
             this.enabled = true;
             this.params = null;
+            // Models Clutter's actor back-reference: add_effect()/remove_effect() on an actor
+            // set/clear it, so get_actor() reports the effect's real attachment.
+            this._actor = null;
         }
 
         set_enabled(val) {
@@ -24,6 +27,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setParams(params) {
             this.params = params;
+        }
+
+        get_actor() {
+            return this._actor;
         }
     }
 
@@ -81,18 +88,34 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         }
     }
 
-    beforeEach(() => {
-        mockActor = {
+    /**
+     * An actor mock that models Clutter's effect back-reference: add_effect()/remove_effect()
+     * set/clear the effect's own actor, so a spec can assert where the effect really is rather
+     * than only the decoration's bookkeeping field.
+     *
+     * @param {object} [extra] - Extra fields (e.g. a surface container's x/y/width/height)
+     * @returns {object}
+     */
+    function makeEffectActor(extra = {}) {
+        return {
             width: 800,
             height: 600,
             effects: [],
             add_effect(eff) {
                 this.effects.push(eff);
+                eff._actor = this;
             },
             remove_effect(eff) {
                 this.effects = this.effects.filter(e => e !== eff);
+                if (eff._actor === this)
+                    eff._actor = null;
             },
+            ...extra,
         };
+    }
+
+    beforeEach(() => {
+        mockActor = makeEffectActor();
 
         mockWin = {
             get_compositor_private: () => mockActor,
@@ -538,7 +561,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     });
 
     it('keeps the last good clip target while the container is unallocated, then re-verifies', () => {
-        const container = {x: 0, y: 0, width: 0, height: 0};
+        const container = makeEffectActor({x: 0, y: 0, width: 0, height: 0});
         mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
         mockActor.get_children = () => [container];
 
@@ -563,22 +586,108 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // and the window actor - always present and verified - is the fallback.
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.clipTarget).toBe(mockActor);
+        expect(deco.clip.get_actor()).toBe(mockActor);
         expect(deco.clipPhaseInTransform).toBeFalse();
 
         // The container allocates; the next apply (the manager's notify::allocation re-run)
-        // re-verifies and targets the container.
+        // re-verifies and targets the container, and the effect really moves there.
         container.width = 800;
         container.height = 600;
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.clipTarget).toBe(container);
+        expect(deco.clip.get_actor()).toBe(container);
         expect(deco.clipPhaseInTransform).toBeTrue();
 
         // It loses its allocation again: the clip keeps its last good target (the container)
-        // rather than re-pinning to the window actor for the pass.
+        // rather than re-pinning to the window actor for the pass, so the effect does not move.
         container.width = 0;
         container.height = 0;
         deco.apply({actions, inputs, actor: mockActor});
         expect(deco.clipTarget).toBe(container);
+        expect(deco.clip.get_actor()).toBe(container);
+        expect(deco.clipPhaseInTransform).toBeTrue();
+    });
+
+    it('moves the clip effect when the resolved target changes', () => {
+        // A verified surface container is the target. Its box then becomes incompatible (still
+        // allocated, but no longer matching the buffer), so the resolver answers the window actor.
+        // The pre-fix code recorded the wanted target in `this.clipTarget` before `_syncClip` and
+        // compared the wanted target with that field, so the comparison was always false and the
+        // effect stayed on the container while the field named the window actor.
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1};
+
+        // The container verifies, so the clip attaches to it.
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(container);
+        expect(deco.clip.get_actor()).toBe(container);
+        expect(container.effects).toContain(deco.clip);
+
+        // Still allocated, but its box no longer matches the buffer: the resolver falls back to
+        // the window actor, and the effect must actually follow it.
+        container.width = 700;
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(mockActor);
+        expect(deco.clip.get_actor()).toBe(mockActor);
+        expect(mockActor.effects).toContain(deco.clip);
+        expect(container.effects).not.toContain(deco.clip);
+        expect(deco.clipPhaseInTransform).toBeFalse();
+    });
+
+    it('follows a replaced surface container', () => {
+        // XWayland can swap the surface child. The clip must detach from the old container and
+        // attach to the new one, not stay on the actor that is going away.
+        const first = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        const second = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [first];
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1};
+
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clip.get_actor()).toBe(first);
+        expect(first.effects).toContain(deco.clip);
+
+        // The surface child is replaced by a new, equally verifiable container.
+        mockActor.get_children = () => [second];
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(second);
+        expect(deco.clip.get_actor()).toBe(second);
+        expect(second.effects).toContain(deco.clip);
+        expect(first.effects).not.toContain(deco.clip);
         expect(deco.clipPhaseInTransform).toBeTrue();
     });
 

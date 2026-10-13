@@ -277,8 +277,14 @@ export class WindowDecoration {
                 this.clipTarget = null;
             }
         } else if (wanted) {
-            // XWayland may replace surface child; re-pin if target moved.
-            if (clipTarget !== this.clipTarget) {
+            // Re-pin when the effect is not actually on the wanted actor. The effect's own actor is
+            // the source of truth: apply() records the wanted target in `this.clipTarget` before
+            // calling here, so comparing the wanted target with that field is always false and a
+            // moved target is silently ignored. `get_actor()` cannot drift from what is attached,
+            // and `_removeClipEffect()` detaches from that same actor, so a replaced surface
+            // container is followed rather than left cutting the old actor (or lost with it when
+            // the old container goes away).
+            if (clipTarget !== (this.clip?.get_actor?.() ?? null)) {
                 this._removeClipEffect();
                 this.clipTarget = clipTarget;
                 this.clipTarget?.add_effect?.(this.clip);
@@ -439,11 +445,18 @@ export class WindowDecoration {
     }
 
     _removeClipEffect() {
-        if (!this.clip || !this.clipTarget)
+        if (!this.clip)
+            return;
+
+        // Detach from the actor the effect is really on, not the bookkeeping field: after apply()
+        // records a new target the field may already name the new actor while the effect is still
+        // on the old one, and removing from the new actor would strand the clip on the old one.
+        const actor = this.clip.get_actor?.() ?? this.clipTarget;
+        if (!actor)
             return;
 
         try {
-            this.clipTarget.remove_effect?.(this.clip);
+            actor.remove_effect?.(this.clip);
         } catch {
             // Target already gone.
         }
