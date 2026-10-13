@@ -104,7 +104,14 @@ export class OverviewDecoration {
     canApplyMask({drawClip, hasStyle}) {
         if (!drawClip || !hasStyle)
             return false;
-        return getWindowClientType(this._win) !== WindowClientType.X11;
+        const clientType = getWindowClientType(this._win);
+        // An unreadable client type is "unknown", not "not X11": folding it in would read as
+        // "maskable" and overwrite an XWayland window's shared shape mask, which Mutter rewrites
+        // from the shape and GJS cannot restore (`set_mask_texture(null)` is rejected). Only a
+        // client type we actually read may take the mask slot.
+        if (clientType === null || clientType === undefined)
+            return false;
+        return clientType !== WindowClientType.X11;
     }
 
     /**

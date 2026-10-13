@@ -1,4 +1,5 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
+import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {evaluateWindowActions} from '../src/lib/detector.js';
@@ -1088,5 +1089,33 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.overview._overviewMaskScale(7680, 4320, 1, 1)).toBeCloseTo(2560 / 7680, 5);
         // Never degenerate.
         expect(deco.overview._overviewMaskScale(100000, 100000, 1, 1)).toBe(0.05);
+    });
+});
+
+describe('OverviewDecoration.canApplyMask (client-type eligibility)', () => {
+    const canMask = clientType => new OverviewDecoration({
+        get_client_type: () => clientType,
+    }).canApplyMask({drawClip: true, hasStyle: true});
+
+    it('refuses an unreadable client type instead of reading it as maskable', () => {
+        // `getWindowClientType` answers null when the getter throws. An XWayland window whose
+        // type we cannot read must not have its shared shape mask overwritten; only a type we
+        // actually read may take the mask slot.
+        expect(canMask(null)).toBeFalse();
+        expect(canMask(undefined)).toBeFalse();
+    });
+
+    it('refuses X11, whose shared shape mask Mutter owns and GJS cannot restore', () => {
+        expect(canMask(WindowClientType.X11)).toBeFalse();
+    });
+
+    it('allows Wayland, whose mask slot the overview owns', () => {
+        expect(canMask(WindowClientType.WAYLAND)).toBeTrue();
+    });
+
+    it('refuses when there is no corner to mask or no style resolved', () => {
+        const deco = new OverviewDecoration({get_client_type: () => WindowClientType.WAYLAND});
+        expect(deco.canApplyMask({drawClip: false, hasStyle: true})).toBeFalse();
+        expect(deco.canApplyMask({drawClip: true, hasStyle: false})).toBeFalse();
     });
 });
