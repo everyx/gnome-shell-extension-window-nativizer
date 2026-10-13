@@ -514,12 +514,17 @@ describe('reconcileOutcome (pure function)', () => {
     // The three-way branch the manager used to hold inline: what a reconcile does with a window
     // follows from the reading alone, so it is a table here rather than a session away.
     const reading = overrides => ({
-        nativeLikeCorners: true, hasGtk4Client: true, ...overrides,
+        nativeLikeCorners: true, hasGtk4Client: true, hasValidGeometry: true, ...overrides,
     });
 
-    it('drops the decoration when the reading has no usable geometry', () => {
-        expect(reconcileOutcome(null)).toBe('undecorate');
-        expect(reconcileOutcome(undefined)).toBe('undecorate');
+    it('keeps the decoration while the geometry cannot be read, and drops an empty one', () => {
+        // No reading at all means the buffer/frame rect could not be read this pass. Tearing the
+        // display down here is the flicker the fix removes: keep it (defer) and let the next
+        // reconcile decide. A reading whose rects were read but have no extent is a definite
+        // "nothing to decorate".
+        expect(reconcileOutcome(null)).toBe('defer');
+        expect(reconcileOutcome(undefined)).toBe('defer');
+        expect(reconcileOutcome(reading({hasValidGeometry: false}))).toBe('undecorate');
     });
 
     it('waits while the process classification is still in flight', () => {

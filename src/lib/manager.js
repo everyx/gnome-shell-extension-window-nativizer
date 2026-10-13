@@ -528,7 +528,11 @@ export class Manager {
     /** @param {Meta.Window} win @returns {object|null} */
     _collectDecorationInputs(win) {
         const reading = readWindow(win, {classifier: this._classifier});
-        if (!reading || !reading.hasValidGeometry)
+        // A null reading means the rects could not be read. Keep it null so `reconcileOutcome`
+        // defers instead of tearing the decoration down; only a window that is actually gone
+        // reaches `destroy` through the actor path. A reading with `hasValidGeometry` false is a
+        // read answer of "no extent", which still routes to undecorate.
+        if (!reading)
             return null;
 
         return {
@@ -549,7 +553,9 @@ export class Manager {
      */
     suggestedRuleWouldChange(win, ruleState) {
         const inputs = this._decorationInputs(win);
-        if (!inputs)
+        // A rule suggestion needs a geometry to be about; the previous shape returned null for
+        // every invalid reading, so keep that here now the reconcile path sees them.
+        if (!inputs?.hasValidGeometry)
             return null;
         return suggestedRuleWouldChange(extractWindowProperties(inputs, inputs.wmClass), inputs, ruleState);
     }
@@ -560,7 +566,7 @@ export class Manager {
      */
     suggestedRuleState(win) {
         const inputs = this._decorationInputs(win);
-        return inputs ? suggestedRuleState(inputs) : null;
+        return inputs?.hasValidGeometry ? suggestedRuleState(inputs) : null;
     }
 
     /**
