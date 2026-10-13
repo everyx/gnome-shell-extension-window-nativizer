@@ -186,12 +186,17 @@ export function isFractionalScale(scale) {
 /**
  * @param {object} params
  * @param {boolean} [params.preferCrispText=false]
- * @param {number} [params.scale=1]
+ * @param {number|null} [params.scale=1]
  * @returns {boolean}
  */
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     if (!preferCrispText)
         return true;
+    // An unknown scale is its own state, not an integer: the read can be fractional, and
+    // clipping it would blur the text this setting exists to protect. Skip the clip for this
+    // pass - the next reconcile retries the scale read - rather than guess an integer.
+    if (scale === null || scale === undefined)
+        return false;
     return !isFractionalScale(scale);
 }
 

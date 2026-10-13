@@ -361,7 +361,7 @@ describe('getPhysicalMonitorScale', () => {
         }
     });
 
-    it('falls back to fallback scale when display query is unavailable', () => {
+    it('answers unknown when the display query is unavailable, rather than substituting a scale', () => {
         const fakeActor = {
             get_parent: () => null,
         };
@@ -369,8 +369,8 @@ describe('getPhysicalMonitorScale', () => {
         const oldGlobal = globalThis.global;
         try {
             delete globalThis.global;
-            expect(getPhysicalMonitorScale(fakeActor, 1.25)).toBe(1.25);
-            expect(getPhysicalMonitorScale(null, 1.0)).toBe(1.0);
+            expect(getPhysicalMonitorScale(fakeActor)).toBeNull();
+            expect(getPhysicalMonitorScale(null)).toBeNull();
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;
@@ -422,7 +422,7 @@ describe('getPhysicalMonitorScale', () => {
             meta_window: throwingWindow,
         };
 
-        expect(getPhysicalMonitorScale(actorWithFreedWin, 1.0)).toBe(1.0);
+        expect(getPhysicalMonitorScale(actorWithFreedWin)).toBeNull();
 
         // Display scale throwing error on stale monitor
         const hadGlobal = 'global' in globalThis;
@@ -438,7 +438,7 @@ describe('getPhysicalMonitorScale', () => {
             const validWinActor = {
                 meta_window: {get_monitor: () => 5},
             };
-            expect(getPhysicalMonitorScale(validWinActor, 1.0)).toBe(1.0);
+            expect(getPhysicalMonitorScale(validWinActor)).toBeNull();
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;
@@ -465,7 +465,7 @@ describe('getPhysicalMonitorScale', () => {
                 },
             };
             // Should not call get_monitor_scale with out-of-bounds index 2
-            expect(getPhysicalMonitorScale(fakeActor, 1.0)).toBe(1.0);
+            expect(getPhysicalMonitorScale(fakeActor)).toBeNull();
             expect(called).toBe(false);
         } finally {
             if (hadGlobal)

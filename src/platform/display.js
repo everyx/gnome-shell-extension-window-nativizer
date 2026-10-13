@@ -96,13 +96,20 @@ export function getMonitorGeometry(monitorIndex) {
 
 /**
  * Resolves the true physical monitor scale for a window actor or Meta.Window instance.
+ *
+ * Answers null when the scale cannot be read - no actor, no resolvable window, a stale monitor
+ * index, or a throwing display - rather than substituting 1.0. This value drives the clip cut,
+ * the shadow cutout, the resize band and the prefer-crisp-text clip decision in one pass, so a
+ * wrong integer would move a display that is already correct. Each consumer degrades instead:
+ * the clip decision skips the pass (see `shouldClipWindow`) and the geometry consumers keep
+ * their last good scale (see `WindowDecoration._resolveScale`).
+ *
  * @param {object|null} actorOrWin - Window actor, child, or Meta.Window instance
- * @param {number} [fallback=1.0]
- * @returns {number} Physical monitor scale
+ * @returns {number|null} Physical monitor scale, or null when it cannot be read
  */
-export function getPhysicalMonitorScale(actorOrWin, fallback = 1.0) {
+export function getPhysicalMonitorScale(actorOrWin) {
     if (!actorOrWin)
-        return fallback;
+        return null;
 
     const win = findMetaWindow(actorOrWin);
     let monitor = -1;
@@ -125,7 +132,7 @@ export function getPhysicalMonitorScale(actorOrWin, fallback = 1.0) {
     } catch {
         // Rapid topology change.
     }
-    return fallback;
+    return null;
 }
 
 /**

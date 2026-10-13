@@ -147,7 +147,7 @@ export class WindowDecoration {
         const clipTarget = resolvedTarget?.actor ?? null;
         this.clipPhaseInTransform = resolvedTarget?.phaseInTransform ?? false;
         const rawInsets = inputs.insets;
-        const scale = inputs?.monitorScale ?? 1.0;
+        const scale = this._resolveScale(inputs);
 
         // One plan per pass: the insets the body uses, and the two meanings the clip shader gives
         // the ring. Every consumer below reads this instead of recombining the detector's answer.
@@ -174,6 +174,28 @@ export class WindowDecoration {
         // style this pass produced - and a desktop pass that has to take the clip back - is
         // applied to the overview state here.
         this.setOverviewMode(inOverview);
+    }
+
+    /**
+     * The physical scale for this pass, or the last good one when the read is unknown.
+     *
+     * The monitor scale reaches the clip cut, the shadow cutout and the resize band in one pass,
+     * so substituting 1.0 for an unknown read would jump an already-correct fractional display to
+     * scale 1 and back. A read failure is transient - a topology change or a torn-down window - and
+     * says nothing about the monitor, so keep the scale the display was last built at; it starts at
+     * 1.0, the identity the scale=1 path is bit-identical to. The clip's own decision still sees the
+     * null (the detector skips the clip under prefer-crisp-text) rather than guessing an integer
+     * here. Deferring the whole pass would also freeze geometry that is not scale-driven, so this
+     * keeps the last good scale and lets the rest of the pass apply.
+     *
+     * @param {object|null} inputs
+     * @returns {number}
+     */
+    _resolveScale(inputs) {
+        const scale = inputs?.monitorScale;
+        if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale))
+            return scale;
+        return this._scale ?? 1.0;
     }
 
     /**
@@ -324,7 +346,7 @@ export class WindowDecoration {
             // are written at full extent and a window flush against an edge swallows clicks on
             // the neighbouring monitor.
             boundsUnknown: bounds === null,
-            scale: inputs?.monitorScale ?? 1,
+            scale: this._resolveScale(inputs),
             constrainedEdges,
         });
     }
