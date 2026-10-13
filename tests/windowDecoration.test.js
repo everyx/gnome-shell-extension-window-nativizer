@@ -141,6 +141,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const opaque = {tag: 'opaque'};
         let probeCalls = 0;
         let opaqueCalls = 0;
+        let probeAnswer = maskWouldChangeScreenshot;
+        let bufferWidth = 800;
+        let bufferHeight = 600;
         const OverviewMask = {
             buildRoundedMask: () => mask,
             opaqueMask: () => {
@@ -149,7 +152,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             },
             maskWouldChangeScreenshot: () => {
                 probeCalls++;
-                return maskWouldChangeScreenshot;
+                return probeAnswer;
             },
         };
         const surface = {
@@ -166,8 +169,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             },
             get_texture: () => ({
                 get_plane: () => ({get_context: () => ({})}),
-                get_width: () => 800,
-                get_height: () => 600,
+                get_width: () => bufferWidth,
+                get_height: () => bufferHeight,
             }),
         };
         mockActor.get_texture = () => surface;
@@ -246,6 +249,16 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             mask, opaque, surface, container, makeContainer, windowSignals, shadowClones,
             probeCalls: () => probeCalls,
             opaqueCalls: () => opaqueCalls,
+            // Lets a spec stage the shaped texture's own state: a probe answer and the buffer the
+            // answer was read from. The real texture is one object across a buffer commit, so a
+            // spec that changes both models the same identity gaining a buffer.
+            setProbeAnswer: value => {
+                probeAnswer = value;
+            },
+            setBuffer: (width, height) => {
+                bufferWidth = width;
+                bufferHeight = height;
+            },
             deco,
         };
     }
@@ -755,6 +768,50 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         harness.deco.setOverviewMode(false);
         harness.deco.setOverviewMode(true);
         expect(harness.probeCalls()).toBe(2);
+    });
+
+    it('takes no verdict from a bufferless texture, then decides once a buffer arrives', () => {
+        // The first Overview entry can race the client's first buffer. Mutter's NULL branch "no
+        // buffer yet" cannot be told apart from the others from GJS, so the window must stay
+        // square and store no verdict; the buffer's arrival is what earns a real observation.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: true});
+        harness.setBuffer(0, 0);
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(0);
+        expect(harness.deco.overview.stateView.isProbed).toBeFalse();
+        expect(harness.surface.hasMask).toBeFalse();
+
+        // The buffer arrives. The probe is taken once, on a real texture, and its verdict is
+        // final: this answer is "would change", so the window stays out of the mask slot.
+        harness.setBuffer(800, 600);
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(1);
+        expect(harness.deco.overview.stateView.isProbed).toBeTrue();
+        expect(harness.surface.hasMask).toBeFalse();
+        expect(harness.surface.mask).toBeNull();
+    });
+
+    it('never re-probes a decided texture after our own mask has touched it', () => {
+        // The first probe is a NULL on a buffered texture, read before we touched anything:
+        // the "masking is safe" verdict, which installs the rounded mask.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+        harness.deco.setOverviewMode(true);
+        expect(harness.surface.mask).toBe(harness.mask);
+        const decided = harness.probeCalls();
+        expect(decided).toBe(1);
+
+        // The client commits a different-sized buffer; the card rebuild clears the mask first,
+        // which installs our opaque one and puts Mutter on the offscreen path. A re-probe here
+        // would read that mutation as a fresh "safe" NULL - the pre-fix code did exactly that.
+        // The verdict is final, so no probe is taken and the rounded mask is re-installed.
+        harness.setBuffer(1600, 1200);
+        harness.setProbeAnswer(null);
+        harness.windowSignals.find(s => s.signal === 'size-changed').cb();
+
+        expect(harness.probeCalls()).toBe(decided);
+        expect(harness.surface.mask).toBe(harness.mask);
     });
 
     it('never rounds a window that has left the overview', () => {
