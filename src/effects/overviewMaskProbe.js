@@ -15,8 +15,9 @@
  * returns NULL for four causes it cannot tell apart - no buffer yet, already offscreen (a set
  * mask, an unreadable plane, a viewport, a non-normal transform), a zero destination size, or a
  * clip that misses it (see `overviewMask.maskWouldChangeScreenshot`). A caller may take `false` as
- * "masking is safe" only from a texture that has a buffer and that we have not modified, and then
- * it is final; a verdict taken after our own mask is set would only report that mask. `null` is
+ * "masking is safe" only from a texture that has a buffer, whose draw target is paintably
+ * allocated, and that we have not modified, and then it is final; a verdict taken after our own
+ * mask is set would only report that mask. `null` is
  * "cannot tell": the member is missing, or the readback threw, and a caller that caches it can
  * lock a window square forever on one transient failure. On a Shell where the member is present
  * the call is safe (a nullable `CoglBitmap*`, no process abort), so a throw there is a readback

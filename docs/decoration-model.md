@@ -747,8 +747,13 @@ the mask:
 The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (51+) returns a
 bitmap, or NULL, and NULL has four causes GJS cannot tell apart - no buffer yet; the offscreen path
 already in use; a zero destination size; and a clip that misses the destination (the full list is
-in `shell-api.md` § shaped_texture_paint_to_bitmap). Only "no buffer yet" is temporary, and the
-1x1 clip makes the last unreachable. The answer is only meaningful on a texture that has a buffer
+in `shell-api.md` § shaped_texture_paint_to_bitmap). "No buffer yet" and a zero/non-paintable
+draw target are the causes that recover, so both earn no verdict: the decoration refuses to probe a
+bufferless texture or one whose window actor has no positive allocation (`isPaintableFrame`, the
+authority the clip uses). The remaining cause-2 branches (an unreadable plane, a viewport, a
+non-normal transform, an already-set mask) have no getter on `Meta.ShapedTexture` and are not
+readable from GJS, and the 1x1 clip makes cause 4 unreachable while the destination is non-zero.
+The answer is only meaningful on a texture that has a buffer, a paint-ably allocated draw target,
 and that we have not modified - our own mask turns the offscreen cause on - so the decoration takes
 a verdict once, on such a texture, and keeps it for that texture's life: a same-size buffer swap
 does not re-open the question, because by then the screenshot path has already moved and
