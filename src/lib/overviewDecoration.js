@@ -483,7 +483,10 @@ export class OverviewDecoration {
             return;
         const {preview: previewActor, container} = preview;
 
-        const width = getWindowFrameRect(this._win, {throwOnError: true})?.width ?? 0;
+        // The frame rect is read without `throwOnError`: this runs from window `size-changed`/
+        // `workspace-changed` handlers, where a throw would escape a Clutter signal handler
+        // instead of simply leaving the shadow unbuilt this pass.
+        const width = getWindowFrameRect(this._win)?.width ?? 0;
         if (!(width > 0))
             return;
 

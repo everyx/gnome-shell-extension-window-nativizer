@@ -1105,6 +1105,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadowClones[1].container).toBe(secondCard);
     });
 
+    it('does not let an unreadable frame rect escape the shadow clone build', () => {
+        // The clone's width comes from the frame rect, read from window size-changed and
+        // workspace-changed handlers. A throw there must become "no shadow this pass", not an
+        // exception out of a Clutter signal handler.
+        const {shadowClones, deco} = setupMaskHarness({drawShadow: true});
+        mockWin.get_frame_rect = () => { throw new Error('Object has been finalized'); };
+
+        expect(() => deco.setOverviewMode(true)).not.toThrow();
+        expect(shadowClones.length).toBe(0);
+    });
+
     it('sizes the overview mask to the largest preview the overview can draw, then caps it', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
