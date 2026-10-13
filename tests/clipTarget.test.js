@@ -4,7 +4,8 @@
  */
 
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
-import {isPaintableFrame} from '../src/effects/clipParams.js';
+import {isPaintableFrame, resolveClipSize} from '../src/effects/clipParams.js';
+import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {
     clipFrameForTarget,
     getX11SurfaceChild,
@@ -434,6 +435,29 @@ describe('clipTarget', () => {
             ])
                 expect(isPaintableFrame(size)).withContext(JSON.stringify(size)).toBeFalse();
             expect(isPaintableFrame(null)).toBeFalse();
+        });
+    });
+
+    describe('a ringless Wayland body stays clipped when the container read lags', () => {
+        // WeChat-like: buffer == frame, so the detector hands the body FLAT_SAFE_INSET (no ring).
+        // While the client swaps its buffer the surface container's allocation can read 0 while its
+        // surface child still paints at full size; the window actor is the authority then, and the
+        // clip must still cut an inset, rounded body rather than leaving the whole actor square.
+        const windowActor = {width: 825, height: 960};
+        const size = resolveClipSize({width: 0, height: 0}, windowActor);
+        const frame = clipFrameForTarget(size, FLAT_SAFE_INSET, CLIP_SCALE,
+            {phaseInTransform: true}, null);
+
+        it('derives the body from the window actor, not the empty container read', () => {
+            expect(size).toEqual(windowActor);
+        });
+
+        it('leaves a positive, inset body rather than the whole square actor', () => {
+            expect(isPaintableFrame(frame)).toBeTrue();
+            expect(frame.x).toBeGreaterThan(0);
+            expect(frame.y).toBeGreaterThan(0);
+            expect(frame.width).toBeLessThan(size.width);
+            expect(frame.height).toBeLessThan(size.height);
         });
     });
 });
