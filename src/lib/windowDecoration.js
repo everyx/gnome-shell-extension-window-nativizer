@@ -12,7 +12,7 @@ import {resolveClipTarget} from './clipTarget.js';
 import {FLAT_SAFE_INSET} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
-import {resolveMonitorBounds} from './window.js';
+import {resolveMonitorBounds, safeRead} from './window.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
 import {getWindowActor} from '../platform/window.js';
 
@@ -110,6 +110,36 @@ export class WindowDecoration {
             hasResizeBand: this.hasResizeBand,
             ring: this.ring ? {...this.ring} : null,
             overview: this.overview.stateView,
+        };
+    }
+
+    /**
+     * A live, read-only view of the decoration's clip internals for the diagnostic reply. Unlike
+     * the compact `stateView` contract the e2e asserts, this reaches into the live clip effect for
+     * the values the width-shrink investigation needs. Every field is a read; nothing here mutates
+     * state, probes, or queues a repaint. A value that cannot be reached is null, which the reply
+     * renders as an explicit `unavailable`.
+     *
+     * @returns {object}
+     */
+    get diagnosticsView() {
+        const clip = this.clip;
+        const hasClip = Boolean(clip);
+        const target = hasClip ? safeRead(() => clip.get_actor?.() ?? this.clipTarget, null) : null;
+
+        return {
+            clipTargetType: hasClip
+                ? safeRead(() => target?.constructor?.$gtype?.name ?? 'unavailable', null)
+                : null,
+            clipTargetName: hasClip ? safeRead(() => target?.name ?? 'unavailable', null) : null,
+            phaseInTransform: hasClip
+                ? safeRead(() => Boolean(clip._phaseInTransform ?? this.clipPhaseInTransform), null)
+                : null,
+            clipFrame: hasClip ? safeRead(() => clip._frameVec ?? null, null) : null,
+            clipInsets: hasClip ? safeRead(() => this.clipInsets ?? null, null) : null,
+            clipScale: hasClip ? safeRead(() => clip._scale ?? null, null) : null,
+            clipEnabled: hasClip ? safeRead(() => Boolean(clip.enabled), null) : null,
+            clipSuspended: hasClip ? safeRead(() => Boolean(clip._suspended), null) : null,
         };
     }
 

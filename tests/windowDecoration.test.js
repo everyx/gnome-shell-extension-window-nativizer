@@ -942,6 +942,26 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
     });
 
+    it('reports the live clip internals through diagnosticsView without touching the overview', () => {
+        const {deco} = setupMaskHarness({drawClip: true, drawShadow: false});
+
+        const view = deco.diagnosticsView;
+        // The desktop clip is on outside the overview and carries its live state.
+        expect(view.clipEnabled).toBeTrue();
+        expect(view.clipSuspended).toBeFalse();
+        expect(view.clipInsets).toEqual(FLAT_SAFE_INSET);
+        expect(typeof view.phaseInTransform).toBe('boolean');
+        expect(typeof view.clipTargetName).toBe('string');
+        // These read fields the mock clip does not model; the reply renders them `unavailable`
+        // rather than silently omitting them.
+        expect(view.clipFrame).toBeNull();
+        expect(view.clipScale).toBeNull();
+        // No overview field survives in the view.
+        expect(view.inOverview).toBeUndefined();
+        expect(view.hasMask).toBeUndefined();
+        expect(view.overviewMode).toBeUndefined();
+    });
+
     it('delegates helper methods: setOverviewMode, restack, resetBandCursor, and undecorate', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,

@@ -228,6 +228,77 @@ the window and the background are both white.
 Prototype actors must be destroyed and any `GLib` sources removed before
 `tools/dev.sh stop`, otherwise the next run inherits them.
 
+## Inspecting a window over D-Bus
+
+The inspector exposes one method, `PickWindow`, on the extension's own bus name
+(`org.gnome.Shell.Extensions.WindowNativizer`, object path
+`/org/gnome/Shell/Extensions/WindowNativizer`):
+
+```
+PickWindow(b debug) -> a{ss}
+```
+
+It exists for the live question that needs shell-side state on a real session without the shell's
+unsafe mode: why a window briefly shrinks in width when a popup closes. **The boolean is required.**
+`false` is exactly the old pick: an interactive crosshair pick that returns the public fields only
+and touches no extra state. `true` is the same interactive pick with the diagnostics-only fields
+added to the reply. There is no non-interactive path — the diagnostics still require the click, and
+that gesture is the user's authorisation to read the state. There is one knob, so a map would add
+parsing rules without adding meaning.
+
+The reply is a **read-only** observation of the live window, its actor and its decoration: it does
+not mutate the window or its decoration, does not start a probe, and prints nothing to the journal.
+Even the process classification is read from the cache (`nativeLikeCorners`); the reply never
+triggers the async `/proc/<pid>/maps` read.
+
+```sh
+PID=$(cat /tmp/window-nativizer-dev/shell.pid)
+BUS=$(tr '\0' '\n' < /proc/$PID/environ | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)
+IFACE=org.gnome.Shell.Extensions.WindowNativizer
+OBJ=/org/gnome/Shell/Extensions/WindowNativizer
+
+# Quiet interactive pick (needs a click; public fields only)
+gdbus call --address "$BUS" --dest "$IFACE" --object-path "$OBJ" \
+    --method "$IFACE".PickWindow false
+
+# Same pick with diagnostics: also needs a click, then the reply carries the fields below
+gdbus call --address "$BUS" --dest "$IFACE" --object-path "$OBJ" \
+    --method "$IFACE".PickWindow true
+```
+
+A call with no argument is rejected with `InvalidArgs` rather than read as `false`: D-Bus has no
+default arguments, and a stale caller must fail loudly.
+
+### Field split
+
+The reply is one `a{ss}` map, so every value is a string. Fields that cannot be read from the
+live objects say `unavailable` explicitly rather than being omitted.
+
+**Public — present in both modes**, so a script that passes `false` keeps working unchanged:
+
+`wmClass`, `windowTitle`, `width`, `height`, `clientType`, `hasRing`, `hasSsd`, `isMaximized`,
+`isFullscreen`, `hasTileMatch`, `allowsResize`, `isAttachedDialog`, `hasParent`, `windowType`,
+`suggestedState`, `suggestedStateWouldChange`.
+
+**Diagnostics-only — present only when `debug` is `true`**:
+
+| Group | Fields |
+|---|---|
+| subpixel phase | `mirrorPhaseX`, `mirrorPhaseY`, `appliedPhaseX`, `appliedPhaseY` |
+| window geometry | `frameRect`, `bufferRect`, `windowActorAllocation` |
+| process | `nativeLikeCorners` |
+| clip | `clipTargetType`, `clipTargetName`, `phaseInTransform`, `clipFrame`, `clipInsets`, `clipScale`, `clipEnabled`, `clipSuspended` |
+
+`frameRect`, `bufferRect` and `windowActorAllocation` are JSON `{"x":…,"y":…,"width":…,"height":…}`;
+`clipFrame` is the clip shader's live `uFrame` as `[x,y,width,height]`; `clipInsets` is JSON
+`{"left":…,"top":…,"right":…,"bottom":…}`. Booleans are `"true"`/`"false"`.
+
+**No-answer vocabulary**, kept distinct so a consumer cannot read a missing answer as a negative
+one: `unavailable` is a read that was reachable but did not return; `unknown` is `mirrorPhaseX/Y`
+when the monitor scan cannot complete, and `nativeLikeCorners` when the process classification has
+not landed; `n/a` is `appliedPhaseX/Y` on a non-Wayland client, where no applied phase exists;
+`cannotTell` is `nativeLikeCorners` when there is no classifier to ask.
+
 ## Documents
 
 | Document | Contents |

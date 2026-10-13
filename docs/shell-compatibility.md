@@ -106,11 +106,10 @@ manual step by necessity; `docs/decoration-model.md` records the same re-check a
 reopen condition.
 
 The pick reply makes the gap observable: on a mixed-DPI multi-monitor machine with the extension
-enabled, run the pick (prefs or `PickWindow` on `org.gnome.Shell.Extensions.WindowNativizer`) on a
-decorated Wayland window that straddles two differently-scaled monitors and compare `mirrorPhaseX/Y`
-with `appliedPhaseX/Y`. They agree when the scan is right; a mismatch is what a
-`resolveHighestScaleMonitorIndex` re-check is for. The single-monitor dev session cannot exercise
-this, which is exactly why the reply carries both.
+enabled, pick a decorated Wayland window interactively with `debug` true (`PickWindow`;
+see `development.md`) and compare `mirrorPhaseX/Y` with `appliedPhaseX/Y`. They agree when the scan
+is right; a mismatch is what a `resolveHighestScaleMonitorIndex` re-check is for. The single-monitor
+dev session cannot exercise this, which is exactly why the reply carries both.
 
 ## Additional GNOME 51 upstream changes audited
 

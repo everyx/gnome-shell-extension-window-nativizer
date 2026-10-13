@@ -591,6 +591,17 @@ export class Manager {
     }
 
     /**
+     * The live decoration for a tracked window, for read-only diagnostics. Returns the
+     * `WindowDecoration` itself (not its `stateView` snapshot), so the inspector can read the live
+     * clip internals the diagnostic reply carries.
+     * @param {Meta.Window} win
+     * @returns {WindowDecoration|null}
+     */
+    decorationFor(win) {
+        return this._windows.get(win)?.deco ?? null;
+    }
+
+    /**
      * Number of windows currently tracked by the manager.
      * @returns {number}
      */

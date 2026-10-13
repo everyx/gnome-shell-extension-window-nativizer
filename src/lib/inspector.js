@@ -27,8 +27,11 @@ import {
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
+    INSPECTOR_DBUS_IFACE_XML,
     extractWindowProperties,
-    extractPhaseProperties,
+    extractDiagnosticProperties,
+    cachedNativeLikeCorners,
+    parseDebugFlag,
 } from './pick.js';
 import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
@@ -54,15 +57,6 @@ function highlightStyle(outerRadius) {
         `border-radius: ${outerRadius}px;`;
 }
 
-const INSPECTOR_DBUS_IFACE_XML = `
-<node>
-  <interface name="${INSPECTOR_DBUS_NAME}">
-    <method name="PickWindow">
-      <arg type="a{ss}" direction="out" name="properties"/>
-    </method>
-  </interface>
-</node>`;
-
 export class InspectorService {
     constructor(manager = null) {
         this._manager = manager;
@@ -80,6 +74,8 @@ export class InspectorService {
         this._overlay = null;
         this._highlight = null;
         this._pendingInvocation = null;
+        // Whether the pick in flight was asked for diagnostics; read once when it is answered.
+        this._pendingDiagnostics = false;
     }
 
     destroy() {
@@ -108,8 +104,28 @@ export class InspectorService {
         }
     }
 
-    /** D-Bus method PickWindow — GJS async name is PickWindowAsync. */
-    PickWindowAsync(_params, invocation) {
+    /**
+     * D-Bus method PickWindow — GJS async name is PickWindowAsync. The boolean argument is required
+     * and is the whole compatibility boundary: `false` is the quiet interactive pick, `true` adds
+     * the read-only diagnostics to the reply. There is no non-interactive path - diagnostics ride
+     * the same user gesture, which is also the authorisation to read that state.
+     *
+     * @param {Array|null} params - The D-Bus in-args ([debug]) as passed by GJS
+     * @param {object} invocation
+     */
+    PickWindowAsync(params, invocation) {
+        const {valid, diagnostics} = parseDebugFlag(params);
+        if (!valid) {
+            // The method requires its boolean. A caller that was not updated fails here rather than
+            // silently getting the quiet interactive pick.
+            invocation.return_error_literal(
+                Gio.IOErrorEnum,
+                Gio.IOErrorEnum.INVALID_ARGUMENT,
+                'PickWindow requires a boolean debug argument; pass false for the interactive pick'
+            );
+            return;
+        }
+
         if (this._pendingInvocation) {
             invocation.return_error_literal(
                 Gio.IOErrorEnum,
@@ -120,6 +136,7 @@ export class InspectorService {
         }
 
         this._pendingInvocation = invocation;
+        this._pendingDiagnostics = diagnostics;
         try {
             this._startInteractivePick();
         } catch (e) {
@@ -137,7 +154,7 @@ export class InspectorService {
         const candidates = [];
         for (const winActor of actors) {
             // A window torn down mid-scan must not abort the hit test - or escape a Clutter
-            // handler and leave the D-Bus pick unanswered: skip it and keep looking.
+            // handler and leave the D-Bus call unanswered: skip it and keep looking.
             try {
                 const win = getWindowFromActor(winActor);
                 let onAllWorkspaces = false;
@@ -164,6 +181,45 @@ export class InspectorService {
             }
         }
         return pickTarget(candidates, activeWorkspace, stageX, stageY);
+    }
+
+    /**
+     * Builds the pick reply for a window. Public fields are always present; diagnostics-only
+     * fields are added only when the caller asked for them, which is the whole point of the
+     * debug argument. Nothing here is printed and no journal line is written in either mode.
+     *
+     * @param {object} win
+     * @param {boolean} diagnostics
+     * @returns {Record<string,string>}
+     */
+    _buildReply(win, diagnostics) {
+        const properties = {
+            ...extractWindowProperties(win, resolveWindowIdentity(win)),
+        };
+
+        if (diagnostics) {
+            Object.assign(properties, extractDiagnosticProperties(
+                win, this._manager?.decorationFor?.(win) ?? null));
+            // The process classification is read from the cache only. A diagnostic must not start
+            // the async probe (that would mutate the state it observes); `unknown` is "no answer
+            // cached yet" and `cannotTell` is "no classifier to ask".
+            properties.nativeLikeCorners = cachedNativeLikeCorners(
+                this._manager?.classifier, getWindowPid(win));
+        }
+
+        // Display only, not used in rule identity matching.
+        const title = getWindowDisplayTitle(win);
+        if (title)
+            properties.windowTitle = title;
+
+        const state = this._manager?.suggestedRuleState?.(win);
+        if (typeof state === 'string') {
+            properties.suggestedState = state;
+            const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
+            if (typeof changes === 'boolean')
+                properties.suggestedStateWouldChange = String(changes);
+        }
+        return properties;
     }
 
     _getExpectedWindowRadius(win) {
@@ -284,7 +340,9 @@ export class InspectorService {
 
     _finishInteractivePick(win) {
         const invocation = this._pendingInvocation;
+        const diagnostics = this._pendingDiagnostics;
         this._pendingInvocation = null;
+        this._pendingDiagnostics = false;
 
         this._cleanupPickUI();
 
@@ -297,28 +355,9 @@ export class InspectorService {
         }
 
         try {
-            // The suggested-rule queries read the process cache; start the read at this request
-            // boundary so they stay side-effect free.
-            this._manager?.classifier?.probeAdwaitaLook(getWindowPid(win));
-            const properties = {
-                ...extractWindowProperties(win, resolveWindowIdentity(win)),
-                // Diagnostics only: the phase we mirror next to the phase Mutter actually applied.
-                ...extractPhaseProperties(win),
-            };
-
-            // Display only, not used in rule identity matching.
-            const title = getWindowDisplayTitle(win);
-            if (title)
-                properties.windowTitle = title;
-
-            const state = this._manager?.suggestedRuleState?.(win);
-            if (typeof state === 'string') {
-                properties.suggestedState = state;
-                const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
-                if (typeof changes === 'boolean')
-                    properties.suggestedStateWouldChange = String(changes);
-            }
-
+            // Diagnostics stay behind the debug argument; the quiet interactive path is
+            // byte-for-byte today's reply, and the diagnostics path adds fields to it.
+            const properties = this._buildReply(win, diagnostics);
             invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
         } catch {
             // The window went away mid-pick; answer empty (a cancel) so the caller is never
@@ -333,6 +372,7 @@ export class InspectorService {
     }
 
     _cancelInteractivePick() {
+        this._pendingDiagnostics = false;
         if (this._pendingInvocation) {
             const inv = this._pendingInvocation;
             this._pendingInvocation = null;

@@ -52,12 +52,14 @@ import {
  * @param {Gio.Cancellable} [cancellable] - Cancelled when the preferences window closes.
  */
 function inspectWindow(callback, cancellable = null) {
+    // The method now takes a debug boolean; `false` is the quiet interactive pick. The extension
+    // owns the field rules (docs/development.md), so prefs sends nothing else.
     Gio.DBus.session.call(
         INSPECTOR_DBUS_NAME,
         INSPECTOR_DBUS_PATH,
         INSPECTOR_DBUS_NAME,
         'PickWindow',
-        null,
+        new GLib.Variant('(b)', [false]),
         null,
         Gio.DBusCallFlags.NONE,
         60000,

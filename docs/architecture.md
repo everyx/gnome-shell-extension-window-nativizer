@@ -40,9 +40,10 @@ tested without a session; the processes only gather inputs and apply results.
   rule store, and asks the extension over D-Bus which window the user clicked.
 
 The picker is the only conversation between them: the extension exposes a `PickWindow`
-method, the prefs window calls it, and it refuses to create a rule the extension reports as
-ineffective. Both sides share one property wire format, so a change to it is a change to
-both.
+method (a required boolean; `false` for the quiet interactive pick), the prefs window calls it, and
+it refuses to create a rule the extension reports as ineffective. Both sides share one property
+wire format, so a change to it is a change to both; the diagnostics-only fields are in
+`development.md`.
 
 For the selection mechanics we followed KDE's KWin
 (`InputRedirection::startInteractiveWindowSelection` with its `clientToVariantMap`)
