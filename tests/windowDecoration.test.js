@@ -859,6 +859,24 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(harness.surface.mask).toBe(harness.mask);
     });
 
+    it('keeps the verdict across drop(), so a re-entry cannot re-read a texture we masked', () => {
+        // Entering installs the rounded mask and records the verdict. drop() retires that mask
+        // through the opaque 1x1 - which has already moved Mutter off the direct-read path - and
+        // the same shaped texture is still there. A re-entry that re-probed it would read our own
+        // mutation, the contamination rule 4 forbids, so the verdict outlives the entry.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+        harness.deco.setOverviewMode(true);
+        expect(harness.surface.mask).toBe(harness.mask);
+        const decided = harness.probeCalls();
+        expect(decided).toBe(1);
+
+        harness.deco.overview.drop();
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(decided);
+        expect(harness.surface.mask).toBe(harness.mask);
+    });
+
     it('reports the mode it actually installed when the mask build declines', () => {
         const readings = {
             radius: 12,

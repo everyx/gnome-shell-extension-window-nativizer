@@ -184,9 +184,10 @@ export class OverviewDecoration {
     /** Drops every overview visual and hook: the overview ended, or the decoration is going away. */
     drop() {
         this._inOverview = false;
-        // A new shaped texture for the same window starts a new probe history; the decoration
-        // keeps no answer across its own teardown.
-        this._probe = null;
+        // The probe verdict is kept. It belongs to the shaped texture, not to this entry: retiring
+        // the mask through the opaque 1x1 has already put the desktop on the offscreen path, so a
+        // later entry on the same texture that re-probed would read our own mutation (rule 4). A
+        // replaced shaped texture is a different key and earns a fresh observation.
         this._release();
     }
 
@@ -277,7 +278,10 @@ export class OverviewDecoration {
      * clip-misses-the-destination cause unreachable once the destination is non-zero; the window
      * actor's allocation is the readable proxy for a degenerate draw target.
      *
-     * The cache is dropped with the decoration (`drop()`); a replaced shaped texture is a new key.
+     * The verdict is kept for the shaped texture's life, across a `drop()`; a replaced shaped
+     * texture is a new key and is probed afresh. Retiring the mask through the opaque 1x1 has
+     * already moved Mutter's screenshot path, so re-asking the same texture would read our own
+     * mutation, which rule 4 forbids.
      *
      * @returns {boolean}
      */
