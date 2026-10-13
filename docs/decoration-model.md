@@ -744,14 +744,22 @@ the mask:
   (`should_get_via_offscreen()` returns false) would have that path moved to an actor render by
   the mask — a different window screenshot, again for the rest of the session.
 
-The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (51+) returns NULL
-from Mutter's own early-out while the offscreen path is already in use, and a 1x1 clip keeps the
-readback to a single pixel when it is not. GNOME 50 has no probe whose NULL return is safe to
-marshal - its `get_image()` aborts the process through GJS - so there the decoration calls nothing
-and refuses the mask. A window the probe refuses shows a **square, sharp** thumbnail instead — the
-clip is suspended, so nothing renders through the FBO. The `force-overview-corners` setting (off by
+The decoration asks before touching anything: `ShapedTexture.paint_to_bitmap()` (51+) returns a
+bitmap, or NULL, and NULL has four causes GJS cannot tell apart - no buffer yet; the offscreen path
+already in use; a zero destination size; and a clip that misses the destination (the full list is
+in `shell-api.md` § shaped_texture_paint_to_bitmap). Only "no buffer yet" is temporary, and the
+1x1 clip makes the last unreachable. The answer is only meaningful on a texture that has a buffer
+and that we have not modified - our own mask turns the offscreen cause on - so the decoration takes
+a verdict once, on such a texture, and keeps it for that texture's life: a same-size buffer swap
+does not re-open the question, because by then the screenshot path has already moved and
+re-deciding could not un-move it. GNOME 50 has no probe whose NULL return is safe to marshal - its
+`get_image()` aborts the process through GJS - so there the decoration calls nothing and refuses
+the mask. A window the probe refuses shows a **square, sharp** thumbnail instead — the clip is
+suspended, so nothing renders through the FBO. The `force-overview-corners` setting (off by
 default) keeps the legacy offscreen clip for those windows instead: rounded, and blurrier. The clip
 never touches the mask slot, so the desktop is left exactly as Mutter had it either way.
+`decoration-alignment.md` § Four rules this work generalised has the general form: observations are
+tri-state, and an observation must not be taken after we have mutated the thing observed.
 
 Upstream has no native window rounded-clip to fall back on —
 `Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only
