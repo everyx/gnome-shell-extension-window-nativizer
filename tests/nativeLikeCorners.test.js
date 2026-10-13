@@ -244,6 +244,36 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             local.destroy();
         });
 
+        it('does not re-arm a retry when a failed read lands after forgetProcess', () => {
+            // The stale completion must be dropped by the in-flight guard. Without it, a failed
+            // read finishing after forgetProcess would schedule a retry for a pid the caller has
+            // already discarded, probing a window that is gone and touching a forgotten entry.
+            const {classifier: local, pending} = withManualTimers();
+            let finish;
+            const readMaps = (pid, done) => { finish = done; };
+            local.probeAdwaitaLook(777001, {readMaps});
+            local.forgetProcess(777001);
+            expect(pending.size).toBe(0);
+
+            finish(null, new Error('EIO'));
+
+            expect(pending.size).toBe(0);
+            expect(local.adwaitaLook(777001)).toBeNull();
+            local.destroy();
+        });
+
+        it('does not re-arm a retry when a failed read lands after destroy', () => {
+            const {classifier: local, pending} = withManualTimers();
+            let finish;
+            const readMaps = (pid, done) => { finish = done; };
+            local.probeAdwaitaLook(777002, {readMaps});
+            local.destroy();
+
+            finish(null, new Error('EIO'));
+
+            expect(pending.size).toBe(0);
+        });
+
         it('cancels every pending retry on destroy', () => {
             const {classifier: local, pending} = withManualTimers();
             const readMaps = (pid, done) => done(null, new Error('EACCES'));
