@@ -213,10 +213,13 @@ export class OverviewDecoration {
      * Probes whether masking this window would move a path the desktop can see, so the overview
      * can leave that window alone instead. See `overviewMask.maskWouldChangeScreenshot`.
      *
-     * Cached on the shaped texture's identity and never invalidated by a mode change: the answer
-     * must come from before our mask ever touched the slot, because afterwards the probe's own
-     * `should_get_via_offscreen()` early-out makes it answer NULL deterministically. The cache is
-     * dropped only with the decoration (`drop()`); a replaced shaped texture is a new key.
+     * A definitive answer is cached on the shaped texture's identity and never invalidated by a
+     * mode change: the answer must come from before our mask ever touched the slot, because
+     * afterwards the probe's own `should_get_via_offscreen()` early-out makes it answer NULL
+     * deterministically. "Cannot tell" (`null`: the member is missing, or the readback threw) is
+     * deliberately *not* cached - one transient failure must not lock a window square for the rest
+     * of the session. The cache is dropped with the decoration (`drop()`); a replaced shaped
+     * texture is a new key.
      *
      * @returns {boolean}
      */
@@ -226,9 +229,15 @@ export class OverviewDecoration {
             return this._probe.wouldChange;
 
         const probe = this._OverviewMask?.maskWouldChangeScreenshot;
-        const wouldChange = probe ? Boolean(probe(stex)) : true;
-        this._probe = {stex, wouldChange};
-        return wouldChange;
+        const answer = probe ? probe(stex) : null;
+        if (answer === true || answer === false) {
+            this._probe = {stex, wouldChange: answer};
+            return answer;
+        }
+
+        // Cannot tell. Keep this pass safe (square) but leave the cache empty so a later reconcile
+        // can ask a texture that has settled. The window is only square until the next entry.
+        return true;
     }
 
     /**

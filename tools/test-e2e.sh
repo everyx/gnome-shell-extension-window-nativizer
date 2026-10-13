@@ -1215,7 +1215,8 @@ done
 # outside, so this window keeps its band. Where the strips sit relative to the frame is a
 # pure-function fact the unit specs own; the e2e asserts the band is on every edge.
 echo ">> [test-e2e] Verifying the band on a window that declares its own margins..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 4000 >/dev/null 2>&1 &
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 30000 >/dev/null 2>&1 &
+DECLARED_PID=$!
 for i in $(seq 1 60); do
     found="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
     [ "$found" = "1" ] && break
@@ -1311,6 +1312,74 @@ if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "
     exit 1
 fi
 echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 with a shadow clone, all restored on the desktop."
+
+# (f2) The suite passed with the square-in-overview regression because it never looked at a
+# pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. Pin
+# the user-visible fact: a Wayland window whose probe is readable wears the rounded mask, so a
+# corner of its overview preview shows the desktop/shadow while the body centre shows the body.
+echo ">> [test-e2e] Verifying the overview preview is rounded, not square (pixel evidence)..."
+OVERVIEW_BOX="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    const GLib = imports.gi.GLib;
+    const target = global.get_window_actors().find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
+    if (!target) return JSON.stringify({error: "window not found"});
+    Main.overview.show();
+    for (let i = 0; i < 60; i++) {
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
+        const preview = target.meta_window._delegate ?? null;
+        if (Main.overview.visible && preview && preview.mapped) {
+            const [x, y] = preview.get_transformed_position();
+            const [w, h] = preview.get_transformed_size();
+            if (w > 0 && h > 0)
+                return JSON.stringify({x, y, w, h});
+        }
+    }
+    return JSON.stringify({error: "no preview"});
+})()
+')"
+if echo "$OVERVIEW_BOX" | grep -q 'error'; then
+    shell_eval '(async () => { const M = await import("resource:///org/gnome/shell/ui/main.js"); M.overview.hide(); })()' >/dev/null 2>&1 || true
+    echo "!! Overview preview box was not readable: $OVERVIEW_BOX"
+    exit 1
+fi
+OVERVIEW_SHOT="/tmp/window-nativizer-overview.png"
+rm -f "$OVERVIEW_SHOT"
+OVERVIEW_BUS="$(get_dbus_bus)"
+gdbus call --address "$OVERVIEW_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+    --method org.gnome.Shell.Screenshot.Screenshot false false "$OVERVIEW_SHOT" >/dev/null 2>&1
+shell_eval '(async () => { const M = await import("resource:///org/gnome/shell/ui/main.js"); M.overview.hide(); })()' >/dev/null 2>&1 || true
+if ! python3 - "$OVERVIEW_BOX" "$SCALE" "$OVERVIEW_SHOT" <<'PYEOF'
+import json, re, sys
+box = json.loads(re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S).group(0))
+scale = float(sys.argv[2])
+from PIL import Image
+im = Image.open(sys.argv[3]).convert('RGB')
+W, H = im.size
+sx, sy, sw, sh = box['x'] * scale, box['y'] * scale, box['w'] * scale, box['h'] * scale
+# The rounded mask cuts the four corners; the body centre stays. Sample just inside the top-left
+# corner and the centre, both inside the preview's visual box.
+cx, cy = int(sx + 3), int(sy + 3)
+mx, my = int(sx + sw / 2), int(sy + sh / 2)
+if not (0 <= cx < W and 0 <= cy < H and 0 <= mx < W and 0 <= my < H):
+    sys.exit(f"preview box outside the screenshot: {box} shot {W}x{H}")
+corner = sum(im.getpixel((cx, cy))) / 3
+middle = sum(im.getpixel((mx, my))) / 3
+print(f"DEBUG: preview box={box} corner=({cx},{cy}) rgb={im.getpixel((cx, cy))} luma={corner:.0f} "
+      f"centre=({mx},{my}) rgb={im.getpixel((mx, my))} luma={middle:.0f}")
+# A square preview shows the body (light) at the corner too; a rounded one shows the darker
+# desktop/shadow. The subject is an undecorated light GTK body on the dark overview backdrop, so
+# demand the corner be clearly darker than the body centre.
+if middle - corner < 20:
+    sys.exit("overview preview corner is not cut: the shape is square, not masked")
+PYEOF
+then
+    echo "!! Overview preview is square: the probe refused to mask a readable Wayland window!"
+    exit 1
+fi
+echo ">> Overview preview verified: the masked Wayland window's corner is cut (rounded, not square)."
+
+kill "$DECLARED_PID" 2>/dev/null || true
 
 # The declared-margin client closes itself (--hold); wait for it to go before proceeding.
 for i in $(seq 1 40); do
@@ -2278,7 +2347,7 @@ summary "Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 summary "Maximize Easing Animation & Band Lifecycle: PASSED (transitions uninterrupted, actor translation preserved)"
 summary "Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 summary "Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
-summary "Overview Clip Mode: PASSED (clip suspended, shaped-texture mask + preview shadow in overview, restored on desktop)"
+summary "Overview Clip Mode: PASSED (clip suspended, shaped-texture mask + preview shadow in overview, restored on desktop; preview corner cut, not square)"
 summary "Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 summary "Partial & Full Maximize: PASSED (band attached while tiled, dropped when fully maximized, restored after)"
 summary "Subpixel Phase Straight Edge & Corner Monotonicity: PASSED (zero dark edge or corner artifacts across fractional phases)"
