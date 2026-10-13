@@ -1005,6 +1005,28 @@ describe('platform', () => {
             expect(getWindowSubpixelOffset(win).x).toBeCloseTo(1 / 3, 6);
         });
 
+        it('answers unknown when an intersecting monitor geometry is unreadable, not zero', () => {
+            // The frame starts on monitor 0, and the scan also reaches a monitor whose geometry
+            // read fails, so it cannot tell that monitor from a non-overlapping one. Answering -1
+            // (which the mirror maps to a zero phase) would silently mis-phase both cuts; null is
+            // the state the consumers keep their last good phase for.
+            globalThis.global = displayFor([
+                {scale: 1.0, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+                {scale: 1.5, geometry: null},
+            ]);
+            const win = waylandWin({x: 1900, y: 0}, 0, {x: 1900, y: 0, width: 200, height: 100});
+            expect(getWindowSubpixelOffset(win)).toBeNull();
+        });
+
+        it('still answers zero when the frame overlaps no readable monitor', () => {
+            // "No overlap" stays a decided zero; only the unreadable geometry is unknown.
+            globalThis.global = displayFor([
+                {scale: 1.5, geometry: {x: 0, y: 0, width: 100, height: 100}},
+            ]);
+            const win = waylandWin({x: 500, y: 500}, 0, {x: 500, y: 500, width: 100, height: 100});
+            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+        });
+
         it('rounds negative halves away from zero, matching roundf rather than Math.round', () => {
             globalThis.global = mixedScaleDisplay(1.25);
             // A window straddling the shared edge: the frame intersects both monitors, so the

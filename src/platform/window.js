@@ -470,8 +470,14 @@ function rectanglesOverlap(a, b) {
  * exactly that it is not (the measurement is in the commit message). The valid-frame,
  * no-intersecting-monitor case was already -1 for the same reason.
  *
+ * An unreadable monitor geometry is not a non-overlapping one: the scan cannot rule it out of
+ * the intersection, so it answers null ("unknown") rather than skip the monitor and possibly
+ * answer -1. That keeps "no overlap" and "cannot tell" apart; the caller keeps the last good
+ * phase for the unknown case instead of collapsing to zero.
+ *
  * @param {object|null} win - Meta.Window
- * @returns {number} Logical monitor index, or -1
+ * @returns {number|null} Logical monitor index, -1 when no readable monitor overlaps, or null
+ *          when a monitor geometry read failed
  */
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
@@ -483,7 +489,11 @@ function resolveHighestScaleMonitorIndex(win) {
     const count = getMonitorCount();
     for (let i = 0; i < count; i++) {
         const geom = getMonitorGeometry(i);
-        if (!geom || !rectanglesOverlap(geom, frame))
+        // An unreadable geometry cannot be ruled out of the intersection, so the scan cannot
+        // tell "no overlap" from "overlap unknown". Surface that instead of skipping it.
+        if (!geom)
+            return null;
+        if (!rectanglesOverlap(geom, frame))
             continue;
         const scale = getMonitorScale(i);
         if (scale > bestScale) {
@@ -526,10 +536,12 @@ function resolveHighestScaleMonitorIndex(win) {
  * `roundHalfAwayFromZero` (`platform/numeric.js`) encodes `roundf`'s rule and leaves the 4/3
  * path unchanged.
  *
- * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or invalid monitors.
+ * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or a frame no readable monitor
+ * overlaps, and null when the monitor scan cannot complete because a geometry read failed. The
+ * phase's two consumers keep their last good value on null, so both cuts stay on one line.
  *
  * @param {object|null} win - Meta.Window
- * @returns {{x: number, y: number}}
+ * @returns {{x: number, y: number}|null} Applied offset, or null when it cannot be computed
  */
 export function getWindowSubpixelOffset(win) {
     if (!win)
@@ -544,6 +556,10 @@ export function getWindowSubpixelOffset(win) {
             return {x: 0, y: 0};
 
         const monitorIndex = resolveHighestScaleMonitorIndex(win);
+        // null is "a monitor geometry could not be read", distinct from -1's "no overlap":
+        // surface it so the caller keeps its last good phase rather than collapse to zero.
+        if (monitorIndex === null)
+            return null;
         if (monitorIndex < 0)
             return {x: 0, y: 0};
 

@@ -77,8 +77,8 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
  * production source on the container path (the shadow reads it too, see `shadowPhaseOffset`), so
  * this reply is where a user compares the two when the mirror's monitor scan cannot be exercised
  * locally. The reply is an `a{ss}` map, so every field is a string, and an unreadable applied
- * phase says so rather than claiming a zero. This runs only when a user asks for the pick, never
- * per frame.
+ * phase says so rather than claiming a zero; an unreadable monitor scan answers "unknown" for
+ * the mirror for the same reason. This runs only when a user asks for the pick, never per frame.
  *
  * @param {object|null} win - Meta.Window
  * @returns {Record<string,string>} mirrorPhaseX/Y and appliedPhaseX/Y
@@ -86,8 +86,10 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
 export function extractPhaseProperties(win) {
     const mirror = getWindowSubpixelOffset(win);
     const properties = {
-        mirrorPhaseX: String(mirror.x),
-        mirrorPhaseY: String(mirror.y),
+        // null is "the monitor scan could not complete", not a phase of zero; say so rather than
+        // report a fabricated zero the user would compare against the applied read.
+        mirrorPhaseX: mirror ? String(mirror.x) : 'unknown',
+        mirrorPhaseY: mirror ? String(mirror.y) : 'unknown',
     };
 
     // The applied transform only exists for a Wayland surface container; the mirror's own doc

@@ -152,22 +152,46 @@ export function isIntegerAlignedSurfaceBox(candidate) {
 }
 
 /**
+ * The subpixel phase the resolved target's path folds into geometry, or null when the fallback
+ * monitor scan cannot complete.
+ *
+ * The container path never needs the mirror: its own transform carries the phase, so the value
+ * is ZERO_PHASE by definition. The fallback folds `getWindowSubpixelOffset(win)` into the frame;
+ * that reader answers null when a monitor geometry read failed, and the caller then keeps its
+ * last good phase rather than jumping to zero.
+ *
+ * @param {{phaseInTransform: boolean}|null} target - A resolveClipTarget() result
+ * @param {object|null} win - Meta.Window behind the target
+ * @returns {{x: number, y: number}|null}
+ */
+export function resolveClipPhase(target, win) {
+    if (target?.phaseInTransform)
+        return ZERO_PHASE;
+    return getWindowSubpixelOffset(win);
+}
+
+/**
  * The clip's local body frame for a resolved target.
  *
  * Both cuts derive their local edge from `clipFrameFor`; only the phase term differs by path. On
  * the container path the phase is already in the target's own transform, so the frame is
  * phase-free. On the fallback the phase sits in a child transform, so the clip folds
  * `getWindowSubpixelOffset(win)` into its geometry while the shadow actor carries the same
- * offset as a translation - and the two edges still meet on one physical line.
+ * offset as a translation - and the two edges still meet on one physical line. `lastPhase` is
+ * the caller's previous good phase, used when the scan cannot complete this pass; null is
+ * returned only when even that is unavailable, and the caller must not substitute a zero phase.
  *
  * @param {{width: number, height: number}} actorSize - Actor size in logical px
  * @param {import('./frame.js').Insets|null} insets - Ring margins per side
  * @param {number} scale - Physical device scale
  * @param {{phaseInTransform: boolean}|null} target - A resolveClipTarget() result
  * @param {object|null} win - Meta.Window behind the target
- * @returns {{x: number, y: number, width: number, height: number}}
+ * @param {{x: number, y: number}|null} [lastPhase=null] - The caller's last good phase
+ * @returns {{x: number, y: number, width: number, height: number}|null}
  */
-export function clipFrameForTarget(actorSize, insets, scale, target, win) {
-    const phase = target?.phaseInTransform ? ZERO_PHASE : getWindowSubpixelOffset(win);
+export function clipFrameForTarget(actorSize, insets, scale, target, win, lastPhase = null) {
+    const phase = resolveClipPhase(target, win) ?? lastPhase;
+    if (!phase)
+        return null;
     return clipFrameFor(actorSize, insets, scale, phase);
 }

@@ -441,6 +441,30 @@ describe('shadowPhaseOffset (the shadow cuts on the clip target\'s phase source)
             expect(shadowPhaseOffset(win, true)).toEqual(mirror);
         });
     });
+
+    it('answers null when the fallback scan cannot read a monitor geometry', () => {
+        // The mirror is the shadow's fallback source; an unreadable monitor geometry is unknown,
+        // not zero, and the actor keeps its last good phase instead of translating by zero.
+        const original = globalThis.global;
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => 1.25,
+                get_monitor_geometry: () => null,
+            },
+        };
+        try {
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_compositor_private: () => ({x: 240, y: 0}),
+                get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            };
+            expect(getWindowSubpixelOffset(win)).toBeNull();
+            expect(shadowPhaseOffset(win, false)).toBeNull();
+        } finally {
+            globalThis.global = original;
+        }
+    });
 });
 
 describe('shadow slice destination span (one derivation from the UV span)', () => {

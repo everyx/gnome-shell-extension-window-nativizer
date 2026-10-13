@@ -283,4 +283,22 @@ describe('extractPhaseProperties', () => {
         expect(extractPhaseProperties(win).appliedPhaseX).toBe('unavailable');
         expect(extractPhaseProperties(win).appliedPhaseY).toBe('unavailable');
     });
+
+    it('says the mirror is unknown when a monitor geometry is unreadable', () => {
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => 1.25,
+                get_monitor_geometry: () => null,
+            },
+        };
+        const win = {
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            get_compositor_private: () => ({x: 0, y: 0, get_children: () => []}),
+        };
+        const fields = extractPhaseProperties(win);
+        expect(fields.mirrorPhaseX).toBe('unknown');
+        expect(fields.mirrorPhaseY).toBe('unknown');
+    });
 });
