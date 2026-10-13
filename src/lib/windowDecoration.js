@@ -319,6 +319,11 @@ export class WindowDecoration {
         this.resizeBand?.setGeometry?.({
             insets: insets ?? null,
             bounds,
+            // `resolveMonitorBounds` answers null both when the display is stale and when the
+            // read threw. That is "bounds unknown", not "do not clip": without this the strips
+            // are written at full extent and a window flush against an edge swallows clicks on
+            // the neighbouring monitor.
+            boundsUnknown: bounds === null,
             scale: inputs?.monitorScale ?? 1,
             constrainedEdges,
         });

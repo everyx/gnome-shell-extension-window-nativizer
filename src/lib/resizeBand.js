@@ -206,18 +206,34 @@ export function emptyBands() {
  * Writes the four disjoint outer ring rectangles into `bands` in place, clipped to `bounds`.
  * Reuses existing rect objects in `bands` to avoid GC allocation on hot path.
  * Direction is resolved separately via `edgeForPoint()`.
+ *
+ * `bounds = null` means "do not clip to a monitor" (the actor's no-surface-clip case).
+ * `boundsUnknown = true` is a different state: the monitor rect could not be read, so the
+ * strips are dropped rather than written at full extent, where a window flush against an edge
+ * would grow a reactive strip onto the neighbouring monitor. The degradation keeps a correct
+ * display alone instead of adding a surface we cannot place.
+ *
  * @param {Record<string, Rect|null>} bands - mutated in place
  * @param {object} params - see `computeResizeBands`
+ * @param {boolean} [params.boundsUnknown=false] - Bounds could not be read; drop every strip
  * @returns {boolean} Whether `bands` differs from what it held
  */
 export function computeResizeBandsInto(bands, {
     frame,
     bounds = null,
+    boundsUnknown = false,
     scale = 1,
     constrainedEdges = null,
     maximizedHorizontally = false,
     maximizedVertically = false,
 } = {}) {
+    if (boundsUnknown) {
+        let changed = false;
+        for (const region of RESIZE_BAND_REGIONS)
+            changed = clearBand(bands, region) || changed;
+        return changed;
+    }
+
     if (!Number.isFinite(scale) || scale <= 0 ||
         !frame || !Number.isFinite(frame.x) || !Number.isFinite(frame.y) ||
         !(frame.width > 0) || !(frame.height > 0)) {

@@ -90,6 +90,7 @@ export const ResizeBand = GObject.registerClass({
         this._hover = null;
         this._insets = ZERO_INSETS;
         this._bounds = null;
+        this._boundsUnknown = false;
         this._scale = 1;
         this._constrainedEdges = null;
 
@@ -135,15 +136,18 @@ export const ResizeBand = GObject.registerClass({
      * @param {object} params
      * @param {import('./frame.js').Insets|null} params.insets - Ring between actor and body
      * @param {{x:number,y:number,width:number,height:number}|null} [params.bounds=null] - Monitor rect
+     * @param {boolean} [params.boundsUnknown=false] - Whether `bounds` could not be read
      * @param {number} [params.scale=1] - Monitor scale the frame was read at
      * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null]
      */
-    setGeometry({insets, bounds = null, scale = 1, constrainedEdges = null}) {
+    setGeometry({insets, bounds = null, boundsUnknown = false, scale = 1, constrainedEdges = null}) {
         const nextInsets = insets ?? ZERO_INSETS;
+        const nextBoundsUnknown = Boolean(boundsUnknown);
         const nextConstrained = normalizeConstrainedEdges({constrainedEdges});
         if (this._insets.left === nextInsets.left && this._insets.top === nextInsets.top &&
             this._insets.right === nextInsets.right && this._insets.bottom === nextInsets.bottom &&
             this._scale === scale && sameBounds(this._bounds, bounds) &&
+            this._boundsUnknown === nextBoundsUnknown &&
             sameConstrainedEdges(this._constrainedEdges, nextConstrained))
             return;
 
@@ -154,6 +158,7 @@ export const ResizeBand = GObject.registerClass({
         this._bounds = bounds
             ? {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height}
             : null;
+        this._boundsUnknown = nextBoundsUnknown;
         this._scale = scale;
         this._constrainedEdges = nextConstrained;
         this.queue_relayout();
@@ -185,6 +190,7 @@ export const ResizeBand = GObject.registerClass({
         const changed = computeResizeBandsInto(this._bands, {
             frame: this._params.frame,
             bounds: this._params.bounds,
+            boundsUnknown: this._boundsUnknown,
             // No surface clip: the band may sit outside the client's surface.
             scale: this._params.scale,
             constrainedEdges: this._constrainedEdges,
