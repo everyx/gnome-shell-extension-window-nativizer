@@ -47,6 +47,9 @@ export class OverviewDecoration {
         this._win = win;
         this._OverviewMask = options.OverviewMask ?? null;
         this._OverviewShadowClass = options.OverviewShadow ?? null;
+        // Told when a card rebuild settles on a mode; the desktop clip follows it. Set only by
+        // WindowDecoration, which owns the clip (see `_refresh`).
+        this._onModeChange = options.onModeChange ?? null;
 
         this._inOverview = false;
         this._stex = null;
@@ -66,6 +69,7 @@ export class OverviewDecoration {
         this._erase = false;
         this._scale = 1;
         this._shadowSource = null;
+        this._forceOverviewCorners = false;
     }
 
     /** @returns {boolean} Whether the overview visuals are currently applied */
@@ -118,12 +122,7 @@ export class OverviewDecoration {
      * @returns {'mask'|'clip'|'square'} The overview outcome chosen for this pass
      */
     setMode(inOverview, readings = {}) {
-        const wanted = Boolean(inOverview);
-        // The probe's answer is cached against the state it was read from, not the entry: once
-        // this window wears our mask the probe's own early-out can never answer anything but NULL
-        // again, so a fresh entry must reuse a settled answer rather than ask a texture our mask
-        // has already moved (see `_maskWouldChangeDesktop`).
-        this._inOverview = wanted;
+        this._inOverview = Boolean(inOverview);
 
         this._canMask = this.canApplyMask({
             drawClip: readings.drawClip ?? false,
@@ -134,7 +133,20 @@ export class OverviewDecoration {
         this._erase = readings.erase ?? false;
         this._scale = readings.scale ?? 1;
         this._shadowSource = readings.shadow ?? null;
+        this._forceOverviewCorners = Boolean(readings.forceOverviewCorners);
 
+        return this._settleMode();
+    }
+
+    /**
+     * Applies the overview visuals for the readings already stored and returns the outcome now in
+     * force. Both the entry path (`setMode`) and a card rebuild (`_refresh`) settle here, so the
+     * mode they hand back is always the one that actually installed - not the one that was merely
+     * attempted.
+     *
+     * @returns {'mask'|'clip'|'square'}
+     */
+    _settleMode() {
         if (!this._inOverview) {
             this._release();
             return 'square';
@@ -146,16 +158,19 @@ export class OverviewDecoration {
         // the thumbnail square, and as sharp as an undecorated window.
         const maskable = this._canMask && !this._maskWouldChangeDesktop();
         this._syncHooks();
+        // A mask is only one of the ways to round the preview; whether it actually landed decides
+        // the mode, so a builder that declined still lets the forced legacy clip take over.
+        let installed = false;
         if (maskable)
-            this._applyMask();
+            installed = this._applyMask();
         else
             this._clearMask();
         // The shadow does not depend on the clip either way: a window can carry a shadow without
         // corners (prefer-crisp-text on a fractional scale).
         this._applyShadow();
-        if (maskable)
+        if (installed)
             return 'mask';
-        return readings.forceOverviewCorners ? 'clip' : 'square';
+        return this._forceOverviewCorners ? 'clip' : 'square';
     }
 
     /** Drops every overview visual and hook: the overview ended, or the decoration is going away. */
@@ -290,18 +305,25 @@ export class OverviewDecoration {
      * the mask on its opaque fast path, so the preview container's opacity is
      * pulled one step below 255 to force the blended path; the 1/255 alpha that
      * costs is imperceptible.
+     *
+     * @returns {boolean} Whether the window wears the mask after this call: true when it was
+     *   already installed or was installed now, false when a missing texture, context, container,
+     *   size or mask left it square
      */
     _applyMask() {
         // The invariant: our rounded mask is only ever installed while the window is in the
         // overview. A reconcile that arrives after the overview ended retires instead of rounding.
         if (!this._inOverview)
-            return;
-        if (this._stex || !this._canMask || this._maskWouldChangeDesktop())
-            return;
+            return false;
+        // Already wearing the mask (a reconcile with no card change): the outcome is unchanged.
+        if (this._stex)
+            return true;
+        if (!this._canMask || this._maskWouldChangeDesktop())
+            return false;
 
         const buildRoundedMask = this._OverviewMask?.buildRoundedMask;
         if (!buildRoundedMask)
-            return;
+            return false;
 
         const actor = getWindowActor(this._win);
         const stex = actor?.get_texture?.() ?? null;
@@ -309,14 +331,14 @@ export class OverviewDecoration {
         const context = multi?.get_plane?.(0)?.get_context?.() ?? null;
         const container = getOverviewPreview(this._win)?.container ?? null;
         if (!stex || !context || !container)
-            return;
+            return false;
 
         const actorWidth = actor?.width ?? 0;
         const actorHeight = actor?.height ?? 0;
         const textureWidth = multi.get_width?.() ?? 0;
         const textureHeight = multi.get_height?.() ?? 0;
         if (!(actorWidth > 0) || !(actorHeight > 0) || !(textureWidth > 0) || !(textureHeight > 0))
-            return;
+            return false;
 
         // Insets and radius are logical; the texture carries the client's buffer.
         const bufferScale = textureWidth / actorWidth;
@@ -337,7 +359,7 @@ export class OverviewDecoration {
             erase: this._erase,
         });
         if (!mask)
-            return;
+            return false;
 
         stex.set_mask_texture(mask);
 
@@ -351,6 +373,7 @@ export class OverviewDecoration {
         });
         this._savedOpacity = container.get_opacity();
         container.set_opacity(Math.min(254, this._savedOpacity));
+        return true;
     }
 
     /**
@@ -377,18 +400,19 @@ export class OverviewDecoration {
         return Math.min(1, Math.max(scale, 0.05));
     }
 
-    /** Re-applies the mask and the shadow clone after the card, or the window, changes. */
+    /**
+     * Re-applies the mask and the shadow clone after the card, or the window, changes.
+     *
+     * The old pair is retired first so the fresh mask attaches to the card that replaced it. The
+     * mode can differ from the entry's - a mask that declined can land now, or one that landed can
+     * decline - so the caller is handed what actually installed and keeps the desktop clip in step.
+     */
     _refresh() {
         if (!this._inOverview)
             return;
-        // The card, or the client's buffer, changed, so the old geometry is retired and a fresh
-        // mask built. The safety answer is not re-asked: `_maskWouldChangeDesktop` already
-        // cached it for this shaped texture, and a re-probe now would only read our own mask.
         this._clearMask();
-        if (this._canMask && !this._maskWouldChangeDesktop())
-            this._applyMask();
         this._clearShadow();
-        this._applyShadow();
+        this._onModeChange?.(this._settleMode());
     }
 
     /** Retires the overview mask and restores the preview container opacity. */
