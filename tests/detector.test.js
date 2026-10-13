@@ -319,6 +319,15 @@ describe('shouldClipWindow', () => {
         expect(shouldClipWindow({preferCrispText: true, scale: 1.5})).toBeFalse();
         expect(shouldClipWindow({preferCrispText: true, scale: 1.75})).toBeFalse();
     });
+
+    it('skips clipping under prefer-crisp-text when the scale is unknown', () => {
+        // The unreadable scale is its own state, not an integer: clipping a fractional window
+        // on a transient read would blur the text this setting protects. Skipping leaves an
+        // already-correct unclipped display alone until the next reconcile retries the read.
+        expect(shouldClipWindow({preferCrispText: true, scale: null})).toBeFalse();
+        // The setting is the only thing that asks the question; without it, clip as before.
+        expect(shouldClipWindow({preferCrispText: false, scale: null})).toBeTrue();
+    });
 });
 
 describe('evaluateWindowActions', () => {

@@ -153,7 +153,7 @@ export function resolveWindowIdentity(win) {
  * @property {boolean} hasValidGeometry
  * @property {object|null} insets - {left, top, right, bottom} or null
  * @property {boolean} hasRing
- * @property {number} monitorScale
+ * @property {number|null} monitorScale - Physical monitor scale, or null while it cannot be read
  * @property {boolean} isMaximized
  * @property {boolean} maximizedHorizontally
  * @property {boolean} maximizedVertically
@@ -251,7 +251,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         hasValidGeometry,
         insets,
         hasRing,
-        monitorScale: getPhysicalMonitorScale(win, 1),
+        monitorScale: getPhysicalMonitorScale(win),
 
         isMaximized,
         maximizedHorizontally,

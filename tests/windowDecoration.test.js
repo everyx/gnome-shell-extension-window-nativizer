@@ -411,6 +411,38 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasResizeBand).toBeFalse();
     });
 
+    it('keeps the last good scale when a later pass cannot read the monitor scale', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const insets = {left: 10, top: 10, right: 10, bottom: 10};
+
+        deco.apply({actions, inputs: {insets, monitorScale: 1.5}, actor: mockActor});
+        expect(deco.clip.params.scale).toBe(1.5);
+        expect(deco.shadow.scale).toBe(1.5);
+        expect(deco.resizeBand.geometry.scale).toBe(1.5);
+
+        // The scale read fails. The clip cut, shadow cutout and band keep the scale the display
+        // was built at rather than jumping to 1.0, which would move a correct fractional display.
+        deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
+        expect(deco.clip.params.scale).toBe(1.5);
+        expect(deco.shadow.scale).toBe(1.5);
+        expect(deco.resizeBand.geometry.scale).toBe(1.5);
+    });
+
     it('applies style and synchronizes full tri-axis in apply()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
