@@ -121,6 +121,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
      * @param {boolean} [options.drawClip=true]
      * @param {boolean} [options.drawShadow=false]
      * @param {boolean} [options.maskWouldChangeScreenshot=false]
+     * @param {boolean} [options.buildRoundedMaskReturnsNull=false]
      * @param {boolean} [options.forceOverviewCorners=false]
      * @param {boolean} [options.ringClear=false]
      * @param {object} [options.insets] - Declared ring, per side
@@ -133,6 +134,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         ringClear = false,
         insets = {left: 0, top: 0, right: 0, bottom: 0},
         maskWouldChangeScreenshot = false,
+        buildRoundedMaskReturnsNull = false,
         forceOverviewCorners = false,
     } = {}) {
         mockWin.get_client_type = () => clientType;
@@ -144,8 +146,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         let probeAnswer = maskWouldChangeScreenshot;
         let bufferWidth = 800;
         let bufferHeight = 600;
+        let buildReturnsNull = buildRoundedMaskReturnsNull;
         const OverviewMask = {
-            buildRoundedMask: () => mask,
+            buildRoundedMask: () => (buildReturnsNull ? null : mask),
             opaqueMask: () => {
                 opaqueCalls++;
                 return opaque;
@@ -254,6 +257,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             // spec that changes both models the same identity gaining a buffer.
             setProbeAnswer: value => {
                 probeAnswer = value;
+            },
+            setBuildReturnsNull: value => {
+                buildReturnsNull = value;
             },
             setBuffer: (width, height) => {
                 bufferWidth = width;
@@ -812,6 +818,90 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         expect(harness.probeCalls()).toBe(decided);
         expect(harness.surface.mask).toBe(harness.mask);
+    });
+
+    it('reports the mode it actually installed when the mask build declines', () => {
+        const readings = {
+            radius: 12,
+            insets: {left: 0, top: 0, right: 0, bottom: 0},
+            erase: false,
+            scale: 1,
+            drawClip: true,
+            hasStyle: true,
+            shadow: null,
+        };
+
+        // The mask builder returns null, so nothing is installed. The pass must report the
+        // fallback the window is left in, not the mask it hoped to install.
+        const square = setupMaskHarness({buildRoundedMaskReturnsNull: true});
+        expect(square.deco.overview.setMode(true, readings)).toBe('square');
+        expect(square.surface.hasMask).toBeFalse();
+
+        // force-overview-corners asks for the legacy clip when the mask is unavailable; the
+        // returned mode is what tells WindowDecoration to keep that clip enabled.
+        const forced = setupMaskHarness({buildRoundedMaskReturnsNull: true});
+        expect(forced.deco.overview.setMode(true, {...readings, forceOverviewCorners: true}))
+            .toBe('clip');
+        expect(forced.surface.hasMask).toBeFalse();
+
+        // A successful build still reports the mask it installed.
+        const masked = setupMaskHarness();
+        expect(masked.deco.overview.setMode(true, readings)).toBe('mask');
+        expect(masked.surface.hasMask).toBeTrue();
+    });
+
+    it('keeps the forced legacy clip when the mask cannot actually be installed', () => {
+        const {surface, deco} = setupMaskHarness({
+            forceOverviewCorners: true,
+            buildRoundedMaskReturnsNull: true,
+        });
+        expect(deco.hasClip).toBeTrue();
+
+        deco.setOverviewMode(true);
+
+        // Neither visual fired would be the bug: no mask landed, so the forced clip must stay on
+        // instead of being disabled by a 'mask' the overview never installed.
+        expect(surface.mask).toBeNull();
+        expect(deco.clip.enabled).toBeTrue();
+    });
+
+    it('follows a refresh that lands a mask after the entry could not install one', () => {
+        const harness = setupMaskHarness({
+            forceOverviewCorners: true,
+            buildRoundedMaskReturnsNull: true,
+        });
+        const {surface, deco} = harness;
+
+        // Entry: the mask builder declines, so the forced legacy clip is the mode in force.
+        deco.setOverviewMode(true);
+        expect(surface.hasMask).toBeFalse();
+        expect(deco.clip.enabled).toBeTrue();
+
+        // A refresh can now build the mask. The mode flips to 'mask', so the clip - the alternative
+        // rounding path - must be suspended; leaving it on would clip the preview twice.
+        harness.setBuildReturnsNull(false);
+        harness.windowSignals.find(s => s.signal === 'size-changed').cb();
+
+        expect(surface.mask).toBe(harness.mask);
+        expect(deco.clip.enabled).toBeFalse();
+    });
+
+    it('follows a refresh that loses the mask back to the forced clip', () => {
+        const harness = setupMaskHarness({forceOverviewCorners: true});
+        const {surface, opaque, deco} = harness;
+
+        // Entry: the mask lands, so the clip is suspended.
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(harness.mask);
+        expect(deco.clip.enabled).toBeFalse();
+
+        // A refresh whose builder now declines retires the mask to the opaque one; the forced clip
+        // is the only rounding left, so it must come back on.
+        harness.setBuildReturnsNull(true);
+        harness.windowSignals.find(s => s.signal === 'size-changed').cb();
+
+        expect(surface.mask).toBe(opaque);
+        expect(deco.clip.enabled).toBeTrue();
     });
 
     it('never rounds a window that has left the overview', () => {

@@ -44,6 +44,9 @@ export class WindowDecoration {
         this.overview = new OverviewDecoration(win, {
             OverviewMask: options.OverviewMask ?? null,
             OverviewShadow: options.OverviewShadow ?? null,
+            // A card rebuild inside the overview can settle on a different mode than the entry
+            // did; the desktop clip must follow whatever was actually installed.
+            onModeChange: mode => this._syncOverviewClip(mode),
         });
 
         this.clip = null;
@@ -195,15 +198,26 @@ export class WindowDecoration {
             shadow: this.shadow,
         });
 
-        if (this.clip) {
-            // The overview chose the outcome; on the desktop the clip is simply on. `enabled` is
-            // computed once so a resume and its matching enable cannot disagree.
-            const enabled = this.overview.inOverview ? mode === 'clip' : true;
-            if (enabled)
-                this.clip.resume?.();
-            this.clip.set_enabled(enabled);
-            this._syncClipParams();
-        }
+        this._syncOverviewClip(mode);
+    }
+
+    /**
+     * Keeps the desktop clip in step with the overview mode that actually installed. Called when
+     * a pass enters or leaves the overview, and when the overview rebuilds its card under a
+     * resize or workspace change - the two paths that can change the mode.
+     *
+     * @param {'mask'|'clip'|'square'} mode
+     */
+    _syncOverviewClip(mode) {
+        if (!this.clip)
+            return;
+        // The overview chose the outcome; on the desktop the clip is simply on. `enabled` is
+        // computed once so a resume and its matching enable cannot disagree.
+        const enabled = this.overview.inOverview ? mode === 'clip' : true;
+        if (enabled)
+            this.clip.resume?.();
+        this.clip.set_enabled(enabled);
+        this._syncClipParams();
     }
 
     /**
