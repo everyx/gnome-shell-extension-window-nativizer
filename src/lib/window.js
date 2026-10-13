@@ -301,16 +301,23 @@ export function isClassificationPending(reading) {
 }
 
 /**
- * What a reconcile should do with a window, read from the reading alone: drop the decoration when
- * there is no usable geometry, wait while the process classification is still in flight, and apply
- * otherwise. Named here so the branch can be a table in a spec instead of a chain the end-to-end
- * run has to reach; the manager only routes on the answer.
+ * What a reconcile should do with a window, read from the reading alone: keep the display while
+ * the reading could not be taken or the process classification is still in flight, drop the
+ * decoration when the rects were read but have no extent, and apply otherwise. Named here so the
+ * branch can be a table in a spec instead of a chain the end-to-end run has to reach; the manager
+ * only routes on the answer.
  *
- * @param {{nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}|null} reading
+ * A null reading is "the buffer/frame rect could not be read this pass", not "the window is gone":
+ * the manager tears a decoration down through the actor's `unmanaging`/`destroy` path, so a
+ * reconcile must not destroy a display that is already correct for an unknown geometry.
+ *
+ * @param {{hasValidGeometry: boolean, nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}|null} reading
  * @returns {'undecorate'|'defer'|'apply'}
  */
 export function reconcileOutcome(reading) {
     if (!reading)
+        return 'defer';
+    if (!reading.hasValidGeometry)
         return 'undecorate';
     if (isClassificationPending(reading))
         return 'defer';
