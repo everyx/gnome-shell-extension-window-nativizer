@@ -5,6 +5,7 @@
  */
 
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 // Per-process via /proc/<pid>/maps. The first is
 // the only GTK4 one, whose own resize handle the band can prove from a window's declared ring.
@@ -16,6 +17,13 @@ const ADWAITA_PROVIDERS = [
 
 /** What a process maps, for the two questions asked of it. */
 const NO_PROVIDER = Object.freeze({adwaitaLook: false, gtk4: false});
+
+/**
+ * Bounded retry schedule for a failed /proc read. A transient failure (EIO during teardown) must
+ * not leave a stable window unclassified forever, and a persistent one (EACCES) must not be
+ * hammered: three attempts at 1s/2s/4s, then the next explicit probe starts a fresh episode.
+ */
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 /**
  * Reads /proc/<pid>/maps off the main loop: GIO runs a local file's async read in a worker thread,
@@ -65,16 +73,28 @@ export class ProcessClassifier {
     /**
      * @param {object} [options]
      * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [options.readMaps]
+     * @param {(delayMs: number, cb: () => void) => number} [options.timeoutAdd] - Timer seam for tests
+     * @param {(id: number) => void} [options.timeoutRemove] - Timer seam for tests
      */
     constructor(options = {}) {
         /** @type {Map<number, {adwaitaLook: boolean, gtk4: boolean}>} */
         this._processCache = new Map();
         /** @type {Map<number, {cancellable: Gio.Cancellable}>} */
         this._inFlight = new Map();
+        /** @type {Map<number, {id: number, reader: Function}>} */
+        this._pendingRetries = new Map();
+        /** @type {Map<number, number>} */
+        this._retryCounts = new Map();
         /** @type {((pid: number) => void)|null} */
         this._onProcessKnown = null;
         this._destroyed = false;
         this._readMaps = options.readMaps ?? readMaps;
+        this._timeoutAdd = options.timeoutAdd ?? ((delayMs, cb) =>
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+                cb();
+                return GLib.SOURCE_REMOVE;
+            }));
+        this._timeoutRemove = options.timeoutRemove ?? (id => GLib.Source.remove(id));
     }
 
     /** @returns {boolean} */
@@ -91,8 +111,10 @@ export class ProcessClassifier {
     probeAdwaitaLook(pid, deps = {}) {
         if (this._destroyed || !isValidPid(pid))
             return;
-        if (this._processCache.has(pid) || this._inFlight.has(pid))
+        if (this._processCache.has(pid) || this._inFlight.has(pid) || this._pendingRetries.has(pid))
             return;
+        // An explicit probe starts a fresh failure episode; let its bounded retries run again.
+        this._retryCounts.delete(pid);
         this._startRead(pid, deps.readMaps ?? this._readMaps);
     }
 
@@ -110,12 +132,15 @@ export class ProcessClassifier {
             // A failed read is "unknown", not a verdict. Caching NO_PROVIDER here answered a
             // transient failure as "definitively not libadwaita, not GTK4" for the process's
             // lifetime, so a GTK4/libadwaita window that recovered wore our clip and a 12px band
-            // over its native handle. Leave the cache empty: the tri-state queries answer null
-            // and the next probe retries, and only a landed /proc read may give a final answer.
-            // The callback is not fired either - it announces a landed answer to re-decide the
-            // windows left alone, and a failure gives nothing to re-decide.
-            if (error || typeof mapsText !== 'string')
+            // over its native handle. Leave the cache empty and schedule a bounded retry: a
+            // window that becomes stable during the failure is still classified without waiting
+            // for another window event. The callback is not fired either - it announces a landed
+            // answer to re-decide the windows left alone, and a failure gives nothing to re-decide.
+            if (error || typeof mapsText !== 'string') {
+                this._scheduleRetry(pid, reader);
                 return;
+            }
+            this._retryCounts.delete(pid);
             this._processCache.set(pid, classifyProcess(mapsText));
             try {
                 this._onProcessKnown?.(pid);
@@ -129,6 +154,30 @@ export class ProcessClassifier {
         } catch (error) {
             done(null, error);
         }
+    }
+
+    /**
+     * Schedules a bounded, backoff retry for a pid whose read failed. The retry reuses the reader
+     * that failed and stops after RETRY_DELAYS_MS.length attempts; an explicit probe starts a new
+     * episode. forgetProcess() and destroy() cancel a pending retry so it cannot touch a forgotten
+     * pid or a torn-down window.
+     * @param {number} pid
+     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} reader
+     */
+    _scheduleRetry(pid, reader) {
+        if (this._destroyed)
+            return;
+        const attempt = (this._retryCounts.get(pid) ?? 0) + 1;
+        if (attempt > RETRY_DELAYS_MS.length)
+            return;
+        this._retryCounts.set(pid, attempt);
+        const id = this._timeoutAdd(RETRY_DELAYS_MS[attempt - 1], () => {
+            this._pendingRetries.delete(pid);
+            if (this._destroyed || this._processCache.has(pid))
+                return;
+            this._startRead(pid, reader);
+        });
+        this._pendingRetries.set(pid, {id, reader});
     }
 
     /**
@@ -158,14 +207,19 @@ export class ProcessClassifier {
     }
 
     /**
-     * Forgets a process from the cache and cancels any read in flight.
+     * Forgets a process from the cache and cancels any read in flight or retry pending.
      * @param {number} pid
      */
     forgetProcess(pid) {
         const entry = this._inFlight.get(pid);
         this._inFlight.delete(pid);
+        const retry = this._pendingRetries.get(pid);
+        this._pendingRetries.delete(pid);
+        this._retryCounts.delete(pid);
         this._processCache.delete(pid);
         entry?.cancellable.cancel();
+        if (retry)
+            this._timeoutRemove(retry.id);
     }
 
     /**
@@ -178,7 +232,7 @@ export class ProcessClassifier {
     }
 
     /**
-     * Clear the cache and the callback, and cancel every read in flight.
+     * Clear the cache and the callback, and cancel every read in flight and every retry pending.
      */
     destroy() {
         if (this._destroyed)
@@ -187,8 +241,13 @@ export class ProcessClassifier {
         this._onProcessKnown = null;
         const entries = [...this._inFlight.values()];
         this._inFlight.clear();
+        const retries = [...this._pendingRetries.values()];
+        this._pendingRetries.clear();
+        this._retryCounts.clear();
         this._processCache.clear();
         for (const entry of entries)
             entry.cancellable.cancel();
+        for (const retry of retries)
+            this._timeoutRemove(retry.id);
     }
 }

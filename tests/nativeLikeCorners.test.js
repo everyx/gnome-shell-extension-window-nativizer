@@ -6,6 +6,36 @@ import {
 const mapped = path => `7f9914000-7f9915000 r-xp 00000000 103:02 12345 ${path}\n`;
 const maps = (...paths) => paths.map(mapped).join('');
 
+/**
+ * A ProcessClassifier with an injectable timer, so a spec can fire the retry deterministically
+ * with no main loop. `fire` returns false when the timer was canceled.
+ * @returns {{classifier: ProcessClassifier, pending: Map<number, {delay: number, cb: Function}>, fire: (id: number) => boolean}}
+ */
+function withManualTimers() {
+    let nextId = 1;
+    const pending = new Map();
+    const classifier = new ProcessClassifier({
+        timeoutAdd: (delay, cb) => {
+            const id = nextId++;
+            pending.set(id, {delay, cb});
+            return id;
+        },
+        timeoutRemove: id => pending.delete(id),
+    });
+    return {
+        classifier,
+        pending,
+        fire: id => {
+            const entry = pending.get(id);
+            if (!entry)
+                return false;
+            pending.delete(id);
+            entry.cb();
+            return true;
+        },
+    };
+}
+
 describe('classifyProcess (pure function)', () => {
     // The two answers a process gives: the Adwaita look (any provider) and whether the
     // client is GTK4 (libadwaita only), which is the one the resize band reads.
@@ -119,26 +149,109 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             expect(classifier.adwaitaLook(-1)).toBeFalse();
         });
 
-        it('leaves a failed read unknown and retries it instead of caching a verdict', () => {
+        it('leaves a failed read unknown and schedules one bounded retry, not a read per probe', () => {
+            const {classifier: local, pending, fire} = withManualTimers();
             let reads = 0;
-            const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
-            classifier.probeAdwaitaLook(717171, {readMaps});
+            const readMaps = (pid, done) => {
+                reads++;
+                if (reads === 1)
+                    done(null, new Error('EACCES'));
+                else
+                    done(maps('/usr/lib/libadwaita-1.so.0'));
+            };
+            local.probeAdwaitaLook(717171, {readMaps});
             // A transient /proc failure is "unknown", not "definitely not libadwaita".
-            expect(classifier.adwaitaLook(717171)).toBeNull();
-            expect(classifier.hasGtk4Client(717171)).toBeNull();
+            expect(local.adwaitaLook(717171)).toBeNull();
+            expect(local.hasGtk4Client(717171)).toBeNull();
             expect(reads).toBe(1);
-            // Not cached: the next probe reads again, so a process that recovers is classified.
-            classifier.probeAdwaitaLook(717171, {readMaps});
+            // A probe while the retry is pending does not start another read (no hammering).
+            local.probeAdwaitaLook(717171, {readMaps});
+            expect(reads).toBe(1);
+            // The scheduled retry reads again, so a process that recovers is classified.
+            fire([...pending.keys()][0]);
             expect(reads).toBe(2);
+            expect(local.adwaitaLook(717171)).toBeTrue();
+            local.destroy();
         });
 
-        it('leaves a reader that throws unknown and retries it on the next probe', () => {
+        it('leaves a reader that throws unknown and retries it on a later attempt', () => {
+            const {classifier: local, pending, fire} = withManualTimers();
             let reads = 0;
             const readMaps = () => { reads++; throw new Error('boom'); };
-            classifier.probeAdwaitaLook(717172, {readMaps});
-            expect(classifier.adwaitaLook(717172)).toBeNull();
-            classifier.probeAdwaitaLook(717172, {readMaps});
+            local.probeAdwaitaLook(717172, {readMaps});
+            expect(local.adwaitaLook(717172)).toBeNull();
+            fire([...pending.keys()][0]);
             expect(reads).toBe(2);
+            local.destroy();
+        });
+
+        it('retries a failed read with backoff and caches the answer with no other window event', () => {
+            const {classifier: local, pending, fire} = withManualTimers();
+            let reads = 0;
+            const readMaps = (pid, done) => {
+                reads++;
+                if (reads === 1)
+                    done(null, new Error('EACCES'));
+                else
+                    done(maps('/usr/lib/libadwaita-1.so.0'));
+            };
+            const known = [];
+            local.setOnProcessKnown(pid => known.push(pid));
+
+            local.probeAdwaitaLook(737373, {readMaps});
+            expect(reads).toBe(1);
+            expect(local.adwaitaLook(737373)).toBeNull();
+            // A retry is armed at the first backoff step; no window event is needed to fire it.
+            expect(pending.size).toBe(1);
+            expect([...pending.values()][0].delay).toBe(1000);
+
+            fire([...pending.keys()][0]);
+            expect(reads).toBe(2);
+            expect(local.adwaitaLook(737373)).toBeTrue();
+            expect(local.hasGtk4Client(737373)).toBeTrue();
+            expect(known).toEqual([737373]);
+            local.destroy();
+        });
+
+        it('bounds the retries and backs off, then stops', () => {
+            const {classifier: local, pending, fire} = withManualTimers();
+            let reads = 0;
+            const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
+            local.probeAdwaitaLook(747474, {readMaps});
+            const delays = [];
+            while (pending.size > 0) {
+                const id = [...pending.keys()][0];
+                delays.push(pending.get(id).delay);
+                fire(id);
+            }
+            expect(delays).toEqual([1000, 2000, 4000]);
+            expect(reads).toBe(4);
+            local.destroy();
+        });
+
+        it('cancels a pending retry on forgetProcess', () => {
+            const {classifier: local, pending, fire} = withManualTimers();
+            let reads = 0;
+            const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
+            local.probeAdwaitaLook(757575, {readMaps});
+            const id = [...pending.keys()][0];
+            expect(pending.size).toBe(1);
+            local.forgetProcess(757575);
+            expect(pending.size).toBe(0);
+            // The canceled timer cannot touch the forgotten pid.
+            expect(fire(id)).toBeFalse();
+            expect(reads).toBe(1);
+            local.destroy();
+        });
+
+        it('cancels every pending retry on destroy', () => {
+            const {classifier: local, pending} = withManualTimers();
+            const readMaps = (pid, done) => done(null, new Error('EACCES'));
+            local.probeAdwaitaLook(767676, {readMaps});
+            local.probeAdwaitaLook(767677, {readMaps});
+            expect(pending.size).toBe(2);
+            local.destroy();
+            expect(pending.size).toBe(0);
         });
 
         it('answers nothing while the read is in flight, then the maps answer', () => {
