@@ -42,10 +42,12 @@ const opaqueMasks = new WeakMap();
  * `get_image()` returns a `cairo_surface_t*`; when Mutter hands back NULL, GJS's marshaller trips
  * `CairoSurface::from_c_ptr`'s assertion and aborts the process with an "uncatchable exception"
  * that no `try`/`catch` can intercept. So when no safe probe member exists we call nothing and
- * answer "unreadable ⇒ unsafe ⇒ do not mask".
+ * answer "cannot tell": the caller keeps the window square but must not cache that as a verdict.
+ * On a line where the member does exist the call is safe, so a throw is likewise "cannot tell".
  *
  * @param {object|null} shapedTexture - MetaShapedTexture, or null when unavailable
- * @returns {boolean} True when masking this window would change its desktop screenshot
+ * @returns {boolean|null} True when masking would change the screenshot, false when it would not,
+ *   null when the readback cannot tell
  */
 export function maskWouldChangeScreenshot(shapedTexture) {
     return probeWouldChangeScreenshot(shapedTexture, {

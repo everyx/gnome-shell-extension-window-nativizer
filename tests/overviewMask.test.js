@@ -85,14 +85,14 @@ describe('maskWouldChangeScreenshot', () => {
 
         // A pre-51 shaped texture: get_image() exists, paint_to_bitmap() does not. Calling the
         // old member with a NULL surface aborts the process from GJS's marshaller, so the probe
-        // must call nothing and answer "unsafe" instead.
+        // must call nothing and answer "cannot tell".
         const legacy = {
             get_image() {
                 getImageCalls++;
                 return {tag: 'surface'};
             },
         };
-        expect(probeWouldChangeScreenshot(legacy, {clip: {}, format: 0})).toBeTrue();
+        expect(probeWouldChangeScreenshot(legacy, {clip: {}, format: 0})).toBeNull();
         expect(getImageCalls).toBe(0);
 
         // A 51+ shaped texture: paint_to_bitmap() is the probe, and get_image() is never reached.
@@ -118,11 +118,17 @@ describe('maskWouldChangeScreenshot', () => {
             .toBeFalse();
     });
 
-    it('treats a missing or throwing probe as unsafe', () => {
-        expect(probeWouldChangeScreenshot(null, {clip: {}, format: 0})).toBeTrue();
-        expect(probeWouldChangeScreenshot(undefined, {clip: {}, format: 0})).toBeTrue();
+    it('reports "cannot tell" as null, never as a verdict', () => {
+        // A missing member: Shell 50 has no `paint_to_bitmap`, and calling `get_image()` there can
+        // abort the process. The answer is "cannot tell", which the caller must not cache.
+        expect(probeWouldChangeScreenshot(null, {clip: {}, format: 0})).toBeNull();
+        expect(probeWouldChangeScreenshot(undefined, {clip: {}, format: 0})).toBeNull();
+        expect(probeWouldChangeScreenshot({get_image: () => ({})}, {clip: {}, format: 0})).toBeNull();
+
+        // A throw on a line where the member exists is a readback that has not settled, not a
+        // "the screenshot would change": telling them apart is what keeps a transient failure
+        // from locking a window square forever.
         expect(probeWouldChangeScreenshot(
-            {paint_to_bitmap: () => { throw new Error('boom'); }}, {clip: {}, format: 0}))
-            .toBeTrue();
+            {paint_to_bitmap: () => { throw new Error('boom'); }}, {clip: {}, format: 0})).toBeNull();
     });
 });

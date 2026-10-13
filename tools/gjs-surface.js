@@ -105,7 +105,8 @@ const SURFACE = [
     // The overview's mask probe asks the shaped texture whether masking this window would move
     // its desktop screenshot off the direct-read path. The member is resolved by capability.
     {ns: 'Meta', cls: 'ShapedTexture', class: true},
-    {ns: 'Meta', cls: 'ShapedTexture', member: 'paint_to_bitmap', arity: 2, optional: true},
+    {ns: 'Meta', cls: 'ShapedTexture', member: 'paint_to_bitmap', arity: 2, optional: true,
+        versionDependent: 'shaped_texture_paint_to_bitmap'},
     {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['RGBA_8888', 'A_8']},
     // gnome-shell, only reachable from inside the shell
     // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
@@ -204,6 +205,67 @@ function label(entry) {
     if (entry.static)
         return `${entry.ns}.${entry.cls}.${entry.member}`;
     return `${entry.ns}.${entry.cls}.prototype.${entry.member}`;
+}
+
+/**
+ * The typelib api version this shell is running (the `N` in `mutter-N`), or null when it is not
+ * discoverable outside the shell. `GI_TYPELIB_PATH` is the only place GJS names it.
+ */
+function typelibApiVersion() {
+    const dirs = (GLib.getenv('GI_TYPELIB_PATH') ?? '').split(':');
+    for (const dir of dirs) {
+        const m = /mutter-(\d+)$/.exec(dir.replace(/\/+$/, ''));
+        if (m)
+            return m[1];
+    }
+    return null;
+}
+
+/** The record's per-member declarations, keyed by member id. */
+function auditedSurface() {
+    try {
+        const [ok, bytes] = GLib.file_get_contents(RECORD);
+        if (!ok)
+            return null;
+        const record = JSON.parse(new TextDecoder().decode(bytes));
+        return new Map(record.surface.map(e => [e.id, e]));
+    } catch {
+        return null;
+    }
+}
+
+/** The audited api versions (`Meta-N`) the record covers, or null. */
+function auditedApiVersions(surface) {
+    const entry = surface?.get('mutter_api_version');
+    if (!entry)
+        return null;
+    return new Set(Object.values(entry.decl)
+        .filter(Boolean)
+        .map(d => /'(\d+)'/.exec(d)?.[1])
+        .filter(Boolean));
+}
+
+const apiVersion = typelibApiVersion();
+const auditedSurfaceById = auditedSurface();
+const audited = auditedApiVersions(auditedSurfaceById);
+if (apiVersion === null) {
+    if (VERBOSE)
+        print('  note  the typelib api version is not discoverable here (GI_TYPELIB_PATH is unset)');
+} else if (audited && !audited.has(apiVersion)) {
+    fail('typelib api version', `Meta-${apiVersion} is not one of the audited versions (${[...audited].join(', ')})`);
+} else {
+    report('typelib api version', `Meta-${apiVersion}`);
+}
+
+// Back the capability gate with the audited record: a member the record declares on this line is
+// not optional here. A GIR-shape surprise (the declaration exists but GJS cannot reach it) then
+// fails the suite instead of silently turning the feature off.
+for (const entry of SURFACE) {
+    if (!entry.versionDependent || !apiVersion || !auditedSurfaceById)
+        continue;
+    const record = auditedSurfaceById.get(entry.versionDependent);
+    if (record && record.decl?.[apiVersion])
+        entry.optional = false;
 }
 
 for (const entry of SURFACE) {
@@ -356,45 +418,8 @@ if (platform) {
 
 // The typelibs are found by version-numbered directory, and a GNOME line whose typelibs we never
 // audited is worth naming - the shape assertions above would only catch it if the shape moved.
-function typelibApiVersion() {
-    const dirs = (GLib.getenv('GI_TYPELIB_PATH') ?? '').split(':');
-    for (const dir of dirs) {
-        const m = /mutter-(\d+)$/.exec(dir.replace(/\/+$/, ''));
-        if (m)
-            return m[1];
-    }
-    return null;
-}
-
-function auditedApiVersions() {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(RECORD);
-        if (!ok)
-            return null;
-        const record = JSON.parse(new TextDecoder().decode(bytes));
-        const entry = record.surface.find(e => e.id === 'mutter_api_version');
-        if (!entry)
-            return null;
-        return new Set(Object.values(entry.decl)
-            .filter(Boolean)
-            .map(d => /'(\d+)'/.exec(d)?.[1])
-            .filter(Boolean));
-    } catch {
-        return null;
-    }
-}
-
-const apiVersion = typelibApiVersion();
-const audited = auditedApiVersions();
-if (apiVersion === null) {
-    if (VERBOSE)
-        print('  note  the typelib api version is not discoverable here (GI_TYPELIB_PATH is unset)');
-} else if (audited && !audited.has(apiVersion)) {
-    fail('typelib api version', `Meta-${apiVersion} is not one of the audited versions (${[...audited].join(', ')})`);
-} else {
-    report('typelib api version', `Meta-${apiVersion}`);
-}
-
+// The api version and the audited record were read before the surface loop, so a member the
+// record declares here was already required rather than optional.
 print(`gjs-surface: ${checked} members checked, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
 if (failed > 0)
     System.exit(1);

@@ -744,6 +744,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         }
     });
 
+    it('re-asks when the probe cannot tell, instead of locking the window square', () => {
+        // "Cannot tell" (the member is missing, or the readback threw) is not a verdict. Caching
+        // it is what made a transient failure a permanent square, so the next entry must ask again.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: null});
+
+        harness.deco.setOverviewMode(true);
+        expect(harness.probeCalls()).toBe(1);
+
+        harness.deco.setOverviewMode(false);
+        harness.deco.setOverviewMode(true);
+        expect(harness.probeCalls()).toBe(2);
+    });
+
     it('never rounds a window that has left the overview', () => {
         const {mask, opaque, surface, deco, probeCalls} = setupMaskHarness();
 
