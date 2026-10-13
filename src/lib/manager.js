@@ -32,6 +32,7 @@ import {
     getWindowActor,
     getWindowType,
     getWindowPid,
+    getSurfaceContainer,
 } from '../platform/window.js';
 
 
@@ -55,6 +56,9 @@ class TrackedWindow {
         this.idleId = null;
         this.firstFrameDone = false;
         this.actorWired = false;
+        // The surface container the clip targets, tracked so its allocation can be watched without
+        // re-connecting on every reconcile. Null until the child exists.
+        this.wiredContainer = null;
     }
 }
 
@@ -302,27 +306,54 @@ export class Manager {
      * @param {Meta.Window} win @param {TrackedWindow} record @param {object|null} actor
      */
     _wireActorSignals(win, record, actor) {
-        if (!actor || record.actorWired)
+        if (!actor)
             return;
-        record.actorWired = true;
 
-        this._connect(record.signals, actor, 'notify::allocation', () => {
-            if (!record.firstFrameDone && actor.width > 0 && actor.height > 0) {
-                if (record.idleId)
-                    GLib.Source.remove(record.idleId);
-                // Defer to idle: don't mutate actor tree during allocation.
-                record.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    record.idleId = null;
-                    record.firstFrameDone = true;
-                    this._reconcileWindow(win);
-                    return GLib.SOURCE_REMOVE;
-                });
-            } else {
-                this._reconcileWindowDebounced(win);
+        if (!record.actorWired) {
+            record.actorWired = true;
+
+            this._connect(record.signals, actor, 'notify::allocation', () => {
+                if (!record.firstFrameDone && actor.width > 0 && actor.height > 0) {
+                    if (record.idleId)
+                        GLib.Source.remove(record.idleId);
+                    // Defer to idle: don't mutate actor tree during allocation.
+                    record.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        record.idleId = null;
+                        record.firstFrameDone = true;
+                        this._reconcileWindow(win);
+                        return GLib.SOURCE_REMOVE;
+                    });
+                } else {
+                    this._reconcileWindowDebounced(win);
+                }
+            }, true);
+            this._connect(record.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
+            this._connect(record.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
+        }
+
+        // The Wayland clip attaches to the surface container, a child of the window actor, whose
+        // allocation can move (0 -> real, a buffer swap, a decoration change) without the window
+        // actor's changing. Watching it re-runs the readings so the stored insets cannot go stale.
+        const container = getSurfaceContainer(actor, St);
+        if (container && container !== record.wiredContainer) {
+            // The container can be replaced (XWayland swaps the surface child); drop the old
+            // connection before watching the new one so `signals` does not accumulate dead entries.
+            const previous = record.wiredContainer;
+            if (previous) {
+                const index = record.signals.findIndex(([obj]) => obj === previous);
+                if (index >= 0) {
+                    try {
+                        previous.disconnect(record.signals[index][1]);
+                    } catch {
+                        // The old container is already gone.
+                    }
+                    record.signals.splice(index, 1);
+                }
             }
-        }, true);
-        this._connect(record.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
-        this._connect(record.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
+            record.wiredContainer = container;
+            this._connect(record.signals, container, 'notify::allocation',
+                () => this._reconcileWindowDebounced(win), true);
+        }
     }
 
     /** Cancels the debounce and first-frame idle the manager scheduled for this window. */

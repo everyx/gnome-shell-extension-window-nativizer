@@ -5,13 +5,14 @@
  */
 
 import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
 import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget} from '../lib/clipTarget.js';
 import {findMetaWindow} from '../platform/window.js';
-import {clipGeometryChanges, clipParamChanges} from './clipParams.js';
+import {clipGeometryChanges, clipParamChanges, isPaintableFrame} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -97,6 +98,14 @@ export const RoundedClipEffect = GObject.registerClass({
 
         // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
+        // True while the clip has suspended itself because its target has no paint-able body. The
+        // next reconcile re-enables the effect (WindowDecoration.setOverviewMode); a valid frame
+        // clears this again.
+        this._suspended = false;
+        // True while a deferred disable is queued. Disabling a Clutter.ActorMeta during its
+        // actor's own paint trips Clutter's `!CLUTTER_ACTOR_IN_PAINT` check, so the suspend lands
+        // on the idle that follows the paint.
+        this._suspendPending = false;
         // The target's phase strategy: the Wayland surface container carries the phase in its
         // own transform (the default), every fallback target does not. setPhaseInTransform()
         // flips it for the fallback; see resolveClipTarget in lib/clipTarget.js.
@@ -206,8 +215,15 @@ export const RoundedClipEffect = GObject.registerClass({
         const actor = this.get_actor();
         const width = actor?.width ?? 0;
         const height = actor?.height ?? 0;
-        if (!(width > 0) || !(height > 0))
+        // A target with no positive extent has no offscreen body to composite. Painting nothing is
+        // indistinguishable from an erased body - the sibling shadow actor still draws - so suspend
+        // the clip instead: disable the effect and let the actor paint directly. The allocation
+        // arriving re-syncs the decoration and re-enables it.
+        if (!isPaintableFrame({width, height})) {
+            this._suspend();
             return;
+        }
+        this._suspended = false;
 
         const scale = this._scale ?? 1.0;
         // The frame's phase comes from the resolved target (see resolveClipTarget). A Wayland
@@ -224,6 +240,12 @@ export const RoundedClipEffect = GObject.registerClass({
         const win = this._phaseInTransform ? null : findMetaWindow(actor);
         const frame = clipFrameForTarget({width, height}, this._insets, scale,
             {phaseInTransform: this._phaseInTransform}, win);
+        // Backstop: if the derived body is not paint-able even for a positive actor (a future
+        // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.
+        if (!isPaintableFrame(frame)) {
+            this._suspend();
+            return;
+        }
         const changes = clipGeometryChanges(this._paint, {scale, width, height, frame});
 
         if (changes.scale !== undefined) {
@@ -253,5 +275,28 @@ export const RoundedClipEffect = GObject.registerClass({
         }
 
         super.vfunc_paint_target(node, paintContext);
+    }
+
+    /**
+     * Suspends the clip after its target turned degenerate. Disabling the effect is what makes the
+     * actor paint directly instead of through an offscreen target that would draw nothing; the
+     * manager's next reconcile re-enables it (`WindowDecoration.setOverviewMode`).
+     */
+    _suspend() {
+        // Do not early-return on `_suspended`: `WindowDecoration.setOverviewMode` re-enables the
+        // effect on every reconcile, so a still-degenerate target must be able to suspend again on
+        // the paint that follows. The flag is state, not a latch.
+        this._suspended = true;
+        if (this._suspendPending)
+            return;
+        this._suspendPending = true;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._suspendPending = false;
+            // A valid frame can have landed between the paint that queued this and the idle; only
+            // disable while the target is still degenerate.
+            if (this._suspended)
+                this.set_enabled(false);
+            return GLib.SOURCE_REMOVE;
+        });
     }
 });
