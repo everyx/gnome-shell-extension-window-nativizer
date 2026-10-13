@@ -211,12 +211,25 @@ signatures for it, so the extension probes which one the host provides.
 
 ## shaped_texture_paint_to_bitmap
 
-`shapedTexture.paint_to_bitmap()` - the overview's safety probe. Mutter returns NULL from its own
-early-out while the shaped texture already renders through the offscreen path (a set mask, a
-viewport, a non-normal transform, a plane Cogl cannot read back), and otherwise reads back the
-requested clip. The extension passes a 1x1 clip, so probing a window that is not already offscreen
-costs one pixel - and the attached mask cannot be detached from GJS afterwards, which is why the
-question is worth asking before touching it.
+`shapedTexture.paint_to_bitmap()` - the overview's safety probe. It returns a `CoglBitmap*` (the
+direct-read screenshot path a mask would move), or NULL, and NULL has four causes GJS cannot tell
+apart:
+
+1. the shaped texture holds no buffer yet (`stex->texture == NULL`);
+2. `should_get_via_offscreen()` is true - a mask is already set (including the one we would
+   install), the plane is one Cogl cannot read back, a viewport is set, or the monitor transform is
+   not normal;
+3. the destination size is zero;
+4. the requested clip does not intersect the destination.
+
+The extension passes a 1x1 clip, so probing a window that is not already offscreen costs one pixel
+and cause 4 is unreachable. Only cause 1 is temporary, and a NULL cannot say which it is, so the
+answer is taken as a verdict only from a texture that has a buffer and that the extension has not
+modified; once taken, it is final for that texture - a same-size buffer swap does not re-open the
+question, because by then the mask is installed and the path has already moved. The attached mask
+cannot be detached from GJS afterwards, which is why the question is worth asking before touching
+it. The general rules behind that scoping are in `decoration-alignment.md` § Four rules this work
+generalised.
 
 ## cogl_pixel_format
 

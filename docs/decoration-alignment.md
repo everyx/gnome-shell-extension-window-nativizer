@@ -540,10 +540,10 @@ scan (19 rays sampled every 5° from top to left shoulder) verifies both minimum
 and monotonic radial/tangential color transitions, ensuring zero dark stroke bleed, notch artifacts,
 or subpixel phase jitter.
 
-## Two rules the edge work generalised
+## Four rules this work generalised
 
-Both were learned by getting them wrong in the edge work above, and neither is specific to this
-decoration.
+All four were learned by getting them wrong in the edge and overview work above, and none is
+specific to this decoration.
 
 **A value defined on the far side of a rasterisation boundary must not be folded into geometry
 that crosses it.** Carry it in the representation the compositor already uses, at the layer where
@@ -564,4 +564,21 @@ whose phase steps never reach ±0.5 physical px, and visible at 1.25, a stock pr
 follow. A scale set is part of the test surface, not a sample of it. And a guard that only rejects
 one direction of artefact is half a guard - the straight-edge probe asserted only a downward
 threshold, so a seam brighter than the shadow passed unseen.
+
+**Observations are tri-state.** When the value comes from an actor or an API we do not own,
+"missing or not yet arrived" is a state of its own, not a `false`. Mutter's `paint_to_bitmap()`
+answers a bitmap ("the screenshot path would move"), NULL (four causes GJS cannot tell apart -
+`shell-api.md` § shaped_texture_paint_to_bitmap), or nothing at all when the member is absent.
+Folding the third into either of the others caches a guess, and a guess is wrong for the rest of
+the session. The degradation for "we cannot tell yet" therefore has to be the one that leaves a
+display that is already correct alone - here the window stays square rather than wearing a mask we
+cannot vouch for - and it must not be final, so the observation is retried when the input settles.
+
+**An observation must not be taken after we have mutated the thing observed.** A probe read after
+our own change reports our change, not the original state. The overview probe is the instance: it
+decides whether installing the mask would move Mutter's screenshot path, and the answer is only
+meaningful on a texture that has a buffer and that we have not touched. Once a verdict exists for a
+shaped texture it is kept for that texture's life and never re-taken; a same-size buffer swap
+deliberately does not re-open the question, because by then the mask is installed and the path has
+already moved - re-deciding could not un-move it.
 
