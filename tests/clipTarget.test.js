@@ -160,15 +160,17 @@ describe('clipTarget', () => {
             expect(isCompatibleSurfaceGeometry(candidateWrongHeight, win)).toBe(false);
         });
 
-        it('accepts candidate with unallocated dimensions (width/height 0)', () => {
+        it('rejects candidate with unallocated dimensions (width/height 0)', () => {
+            // The resolver defers this separately; the geometry check itself must not accept a box
+            // it cannot verify.
             const candidateUnallocated = {x: 0, y: 0, width: 0, height: 0};
-            expect(isCompatibleSurfaceGeometry(candidateUnallocated, win)).toBe(true);
+            expect(isCompatibleSurfaceGeometry(candidateUnallocated, win)).toBe(false);
         });
 
-        it('accepts candidate when window buffer cannot be queried', () => {
+        it('rejects candidate when window buffer cannot be queried', () => {
             const winNoBuffer = {get_buffer_rect: () => null};
             const candidate = {x: 0, y: 0, width: 500, height: 400};
-            expect(isCompatibleSurfaceGeometry(candidate, winNoBuffer)).toBe(true);
+            expect(isCompatibleSurfaceGeometry(candidate, winNoBuffer)).toBe(false);
         });
     });
 
@@ -220,20 +222,30 @@ describe('clipTarget', () => {
                     .toEqual({actor, phaseInTransform: false});
             });
 
-            it('keeps the container when the buffer cannot be read (fail-open)', () => {
+            it('falls back to the window actor when the buffer cannot be read', () => {
+                // The buffer read fails independently of the container's allocation, so the
+                // container's coordinate space cannot be verified; the window actor is the safe
+                // verified target, not the unverified container.
                 const win = {get_client_type: () => WindowClientType.WAYLAND, get_buffer_rect: () => null};
                 const surface = new MockSurfaceActor();
                 const actor = createMockActor({children: [surface]});
 
                 expect(resolveClipTarget(win, actor, mockSt))
-                    .toEqual({actor: surface, phaseInTransform: true});
+                    .toEqual({actor, phaseInTransform: false});
             });
 
-            it('keeps the container when it has no allocation yet (fail-open)', () => {
+            it('defers when the container has no allocation yet, then re-verifies once it allocates', () => {
+                // "Wait": the clip keeps its last good target while the container's box is
+                // unverifiable, and the manager's notify::allocation watch re-runs this resolution.
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
                 const unallocated = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {width: 0, height: 0});
                 const actor = createMockActor({children: [unallocated]});
 
+                expect(resolveClipTarget(win, actor, mockSt)).toEqual({defer: true});
+
+                // The later re-verification: the same container once allocated is the target.
+                unallocated.width = 500;
+                unallocated.height = 400;
                 expect(resolveClipTarget(win, actor, mockSt))
                     .toEqual({actor: unallocated, phaseInTransform: true});
             });

@@ -11,9 +11,13 @@
  * not an St.Widget either, so an ambiguous tree fails the uniqueness rule and falls back to the
  * window actor. On X11 the surface is the window actor's first non-foreign child - a foreign
  * widget injected ahead of it is skipped rather than taking the clip - and when no such child
- * exists the window actor is the fallback, never an unverified widget. Every fallback keeps the
- * phase in a child transform, so the clip folds the window's subpixel offset into its geometry
- * (`clipFrameForTarget`) exactly where the shadow actor carries it as a translation.
+ * exists the window actor is the fallback, never an unverified widget. A container that has not
+ * allocated yet defers the choice (`{defer: true}`) so the last good target is kept; a container
+ * whose geometry cannot be verified is refused and the window actor is used. The manager watches
+ * the container's `notify::allocation` and re-runs this resolution once it settles. Every
+ * fallback keeps the phase in a child transform, so the clip folds the window's subpixel offset
+ * into its geometry (`clipFrameForTarget`) exactly where the shadow actor carries it as a
+ * translation.
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
@@ -52,14 +56,29 @@ export function getX11SurfaceChild(actor, St = null) {
 }
 
 /**
+ * Whether a surface container has no allocation yet, so its box cannot be verified. Kept separate
+ * from `isCompatibleSurfaceGeometry` because the resolver treats it as the "wait" case (keep the
+ * last good target) rather than an incompatibility (fall back to the window actor).
+ *
+ * @param {object|null} candidate
+ * @returns {boolean}
+ */
+function isUnallocatedSurfaceBox(candidate) {
+    const width = candidate?.width;
+    const height = candidate?.height;
+    return width === undefined || height === undefined || width === 0 || height === 0;
+}
+
+/**
  * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
  *
- * The two unreadable cases fail open on purpose. The container is the only target whose own
- * transform carries the phase, so rejecting it on a transient state - a buffer not yet readable,
- * or a Clutter actor not yet allocated - would drop the phase guarantee for as long as the state
- * lasts. The check exists to reject a coordinate space that genuinely differs (a letterboxed
- * container offset, or a size that does not match the buffer), and those are stable; the next
- * reconcile re-runs the check once the window settles.
+ * A geometry that cannot be verified is not accepted. An unreadable buffer is an independent read
+ * failure, and an unallocated candidate is the "wait" case the resolver defers (`isUnallocatedSurfaceBox`);
+ * both used to fail open, so a container whose box genuinely differs from the buffer - a
+ * letterboxed or offset container - could be attached whenever the buffer read happened to fail,
+ * and the clip then cut the wrong body. The check exists to reject a coordinate space that
+ * genuinely differs, and the resolver's caller re-verifies on the container's `notify::allocation`
+ * once the state settles.
  *
  * @param {object|null} candidate
  * @param {object|null} win
@@ -70,18 +89,20 @@ export function isCompatibleSurfaceGeometry(candidate, win) {
         return false;
 
     const buffer = getWindowBufferRect(win);
-    // Fail-open: if buffer cannot be queried yet, defer rejection to subsequent reconcile.
+    // An unreadable buffer cannot verify the container's coordinate space; the safe target is the
+    // window actor, not an unverified container.
     if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
-        return true;
+        return false;
 
     const candW = candidate.width;
     const candH = candidate.height;
     const candX = candidate.x ?? 0;
     const candY = candidate.y ?? 0;
 
-    // Fail-open: if candidate has not allocated size yet, accept until allocation settles.
+    // An unallocated box cannot be verified either; the resolver defers this case separately so it
+    // keeps the last good target instead of switching to the window actor.
     if (candW === undefined || candH === undefined || candW === 0 || candH === 0)
-        return true;
+        return false;
 
     // The container path's premise is that the container's local space IS the buffer's: the clip
     // derives its frame with ZERO_PHASE, so a real offset in x/y moves the cut against the shadow's
@@ -109,7 +130,8 @@ export function isCompatibleSurfaceGeometry(candidate, win) {
  * @param {object|null} win
  * @param {object|null} actor
  * @param {object|null} [St]
- * @returns {{actor: object, phaseInTransform: boolean}|null}
+ * @returns {{actor: object, phaseInTransform: boolean}|{defer: true}|null} The target, a defer
+ *          signal when the container is not allocated yet, or null when there is no actor
  */
 export function resolveClipTarget(win, actor, St = null) {
     if (!actor)
@@ -121,9 +143,16 @@ export function resolveClipTarget(win, actor, St = null) {
     const defaultTarget = isX11 ? getX11SurfaceChild(actor, St) ?? actor : actor;
 
     const surfaceContainer = getSurfaceContainer(actor, St);
-    if (surfaceContainer && isCompatibleSurfaceGeometry(surfaceContainer, win) &&
-        isIntegerAlignedSurfaceBox(surfaceContainer))
-        return {actor: surfaceContainer, phaseInTransform: true};
+    if (surfaceContainer) {
+        // The container has no allocation yet: its box cannot be verified, so defer the choice and
+        // keep the last good target rather than attach the clip to an unverified actor. The manager
+        // watches this container's notify::allocation and re-runs the resolution once it settles.
+        if (isUnallocatedSurfaceBox(surfaceContainer))
+            return {defer: true};
+        if (isCompatibleSurfaceGeometry(surfaceContainer, win) &&
+            isIntegerAlignedSurfaceBox(surfaceContainer))
+            return {actor: surfaceContainer, phaseInTransform: true};
+    }
 
     return {actor: defaultTarget, phaseInTransform: false};
 }

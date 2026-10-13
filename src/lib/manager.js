@@ -333,7 +333,9 @@ export class Manager {
 
         // The Wayland clip attaches to the surface container, a child of the window actor, whose
         // allocation can move (0 -> real, a buffer swap, a decoration change) without the window
-        // actor's changing. Watching it re-runs the readings so the stored insets cannot go stale.
+        // actor's changing. Watching it re-runs the readings so the stored insets cannot go stale
+        // and re-verifies a clip target `resolveClipTarget` deferred while the container was
+        // unallocated, so the clip returns to the container once its box is verifiable.
         const container = getSurfaceContainer(actor, St);
         if (container && container !== record.wiredContainer) {
             // The container can be replaced (XWayland swaps the surface child); drop the old
