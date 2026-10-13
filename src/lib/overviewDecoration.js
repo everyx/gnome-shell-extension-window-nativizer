@@ -16,6 +16,7 @@
 
 import {ZERO_INSETS} from './frame.js';
 import {WindowClientType} from './mutterRules.generated.js';
+import {isPaintableFrame} from '../effects/clipParams.js';
 import {getWindowActor, getWindowFrameRect, getOverviewPreview, getWindowClientType} from '../platform/window.js';
 
 /**
@@ -248,33 +249,44 @@ export class OverviewDecoration {
      * Probes whether masking this window would move a path the desktop can see, so the overview
      * can leave that window alone instead. See `overviewMask.maskWouldChangeScreenshot`.
      *
-     * The observation is only meaningful on a texture we have not modified, and only once that
-     * texture has a buffer. Mutter's NULL has several causes that GJS cannot tell apart - "no
-     * buffer yet" and "already offscreen because a mask is set" among them - so this refuses to
-     * take a verdict from a bufferless texture (`_textureBufferKey` returns null) and, once a
-     * verdict is recorded for a shaped texture, never probes it again. A `true` answer is a real
-     * bitmap: the direct-read path the mask would move, a refusal final for this texture's life. A
-     * `false` answer is a NULL read on a buffered, unmodified texture: "masking is safe", also
-     * final. A same-size buffer swap deliberately does not re-open the question - by then the mask
-     * is installed and the screenshot path already moved, so re-deciding could not un-move it. A
-     * "cannot tell" (`null`: the member is missing, or the readback threw) is never cached: one
-     * transient failure must not lock a window square for the rest of the session.
+     * The observation is only meaningful on a texture we have not modified, that has a buffer,
+     * and whose draw target is paintably allocated. Mutter's NULL has several causes that GJS
+     * cannot tell apart - "no buffer yet" and "the draw target is degenerate" among them - so this
+     * refuses to take a verdict from a bufferless texture (`_textureBufferKey` returns null) or from
+     * one whose window actor has no positive allocation (`isPaintableFrame`, the authority the clip
+     * already uses), and, once a verdict is recorded for a shaped texture, never probes it again. A
+     * `true` answer is a real bitmap: the direct-read path the mask would move, a refusal final for
+     * this texture's life. A `false` answer is a NULL read on a buffered, allocated, unmodified
+     * texture: "masking is safe", also final. A same-size buffer swap deliberately does not re-open
+     * the question - by then the mask is installed and the screenshot path already moved, so
+     * re-deciding could not un-move it. A "cannot tell" (`null`: the member is missing, or the
+     * readback threw) is never cached: one transient failure must not lock a window square for the
+     * rest of the session.
+     *
+     * The remaining NULL causes are not readable from GJS: `Meta.ShapedTexture` exposes no getter
+     * for an already-set mask, an unreadable plane, a viewport or a non-normal buffer transform,
+     * and no getter for its own zero destination size. They are conditions under which Mutter
+     * already keeps the screenshot off the direct-read path, and the 1x1 clip makes the
+     * clip-misses-the-destination cause unreachable once the destination is non-zero; the window
+     * actor's allocation is the readable proxy for a degenerate draw target.
      *
      * The cache is dropped with the decoration (`drop()`); a replaced shaped texture is a new key.
      *
      * @returns {boolean}
      */
     _maskWouldChangeDesktop() {
-        const stex = getWindowActor(this._win)?.get_texture?.() ?? null;
+        const actor = getWindowActor(this._win);
+        const stex = actor?.get_texture?.() ?? null;
         // A settled verdict is final. Our mask can only be installed after one (see below), so a
         // later probe on this texture would read our change, not the original state.
         if (this._probe && this._probe.stex === stex)
             return this._probe.wouldChange;
 
-        // No buffer yet: a NULL here would be indistinguishable from the other causes and would
-        // speak for a texture we cannot vouch for. Leave the window square this pass, cache
-        // nothing, and let the buffer's arrival earn a fresh observation.
-        if (this._textureBufferKey(stex) === null)
+        // No buffer yet, or no paintably allocated draw target: a NULL here would be
+        // indistinguishable from the other causes and would speak for a state that can recover.
+        // Leave the window square this pass, cache nothing, and let the buffer or the allocation
+        // arriving earn a fresh observation.
+        if (this._textureBufferKey(stex) === null || !isPaintableFrame(actor))
             return true;
 
         const probe = this._OverviewMask?.maskWouldChangeScreenshot;

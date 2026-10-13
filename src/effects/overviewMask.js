@@ -39,12 +39,15 @@ const opaqueMasks = new WeakMap();
  * 3. the destination size is zero (`dst_width == 0 || dst_height == 0`);
  * 4. the requested clip does not intersect the destination.
  *
- * Causes 2-4 mean the screenshot path cannot move under a mask, but cause 1 is temporary: the same
- * shaped texture gains a buffer later, and on it the path *can* move. A probe cannot be trusted
- * after our own mask is set either, because that turns cause 2 on. So the caller takes a verdict
- * only from a texture that has a buffer (cause 1 excluded) and that we have not modified (our mask
- * excluded), and keeps that verdict for the texture's life. The 1x1 clip keeps the readback to a
- * single pixel.
+ * Causes 2-4 mean the screenshot path cannot move under a mask at the moment of the probe, but
+ * cause 1 is temporary (the same shaped texture gains a buffer later) and cause 3's practical form
+ * is transient (a draw target with no paint-able allocation recovers). A probe cannot be trusted
+ * after our own mask is set either, because that turns cause 2 on. So the caller excludes what it
+ * can read - a buffer (cause 1) and a paint-ably allocated window actor (cause 3) - refuses to take
+ * a verdict after our own mask (cause 2's mask branch), and keeps a verdict for the texture's life.
+ * The other cause-2 branches (an unreadable plane, a viewport, a non-normal transform) have no
+ * getter on `Meta.ShapedTexture`, so GJS cannot see them; the 1x1 clip keeps cause 4 unreachable
+ * while the destination is non-zero, and keeps the readback to a single pixel.
  *
  * The member is resolved by capability, not by a Shell version: 51 renamed `get_image()` to
  * `paint_to_bitmap()` and changed its return from `cairo_surface_t*` to `CoglBitmap*`. The 50-era

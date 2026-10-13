@@ -799,6 +799,31 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(harness.surface.mask).toBeNull();
     });
 
+    it('takes no verdict from a buffered texture whose draw target is not paintably allocated', () => {
+        // "Has a backing buffer" is not "the current draw target is valid": a valid buffer with a
+        // momentarily zero-sized draw target must not cache a NULL as a final "masking is safe",
+        // or the target's recovery would keep the stale verdict. The window actor's allocation is
+        // the readable authority for the draw target, so a zero allocation earns no verdict.
+        const harness = setupMaskHarness({maskWouldChangeScreenshot: false});
+        mockActor.width = 0;
+        mockActor.height = 0;
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(0);
+        expect(harness.deco.overview.stateView.isProbed).toBeFalse();
+        expect(harness.surface.hasMask).toBeFalse();
+
+        // The draw target recovers: the same buffered texture now earns one fresh observation,
+        // and its "safe" NULL installs the rounded mask.
+        mockActor.width = 800;
+        mockActor.height = 600;
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.probeCalls()).toBe(1);
+        expect(harness.deco.overview.stateView.isProbed).toBeTrue();
+        expect(harness.surface.mask).toBe(harness.mask);
+    });
+
     it('never re-probes a decided texture after our own mask has touched it', () => {
         // The first probe is a NULL on a buffered texture, read before we touched anything:
         // the "masking is safe" verdict, which installs the rounded mask.

@@ -223,13 +223,17 @@ apart:
 4. the requested clip does not intersect the destination.
 
 The extension passes a 1x1 clip, so probing a window that is not already offscreen costs one pixel
-and cause 4 is unreachable. Only cause 1 is temporary, and a NULL cannot say which it is, so the
-answer is taken as a verdict only from a texture that has a buffer and that the extension has not
-modified; once taken, it is final for that texture - a same-size buffer swap does not re-open the
-question, because by then the mask is installed and the path has already moved. The attached mask
-cannot be detached from GJS afterwards, which is why the question is worth asking before touching
-it. The general rules behind that scoping are in `decoration-alignment.md` § Four rules this work
-generalised.
+and cause 4 is unreachable while the destination is non-zero. Causes 1 and 3 are the ones that
+recover, and a NULL cannot say which cause it is, so the extension refuses to probe a bufferless
+texture or one whose window actor has no paint-able allocation (`isPaintableFrame`, the authority
+the clip uses) and takes the answer as a verdict only from a texture that has a buffer, a
+paint-ably allocated draw target, and that it has not modified; once taken, it is final for that
+texture - a same-size buffer swap does not re-open the question, because by then the mask is
+installed and the path has already moved. The remaining cause-2 branches - an unreadable plane, a
+viewport, a non-normal buffer transform, an already-set mask - have no getter on
+`Meta.ShapedTexture` and are not readable from GJS. The attached mask cannot be detached from GJS
+afterwards, which is why the question is worth asking before touching it. The general rules behind
+that scoping are in `decoration-alignment.md` § Four rules this work generalised.
 
 ## cogl_pixel_format
 
