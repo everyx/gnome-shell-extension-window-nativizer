@@ -29,13 +29,22 @@ const opaqueMasks = new WeakMap();
  * would keep taking the actor-render path — rounded corners, alpha channel — for the rest of
  * the session, which is a change the desktop can show.
  *
- * `paint_to_bitmap()` answers exactly that question: it returns a `CoglBitmap*`, or `NULL` from
- * one of Mutter's own early-outs. Every NULL branch means the screenshot path cannot move under
- * this mask — no buffer and a zero destination size have no content to change, and the offscreen
- * branch (`should_get_via_offscreen()`, which includes our own already-attached mask) is the one
- * the mask would force — so `null` is read as "the screenshot does not change" and only a real
- * bitmap (the direct-read path, which the mask would move) is a refusal. The 1x1 clip keeps the
- * readback to a single pixel.
+ * `paint_to_bitmap()` answers exactly that question: it returns a `CoglBitmap*`, or `NULL`. A real
+ * bitmap is the direct-read path the mask would move, so it is a refusal. NULL has four causes in
+ * Mutter and GJS cannot tell them apart:
+ *
+ * 1. the shaped texture holds no buffer yet (`stex->texture == NULL`);
+ * 2. `should_get_via_offscreen()` is true - a mask is already set (including our own), the plane
+ *    is one Cogl cannot read back, a viewport is set, or the monitor transform is not normal;
+ * 3. the destination size is zero (`dst_width == 0 || dst_height == 0`);
+ * 4. the requested clip does not intersect the destination.
+ *
+ * Causes 2-4 mean the screenshot path cannot move under a mask, but cause 1 is temporary: the same
+ * shaped texture gains a buffer later, and on it the path *can* move. A probe cannot be trusted
+ * after our own mask is set either, because that turns cause 2 on. So the caller takes a verdict
+ * only from a texture that has a buffer (cause 1 excluded) and that we have not modified (our mask
+ * excluded), and keeps that verdict for the texture's life. The 1x1 clip keeps the readback to a
+ * single pixel.
  *
  * The member is resolved by capability, not by a Shell version: 51 renamed `get_image()` to
  * `paint_to_bitmap()` and changed its return from `cairo_surface_t*` to `CoglBitmap*`. The 50-era

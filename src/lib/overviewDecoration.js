@@ -119,10 +119,10 @@ export class OverviewDecoration {
      */
     setMode(inOverview, readings = {}) {
         const wanted = Boolean(inOverview);
-        // The probe's answer is cached per shaped texture, not per entry: once this window wears
-        // our mask the probe's own early-out can never answer anything but NULL again, so a fresh
-        // entry must reuse the first answer rather than ask a texture our mask has already moved
-        // (see `_maskWouldChangeDesktop`).
+        // The probe's answer is cached against the state it was read from, not the entry: once
+        // this window wears our mask the probe's own early-out can never answer anything but NULL
+        // again, so a fresh entry must reuse a settled answer rather than ask a texture our mask
+        // has already moved (see `_maskWouldChangeDesktop`).
         this._inOverview = wanted;
 
         this._canMask = this.canApplyMask({
@@ -210,29 +210,71 @@ export class OverviewDecoration {
     }
 
     /**
+     * Reads the shaped texture's own buffer state. A NULL probe answer is only meaningful on a
+     * texture that has a buffer: "no buffer yet" is one of the branches NULL can mean, and GJS
+     * cannot tell it apart from the others. A texture with no buffer earns no verdict, so the
+     * caller uses this to refuse to probe one.
+     *
+     * @param {object|null} stex - MetaShapedTexture, or a stand-in in a spec
+     * @returns {string|null} A key for the buffer the texture holds, or null when it holds none yet
+     */
+    _textureBufferKey(stex) {
+        const multi = stex?.get_texture?.() ?? null;
+        if (!multi)
+            return null;
+        const width = multi.get_width?.() ?? 0;
+        const height = multi.get_height?.() ?? 0;
+        if (!(width > 0) || !(height > 0))
+            return null;
+        return `${width}x${height}`;
+    }
+
+    /**
      * Probes whether masking this window would move a path the desktop can see, so the overview
      * can leave that window alone instead. See `overviewMask.maskWouldChangeScreenshot`.
      *
-     * A definitive answer is cached on the shaped texture's identity and never invalidated by a
-     * mode change: the answer must come from before our mask ever touched the slot, because
-     * afterwards the probe's own `should_get_via_offscreen()` early-out makes it answer NULL
-     * deterministically. "Cannot tell" (`null`: the member is missing, or the readback threw) is
-     * deliberately *not* cached - one transient failure must not lock a window square for the rest
-     * of the session. The cache is dropped with the decoration (`drop()`); a replaced shaped
-     * texture is a new key.
+     * The observation is only meaningful on a texture we have not modified, and only once that
+     * texture has a buffer. Mutter's NULL has several causes that GJS cannot tell apart - "no
+     * buffer yet" and "already offscreen because a mask is set" among them - so this refuses to
+     * take a verdict from a bufferless texture (`_textureBufferKey` returns null) and, once a
+     * verdict is recorded for a shaped texture, never probes it again. A `true` answer is a real
+     * bitmap: the direct-read path the mask would move, a refusal final for this texture's life. A
+     * `false` answer is a NULL read on a buffered, unmodified texture: "masking is safe", also
+     * final. A same-size buffer swap deliberately does not re-open the question - by then the mask
+     * is installed and the screenshot path already moved, so re-deciding could not un-move it. A
+     * "cannot tell" (`null`: the member is missing, or the readback threw) is never cached: one
+     * transient failure must not lock a window square for the rest of the session.
+     *
+     * The cache is dropped with the decoration (`drop()`); a replaced shaped texture is a new key.
      *
      * @returns {boolean}
      */
     _maskWouldChangeDesktop() {
         const stex = getWindowActor(this._win)?.get_texture?.() ?? null;
+        // A settled verdict is final. Our mask can only be installed after one (see below), so a
+        // later probe on this texture would read our change, not the original state.
         if (this._probe && this._probe.stex === stex)
             return this._probe.wouldChange;
 
+        // No buffer yet: a NULL here would be indistinguishable from the other causes and would
+        // speak for a texture we cannot vouch for. Leave the window square this pass, cache
+        // nothing, and let the buffer's arrival earn a fresh observation.
+        if (this._textureBufferKey(stex) === null)
+            return true;
+
         const probe = this._OverviewMask?.maskWouldChangeScreenshot;
         const answer = probe ? probe(stex) : null;
-        if (answer === true || answer === false) {
-            this._probe = {stex, wouldChange: answer};
-            return answer;
+        if (answer === true) {
+            // A real bitmap: the direct-read path the mask would move. Final for this texture.
+            this._probe = {stex, wouldChange: true};
+            return true;
+        }
+        if (answer === false) {
+            // A NULL on a buffered, unmodified texture: masking is safe, and final. Keeping the
+            // verdict is what stops a later reconcile - after our opaque mask has moved the
+            // texture offscreen - from reading its own mutation as fresh evidence.
+            this._probe = {stex, wouldChange: false};
+            return false;
         }
 
         // Cannot tell. Keep this pass safe (square) but leave the cache empty so a later reconcile

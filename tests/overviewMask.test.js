@@ -111,9 +111,10 @@ describe('maskWouldChangeScreenshot', () => {
         expect(getImageCalls).toBe(0);
     });
 
-    it('reads the NULL bitmap as the offscreen path already in use, so the mask is safe', () => {
-        // Every NULL branch leaves the screenshot path where the mask would put it (or there is
-        // no content to move), so it is a "does not change" answer, not a refusal.
+    it('answers "would not change" for a NULL bitmap', () => {
+        // Only the caller can scope this: it refuses to take a verdict from a bufferless texture
+        // or one it has already modified, and then a NULL means the screenshot path cannot move
+        // under the mask. The probe itself cannot see either fact.
         expect(probeWouldChangeScreenshot({paint_to_bitmap: () => null}, {clip: {}, format: 0}))
             .toBeFalse();
     });
