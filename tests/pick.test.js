@@ -301,4 +301,24 @@ describe('extractPhaseProperties', () => {
         expect(fields.mirrorPhaseX).toBe('unknown');
         expect(fields.mirrorPhaseY).toBe('unknown');
     });
+
+    it('says the mirror is unknown when an intersecting monitor scale is unreadable', () => {
+        // The pick reply must report the new strict-read path as unknown, not echo the 1.0
+        // fallback as a zero phase the user would compare against the applied read.
+        globalThis.global = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => { throw new Error('scale went away'); },
+                get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            },
+        };
+        const win = {
+            get_client_type: () => WindowClientType.WAYLAND,
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            get_compositor_private: () => ({x: 0, y: 0, get_children: () => []}),
+        };
+        const fields = extractPhaseProperties(win);
+        expect(fields.mirrorPhaseX).toBe('unknown');
+        expect(fields.mirrorPhaseY).toBe('unknown');
+    });
 });
