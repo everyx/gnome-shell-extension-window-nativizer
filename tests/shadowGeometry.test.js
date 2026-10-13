@@ -8,6 +8,7 @@ import {shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowS
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/window.js';
+import {resolveClipPhase} from '../src/lib/clipTarget.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';
 
@@ -461,6 +462,75 @@ describe('shadowPhaseOffset (the shadow cuts on the clip target\'s phase source)
             };
             expect(getWindowSubpixelOffset(win)).toBeNull();
             expect(shadowPhaseOffset(win, false)).toBeNull();
+        } finally {
+            globalThis.global = original;
+        }
+    });
+
+    it('keeps the clip and the shadow on one history phase across an unknown read and recovery', () => {
+        // The clip folds the mirror into its frame and the shadow translates by it, each keeping
+        // its own last good value (`_lastPhase` / `_lastOffset`). They stay on one line only while
+        // both read the same source and both drop an unknown read. Drive that pair through a
+        // failure and its recovery: after the failure both histories must hold the same
+        // pre-failure phase (never a fabricated zero), and after recovery they must move together.
+        const original = globalThis.global;
+        const container = {x: 0, y: 0, width: 500, height: 400, translation_x: 0, translation_y: 0};
+        const actor = {x: 241, y: 0, get_children: () => [container]};
+        const win = {
+            get_client_type: () => 0, // WAYLAND
+            get_compositor_private: () => actor,
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+        };
+        // Both consumers' "keep the last good phase" rule, seeded with the same zero.
+        let clipLast = {x: 0, y: 0};
+        let shadowLast = {x: 0, y: 0};
+        const step = () => {
+            const clip = resolveClipPhase({phaseInTransform: false}, win);
+            const shadow = shadowPhaseOffset(win, false);
+            if (clip)
+                clipLast = clip;
+            if (shadow)
+                shadowLast = shadow;
+            return {clip, shadow};
+        };
+        const display = geometry => ({
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => 1.25,
+                get_monitor_geometry: () => geometry,
+            },
+        });
+
+        try {
+            globalThis.global = display({x: 0, y: 0, width: 1920, height: 1080});
+            const first = step();
+            expect(first.clip).toEqual(getWindowSubpixelOffset(win));
+            expect(first.shadow).toEqual(first.clip);
+            expect(first.clip.x).toBeCloseTo(-0.2, 6);
+            expect(clipLast).toEqual(shadowLast);
+
+            // An unreadable monitor geometry: both reads answer null, so neither history records
+            // it and both keep the same last good phase - never the fabricated zero.
+            globalThis.global = display(null);
+            const failed = step();
+            expect(failed.clip).toBeNull();
+            expect(failed.shadow).toBeNull();
+            expect(clipLast).toEqual(first.clip);
+            expect(shadowLast).toEqual(first.shadow);
+            expect(clipLast).toEqual(shadowLast);
+            expect(clipLast).not.toEqual({x: 0, y: 0});
+
+            // The display recovers and the window has moved: both reads land on the new phase and
+            // the two histories move together.
+            globalThis.global = display({x: 0, y: 0, width: 1920, height: 1080});
+            actor.x = 242;
+            const recovered = step();
+            expect(recovered.clip).toEqual(getWindowSubpixelOffset(win));
+            expect(recovered.clip.x).toBeCloseTo(0.4, 6);
+            expect(recovered.shadow).toEqual(recovered.clip);
+            expect(clipLast).toEqual(recovered.clip);
+            expect(shadowLast).toEqual(recovered.shadow);
+            expect(clipLast).toEqual(shadowLast);
         } finally {
             globalThis.global = original;
         }
