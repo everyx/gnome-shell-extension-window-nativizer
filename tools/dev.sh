@@ -56,14 +56,11 @@ cmd_shell() {
     tail -20 "$LOG"
     # The session was setsid'd, so nothing here will reap it. Without this the half-started session
     # keeps the wayland display and the next `dev.sh shell` sees a live pidfile - reporting "already
-    # running" - while the stale ready marker makes it look usable.
-    kill -- "-$session_pid" 2>/dev/null || true
-    # Match the nested shell's own invocation, not any command line that merely mentions the display
-    # name - `pkill -f` is a substring match, so the broad pattern also kills a developer's shell
-    # that happens to reference it. The session may have died before gnome-shell started, when the
-    # first pattern matches nothing and dbus-run-session is what still holds the session's bus.
-    pkill -f "gnome-shell --headless --wayland --wayland-display=$WL_DISPLAY" 2>/dev/null || true
-    pkill -f "bash $ROOT/tools/dev-shell.sh" 2>/dev/null || true
+    # running" - while the stale ready marker makes it look usable. `$session_pid` is the session
+    # leader, so its process group is exactly this session (dbus-run-session, dev-shell.sh and any
+    # gnome-shell it reached). A `pkill -f` on the display name cannot say that: the display name is
+    # fixed, so it is a substring of every leg's command line and of a developer's nested shell too.
+    kill -- "-$session_pid" 2>/dev/null || kill "$session_pid" 2>/dev/null || true
     rm -f "$STATE_DIR/ready" "$PIDFILE"
     exit 1
 }
@@ -140,13 +137,21 @@ cmd_dconf() {
 }
 
 cmd_stop() {
+    local pid cmd
     if [[ -f "$PIDFILE" ]]; then
-        echo ">> Stopping nested shell (PID $(cat "$PIDFILE"))"
-        # Kill entire process tree (dbus-run-session cleans up along with it). Matching the shell's
-        # own invocation rather than just the display name: `pkill -f` matches any command line
-        # containing the pattern, and a bare display name kills unrelated shells that mention it.
-        pkill -f "gnome-shell --headless --wayland --wayland-display=$WL_DISPLAY" 2>/dev/null || true
-        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        pid="$(cat "$PIDFILE")"
+        echo ">> Stopping nested shell (PID $pid)"
+        # Signal the exact process this harness recorded, never the shared display name. `pkill -f`
+        # on the display name is a substring match against every command line, and the display name
+        # is fixed, so one leg's teardown also killed the shell the next leg - or the developer -
+        # had just started. The recorded pid is the nested gnome-shell; dbus-run-session reaps the
+        # rest of the session when it exits, so signalling that one pid stops the session. The
+        # pidfile is trusted only while it still names this harness's shell, so a stale pidfile
+        # cannot make a reused pid a target.
+        cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+        if [[ "$cmd" == *gnome-shell*"wayland-display=$WL_DISPLAY"* ]]; then
+            kill "$pid" 2>/dev/null || true
+        fi
         rm -rf "$PIDFILE" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"
     fi
     echo ">> Cleaned up"

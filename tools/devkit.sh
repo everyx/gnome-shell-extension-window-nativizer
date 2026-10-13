@@ -34,9 +34,11 @@ if [ "$1" = "bg" ]; then
     done
     if ! pgrep -f "gnome-shell --devkit" > /dev/null; then
         echo "FAILED: Session failed to start, log tail:"; tail -5 "$LOG"
-        # Nothing else reaps it, and a pidfile left behind names a pid that will be reused.
-        kill -- "-$session_pid" 2>/dev/null || true
-        pkill -f "gnome-shell --devkit" 2>/dev/null || true
+        # Nothing else reaps it, and a pidfile left behind names a pid that will be reused. The
+        # setsid'd `$session_pid` leads the process group, so `-$session_pid` is exactly this
+        # session; a `pkill -f "gnome-shell --devkit"` is a bare command-line match that also
+        # reaches another devkit session.
+        kill -- "-$session_pid" 2>/dev/null || kill "$session_pid" 2>/dev/null || true
         rm -f "$PIDFILE"
         exit 1
     fi
