@@ -107,8 +107,16 @@ export class ProcessClassifier {
             if (this._inFlight.get(pid) !== entry)
                 return;
             this._inFlight.delete(pid);
-            // Cache NO_PROVIDER on read failure to avoid per-reconcile I/O retries; cleared on forgetProcess().
-            this._processCache.set(pid, error ? NO_PROVIDER : classifyProcess(mapsText));
+            // A failed read is "unknown", not a verdict. Caching NO_PROVIDER here answered a
+            // transient failure as "definitively not libadwaita, not GTK4" for the process's
+            // lifetime, so a GTK4/libadwaita window that recovered wore our clip and a 12px band
+            // over its native handle. Leave the cache empty: the tri-state queries answer null
+            // and the next probe retries, and only a landed /proc read may give a final answer.
+            // The callback is not fired either - it announces a landed answer to re-decide the
+            // windows left alone, and a failure gives nothing to re-decide.
+            if (error || typeof mapsText !== 'string')
+                return;
+            this._processCache.set(pid, classifyProcess(mapsText));
             try {
                 this._onProcessKnown?.(pid);
             } catch (cbError) {

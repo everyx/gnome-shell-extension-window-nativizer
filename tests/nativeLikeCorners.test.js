@@ -92,6 +92,12 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             expect(classifier.hasGtk4Client(828284)).toBeFalse();
         });
 
+        it('answers null while a failed read leaves the process unknown', () => {
+            classifier.probeAdwaitaLook(828286, {readMaps: (pid, done) => done(null, new Error('EACCES'))});
+            expect(classifier.hasGtk4Client(828286)).toBeNull();
+            expect(classifier.adwaitaLook(828286)).toBeNull();
+        });
+
         it('answers null while the answer is in flight, then yes once it lands', () => {
             let finish;
             const readMaps = (pid, done) => { finish = done; };
@@ -113,20 +119,26 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             expect(classifier.adwaitaLook(-1)).toBeFalse();
         });
 
-        it('decorates a process whose maps cannot be read, and reads it once', () => {
+        it('leaves a failed read unknown and retries it instead of caching a verdict', () => {
             let reads = 0;
             const readMaps = (pid, done) => { reads++; done(null, new Error('EACCES')); };
             classifier.probeAdwaitaLook(717171, {readMaps});
-            expect(classifier.adwaitaLook(717171)).toBeFalse();
-            classifier.probeAdwaitaLook(717171, {readMaps}); // idempotent: already cached
-            expect(classifier.adwaitaLook(717171)).toBeFalse();
+            // A transient /proc failure is "unknown", not "definitely not libadwaita".
+            expect(classifier.adwaitaLook(717171)).toBeNull();
+            expect(classifier.hasGtk4Client(717171)).toBeNull();
             expect(reads).toBe(1);
+            // Not cached: the next probe reads again, so a process that recovers is classified.
+            classifier.probeAdwaitaLook(717171, {readMaps});
+            expect(reads).toBe(2);
         });
 
-        it('decorates a process whose reader throws instead of answering', () => {
-            const readMaps = () => { throw new Error('boom'); };
+        it('leaves a reader that throws unknown and retries it on the next probe', () => {
+            let reads = 0;
+            const readMaps = () => { reads++; throw new Error('boom'); };
             classifier.probeAdwaitaLook(717172, {readMaps});
-            expect(classifier.adwaitaLook(717172)).toBeFalse();
+            expect(classifier.adwaitaLook(717172)).toBeNull();
+            classifier.probeAdwaitaLook(717172, {readMaps});
+            expect(reads).toBe(2);
         });
 
         it('answers nothing while the read is in flight, then the maps answer', () => {
@@ -143,9 +155,18 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             const known = [];
             classifier.setOnProcessKnown(pid => known.push(pid));
 
-            classifier.probeAdwaitaLook(414141, {readMaps: failing});
+            classifier.probeAdwaitaLook(414141, {readMaps: reader(maps('/usr/lib/libc.so.6'))});
             expect(classifier.adwaitaLook(414141)).toBeFalse();
             expect(known).toEqual([414141]);
+        });
+
+        it('does not report a pid whose read failed, because no answer landed', () => {
+            const known = [];
+            classifier.setOnProcessKnown(pid => known.push(pid));
+
+            classifier.probeAdwaitaLook(414142, {readMaps: failing});
+            expect(classifier.adwaitaLook(414142)).toBeNull();
+            expect(known).toEqual([]);
         });
 
         it('reads a pid once, then serves the cache', () => {
