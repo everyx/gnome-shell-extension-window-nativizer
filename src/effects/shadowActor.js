@@ -38,6 +38,10 @@ export const ShadowActor = GObject.registerClass({
         // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
         // mirror is the safe default until the decoration reports the real strategy.
         this._phaseInTransform = false;
+        // The last phase a pass could read. While the fallback monitor scan cannot complete,
+        // the shadow keeps this rather than translating by a fabricated zero; the clip keeps the
+        // same phase, so the two cuts stay on one line. Zero is only the start.
+        this._lastOffset = {x: 0, y: 0};
         this._fade = new ShadowFadeStateMachine({
             now: () => GLib.get_monotonic_time() / 1000,
         });
@@ -95,10 +99,14 @@ export const ShadowActor = GObject.registerClass({
         if (!this._windowActor)
             return;
         const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform);
+        // A null offset is an unreadable monitor geometry, not a zero phase: keep the last good
+        // phase so the shadow's cutout stays on the clip's line instead of hopping to zero.
+        if (offset)
+            this._lastOffset = offset;
         const position = shadowLayoutPosition(this._windowActor);
         const baseX = (this._windowActor.x ?? 0) - SHADOW_PAD;
         const baseY = (this._windowActor.y ?? 0) - SHADOW_PAD;
-        const {x, y} = shadowTranslation(this._windowActor, offset);
+        const {x, y} = shadowTranslation(this._windowActor, this._lastOffset);
         const nextX = x + position.x - baseX;
         const nextY = y + position.y - baseY;
         if (this.translation_x !== nextX)

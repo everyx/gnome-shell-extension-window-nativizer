@@ -10,7 +10,8 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
-import {clipFrameForTarget} from '../lib/clipTarget.js';
+import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
+import {ZERO_PHASE} from '../lib/snap.js';
 import {findMetaWindow, getWindowActor} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
@@ -125,6 +126,11 @@ export const RoundedClipEffect = GObject.registerClass({
             frame: {x: -1, y: -1, width: -1, height: -1},
         };
         this._scale = 1.0;
+        // The last phase a fallback pass folded into the frame. While the monitor scan cannot
+        // complete, the clip keeps this rather than jumping to zero; the shadow keeps the same
+        // phase as its translation, so the two cuts stay on one line. ZERO_PHASE is only the
+        // start - there is no earlier correct display to preserve on the first paint.
+        this._lastPhase = ZERO_PHASE;
 
         this._sizeVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
@@ -247,8 +253,13 @@ export const RoundedClipEffect = GObject.registerClass({
         // The container path needs no window lookup for its phase: it is already in the target's
         // own transform. Only the fallback folds the window's subpixel offset into its geometry.
         const phaseWin = this._phaseInTransform ? null : win ?? findMetaWindow(actor);
+        // An unknown fallback phase (unreadable monitor geometry) keeps the last good frame; the
+        // shadow takes the same last good phase, so the two cuts keep agreeing.
+        const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin);
+        if (resolvedPhase)
+            this._lastPhase = resolvedPhase;
         const frame = clipFrameForTarget(size, this._insets, scale,
-            {phaseInTransform: this._phaseInTransform}, phaseWin);
+            {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase);
         // Backstop: if the derived body is not paint-able even for a positive actor (a future
         // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.
         if (!isPaintableFrame(frame)) {
