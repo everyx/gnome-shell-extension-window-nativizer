@@ -336,7 +336,7 @@ export class Manager {
         // actor's changing. Watching it re-runs the readings so the stored insets cannot go stale
         // and re-verifies a clip target `resolveClipTarget` deferred while the container was
         // unallocated, so the clip returns to the container once its box is verifiable.
-        const container = getSurfaceContainer(actor, St);
+        const container = getSurfaceContainer(actor, win, St);
         if (container && container !== record.wiredContainer) {
             // The container can be replaced (XWayland swaps the surface child); drop the old
             // connection before watching the new one so `signals` does not accumulate dead entries.

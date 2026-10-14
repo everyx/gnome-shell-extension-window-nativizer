@@ -1,41 +1,42 @@
 /**
  * Resolves the target actor for RoundedClipEffect and the phase strategy that actor implies.
  *
- * A Wayland window's surface container is the target whenever it can be identified uniquely
- * (`getSurfaceContainer`: exactly one non-foreign child) and its geometry is a plain match for
- * the buffer. The container's own transform carries the subpixel phase Mutter applies, and an
- * offscreen effect on the container paints its local content, so the phase stays out of the
- * FBO's box rounding; clipping the window actor instead puts the phase in a child transform the
- * FBO cannot keep, which is what leaves a hairline at 1.25x. Foreign widgets (e.g. Blur my
- * Shell) sit beside the container in the same tree, and Mutter's fullscreen background actor is
- * not an St.Widget either, so an ambiguous tree fails the uniqueness rule and falls back to the
- * window actor. On X11 the surface is the window actor's first non-foreign child - a foreign
- * widget injected ahead of it is skipped rather than taking the clip - and when no such child
- * exists the window actor is the fallback, never an unverified widget. A container that has not
- * allocated yet defers the choice (`{defer: true}`) so the last good target is kept; a container
- * whose geometry cannot be verified is refused and the window actor is used. The manager watches
- * the container's `notify::allocation` and re-runs this resolution once it settles. Every
- * fallback keeps the phase in a child transform, so the clip folds the window's subpixel offset
- * into its geometry (`clipFrameForTarget`) exactly where the shadow actor carries it as a
- * translation.
+ * A Wayland window's surface container is the target whenever `getSurfaceContainer` can identify
+ * it and its geometry is a plain match for the buffer. That identification has three branches
+ * (see its definition in `platform/window.js`): a unique non-foreign child, else the unique
+ * buffer-compatible one, else fall back. The container's own transform carries the subpixel phase
+ * Mutter applies, and an offscreen effect on the container paints its local content, so the phase
+ * stays out of the FBO's box rounding; clipping the window actor instead puts the phase in a child
+ * transform the FBO cannot keep, which is what leaves a hairline at 1.25x. Foreign widgets (e.g.
+ * Blur my Shell) sit beside the container in the same tree, and Mutter's fullscreen background
+ * actor is not an St.Widget either, so a tree the rule cannot resolve falls back to the window
+ * actor. On X11 the surface is the window actor's first non-foreign child - a foreign widget
+ * injected ahead of it is skipped rather than taking the clip - and when no such child exists the
+ * window actor is the fallback, never an unverified widget. A container that has not allocated yet
+ * defers the choice (`{defer: true}`) so the last good target is kept; a container whose geometry
+ * cannot be verified is refused and the window actor is used. The manager watches the container's
+ * `notify::allocation` and re-runs this resolution once it settles. Every fallback keeps the phase
+ * in a child transform, so the clip folds the window's subpixel offset into its geometry
+ * (`clipFrameForTarget`) exactly where the shadow actor carries it as a translation.
  */
 
 import {WindowClientType} from './mutterRules.generated.js';
 import {
     getSurfaceContainer,
-    getWindowBufferRect,
     getWindowClientType,
     getWindowSubpixelOffset,
+    isCompatibleSurfaceGeometry,
     isForeignWidget,
+    isUnallocatedSurfaceBox,
 } from '../platform/window.js';
 import {clipFrameFor, ZERO_PHASE} from './snap.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;
 
-// The surface-container identity and the foreign-widget test live in the platform seam, because
-// the subpixel phase reader needs the same answer and platform may not import from lib/. Kept as
-// a re-export so this module's callers and specs still find it here.
-export {isForeignWidget};
+// The surface-container identity and the compatibility and foreign-widget predicates live in the
+// platform seam, because the phase readers need the same answers and platform may not import from
+// lib/. Re-exported so this module's callers and specs still find them here.
+export {isCompatibleSurfaceGeometry, isForeignWidget};
 
 /**
  * The X11 window actor's real surface actor: its first child that is not foreign.
@@ -56,76 +57,19 @@ export function getX11SurfaceChild(actor, St = null) {
 }
 
 /**
- * Whether a surface container has no allocation yet, so its box cannot be verified. Kept separate
- * from `isCompatibleSurfaceGeometry` because the resolver treats it as the "wait" case (keep the
- * last good target) rather than an incompatibility (fall back to the window actor).
- *
- * @param {object|null} candidate
- * @returns {boolean}
+ * Whether a surface container has no allocation yet, so its box cannot be verified. Re-exported
+ * from the platform seam so the resolver's "wait" case and the identity rule cannot drift.
  */
-function isUnallocatedSurfaceBox(candidate) {
-    const width = candidate?.width;
-    const height = candidate?.height;
-    return width === undefined || height === undefined || width === 0 || height === 0;
-}
-
-/**
- * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
- *
- * A geometry that cannot be verified is not accepted. An unreadable buffer is an independent read
- * failure, and an unallocated candidate is the "wait" case the resolver defers (`isUnallocatedSurfaceBox`);
- * both used to fail open, so a container whose box genuinely differs from the buffer - a
- * letterboxed or offset container - could be attached whenever the buffer read happened to fail,
- * and the clip then cut the wrong body. The check exists to reject a coordinate space that
- * genuinely differs, and the resolver's caller re-verifies on the container's `notify::allocation`
- * once the state settles.
- *
- * @param {object|null} candidate
- * @param {object|null} win
- * @returns {boolean}
- */
-export function isCompatibleSurfaceGeometry(candidate, win) {
-    if (!candidate || !win)
-        return false;
-
-    const buffer = getWindowBufferRect(win);
-    // An unreadable buffer cannot verify the container's coordinate space; the safe target is the
-    // window actor, not an unverified container.
-    if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
-        return false;
-
-    const candW = candidate.width;
-    const candH = candidate.height;
-    const candX = candidate.x ?? 0;
-    const candY = candidate.y ?? 0;
-
-    // An unallocated box cannot be verified either; the resolver defers this case separately so it
-    // keeps the last good target instead of switching to the window actor.
-    if (candW === undefined || candH === undefined || candW === 0 || candH === 0)
-        return false;
-
-    // The container path's premise is that the container's local space IS the buffer's: the clip
-    // derives its frame with ZERO_PHASE, so a real offset in x/y moves the cut against the shadow's
-    // hole by exactly that offset - 0.4 logical px is half a physical pixel at 1.25x, the phase the
-    // two cuts are most likely to part on. Only float residue may pass, so the origin is compared
-    // against a tolerance instead of being rounded to zero; whether the box is integer-aligned is a
-    // separate concern (`isIntegerAlignedSurfaceBox`).
-    const ORIGIN_EPSILON = 1e-6;
-    if (Math.abs(candX) > ORIGIN_EPSILON || Math.abs(candY) > ORIGIN_EPSILON ||
-        Math.abs(candW - buffer.width) > ORIGIN_EPSILON ||
-        Math.abs(candH - buffer.height) > ORIGIN_EPSILON)
-        return false;
-
-    return true;
-}
+export {isUnallocatedSurfaceBox};
 
 /**
  * Resolves the target actor to which RoundedClipEffect should be attached, and whether that
  * actor's own transform carries the buffer's subpixel phase.
  *
- * The container is identified through the same rule the phase reader uses (`getSurfaceContainer`
- * requires exactly one non-foreign child), so the clip can never attach to an actor that
- * `getWindowSubpixelOffset` would refuse to treat as the container.
+ * The container is identified through `getSurfaceContainer`, the same three-branch rule the phase
+ * readers use, so the clip can never attach to an actor that `getWindowSubpixelOffset` would
+ * refuse to treat as the container: that rule only offers an actor passing the same
+ * `isCompatibleSurfaceGeometry` predicate this resolver re-checks.
  *
  * @param {object|null} win
  * @param {object|null} actor
@@ -142,7 +86,7 @@ export function resolveClipTarget(win, actor, St = null) {
     // foreign St.Widget injected ahead of it must never take the clip.
     const defaultTarget = isX11 ? getX11SurfaceChild(actor, St) ?? actor : actor;
 
-    const surfaceContainer = getSurfaceContainer(actor, St);
+    const surfaceContainer = getSurfaceContainer(actor, win, St);
     if (surfaceContainer) {
         // The container has no allocation yet: its box cannot be verified, so defer the choice and
         // keep the last good target rather than attach the clip to an unverified actor. The manager

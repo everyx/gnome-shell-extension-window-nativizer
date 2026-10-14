@@ -261,8 +261,9 @@ To solve this at the root:
 2. **Symmetric Device Grid Phase Locking**:
    The clip frame snaps to the same physical grid phase as the shadow cutlines, which also snap to
    the physical grid. `resolveClipTarget` (`lib/clipTarget.js`) picks the Wayland surface container
-   when it can identify it uniquely (`getSurfaceContainer`: exactly one non-foreign child) and its
-   geometry matches the buffer; the buffer's subpixel phase is that container's own transform, so
+   when it can identify it (`getSurfaceContainer`: exactly one non-foreign child, else the unique
+   buffer-compatible one, else fall back to the window actor) and its geometry matches the buffer;
+   the buffer's subpixel phase is that container's own transform, so
    an offscreen effect on the container paints its local content and the hard straight-edge cut is
    computed in the same coordinates as the buffer. Clipping the window actor instead leaves the
    phase in a child transform, which the offscreen FBO's box rounding cannot keep; at 1.25x the cut

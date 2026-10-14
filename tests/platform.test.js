@@ -807,22 +807,53 @@ describe('platform', () => {
 
     describe('getSurfaceContainer', () => {
         const St = {Widget: class {}};
+        const bufferWin = (width, height) => ({get_buffer_rect: () => ({x: 0, y: 0, width, height})});
 
         it('returns the only non-foreign child', () => {
             const container = {x: 3, y: -2, width: 800, height: 600};
-            expect(getSurfaceContainer({get_children: () => [container]}, St)).toBe(container);
+            expect(getSurfaceContainer({get_children: () => [container]}, null, St)).toBe(container);
         });
 
         it('excludes an injected foreign St.Widget', () => {
             const foreign = new St.Widget();
             const container = {x: 0, y: 0, width: 800, height: 600};
-            expect(getSurfaceContainer({get_children: () => [foreign, container]}, St)).toBe(container);
+            expect(getSurfaceContainer({get_children: () => [foreign, container]}, null, St)).toBe(container);
         });
 
-        it('answers null when the tree is ambiguous, so the caller keeps a zero container offset', () => {
+        it('picks the buffer-sized container over the full-monitor background of a letterboxed window', () => {
+            // Acked-fullscreen but not opaquely covering the monitor: Mutter's do_sync_geometry
+            // inserts a full-monitor black backing as a second non-foreign child. Its box is
+            // incompatible with the buffer while the container's is a plain match.
+            const background = {x: 0, y: 0, width: 1920, height: 1080};
+            const container = {x: 0, y: 0, width: 800, height: 600};
+            expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBe(container);
+        });
+
+        it('answers null when more than one non-foreign child matches the buffer, never guessing', () => {
+            // Opaque-fullscreen shape: the backing and the container are both monitor-sized, so the
+            // geometric filter cannot separate them and the caller falls back to the window actor.
+            const background = {x: 0, y: 0, width: 800, height: 600};
+            const container = {x: 0, y: 0, width: 800, height: 600};
+            expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBeNull();
+        });
+
+        it('keeps the wait when an unallocated child could be the container instead of the compatible sibling', () => {
+            // The narrow hole: the real container has not allocated yet while the backing is already
+            // buffer-compatible. The private container type is unreachable from GJS, so instead of
+            // guessing the backing the rule returns the unallocated candidate, which the resolver's
+            // existing defer path turns into "keep the last good target".
+            const background = {x: 0, y: 0, width: 800, height: 600};
+            const container = {x: 0, y: 0, width: 0, height: 0};
+            expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBe(container);
+        });
+
+        it('falls back when a buffer-sized sibling is merely off the origin, never telling it from the backing', () => {
+            // The other half of the narrow hole: the real container has moved off (0,0) while the
+            // backing sits at the origin and is buffer-compatible. Geometry cannot separate them,
+            // so the rule takes the tie fallback rather than guessing.
             const background = {x: 0, y: 0, width: 800, height: 600};
             const container = {x: 3, y: 0, width: 800, height: 600};
-            expect(getSurfaceContainer({get_children: () => [background, container]}, St)).toBeNull();
+            expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBeNull();
         });
     });
 
@@ -1236,10 +1267,12 @@ describe('platform', () => {
 
         it('names the clip\'s own rule as the one the readers share', () => {
             const actor = {x: 240, y: 200, get_children: () => [foreign, container]};
-            expect(getSurfaceContainer(actor, St)).toBe(container);
-            // Without St the subclass is not seen as foreign, the tree is ambiguous and the read
-            // the old signatures ran answers null - the miss the explicit St removes.
-            expect(getSurfaceContainer(actor)).toBeNull();
+            const win = {get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600})};
+            expect(getSurfaceContainer(actor, win, St)).toBe(container);
+            // Without St the subclass is not seen as foreign, the tree has two candidates and the
+            // declared container is not compatible (its x=1), so the rule answers null - the miss
+            // the explicit St removes.
+            expect(getSurfaceContainer(actor, win, null)).toBeNull();
         });
     });
 });

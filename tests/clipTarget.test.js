@@ -276,7 +276,45 @@ describe('clipTarget', () => {
                 const actor = createMockActor({children: [surface, background]});
 
                 // Mutter adds extra non-foreign children (the fullscreen background actor), so the
-                // container is only chosen when the tree is unambiguous.
+                // container is only chosen when the tree is unambiguous. Both default to the 500x400
+                // buffer here, so this is the tie branch: more than one candidate, never guess.
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor, phaseInTransform: false});
+            });
+
+            it('chooses the buffer-sized container over the full-monitor background of a letterboxed window', () => {
+                // Letterboxed acked-fullscreen: the black backing is monitor-sized, the container
+                // buffer-sized, so the geometry filter separates them and the container is chosen.
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {x: 0, y: 0, width: 800, height: 600}});
+                const background = new MockSurfaceActor('MetaBackgroundActor', {x: 0, y: 0, width: 1920, height: 1080});
+                const container = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 0, y: 0, width: 800, height: 600});
+                const actor = createMockActor({children: [background, container]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: container, phaseInTransform: true});
+            });
+
+            it('defers rather than attaching to the backing when the container has not allocated', () => {
+                // The narrow hole: the backing is already buffer-compatible while the real container
+                // has not allocated. The unallocated candidate is returned so the resolver keeps its
+                // last good target for this reconcile instead of committing the clip to the backing.
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {x: 0, y: 0, width: 800, height: 600}});
+                const background = new MockSurfaceActor('MetaBackgroundActor', {x: 0, y: 0, width: 800, height: 600});
+                const container = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {width: 0, height: 0});
+                const actor = createMockActor({children: [background, container]});
+
+                expect(resolveClipTarget(win, actor, mockSt)).toEqual({defer: true});
+            });
+
+            it('falls back to the window actor when a buffer-sized container is merely offset from the backing', () => {
+                // The narrow hole we cannot resolve: the real container has moved off the origin,
+                // so the compatible child may be the backing. The private type is unreachable and
+                // geometry cannot separate them, so the resolver falls back rather than guess.
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {x: 0, y: 0, width: 800, height: 600}});
+                const background = new MockSurfaceActor('MetaBackgroundActor', {x: 0, y: 0, width: 800, height: 600});
+                const container = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 3, y: 0, width: 800, height: 600});
+                const actor = createMockActor({children: [background, container]});
+
                 expect(resolveClipTarget(win, actor, mockSt))
                     .toEqual({actor, phaseInTransform: false});
             });
