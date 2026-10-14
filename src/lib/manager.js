@@ -449,6 +449,13 @@ export class Manager {
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
+            // The remembered pid can still be unusable when the window was tracked before its client
+            // had one: tracking happens on `window-created`, and an X11 client sets `_NET_WM_PID`
+            // after the window exists. Learn it here and remember it, so a window whose pid arrives
+            // late is still classified - teardown keeps using the remembered value, which is the
+            // point of reading it once.
+            if (!(record.pid > 0))
+                record.pid = getWindowPid(win);
             this._classifier?.probeAdwaitaLook(record.pid);
 
             const inputs = this._decorationInputs(win);
