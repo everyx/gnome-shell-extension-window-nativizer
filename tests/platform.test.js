@@ -1158,6 +1158,20 @@ describe('platform', () => {
             expect(getAppliedSubpixelPhase(waylandWin([container]))).toEqual({x: 0.25, y: 0.25});
         });
 
+        it('reads the transform and the layout from one actor when the caller hands it in', () => {
+            // The diagnostic resolves one container and hands it to both readers, so the transform
+            // and the layout origin subtracted from it are the same actor even when the tree alone
+            // is ambiguous (two non-foreign children) and resolution would answer null.
+            const container = {
+                x: 3, y: -2, translation_x: 1, translation_y: 0.5,
+                get_transform: () => matrix({tx: 4.25, ty: -1.25}),
+            };
+            const other = {x: 100, y: 100, get_transform: () => matrix({tx: 900, ty: 900})};
+            const win = waylandWin([container, other]);
+            expect(getAppliedSubpixelPhase(win)).toBeNull();
+            expect(getAppliedSubpixelPhase(win, null, container)).toEqual({x: 0.25, y: 0.25});
+        });
+
         it('answers null for a non-Wayland client', () => {
             const win = waylandWin([{x: 0, y: 0, get_transform: () => matrix()}]);
             win.get_client_type = () => 1; // X11

@@ -12,8 +12,8 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
-import {findMetaWindow, getWindowActor} from '../platform/window.js';
-import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize} from './clipParams.js';
+import {findMetaWindow, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
+import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
 const DECLARATIONS = `
@@ -82,6 +82,40 @@ const CODE = `
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
 
+/**
+ * A live actor's extent, or null when the actor is gone or its read throws. The window actor is an
+ * actor we do not own, so a torn-down read is "unknown" and the settle falls back rather than
+ * aborting the paint.
+ * @param {{width:number,height:number}|null} actor
+ * @returns {{width:number,height:number}|null}
+ */
+function readActorExtent(actor) {
+    if (!actor)
+        return null;
+    try {
+        return {width: actor.width, height: actor.height};
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The window's own size, read live at paint: its frame rect, else its buffer rect. This is the
+ * read that separates a resize from a body that moved on its own, so it is taken on the frame
+ * clock; only its previous value lives in the pass plan.
+ * @param {object|null} win
+ * @returns {{width:number,height:number}|null}
+ */
+function readWindowSize(win) {
+    const frame = getWindowFrameRect(win);
+    if (isPaintableFrame(frame))
+        return {width: frame.width, height: frame.height};
+    const buffer = getWindowBufferRect(win);
+    if (isPaintableFrame(buffer))
+        return {width: buffer.width, height: buffer.height};
+    return null;
+}
+
 export const RoundedClipEffect = GObject.registerClass({
     GTypeName: ROUNDED_CLIP_G_TYPE,
 }, class RoundedClipEffect extends ShaderEffect {
@@ -137,6 +171,12 @@ export const RoundedClipEffect = GObject.registerClass({
         // phase as its translation, so the two cuts stay on one line. ZERO_PHASE is only the
         // start - there is no earlier correct display to preserve on the first paint.
         this._lastPhase = ZERO_PHASE;
+        // The pass plan the next paint settles from: the reference points the hold compares against
+        // and the window's own size as of the previous pass. It carries no resolved body - the
+        // paint reads the two actors and the window's own size live and evaluates the settle there,
+        // so the cut is what the compositor is drawing that frame. Null until the first pass, when
+        // the live target size is used as before.
+        this._bodyPlan = null;
 
         this._sizeVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
@@ -219,6 +259,26 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
+     * Sets the pass plan the next paint settles its body from. WindowDecoration decides no body:
+     * it hands the reference points the hold compares against, and the paint reads the target
+     * actor, the window actor and the window's own size live so the frame tracks what the
+     * compositor draws. The shadow is handed the same plan, so both cuts derive one body by
+     * construction.
+     * @param {{previousBody:object|null, previousAuthority:object|null,
+     *   previousWindowSize:object|null}|null} plan
+     */
+    setBodyPlan(plan) {
+        const next = plan ?? null;
+        const previous = this._bodyPlan;
+        if (previous === next)
+            return;
+        this._bodyPlan = next;
+        // The next paint recomputes the frame from the live reads and clipGeometryChanges sees the
+        // moved edge; only a paint that nothing else queued could miss it.
+        this.queue_repaint();
+    }
+
+    /**
      * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
      * @param {object} node
      * @param {object} paintContext
@@ -226,23 +286,22 @@ export const RoundedClipEffect = GObject.registerClass({
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
         const targetSize = {width: actor?.width ?? 0, height: actor?.height ?? 0};
-        // The window actor is the authority for whether the window has a body. A Wayland surface
-        // container's own allocation can read 0 while its surface child still paints at full size
-        // (a client swapping its buffer while opening, a layout that has not settled), so a
-        // non-positive target read falls back to the window actor instead of suspending. That also
-        // keeps the verdict stable across paints: the container's lagging read no longer toggles
-        // the clip between clipped and unclipped. Only when neither has an extent is the target
+        // Both body reads are taken live at paint. The window actor is the authority for whether
+        // the window has a body: a Wayland surface container's own allocation can read 0 while its
+        // surface child still paints at full size (a client swapping its buffer while opening, a
+        // layout that has not settled), so a non-positive target read falls back to the window
+        // actor instead of suspending. The pair also feeds the settle below, so the window actor is
+        // read even when the target is usable; only when neither has an extent is the target
         // genuinely degenerate, and then the clip suspends rather than compositing nothing while
         // the sibling shadow actor keeps drawing.
-        let win = null;
-        let size = targetSize;
-        if (!isPaintableFrame(targetSize)) {
-            win = findMetaWindow(actor);
-            size = resolveClipSize(targetSize, getWindowActor(win));
-            if (!size) {
-                this._suspend();
-                return;
-            }
+        const win = findMetaWindow(actor);
+        const windowActorSize = readActorExtent(getWindowActor(win));
+        const size = isPaintableFrame(targetSize)
+            ? targetSize
+            : resolveClipSize(targetSize, windowActorSize);
+        if (!size) {
+            this._suspend();
+            return;
         }
         this._suspended = false;
 
@@ -258,13 +317,19 @@ export const RoundedClipEffect = GObject.registerClass({
         // the clip's cut and the shadow's cutout still land on one physical line.
         // The container path needs no window lookup for its phase: it is already in the target's
         // own transform. Only the fallback folds the window's subpixel offset into its geometry.
-        const phaseWin = this._phaseInTransform ? null : win ?? findMetaWindow(actor);
+        const phaseWin = this._phaseInTransform ? null : win;
         // An unknown fallback phase (unreadable monitor geometry) keeps the last good frame; the
         // shadow takes the same last good phase, so the two cuts keep agreeing.
         const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin, this._St);
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
-        const frame = clipFrameForTarget(size, this._insets, scale,
+        // The frame edge is the body this paint settles from the live reads and the pass plan; the
+        // actor size above still drives uSize. A null plan (before the first pass) uses the live
+        // size, so this is a no-op in health. This is the frame clock: between the manager's
+        // debounced passes the cut follows the actor the compositor is drawing now.
+        const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
+            this._bodyPlan).body ?? size;
+        const frame = clipFrameForTarget(bodySize, this._insets, scale,
             {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase, this._St);
         // Backstop: if the derived body is not paint-able even for a positive actor (a future
         // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.

@@ -12,7 +12,7 @@ import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosi
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {findMetaWindow} from '../platform/window.js';
+import {findMetaWindow, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
@@ -34,6 +34,23 @@ function readActorSize(actor) {
     } catch {
         return null;
     }
+}
+
+/**
+ * The window's own size, read live at relayout: its frame rect, else its buffer rect. The cast
+ * must see a resize on the frame it starts, so this is read here rather than taken from the
+ * pass; only its previous value travels in the body plan.
+ * @param {object|null} win
+ * @returns {{width:number,height:number}|null}
+ */
+function readWindowSize(win) {
+    const frame = getWindowFrameRect(win);
+    if (frame && frame.width > 0 && frame.height > 0)
+        return {width: frame.width, height: frame.height};
+    const buffer = getWindowBufferRect(win);
+    if (buffer && buffer.width > 0 && buffer.height > 0)
+        return {width: buffer.width, height: buffer.height};
+    return null;
 }
 
 export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
@@ -63,6 +80,11 @@ export const ShadowActor = GObject.registerClass({
         // clipTargetReadChanged): the shadow's own box is bound to the window actor and does not
         // move for a container-only resize, so nothing else would schedule that paint.
         this._clipTargetSize = null;
+        // The pass plan the next relayout settles from: the reference points the hold compares
+        // against and the window's own size as of the previous pass. Null until the first pass; the
+        // layout then derives the body from the live reads, exactly as it did before the settle
+        // existed.
+        this._bodyPlan = null;
         // Edge-trigger for the body-authority warning, so a persistent disagreement is one loud
         // journal line per episode rather than one per paint frame.
         this._bodyWarningActive = false;
@@ -207,6 +229,18 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
+     * Sets the body plan the next layout settles from. WindowDecoration hands the same plan to the
+     * clip, so the shadow's cast and the clip's cut derive one body by construction; the plan
+     * carries no resolved body, and the layout evaluates the settle from the live reads at its own
+     * relayout clock (which follows the actor's allocation, so per frame during a drag).
+     * @param {{previousBody:object|null, previousAuthority:object|null,
+     *   previousWindowSize:object|null}|null} plan
+     */
+    setBodyPlan(plan) {
+        this._bodyPlan = plan ?? null;
+    }
+
+    /**
      * @returns {{width:number, height:number, cast:object|null, rightBand:object|null}} Live,
      *          read-only shadow geometry for the debug reply; every field is a read.
      */
@@ -334,6 +368,8 @@ export const ShadowActor = GObject.registerClass({
             this._insets ?? ZERO_INSETS, scale, {
                 targetSize: readActorSize(this._clipTarget),
                 windowActorSize: readActorSize(this._windowActor),
+                windowSize: readWindowSize(findMetaWindow(this._windowActor)),
+                bodyPlan: this._bodyPlan,
             });
         this._warnOnBodyDisagreement(layout.authority);
 

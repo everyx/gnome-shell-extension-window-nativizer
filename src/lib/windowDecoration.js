@@ -9,12 +9,76 @@
  */
 
 import {resolveClipTarget} from './clipTarget.js';
+import {BODY_SETTLE_TOLERANCE, settleClipBody} from '../effects/clipParams.js';
+import {
+    bufferAllocationWarning,
+    evaluateInvariant,
+    freshInvariantState,
+    phaseAlignmentWarning,
+    windowIdentityLabel,
+} from './diagnosticInvariants.js';
 import {FLAT_SAFE_INSET} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
 import {resolveMonitorBounds, safeRead} from './window.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
-import {getWindowActor} from '../platform/window.js';
+import {getAppliedSubpixelPhase, getSurfaceContainer, getWindowActor, getWindowSubpixelOffset} from '../platform/window.js';
+
+/**
+ * Names the actor a phase read came from, so `phaseAlignmentWarning` can refuse a pair read from
+ * two actors. A null read stays null; a read with no actor (an X11 zero, a spec stub) stays
+ * untagged and is compared as before.
+ * @param {{x:number,y:number}|null} phase
+ * @param {object|null} actor
+ * @returns {{x:number,y:number,actor?:object}|null}
+ */
+function tagPhase(phase, actor) {
+    if (!phase || !actor)
+        return phase;
+    return {...phase, actor};
+}
+
+/**
+ * The journal sink for the edge-triggered diagnostics. `console.warn` is not writable, so the
+ * sink is injectable and a spec can observe the line instead of the process log.
+ * @param {string} message
+ */
+function warnToJournal(message) {
+    console.warn(message);
+}
+
+/**
+ * A live actor's extent, or null when the actor is gone or its read throws. The body the clip and
+ * the shadow act on comes from actors we do not own, so a torn-down read is "unknown" and leaves
+ * the settle to fall back rather than aborting the pass.
+ * @param {{width:number,height:number}|null} actor
+ * @returns {{width:number,height:number}|null}
+ */
+function readActorExtent(actor) {
+    if (!actor)
+        return null;
+    try {
+        return {width: actor.width, height: actor.height};
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The window's own size from this pass's reading, or null when neither rect is usable. The frame
+ * rect is the logical window size a focus hand-off or an animation does not change; the buffer
+ * rect is the fallback when the frame read is unavailable. It is the independent authority that
+ * tells a body moving on its own from a window actually resizing.
+ * @param {object|null} inputs - The pass's WindowReading
+ * @returns {{width:number,height:number}|null}
+ */
+function readWindowExtent(inputs) {
+    for (const rect of [inputs?.frameRect, inputs?.bufferRect]) {
+        if (rect && rect.width > 0 && rect.height > 0)
+            return {width: rect.width, height: rect.height};
+    }
+    return null;
+}
 
 export class WindowDecoration {
     /**
@@ -38,12 +102,14 @@ export class WindowDecoration {
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
+        this._warn = options.warn ?? warnToJournal;
 
         // The overview's own decoration (mask, container opacity, shadow clone) is a
         // lifecycle of its own; the desktop reads it for clip decisions but never reaches in.
         this.overview = new OverviewDecoration(win, {
             OverviewMask: options.OverviewMask ?? null,
             OverviewShadow: options.OverviewShadow ?? null,
+            warn: this._warn,
             // A card rebuild inside the overview can settle on a different mode than the entry
             // did; the desktop clip must follow whatever was actually installed.
             onModeChange: mode => this._syncOverviewClip(mode),
@@ -58,8 +124,27 @@ export class WindowDecoration {
         // The resolved ring plan for the current pass; null until the first apply().
         this.ring = null;
 
+        // Edge-triggered diagnostic latches, one per invariant, reset on agreement. They are
+        // per-window because "one WARNING per episode" is a window's episode, not the session's.
+        this._bufferActorLatch = freshInvariantState();
+        this._phaseLatch = freshInvariantState();
+
         this._style = null;
-        this._scale = 1.0;
+        // Not 1.0: an unread scale is *unknown*, and `apply()` refuses to act on it. A decoration
+        // rebuilt while the previous one kept its visuals must not read that as "scale = 1".
+        this._scale = null;
+        // The settle reference points, advanced once per pass. `_lastBody` is the last settled
+        // body, `_lastAuthority` the authority it was settled from, and `_lastWindowSize` the
+        // window's own size at the pass. The pass hands them to the geometry path as the plan; the
+        // clip and the shadow read the actors and the window's own size live at their own clock and
+        // settle the body there, so the cut tracks the frame the compositor draws rather than
+        // freezing between the manager's 50 ms passes. `_lastBody`/`_lastAuthority` are only
+        // advanced when the pass's own settle acts on the fresh body, so the hold cannot latch.
+        this._lastBody = null;
+        this._lastAuthority = null;
+        this._lastWindowSize = null;
+        // The plan handed to the clip and the shadow for the paints after this pass.
+        this._bodyPlan = null;
         // The manager's "force corners" setting for this pass; handed to the overview, which
         // picks the legacy offscreen clip over the mask for XWayland and the fallback cases.
         this._forceOverviewCorners = false;
@@ -202,13 +287,61 @@ export class WindowDecoration {
         }
         const clipTarget = this.clipTarget;
         const rawInsets = inputs.insets;
-        const scale = this._resolveScale(inputs);
+        // An unreadable scale must not postpone the decoration. This pass can be the first frame of
+        // an actor Mutter has just re-created, and a postponed clip there is an *unclipped* frame -
+        // square corners and a visible margin, the focus hand-off flicker the journal shows. An
+        // approximate scale instead costs a fraction of a pixel of corner rounding for one frame,
+        // and only until the next pass reads the monitor for real. The body itself is still guarded
+        // against acting on a disagreeing read, by settleClipBody below.
+        const scale = this._resolveScale(inputs) ?? 1.0;
+
+        // Hand the geometry path the plan, not a resolved body: the actors and the window's own
+        // size are read live at paint, so the clip's cut and the shadow's cast settle from them
+        // there and track the frame the compositor is drawing. The pass advances the reference
+        // points on its own debounced clock, which is what the between-pass hold compares against.
+        const windowSize = readWindowExtent(inputs);
+        this._bodyPlan = {
+            previousWindowSize: this._lastWindowSize,
+            previousBody: this._lastBody,
+            previousAuthority: this._lastAuthority,
+            // The comparison needs both kinds of inset: the ones the clip cuts with (the declared
+            // ring, or our flat safe inset) and the declared ring alone, because only the flat case
+            // trims *inside* the actor's box.
+            insets: this.ring?.insets ?? null,
+            declared: rawInsets ?? null,
+        };
+        const passSettle = settleClipBody(readActorExtent(clipTarget), readActorExtent(winActor),
+            this._lastBody, this._lastAuthority, windowSize, this._lastWindowSize,
+            BODY_SETTLE_TOLERANCE, this.ring?.insets ?? null, rawInsets ?? null);
+        this._lastBody = passSettle.body;
+        this._lastAuthority = passSettle.authority;
+        this._lastWindowSize = windowSize;
 
         // One plan per pass: the insets the body uses, and the two meanings the clip shader gives
         // the ring. Every consumer below reads this instead of recombining the detector's answer.
+        // The client's declared ring is the compositor's state, not ours. During a focus hand-off
+        // the buffer and the frame rects are updated a step apart, so the derived ring can read 4px
+        // for one pass and 1px again after - the journal showed exactly that, a 6px body swing, and
+        // it looks like the window edge stepping in and back. Only a change in the window's own size
+        // can make a different ring real, so with the size unchanged the previous ring stands (the
+        // "subject itself unchanged" case the state-ownership rule allows).
+        const ringWindowSize = readWindowExtent(inputs);
+        const ringSizeChanged = !ringWindowSize || !this._lastWindowSize ||
+            Math.abs(ringWindowSize.width - this._lastWindowSize.width) >= 1 ||
+            Math.abs(ringWindowSize.height - this._lastWindowSize.height) >= 1;
+        let ringNow = rawInsets;
+        if (!ringSizeChanged && this._lastRing) {
+            const drifted = Math.abs((this._lastRing.left ?? 0) - (rawInsets.left ?? 0)) >= 1 ||
+                Math.abs((this._lastRing.top ?? 0) - (rawInsets.top ?? 0)) >= 1 ||
+                Math.abs((this._lastRing.right ?? 0) - (rawInsets.right ?? 0)) >= 1 ||
+                Math.abs((this._lastRing.bottom ?? 0) - (rawInsets.bottom ?? 0)) >= 1;
+            if (drifted)
+                ringNow = this._lastRing;
+        }
+        this._lastRing = ringNow;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
-                ? FLAT_SAFE_INSET : rawInsets,
+                ? FLAT_SAFE_INSET : ringNow,
             clear: actions.ring.clear,
             erase: actions.ring.clear || actions.ring.safeInset,
         };
@@ -224,6 +357,8 @@ export class WindowDecoration {
         // The style is this pass's own reading of the corner state; the overview re-reads it, so a
         // pass that draws nothing (maximized, fullscreen) must still clear the previous one's.
         this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale);
+
+        this._checkDiagnosticInvariants(inputs, winActor);
 
         // _syncClip only runs the overview transition when the clip's presence changed, so the
         // style this pass produced - and a desktop pass that has to take the clip back - is
@@ -250,7 +385,7 @@ export class WindowDecoration {
         const scale = inputs?.monitorScale;
         if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale))
             return scale;
-        return this._scale ?? 1.0;
+        return this._scale ?? null;
     }
 
     /**
@@ -426,6 +561,7 @@ export class WindowDecoration {
         this.drawClip = Boolean(this.clip && drawClip && style.radius > 0);
 
         this._syncClipParams();
+        this.clip?.setBodyPlan?.(this._bodyPlan);
         if (this.shadow) {
             // Both cuts read the same phase source: the shadow follows the clip's resolved target
             // strategy (see shadowPhaseOffset). Its body authority is that same target, so the two
@@ -433,6 +569,7 @@ export class WindowDecoration {
             // shrink the shadow's band while the clip's cut stays put.
             this.shadow.setPhaseInTransform?.(this.clipPhaseInTransform);
             this.shadow.setClipTarget?.(this.clipTarget);
+            this.shadow.setBodyPlan?.(this._bodyPlan);
             this.shadow.setScale?.(scale);
             this.shadow.setShadowInsets?.(insets);
             this.shadow.setShadowStyle?.({
@@ -440,6 +577,75 @@ export class WindowDecoration {
                 radius: this.clip && drawClip ? style.radius : 0,
             });
         }
+    }
+
+    /**
+     * Runs this pass's diagnostic invariants: the conditions a healthy pass must satisfy, made loud
+     * once per episode. The predicates are pure (`diagnosticInvariants.js`); the per-window latches
+     * live here, and each speaks only after `INVARIANT_STRIKES` consecutive violating passes.
+     *
+     * The buffer-versus-allocation pair is this pass's own assembled reading - the `bufferRect` the
+     * manager read from the Meta.Window against the window actor's live allocation. In health they
+     * are equal, so a disagreement means one of the two reads lagged the other in this pass; that
+     * is the right-edge transient the shadow-vs-authority warning cannot see, because there the
+     * authority itself is the value that moved.
+     *
+     * The phase pair is checked only on the fallback path. There the clip folds the mirror into its
+     * geometry, so a mirror that does not reproduce the phase Mutter applied moves our cut off the
+     * buffer. On the container path the phase is read back from the transform and the mirror is
+     * unused, so a disagreement there is not a defect.
+     *
+     * @param {object} inputs - The pass's assembled reading (bufferRect, wmClass, pid)
+     * @param {object} winActor - The window actor
+     */
+    _checkDiagnosticInvariants(inputs, winActor) {
+        const label = windowIdentityLabel(inputs ?? {});
+        const bufferRect = inputs?.bufferRect ?? null;
+        const actorBox = winActor
+            ? {x: winActor.x ?? 0, y: winActor.y ?? 0, width: winActor.width, height: winActor.height}
+            : null;
+        this._fireInvariant('_bufferActorLatch',
+            bufferAllocationWarning(bufferRect, actorBox, label));
+
+        if (!this.clipPhaseInTransform && this._win) {
+            const {mirror, applied} = this._readPhases();
+            this._fireInvariant('_phaseLatch', phaseAlignmentWarning(mirror, applied, label));
+        } else {
+            this._phaseLatch = freshInvariantState();
+        }
+    }
+
+    /**
+     * The two subpixel-phase reads, in one seam so a spec can drive both states without a Clutter
+     * container. The mirror is the reconstructed phase; the applied read is what Mutter put on the
+     * surface container's transform.
+     *
+     * @returns {{mirror: object|null, applied: object|null}}
+     */
+    _readPhases() {
+        // One container, both reads: the mirror folds that container's layout and the applied read
+        // is that same actor's transform, so the caller's comparison is between one authority.
+        // Tagging each read with the actor it came from lets the predicate refuse a mismatched
+        // pair instead of reporting a position as if it were a phase.
+        const actor = getWindowActor(this._win);
+        const container = actor ? getSurfaceContainer(actor, this._win, this._St) : null;
+        return {
+            mirror: tagPhase(getWindowSubpixelOffset(this._win, this._St, container), container),
+            applied: tagPhase(getAppliedSubpixelPhase(this._win, this._St, container), container),
+        };
+    }
+
+    /**
+     * Advances one latch by one pass and logs the text when this pass is the episode's first
+     * sustained violation.
+     * @param {string} key - The latch field name on this decoration
+     * @param {string|null} warning - This pass's warning text, or null when healthy
+     */
+    _fireInvariant(key, warning) {
+        const {state, message} = evaluateInvariant(this[key], warning);
+        this[key] = state;
+        if (message)
+            this._warn(message);
     }
 
     /**
@@ -451,6 +657,7 @@ export class WindowDecoration {
                 insets: this.clipInsets,
                 radius: this.drawClip ? this._style.radius : 0,
                 outline: this.drawClip && !this.overview.inOverview ? this._style.outline : null,
+
                 erase: Boolean(this.ring?.erase),
                 clearStroke: !this.overview.inOverview && Boolean(this.ring?.clear),
                 scale: this._scale,

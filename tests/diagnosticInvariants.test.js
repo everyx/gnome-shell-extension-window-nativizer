@@ -1,0 +1,169 @@
+/**
+ * Specs for the diagnostic invariants: the pure predicates and the edge-triggered latch.
+ *
+ * Run: pnpm test
+ */
+
+import {
+    BUFFER_ACTOR_TOLERANCE,
+    PHASE_ALIGNMENT_TOLERANCE,
+    PHASE_MAGNITUDE_BOUND,
+    bufferAllocationWarning,
+    evaluateInvariant,
+    freshInvariantState,
+    overviewMaskRefusalWarning,
+    phaseAlignmentWarning,
+    windowIdentityLabel,
+} from '../src/lib/diagnosticInvariants.js';
+
+describe('evaluateInvariant (one WARNING per episode, after a sustained violation)', () => {
+    const say = 'boom';
+
+    it('stays silent for a single-pass blip and re-arms on agreement', () => {
+        // The pass a resize in flight shows: the buffer and the allocation settle a pass apart.
+        let {state, message} = evaluateInvariant(freshInvariantState(), say);
+        expect(message).toBeNull();
+        expect(state.strikes).toBe(1);
+
+        // Agreement before the second violation resets the count, so the blip never speaks.
+        ({state, message} = evaluateInvariant(state, null));
+        expect(message).toBeNull();
+        expect(state).toEqual(freshInvariantState());
+    });
+
+    it('speaks on the second consecutive violating pass', () => {
+        const first = evaluateInvariant(freshInvariantState(), say);
+        expect(first.message).toBeNull();
+
+        const second = evaluateInvariant(first.state, say);
+        expect(second.message).toBe(say);
+        expect(second.state.warned).toBeTrue();
+    });
+
+    it('does not repeat while the violation persists, and speaks again after it clears', () => {
+        let latch = freshInvariantState();
+        latch = evaluateInvariant(latch, say).state;
+        const fired = evaluateInvariant(latch, say);
+        expect(fired.message).toBe(say);
+        latch = fired.state;
+
+        // The episode is already loud: every later violating pass is silent.
+        for (let i = 0; i < 5; i++) {
+            const later = evaluateInvariant(latch, say);
+            expect(later.message).toBeNull();
+            latch = later.state;
+        }
+
+        // Agreement re-arms, so a fresh episode speaks again.
+        latch = evaluateInvariant(latch, null).state;
+        latch = evaluateInvariant(latch, say).state;
+        expect(evaluateInvariant(latch, say).message).toBe(say);
+    });
+
+    it('accepts an absent latch and honours a caller-chosen strike count', () => {
+        expect(evaluateInvariant(null, say).message).toBeNull();
+        expect(evaluateInvariant(null, null).state).toEqual(freshInvariantState());
+
+        const immediate = evaluateInvariant(null, say, 1);
+        expect(immediate.message).toBe(say);
+    });
+});
+
+describe('windowIdentityLabel (a journal line names the window)', () => {
+    it('prefers the class, then the title, then the pid', () => {
+        expect(windowIdentityLabel({wmClass: 'firefox', pid: 42})).toBe('"firefox"');
+        expect(windowIdentityLabel({wmClass: '  ', title: 'Inbox', pid: 42})).toBe('"Inbox"');
+        expect(windowIdentityLabel({pid: 42})).toBe('pid 42');
+        expect(windowIdentityLabel({})).toBe('an unidentified window');
+    });
+});
+
+describe('bufferAllocationWarning (the pass\'s two geometry reads must agree)', () => {
+    const buffer = {x: 100, y: 50, width: 800, height: 600};
+
+    it('is silent when the extents agree, including within the tolerance', () => {
+        expect(bufferAllocationWarning(buffer, {...buffer}, 'x')).toBeNull();
+        expect(bufferAllocationWarning(buffer,
+            {...buffer, width: 800 + BUFFER_ACTOR_TOLERANCE / 2}, 'x')).toBeNull();
+    });
+
+    it('names both extents and the window on a real disagreement', () => {
+        const warning = bufferAllocationWarning(buffer, {...buffer, width: 798}, '"firefox"');
+        expect(warning).toContain('800x600');
+        expect(warning).toContain('798x600');
+        expect(warning).toContain('"firefox"');
+    });
+
+    it('ignores the origins, which an animation may legitimately translate', () => {
+        expect(bufferAllocationWarning(buffer, {...buffer, x: 300, y: 200}, 'x')).toBeNull();
+    });
+
+    it('is silent when either read is missing or degenerate', () => {
+        expect(bufferAllocationWarning(null, buffer, 'x')).toBeNull();
+        expect(bufferAllocationWarning(buffer, null, 'x')).toBeNull();
+        expect(bufferAllocationWarning(buffer, {...buffer, width: 0}, 'x')).toBeNull();
+    });
+});
+
+describe('phaseAlignmentWarning (the fallback mirror must match Mutter\'s applied phase)', () => {
+    it('is silent when they agree within the tolerance', () => {
+        expect(phaseAlignmentWarning({x: 0.5, y: 0}, {x: 0.5, y: 0}, 'x')).toBeNull();
+        expect(phaseAlignmentWarning({x: 0.5, y: 0},
+            {x: 0.5 + PHASE_ALIGNMENT_TOLERANCE / 2, y: 0}, 'x')).toBeNull();
+    });
+
+    it('warns on a fractional-scale hairline of disagreement', () => {
+        const warning = phaseAlignmentWarning({x: 0.5, y: 0}, {x: 1.3, y: 0}, '"firefox"');
+        expect(warning).toContain('(0.50,0.00)');
+        expect(warning).toContain('(1.30,0.00)');
+        expect(warning).toContain('"firefox"');
+    });
+
+    it('is silent when either read is unavailable', () => {
+        expect(phaseAlignmentWarning(null, {x: 1, y: 0}, 'x')).toBeNull();
+        expect(phaseAlignmentWarning({x: 1, y: 0}, null, 'x')).toBeNull();
+        expect(phaseAlignmentWarning({x: Number.NaN, y: 0}, {x: 1, y: 0}, 'x')).toBeNull();
+    });
+
+    it('is silent when the two reads were taken from different actors', () => {
+        // The mirror folds the surface container's layout; the applied read is that same
+        // container's transform. A pair naming different actors compares a phase against a
+        // position - the false positive the field saw as (-960,-600) - so it is unavailable.
+        const container = {name: 'container'};
+        const windowActor = {name: 'windowActor'};
+        expect(phaseAlignmentWarning({x: 0, y: 0, actor: container},
+            {x: -960, y: -600, actor: windowActor}, '"telegram"')).toBeNull();
+        // A pair naming the same actor is still compared.
+        const warning = phaseAlignmentWarning({x: 0, y: 0, actor: container},
+            {x: 1.3, y: 0, actor: container}, '"firefox"');
+        expect(warning).toContain('disagrees');
+    });
+
+    it('reports an out-of-bound read as unavailable and keeps the raw numbers', () => {
+        // A phase is bounded; -960 is a layout position, not a phase. The message says the read
+        // is unavailable and prints both raw values so the journal still shows what was read.
+        const warning = phaseAlignmentWarning({x: 0, y: 0},
+            {x: -960, y: -600}, '"telegram"');
+        expect(warning).toContain('unavailable');
+        expect(warning).toContain('(-960.00,-600.00)');
+        expect(warning).toContain(`${PHASE_MAGNITUDE_BOUND}px`);
+        expect(warning).toContain('"telegram"');
+        expect(warning).not.toContain('disagrees');
+    });
+
+    it('keeps a disagreement within the subpixel bound as a phase warning', () => {
+        // The magnitude guard only rejects values a phase cannot have; a real fractional-scale
+        // hairline is still a disagreement.
+        const warning = phaseAlignmentWarning({x: 0, y: 0},
+            {x: PHASE_MAGNITUDE_BOUND - 0.1, y: 0}, '"firefox"');
+        expect(warning).toContain('disagrees');
+    });
+});
+
+describe('overviewMaskRefusalWarning (the square-in-the-overview class)', () => {
+    it('names the reason and the window', () => {
+        const warning = overviewMaskRefusalWarning('no preview container', '"firefox"');
+        expect(warning).toContain('no preview container');
+        expect(warning).toContain('"firefox"');
+    });
+});

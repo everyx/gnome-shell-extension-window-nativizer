@@ -1270,8 +1270,6 @@ for i in range(len(ray_mins) - 1):
     if tangential_step > 25:
         sys.exit(f"tangential corner discontinuity detected between deg={deg_curr} ({min_curr}) and deg={deg_next} ({min_next}): step {tangential_step} > 25")
 
-corner_overall_min = min(m for _, m, _ in ray_mins)
-print(f"DEBUG: test_x={test_x} f.x={pos.get('x')} straight_px={px} straight_min={straight_min} corner_min={corner_overall_min} red_left={red['left']} red_pre_green={pre_body} red_shadow_min={shadow_min} red_profile_green={red_col} (rays 0..90 deg: {[m for _, m, _ in ray_mins]})")
 PYEOF
     then
         echo "!! Straight edge or corner dark dip artifact detected at phase x=$test_x!"
@@ -1620,8 +1618,6 @@ decl_eff = scale * box['declared']['box']['w'] / box['declared']['frame']['width
 desk_b, desk_bg, desk_body = corner_boundary(dimg, desk['x'] * scale, desk['y'] * scale, scale)
 decl_b, decl_bg, decl_body = corner_boundary(
     oimg, box['declared']['box']['x'] * scale, box['declared']['box']['y'] * scale, decl_eff)
-print(f"DEBUG: desktop corner boundary={desk_b:.3f} logical px (backdrop {desk_bg:.0f}, body {desk_body:.0f})")
-print(f"DEBUG: preview corner boundary={decl_b:.3f} logical px (backdrop {decl_bg:.0f}, body {decl_body:.0f})")
 if abs(desk_b - decl_b) > STANDARD_PX:
     sys.exit(f"the preview's corner does not reproduce the desktop's coverage: {decl_b:.3f} vs "
              f"{desk_b:.3f} logical px (standard {STANDARD_PX})")
@@ -1635,7 +1631,6 @@ if not (0 <= cx < oimg.width and 0 <= cy < oimg.height and 0 <= mx < oimg.width 
     sys.exit(f"preview box outside the screenshot: {box['declared']} shot {oimg.size}")
 corner = luma(oimg.getpixel((cx, cy)))
 middle = luma(oimg.getpixel((mx, my)))
-print(f"DEBUG: preview corner=({cx},{cy}) luma={corner:.0f} centre=({mx},{my}) luma={middle:.0f}")
 if middle - corner < CORNER_DARKER:
     sys.exit("overview preview corner is not cut: the shape is square, not masked")
 
@@ -1643,12 +1638,9 @@ if 'native' in box:
     native_eff = scale * box['native']['box']['w'] / box['native']['frame']['width']
     native_b, native_bg, native_body = corner_boundary(
         oimg, box['native']['box']['x'] * scale, box['native']['box']['y'] * scale, native_eff)
-    print(f"DEBUG: native  corner boundary={native_b:.3f} logical px (backdrop {native_bg:.0f}, body {native_body:.0f})")
     if abs(decl_b - native_b) > STANDARD_PX:
         sys.exit(f"the decorated preview's corner is not libadwaita's: {decl_b:.3f} vs "
                  f"{native_b:.3f} logical px (standard {STANDARD_PX})")
-else:
-    print("DEBUG: no libadwaita reference client; the native corner comparison did not run")
 PYEOF
 then
     echo "!! Overview preview corner did not match the desktop or libadwaita reference!"
