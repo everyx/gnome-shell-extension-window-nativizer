@@ -409,6 +409,89 @@ export function isForeignWidget(child, St = null) {
 }
 
 /**
+ * Whether a candidate surface container has no allocation yet, so its box cannot be verified. Kept
+ * separate from `isCompatibleSurfaceGeometry` because the resolver treats it as the "wait" case
+ * (keep the last good target) rather than an incompatibility (fall back to the window actor).
+ *
+ * @param {object|null} candidate
+ * @returns {boolean}
+ */
+export function isUnallocatedSurfaceBox(candidate) {
+    if (!candidate)
+        return false;
+    const width = candidate.width;
+    const height = candidate.height;
+    // Only an actor that exposes a box is a container candidate: an injected widget the St-based
+    // filter could not name has no width/height and must not be read as an unallocated container.
+    if (width === undefined && height === undefined)
+        return false;
+    return width === undefined || height === undefined || width === 0 || height === 0;
+}
+
+/**
+ * Whether a candidate box has the buffer's dimensions, ignoring where it sits. Shared by the
+ * compatibility predicate and the identity rule's "cannot tell" guard, so both read one buffer
+ * comparison: an allocated child this size but off the buffer origin is either the container
+ * mid-move or the backing, and the identity rule refuses to guess between them.
+ *
+ * @param {object|null} candidate
+ * @param {object|null} win
+ * @returns {boolean}
+ */
+function hasBufferDimensions(candidate, win) {
+    if (!candidate || !win)
+        return false;
+
+    const buffer = getWindowBufferRect(win);
+    if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
+        return false;
+
+    const candW = candidate.width;
+    const candH = candidate.height;
+    if (candW === undefined || candH === undefined || candW === 0 || candH === 0)
+        return false;
+
+    const EPSILON = 1e-6;
+    return Math.abs(candW - buffer.width) <= EPSILON &&
+        Math.abs(candH - buffer.height) <= EPSILON;
+}
+
+/**
+ * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
+ *
+ * A geometry that cannot be verified is not accepted. An unreadable buffer is an independent read
+ * failure, and an unallocated candidate is the "wait" case the resolver defers (`isUnallocatedSurfaceBox`);
+ * both used to fail open, so a container whose box genuinely differs from the buffer - a
+ * letterboxed or offset container - could be attached whenever the buffer read happened to fail,
+ * and the clip then cut the wrong body. The check exists to reject a coordinate space that
+ * genuinely differs, and the resolver's caller re-verifies on the container's `notify::allocation`
+ * once the state settles.
+ *
+ * The identity rule and this predicate live in the platform seam together because the phase
+ * readers and the clip resolver must answer "is this actor the container?" with one rule, and
+ * platform may not import from `lib/` (see tools/check-platform-boundary.mjs); `clipTarget.js`
+ * re-exports the predicate.
+ *
+ * @param {object|null} candidate
+ * @param {object|null} win
+ * @returns {boolean}
+ */
+export function isCompatibleSurfaceGeometry(candidate, win) {
+    if (!hasBufferDimensions(candidate, win))
+        return false;
+
+    // The container path's premise is that the container's local space IS the buffer's: the clip
+    // derives its frame with ZERO_PHASE, so a real offset in x/y moves the cut against the shadow's
+    // hole by exactly that offset - 0.4 logical px is half a physical pixel at 1.25x, the phase the
+    // two cuts are most likely to part on. Only float residue may pass, so the origin is compared
+    // against a tolerance instead of being rounded to zero; whether the box is integer-aligned is a
+    // separate concern (`isIntegerAlignedSurfaceBox`).
+    const ORIGIN_EPSILON = 1e-6;
+    return Math.abs(candidate.x ?? 0) <= ORIGIN_EPSILON &&
+        Math.abs(candidate.y ?? 0) <= ORIGIN_EPSILON;
+}
+
+/**
  * Resolves the actor Mutter positions as the window's Wayland surface container.
  *
  * `surface_container_apply_transform` computes the subpixel phase from the container's layout
@@ -417,19 +500,66 @@ export function isForeignWidget(child, St = null) {
  * wants the phase has to read this actor, not the window actor. The container's type
  * (`MetaSurfaceContainerActorWayland`) is private: it is absent from `meta-window-actor.h` and
  * from the GIR sources, so it is not reachable from GJS and cannot be type-checked. Identity is
- * inferred from the actor tree instead: the window actor's non-foreign child. The background
- * actor Mutter inserts is not an St.Widget, so an ambiguous tree (more than one non-foreign
- * child) answers null and the caller treats the container offset as zero.
+ * inferred from the actor tree instead, in three branches:
+ *
+ *   1. exactly one non-foreign child -> that child (the original rule, unchanged);
+ *   2. otherwise, the unique non-foreign child whose box passes `isCompatibleSurfaceGeometry`
+ *      for the window's buffer, and no other non-foreign child is buffer-sized but off the
+ *      buffer origin -> that child;
+ *   3. none passing, more than one passing, or a buffer-sized-but-misplaced sibling making the
+ *      pick ambiguous -> null, and the caller falls back to the window actor (never guess).
+ *
+ * The geometric filter separates Mutter's black full-monitor backing (`do_sync_geometry`'s plain
+ * `Clutter.Actor`, not an St.Widget, so it counts as non-foreign) from the buffer-sized container
+ * in the letterboxed case; when both are monitor-sized (opaque fullscreen) it finds two and branch
+ * 3 falls back. The new path selects only actors the existing container path accepts, because it
+ * runs the same `isCompatibleSurfaceGeometry` predicate that path re-checks.
+ *
+ * The narrow hole is handled explicitly in two directions, never papered over. The container's
+ * private type would be the way to identify it and is unreachable from GJS, so:
+ *
+ *   - When one non-foreign child has not allocated (the tell that the tree is not settled), it may
+ *     be the real container waiting for its buffer while a sibling is already compatible. The rule
+ *     returns that unallocated child, so the resolver's existing defer path fires and keeps the
+ *     last good target instead of attaching to the sibling; this is the same value a sole
+ *     unallocated container yields under branch 1.
+ *   - When the compatible pick's sibling is buffer-sized but off the buffer origin, it could be
+ *     the real container mid-move and the compatible child the backing. Geometry alone cannot
+ *     separate them, so the rule falls back exactly as a tie does. The residual is then a brief,
+ *     appearance-only mismatch at most - the clip stays on the window actor, the known-worse
+ *     phase path, but never a deformation and never a guess.
  *
  * @param {object|null} actor - The window actor
+ * @param {object|null} win - Meta.Window behind the actor, for the buffer comparison
  * @param {object|null} [St]
  * @returns {object|null} Surface container actor, or null when it cannot be identified
  */
-export function getSurfaceContainer(actor, St = null) {
+export function getSurfaceContainer(actor, win, St = null) {
     try {
         const children = actor?.get_children?.() ?? [];
         const nonForeign = children.filter(child => !isForeignWidget(child, St));
-        return nonForeign.length === 1 ? nonForeign[0] : null;
+        if (nonForeign.length === 1)
+            return nonForeign[0];
+
+        // Narrow hole, "we can tell": an unallocated non-foreign child may be the real container
+        // waiting for its buffer. Do not guess among the allocated siblings; return it so the
+        // resolver's defer path fires and keeps the last good target.
+        const unallocated = nonForeign.find(isUnallocatedSurfaceBox);
+        if (unallocated)
+            return unallocated;
+
+        const compatible = nonForeign.filter(child => isCompatibleSurfaceGeometry(child, win));
+        if (compatible.length !== 1)
+            return null;
+
+        // Narrow hole, "we cannot tell": another non-foreign child is buffer-sized but off the
+        // buffer origin. It could be the real container mid-move and the compatible child the
+        // backing, so never guess - fall back as the tie does.
+        if (nonForeign.some(child =>
+            child !== compatible[0] && hasBufferDimensions(child, win)))
+            return null;
+
+        return compatible[0];
     } catch {
         return null;
     }
@@ -590,7 +720,7 @@ export function getWindowSubpixelOffset(win, St = null) {
         // Layout coordinates only: the window actor's position plus the surface container's
         // position inside it (zero when the container cannot be identified). The container is
         // resolved with the same St the clip path is handed, so both run one identification rule.
-        const container = getSurfaceContainer(actor, St);
+        const container = getSurfaceContainer(actor, win, St);
         const absX = (actor.x ?? 0) + (container?.x ?? 0);
         const absY = (actor.y ?? 0) + (container?.y ?? 0);
         const relX = absX - monitorX;
@@ -649,7 +779,7 @@ export function getAppliedSubpixelPhase(win, St = null) {
 
         // The same St the clip resolves its target with, so the applied read and the clip share
         // one identification rule rather than the heuristic.
-        const container = getSurfaceContainer(actor, St);
+        const container = getSurfaceContainer(actor, win, St);
         if (!container || typeof container.get_transform !== 'function')
             return null;
 

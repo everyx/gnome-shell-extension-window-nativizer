@@ -596,6 +596,33 @@ identify the container it falls back to the window actor and the clip folds the 
 geometry instead, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md`
 owns that limitation and the model behind it.
 
+**How the container is identified.** The container's type (`MetaSurfaceContainerActorWayland`) is
+private and unreachable from GJS, so `getSurfaceContainer` (`src/platform/window.js`) infers it
+from the window actor's children in three branches: exactly one non-foreign child is the container
+(the original rule); otherwise the unique non-foreign child whose box passes
+`isCompatibleSurfaceGeometry` - origin at (0,0), dimensions equal to the buffer, the same predicate
+the clip re-checks before attaching - is the container; otherwise the answer is null and the
+resolver falls back to the window actor, never a guess. The geometric filter is what separates
+Mutter's black full-monitor backing (`do_sync_geometry`'s plain `Clutter.Actor`, not an `St.Widget`,
+so it counts as non-foreign) from the buffer-sized container for an acked-fullscreen window that
+does not cover the monitor opaquely; when both are monitor-sized - the opaque-fullscreen shape -
+two children pass and the third branch falls back. Every actor the rule offers has passed the same
+`isCompatibleSurfaceGeometry` predicate the container path trusts, so the new branch can never
+select something the container path would have rejected.
+
+**The residual, and its consequence.** If the real container has not allocated yet while another
+non-foreign child is already buffer-compatible, the unique-compatible branch could take that
+backing for one reconcile. The private type would distinguish them and is unreachable, but an
+unallocated non-foreign child is the tell that the tree is not settled: the rule returns that
+unallocated child, the resolver's existing defer path fires, and it keeps its last good target
+(`{defer: true}`) rather than attaching to the backing. If the real container is allocated but its
+own box is off the buffer origin while a sibling is buffer-sized and at the origin, the two cannot
+be told apart from geometry alone; there the rule takes the tie fallback and the clip stays on the
+window actor for that reconcile. That residual's consequence is bounded to appearance: the two
+cuts can part by the fractional-scale hairline the container path exists to avoid, for the one
+reconcile, and the clip never attaches to an actor the container path would reject and never
+deforms the window.
+
 **Where the phase comes from.** On the container path the phase is read back from the transform
 Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform/window.js`),
 because the clip's local frame is phase-free and the shadow actor is a sibling that must translate
