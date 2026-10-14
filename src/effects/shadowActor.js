@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -18,6 +18,23 @@ import {ShadowFadeStateMachine} from './shadowFade.js';
 const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y',
 ];
+
+/**
+ * A live actor's size, or null when the actor is gone or its read throws. The body authority is
+ * read from actors we do not own (the surface container can be replaced mid-flight), so a torn-down
+ * read is "unknown" and falls through resolveClipSize rather than aborting the paint.
+ * @param {{width:number,height:number}|null} actor
+ * @returns {{width:number,height:number}|null}
+ */
+function readActorSize(actor) {
+    if (!actor)
+        return null;
+    try {
+        return {width: actor.width, height: actor.height};
+    } catch {
+        return null;
+    }
+}
 
 export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
 
@@ -33,6 +50,14 @@ export const ShadowActor = GObject.registerClass({
 
         this._windowActor = windowActor;
         this._container = container;
+        // The actor the clip resolved as its target. Its read is the shadow's body authority, so the
+        // two derive their body from one source (see shadowLayout's bodySource). Kept live by
+        // setClipTarget() on every decorate pass; null falls back to the window actor, exactly as
+        // resolveClipSize does.
+        this._clipTarget = null;
+        // Edge-trigger for the body-authority warning, so a persistent disagreement is one loud
+        // journal line per episode rather than one per paint frame.
+        this._bodyWarningActive = false;
         this._insets = null;
         this._scale = 1.0;
         // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
@@ -155,6 +180,41 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
+     * Points the shadow at the clip's resolved target, whose read is the body authority the clip
+     * cuts. Called by the decoration on every pass after the target is resolved; a changed target
+     * re-derives the next paint's cast from it, while a pass that keeps the target does nothing.
+     * @param {Clutter.Actor|null} clipTarget
+     */
+    setClipTarget(clipTarget) {
+        const next = clipTarget ?? null;
+        if (this._clipTarget === next)
+            return;
+        this._clipTarget = next;
+        this.queue_redraw();
+    }
+
+    /**
+     * @returns {{width:number, height:number, cast:object|null, rightBand:object|null}} Live,
+     *          read-only shadow geometry for the debug reply; every field is a read.
+     */
+    get diagnosticsView() {
+        const style = this._fade?.style ?? null;
+        const cast = style?.cast ?? null;
+        const entry = style?.boxesByScale?.get?.(this._scale) ?? null;
+        const box = entry?.boxes?.[7] ?? null;
+        return {
+            width: this.width,
+            height: this.height,
+            cast: cast
+                ? {x: cast.x, y: cast.y, width: cast.width, height: cast.height}
+                : null,
+            rightBand: box
+                ? {x1: box.x1, y1: box.y1, x2: box.x2, y2: box.y2}
+                : null,
+        };
+    }
+
+    /**
      * Sets display scale externally, eliminating Shell queries from paint passes.
      * @param {number} scale
      */
@@ -257,7 +317,12 @@ export const ShadowActor = GObject.registerClass({
     // The layout decision (cast, slices, snapped quads) lives in the pure shadowLayout;
     // this method owns only the Clutter box objects it reuses per physical scale.
     _relayout(style, scale) {
-        const layout = shadowLayout(style, {width: this.width, height: this.height}, this._insets ?? ZERO_INSETS, scale);
+        const layout = shadowLayout(style, {width: this.width, height: this.height},
+            this._insets ?? ZERO_INSETS, scale, {
+                targetSize: readActorSize(this._clipTarget),
+                windowActorSize: readActorSize(this._windowActor),
+            });
+        this._warnOnBodyDisagreement(layout.authority);
 
         const slicesChanged = layout.castChanged || !style.slices;
         if (slicesChanged) {
@@ -291,6 +356,29 @@ export const ShadowActor = GObject.registerClass({
         }
 
         return entry.boxes;
+    }
+
+    /**
+     * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip
+     * cuts (resolveClipSize of the target and the window actor); the shadow's box is bound to the
+     * window actor, so on a healthy window the two agree and this is silent. A disagreement is the
+     * glitch this warning exists to catch: the clip follows the container while the shadow follows
+     * the actor, and the right band shrinks. Edge-triggered, so a persistent disagreement is one
+     * WARNING naming the numbers rather than one per paint frame; agreement re-arms it.
+     * @param {{width:number,height:number}|null} authority
+     */
+    _warnOnBodyDisagreement(authority) {
+        const warning = shadowBodyWarning(authority,
+            {width: this.width, height: this.height},
+            readActorSize(this._windowActor));
+        if (warning) {
+            if (!this._bodyWarningActive) {
+                this._bodyWarningActive = true;
+                console.warn(warning);
+            }
+            return;
+        }
+        this._bodyWarningActive = false;
     }
 
     destroy() {

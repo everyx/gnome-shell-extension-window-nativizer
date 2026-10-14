@@ -42,10 +42,24 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.insets = null;
             this.style = null;
             this.scale = 1;
+            this.clipTarget = null;
         }
 
         setScale(scale) {
             this.scale = scale;
+        }
+
+        setClipTarget(clipTarget) {
+            this.clipTarget = clipTarget;
+        }
+
+        get diagnosticsView() {
+            return {
+                width: 824,
+                height: 624,
+                cast: {x: 0, y: 0, width: 824, height: 624},
+                rightBand: {x1: 812, y1: 0, x2: 824, y2: 624},
+            };
         }
 
         setShadowInsets(insets) {
@@ -713,6 +727,42 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.scale).toBe(1);
         expect(deco.shadow.style.radius).toBe(12);
         expect(deco.shadow.scale).toBe(1);
+    });
+
+    it('points the shadow at the clip target and reports the live body for diagnostics', () => {
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        deco.apply({
+            actions: {
+                drawClip: true,
+                drawRing: false,
+                drawShadow: true,
+                drawResize: false,
+                ring: {clear: false, safeInset: false},
+                style: {radius: 12, outline: null, shadows: []},
+            },
+            inputs: {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1},
+            actor: mockActor,
+        });
+
+        // The shadow's body authority is the same target the clip attached to...
+        expect(deco.shadow.clipTarget).toBe(container);
+        // ...and the read-only view exposes the clip's container box plus the shadow's live box,
+        // cast and snapped right band for one debug pick during the glitch.
+        expect(deco.diagnosticsView.containerBox).toEqual({x: 0, y: 0, width: 800, height: 600});
+        expect(deco.diagnosticsView.shadowWidth).toBe(824);
+        expect(deco.diagnosticsView.shadowHeight).toBe(624);
+        expect(deco.diagnosticsView.shadowCast).toEqual({x: 0, y: 0, width: 824, height: 624});
+        expect(deco.diagnosticsView.shadowRightBand).toEqual({x1: 812, y1: 0, x2: 824, y2: 624});
     });
 
     it('resolves the ring plan once and exposes it through the state view', () => {

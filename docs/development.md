@@ -288,10 +288,15 @@ live objects say `unavailable` explicitly rather than being omitted.
 | window geometry | `frameRect`, `bufferRect`, `windowActorAllocation` |
 | process | `nativeLikeCorners` |
 | clip | `clipTargetType`, `clipTargetName`, `phaseInTransform`, `clipFrame`, `clipInsets`, `clipScale`, `clipEnabled`, `clipSuspended` |
+| clip body authority | `containerBox`, `shadowWidth`, `shadowHeight`, `shadowCast`, `shadowRightBand` |
 
 `frameRect`, `bufferRect` and `windowActorAllocation` are JSON `{"x":…,"y":…,"width":…,"height":…}`;
 `clipFrame` is the clip shader's live `uFrame` as `[x,y,width,height]`; `clipInsets` is JSON
-`{"left":…,"top":…,"right":…,"bottom":…}`. Booleans are `"true"`/`"false"`.
+`{"left":…,"top":…,"right":…,"bottom":…}`. `containerBox` is the resolved clip target's live box
+in that same JSON - the surface container on the container path, the window actor on the fallback -
+so it pairs with `windowActorAllocation` to show which side moved. `shadowCast` is the shadow's
+derived body cast in the same JSON, `shadowRightBand` is the snapped right-edge slice
+`{x1,y1,x2,y2}`, and `shadowWidth`/`shadowHeight` are bare numbers. Booleans are `"true"`/`"false"`.
 
 **No-answer vocabulary**, kept distinct so a consumer cannot read a missing answer as a negative
 one: `unavailable` is a read that was reachable but did not return; `unknown` is `mirrorPhaseX/Y`

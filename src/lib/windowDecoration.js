@@ -125,7 +125,8 @@ export class WindowDecoration {
     get diagnosticsView() {
         const clip = this.clip;
         const hasClip = Boolean(clip);
-        const target = hasClip ? safeRead(() => clip.get_actor?.() ?? this.clipTarget, null) : null;
+        const target = safeRead(() => clip?.get_actor?.() ?? this.clipTarget, null);
+        const shadow = safeRead(() => this.shadow?.diagnosticsView ?? null, null);
 
         return {
             clipTargetType: hasClip
@@ -140,6 +141,18 @@ export class WindowDecoration {
             clipScale: hasClip ? safeRead(() => clip._scale ?? null, null) : null,
             clipEnabled: hasClip ? safeRead(() => Boolean(clip.enabled), null) : null,
             clipSuspended: hasClip ? safeRead(() => Boolean(clip._suspended), null) : null,
+            // The resolved target's live box, read alone from the clip's frame: on the container
+            // path this is the surface container the clip's body authority names, and the pair with
+            // `windowActorAllocation` in the reply shows which side moved when the shadow disagrees.
+            containerBox: safeRead(() => target
+                ? {x: target.x, y: target.y, width: target.width, height: target.height}
+                : null, null),
+            // The shadow's side of the same body, so one debug pick during the glitch shows the
+            // clip's frame, the container it derived from, and the shadow box/cast/right band.
+            shadowWidth: shadow?.width ?? null,
+            shadowHeight: shadow?.height ?? null,
+            shadowCast: shadow?.cast ?? null,
+            shadowRightBand: shadow?.rightBand ?? null,
         };
     }
 
@@ -415,8 +428,11 @@ export class WindowDecoration {
         this._syncClipParams();
         if (this.shadow) {
             // Both cuts read the same phase source: the shadow follows the clip's resolved target
-            // strategy (see shadowPhaseOffset).
+            // strategy (see shadowPhaseOffset). Its body authority is that same target, so the two
+            // derive the body from one source and a transient container/actor disagreement cannot
+            // shrink the shadow's band while the clip's cut stays put.
             this.shadow.setPhaseInTransform?.(this.clipPhaseInTransform);
+            this.shadow.setClipTarget?.(this.clipTarget);
             this.shadow.setScale?.(scale);
             this.shadow.setShadowInsets?.(insets);
             this.shadow.setShadowStyle?.({
