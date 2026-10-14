@@ -128,7 +128,8 @@ export function extractPhaseProperties(win) {
 /**
  * The decoration-side diagnostics keys, in reply order. Named once so `extractDiagnosticProperties`
  * and `WindowDecoration.diagnosticsView` cannot silently disagree about what crossing the bus is.
- * Only the live clip is carried here; the overview is deliberately left out (see development.md).
+ * The live clip and the shadow over the same body are carried here; the overview is deliberately
+ * left out (see development.md).
  */
 export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
     'clipTargetType',
@@ -139,6 +140,11 @@ export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
     'clipScale',
     'clipEnabled',
     'clipSuspended',
+    'containerBox',
+    'shadowWidth',
+    'shadowHeight',
+    'shadowCast',
+    'shadowRightBand',
 ]);
 
 /**

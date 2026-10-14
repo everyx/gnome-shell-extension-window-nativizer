@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_PAD}
+import {shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -323,6 +323,98 @@ describe('shadowLayout', () => {
         expect(second.slices).toEqual(shadowSlices(shadowGeometry(12), second.cast.width, second.cast.height));
     });
 
+});
+
+describe('shadow body authority (one body for the clip and the shadow)', () => {
+    const zero = {left: 0, top: 0, right: 0, bottom: 0};
+    // The actor box the bind constraint gives the shadow: the window actor grown by PAD a side.
+    const boundShadowBox = body => ({
+        width: body.width + SHADOW_PAD * 2,
+        height: body.height + SHADOW_PAD * 2,
+    });
+
+    it('follows the clip authority even when the shadow box disagrees, right band included', () => {
+        // The clip derives its body from resolveClipSize(target, windowActor). Force the
+        // disagreement a client focus/refocus hack produced: a surface container wider than the
+        // window actor while the shadow is still bound to the actor. Pre-fix the fifth argument was
+        // ignored, the cast was derived from the smaller actor box, and the right strip of the
+        // larger clip body went unpainted (28px reproduces the observed missing band).
+        const windowBody = {width: 400, height: 300};
+        const containerBody = {width: 428, height: 300};
+
+        const layout = shadowLayout({radius: 12}, boundShadowBox(windowBody), zero, 1, {
+            targetSize: containerBody,
+            windowActorSize: windowBody,
+        });
+
+        // The cast and its hole describe the authority body, not the bound box.
+        const hole = {
+            x: layout.cast.x + SHADOW_PAD,
+            y: layout.cast.y + SHADOW_PAD,
+            width: layout.cast.width - SHADOW_PAD * 2,
+            height: layout.cast.height - SHADOW_PAD * 2,
+        };
+        expect(hole.width).toBe(containerBody.width);
+        expect(hole.height).toBe(containerBody.height);
+        expect(layout.cast.width).toBe(containerBody.width + SHADOW_PAD * 2);
+        expect(layout.authority).toEqual(containerBody);
+
+        // The snapped right band (slice 7) reaches the cast's right edge, so the PAD beyond the
+        // body's right edge is painted rather than left as the missing strip.
+        const rects = snapSliceRects(layout.cast, layout.corner, 1);
+        const bodyRight = hole.x + hole.width;
+        const castRight = layout.cast.x + layout.cast.width;
+        expect(rects[7].x2).toBeCloseTo(castRight, 6);
+        expect(rects[7].x1).toBeLessThanOrEqual(bodyRight);
+        expect(rects[7].x2).toBeGreaterThanOrEqual(bodyRight);
+    });
+
+    it('is a no-op when the container and the window actor agree', () => {
+        const body = {width: 400, height: 300};
+        const withAuthority = shadowLayout({radius: 12}, boundShadowBox(body), zero, 1, {
+            targetSize: body,
+            windowActorSize: body,
+        });
+        const withoutAuthority = shadowLayout({radius: 12}, boundShadowBox(body), zero, 1);
+        expect(withAuthority.cast).toEqual(withoutAuthority.cast);
+        expect(withAuthority.slices).toEqual(withoutAuthority.slices);
+    });
+});
+
+describe('shadowBodyWarning (the body-authority invariant)', () => {
+    const shadowBox = body => ({
+        width: body.width + SHADOW_PAD * 2,
+        height: body.height + SHADOW_PAD * 2,
+    });
+
+    it('names both extents when the authority disagrees beyond the tolerance', () => {
+        const warning = shadowBodyWarning(
+            {width: 428, height: 300},
+            shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300});
+        expect(warning).toContain('[window-nativizer] Shadow body authority');
+        expect(warning).toContain('428x300');
+        expect(warning).toContain('400x300');
+    });
+
+    it('stays silent when the authority and the box agree', () => {
+        expect(shadowBodyWarning(
+            {width: 400, height: 300},
+            shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300})).toBeNull();
+    });
+
+    it('stays silent within the documented tolerance', () => {
+        expect(shadowBodyWarning(
+            {width: 400 + SHADOW_BODY_TOLERANCE, height: 300},
+            shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300})).toBeNull();
+    });
+
+    it('stays silent when the authority is unknown', () => {
+        expect(shadowBodyWarning(null, shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300})).toBeNull();
+    });
 });
 
 describe('shadowPhaseOffset (the shadow cuts on the clip target\'s phase source)', () => {

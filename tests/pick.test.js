@@ -352,6 +352,11 @@ describe('extractDiagnosticProperties', () => {
             clipScale: 1.25,
             clipEnabled: true,
             clipSuspended: false,
+            containerBox: {x: 0, y: 0, width: 800, height: 600},
+            shadowWidth: 824,
+            shadowHeight: 624,
+            shadowCast: {x: 0, y: 0, width: 824, height: 624},
+            shadowRightBand: {x1: 812, y1: 0, x2: 824, y2: 624},
         };
         const props = extractDiagnosticProperties(diagnosticWin(), {diagnosticsView: view});
 
@@ -368,6 +373,11 @@ describe('extractDiagnosticProperties', () => {
         expect(props.clipScale).toBe('1.25');
         expect(props.clipEnabled).toBe('true');
         expect(props.clipSuspended).toBe('false');
+        expect(props.containerBox).toBe('{"x":0,"y":0,"width":800,"height":600}');
+        expect(props.shadowWidth).toBe('824');
+        expect(props.shadowHeight).toBe('624');
+        expect(props.shadowCast).toBe('{"x":0,"y":0,"width":824,"height":624}');
+        expect(props.shadowRightBand).toBe('{"x1":812,"y1":0,"x2":824,"y2":624}');
     });
 
     it('renders an untracked window with explicit unavailable clip values', () => {
