@@ -832,3 +832,24 @@ overrides `vfunc_allocate()` to expand the thumbnail box by `SHADOW_PAD` scaled 
 The clone paints the shadow's baked 8-slice mesh, so scaling it is a texture sample, not a
 re-blur. It monkey-patches nothing: the allocation is a Clutter vfunc, not a GJS signal handler
 recomputing matrices per frame, and the clone is a plain scene-graph child of the preview.
+
+## One body, one authority
+
+The clip and the shadow describe the same body, so they read it from the same call. `resolveClipSize(targetRead, windowActorRead)` — the clip target's own read when it is usable, else the window actor — is what the clip paints with, and the shadow derives its cast and its eight slices from that same answer (`shadowLayout`'s `bodySource`, fed by `WindowDecoration` on every pass). Healthy agreement (`frameRect == bufferRect == windowActorAllocation`) produces a byte-identical cast, so nothing changes in the ordinary case.
+
+A disagreement is not silent: when the authority and the shadow's own box differ by more than `SHADOW_BODY_TOLERANCE = 0.5` logical px, one WARNING per episode names both extents (agreement re-arms it). Health means it never fires — the e2e log audit treats an unexpected WARNING as a failure — and on a real machine it is what leaves the evidence when something outside our code moves one of the two.
+
+**The shadow is not resized to match; only its cast follows the authority.** That is deliberate, and it was verified rather than assumed: driving the authority larger than the shadow actor's own allocation in a nested session at 1.3333 (control 700×500; +28 ⇒ +28.5 logical px of visible shadow; +120 ⇒ +120) showed the added area is painted. `ShadowActor` overrides no paint volume, so a custom paint node is not clipped by the allocation, and the extra slices appear.
+
+**A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip — which re-reads its size at paint — moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
+
+## Identifying the surface container
+
+The container is not introspectable, so it is identified structurally, by one rule shared by the clip resolver and both phase readers (they take the same `St`, so `isForeignWidget` uses the live `instanceof St.Widget` branch everywhere instead of a global or a constructor-name guess):
+
+1. exactly one non-foreign child of the window actor — that child, unchanged;
+2. any non-foreign child without an allocation — return it, and the resolver defers, keeping the last good target (it may be the container waiting for its first buffer);
+3. otherwise exactly one non-foreign child whose box passes `isCompatibleSurfaceGeometry` — that child, the container path;
+4. none, more than one, or another child that is buffer-sized but off the buffer origin — null, and the clip falls back to the window actor.
+
+Branch 3 is what separates Mutter's own fullscreen backing actor (a plain `Clutter.Actor`, non-foreign by type, monitor-sized, inserted by `do_sync_geometry` for a letterboxed fullscreen window) from the buffer-sized container. In the opaque-fullscreen shape both are monitor-sized, so two candidates pass and branch 4 falls back rather than guess. The residual, recorded rather than hidden: when a container is buffer-sized but off the buffer origin and another child is compatible, geometry cannot separate them, so that reconcile stays on the window-actor fallback — the known-worse phase path, where the two cuts can briefly part by the fractional-scale hairline. That is an appearance difference, never a deformation, and the next reconcile re-resolves.
