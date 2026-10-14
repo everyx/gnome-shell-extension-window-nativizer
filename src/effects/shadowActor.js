@@ -44,12 +44,15 @@ export const ShadowActor = GObject.registerClass({
     /**
      * @param {Clutter.Actor} windowActor
      * @param {Clutter.Actor} container - windowGroup; shadow inserted below windowActor
+     * @param {object|null} [St] - The St namespace the clip target path uses, so the applied
+     *        phase read identifies the surface container by the clip's rule, not a global
      */
-    _init(windowActor, container) {
+    _init(windowActor, container, St = null) {
         super._init({name: 'WindowNativizerShadowActor', reactive: false, opacity: 255});
 
         this._windowActor = windowActor;
         this._container = container;
+        this._St = St;
         // The actor the clip resolved as its target. Its read is the shadow's body authority, so the
         // two derive their body from one source (see shadowLayout's bodySource). Kept live by
         // setClipTarget() on every decorate pass; null falls back to the window actor, exactly as
@@ -123,7 +126,7 @@ export const ShadowActor = GObject.registerClass({
     _syncGeometry() {
         if (!this._windowActor)
             return;
-        const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform);
+        const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform, this._St);
         // A null offset is an unreadable monitor geometry, not a zero phase: keep the last good
         // phase so the shadow's cutout stays on the clip's line instead of hopping to zero.
         if (offset)

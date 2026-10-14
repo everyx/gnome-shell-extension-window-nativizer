@@ -189,16 +189,17 @@ export function shadowLayoutPosition(windowActor, pad = SHADOW_PAD) {
  *
  * @param {object|null} win - Meta.Window behind the shadow's window actor
  * @param {boolean} phaseInTransform - The resolved clip target's strategy
+ * @param {object|null} [St] - The St namespace the clip target path uses, for the fallback read
  * @returns {{x: number, y: number}|null} Phase, or null when neither source can answer; the
  *          caller keeps its last good phase so the shadow stays on the clip's line
  */
-export function shadowPhaseOffset(win, phaseInTransform) {
+export function shadowPhaseOffset(win, phaseInTransform, St = null) {
     if (phaseInTransform) {
-        const applied = getAppliedSubpixelPhase(win);
+        const applied = getAppliedSubpixelPhase(win, St);
         if (applied)
             return applied;
     }
-    return getWindowSubpixelOffset(win);
+    return getWindowSubpixelOffset(win, St);
 }
 
 /**

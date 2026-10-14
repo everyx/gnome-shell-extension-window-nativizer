@@ -599,7 +599,11 @@ owns that limitation and the model behind it.
 **Where the phase comes from.** On the container path the phase is read back from the transform
 Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform/window.js`),
 because the clip's local frame is phase-free and the shadow actor is a sibling that must translate
-by that same value explicitly. Both cuts then follow one source. The read only reflects a move once
+by that same value explicitly. Both cuts then follow one source. Both phase readers
+(`getAppliedSubpixelPhase` and the mirror `getWindowSubpixelOffset`) identify the container through
+`getSurfaceContainer` with the same `St` the clip resolved its target with, threaded from the
+manager through the decoration into the effect and the shadow actor, so the foreign-widget rule is
+one rule everywhere and never falls back to `globalThis.St` or the constructor-name heuristic. The read only reflects a move once
 Mutter has invalidated the cached transform, which it does on the window actor's allocation change,
 so `ShadowActor` syncs on `notify::allocation` as well as position, translation, scale and pivot -
 on position alone the read held the previous position's phase indefinitely (measured at 1.25x: the

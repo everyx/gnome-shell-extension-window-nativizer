@@ -553,9 +553,11 @@ function resolveHighestScaleMonitorIndex(win) {
  * keep their last good value on null, so both cuts stay on one line.
  *
  * @param {object|null} win - Meta.Window
+ * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
+ *        St leaves the constructor-name heuristic as the last resort
  * @returns {{x: number, y: number}|null} Applied offset, or null when it cannot be computed
  */
-export function getWindowSubpixelOffset(win) {
+export function getWindowSubpixelOffset(win, St = null) {
     if (!win)
         return {x: 0, y: 0};
 
@@ -586,8 +588,9 @@ export function getWindowSubpixelOffset(win) {
         const monitorY = geom?.y ?? 0;
 
         // Layout coordinates only: the window actor's position plus the surface container's
-        // position inside it (zero when the container cannot be identified).
-        const container = getSurfaceContainer(actor);
+        // position inside it (zero when the container cannot be identified). The container is
+        // resolved with the same St the clip path is handed, so both run one identification rule.
+        const container = getSurfaceContainer(actor, St);
         const absX = (actor.x ?? 0) + (container?.x ?? 0);
         const absY = (actor.y ?? 0) + (container?.y ?? 0);
         const relX = absX - monitorX;
@@ -631,9 +634,11 @@ export function getWindowSubpixelOffset(win) {
  * reply and never claims a fake zero.
  *
  * @param {object|null} win - Meta.Window
+ * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
+ *        St leaves the constructor-name heuristic as the last resort
  * @returns {{x: number, y: number}|null} Applied phase, or null when it cannot be read
  */
-export function getAppliedSubpixelPhase(win) {
+export function getAppliedSubpixelPhase(win, St = null) {
     try {
         if (!win || getWindowClientType(win) !== WindowClientType.WAYLAND)
             return null;
@@ -642,7 +647,9 @@ export function getAppliedSubpixelPhase(win) {
         if (!actor)
             return null;
 
-        const container = getSurfaceContainer(actor);
+        // The same St the clip resolves its target with, so the applied read and the clip share
+        // one identification rule rather than the heuristic.
+        const container = getSurfaceContainer(actor, St);
         if (!container || typeof container.get_transform !== 'function')
             return null;
 
