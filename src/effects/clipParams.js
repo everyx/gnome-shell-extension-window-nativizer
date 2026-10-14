@@ -193,12 +193,19 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
         Math.abs(targetSize.width - padWidth - (windowActorSize.width - (padWidth - declaredWidth))) > tolerance ||
         Math.abs(targetSize.height - padHeight - (windowActorSize.height - (padHeight - declaredHeight))) > tolerance;
     // Between passes the body's normal residue (`buffer / scale` on a fractional monitor) is below
-    // the tolerance and a whole-pixel move is the defect, so this boundary is inclusive. The
-    // window's own size is read independently; when it moved too the body is genuinely new, and an
-    // unknown window size counts as moved so a real resize is never frozen out.
+    // the tolerance and a whole-pixel move is the defect, so this boundary is inclusive.
     const bodyMoved = isPaintableFrame(previousAuthority) &&
         (Math.abs(authority.width - previousAuthority.width) >= tolerance ||
          Math.abs(authority.height - previousAuthority.height) >= tolerance);
+    // The window's own size is read independently; when it moved too the body is genuinely new,
+    // and an unknown window size counts as moved. That is the one asymmetry here, and it is
+    // deliberate: `windowResizedSince` above reads the same unknown as "not a resize" because there
+    // it only picks which read is the authority, where the steady-state preference is the safe
+    // answer. Here the unknown decides whether to veto the hold, and vetoing freezes the cut for a
+    // pass. An unreadable window size is an interactive drag - the one case where a frame of lag is
+    // most visible - so the unknown is spent on acting. The accepted cost is the focus hand-off
+    // this hold was written for: with no window size to compare, a body that moved while the window
+    // stood still is followed for that pass instead of held.
     const windowKnown = isPaintableFrame(windowSize) && isPaintableFrame(previousWindowSize);
     const windowMoved = !windowKnown ||
         Math.abs(windowSize.width - previousWindowSize.width) >= tolerance ||
