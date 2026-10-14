@@ -274,8 +274,10 @@ export class InspectorService {
             try {
                 const targetWin = this._findTargetWindow(x, y);
                 if (targetWin) {
-                    const pid = getWindowPid(targetWin);
-                    this._manager?.classifier?.probeAdwaitaLook(pid);
+                    // No probe from here: a window the manager does not track would leave a
+                    // process answer with no owner to forget it by, and any later process given
+                    // that pid would inherit it. The picker reads whatever the manager already
+                    // knows.
                     const frame = getWindowFrameRect(targetWin);
                     if (!frame)
                         return;
