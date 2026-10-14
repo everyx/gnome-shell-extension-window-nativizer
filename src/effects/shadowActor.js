@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {setActorBox, snapSliceRects} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -58,6 +58,11 @@ export const ShadowActor = GObject.registerClass({
         // setClipTarget() on every decorate pass; null falls back to the window actor, exactly as
         // resolveClipSize does.
         this._clipTarget = null;
+        // The size read from `_clipTarget` when it was last adopted. setClipTarget() compares it
+        // against the live read so an in-place resize of the same container still repaints (see
+        // clipTargetReadChanged): the shadow's own box is bound to the window actor and does not
+        // move for a container-only resize, so nothing else would schedule that paint.
+        this._clipTargetSize = null;
         // Edge-trigger for the body-authority warning, so a persistent disagreement is one loud
         // journal line per episode rather than one per paint frame.
         this._bodyWarningActive = false;
@@ -185,14 +190,19 @@ export const ShadowActor = GObject.registerClass({
     /**
      * Points the shadow at the clip's resolved target, whose read is the body authority the clip
      * cuts. Called by the decoration on every pass after the target is resolved; a changed target
-     * re-derives the next paint's cast from it, while a pass that keeps the target does nothing.
+     * *or* a changed read of the same target re-derives the next paint's cast from it, while a pass
+     * that leaves both the reference and the extent alone does nothing. The extent matters because
+     * a surface container can resize in place: the same object then hands the shadow a new body,
+     * the shadow's bound box does not move, and without the read comparison no paint would follow.
      * @param {Clutter.Actor|null} clipTarget
      */
     setClipTarget(clipTarget) {
         const next = clipTarget ?? null;
-        if (this._clipTarget === next)
+        const nextSize = readActorSize(next);
+        if (!clipTargetReadChanged(this._clipTarget, next, this._clipTargetSize, nextSize))
             return;
         this._clipTarget = next;
+        this._clipTargetSize = nextSize;
         this.queue_redraw();
     }
 
