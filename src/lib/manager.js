@@ -274,6 +274,11 @@ export class Manager {
             St,
         });
         const record = new TrackedWindow(deco);
+        // The pid is read once, here, and remembered. It used to be read again at every use, and a
+        // read taken while a window is being torn down can come back empty: the process then kept
+        // its classification with no owner (nothing left to forget it by), and a window whose read
+        // failed looked like it had no peer, dropping a live process's answer and re-probing it.
+        record.pid = getWindowPid(win);
         this._windows.set(win, record);
 
         const windowSignals = [
@@ -393,11 +398,13 @@ export class Manager {
         if (this._lastFocusWindow === win)
             this._lastFocusWindow = null;
 
-        const pid = getWindowPid(win);
+        // The remembered pid, not a fresh read: the window is on its way out, so a read here can
+        // come back empty, and an empty read must not decide whether a process still has windows.
+        const pid = record?.pid ?? 0;
         if (pid > 0) {
             let hasPeer = false;
             for (const other of this._windows.keys()) {
-                if (getWindowPid(other) === pid) {
+                if (this._windows.get(other)?.pid === pid) {
                     hasPeer = true;
                     break;
                 }
@@ -414,7 +421,7 @@ export class Manager {
      */
     _onProcessKnown(pid) {
         for (const win of this._windows.keys()) {
-            if (getWindowPid(win) === pid)
+            if (this._windows.get(win)?.pid === pid)
                 this._reconcileWindow(win);
         }
     }
@@ -442,8 +449,7 @@ export class Manager {
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
-            const pid = getWindowPid(win);
-            this._classifier?.probeAdwaitaLook(pid);
+            this._classifier?.probeAdwaitaLook(record.pid);
 
             const inputs = this._decorationInputs(win);
             // The branch itself lives in the reading module, so a spec can table it:
