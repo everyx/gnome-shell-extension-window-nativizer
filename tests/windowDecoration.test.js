@@ -712,6 +712,54 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clipPhaseInTransform).toBeTrue();
     });
 
+    it('re-resolves when the container ambiguity appears and then disappears', () => {
+        // Two non-foreign children of the same buffer-sized box are the tie `getSurfaceContainer`
+        // refuses to guess between (Mutter's fullscreen backing beside the real container), so the
+        // clip falls back to the window actor. When the backing goes away the tree is unambiguous
+        // again, and the same reconcile path must move the clip to the container with nothing left
+        // pointing at the fallback.
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        const backing = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        let children = [container, backing];
+        mockActor.get_children = () => children;
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1};
+
+        // The ambiguity is present: the fallback is the window actor, and the shadow is told so.
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(mockActor);
+        expect(deco.clip.get_actor()).toBe(mockActor);
+        expect(deco.clipPhaseInTransform).toBeFalse();
+        expect(deco.shadow.clipTarget).toBe(mockActor);
+        expect(container.effects).not.toContain(deco.clip);
+
+        // The backing goes away: the container is the unique non-foreign child, so the later
+        // reconcile re-resolves to it and the shadow's body authority follows the same move.
+        children = [container];
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(deco.clipTarget).toBe(container);
+        expect(deco.clip.get_actor()).toBe(container);
+        expect(deco.clipPhaseInTransform).toBeTrue();
+        expect(deco.shadow.clipTarget).toBe(container);
+        expect(mockActor.effects).not.toContain(deco.clip);
+    });
+
     it('applies style and synchronizes full tri-axis in apply()', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
