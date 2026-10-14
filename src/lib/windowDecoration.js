@@ -311,7 +311,7 @@ export class WindowDecoration {
         if (wanted !== hasClip) {
             if (wanted) {
                 const ClipClass = this._RoundedClipEffect;
-                this.clip = ClipClass ? new ClipClass() : null;
+                this.clip = ClipClass ? new ClipClass(this._St) : null;
                 this.clipTarget = clipTarget;
                 this.clipTarget?.add_effect?.(this.clip);
             } else {
@@ -357,7 +357,7 @@ export class WindowDecoration {
         if (wantShadow !== hasShadow) {
             if (wantShadow) {
                 const ShadowClass = this._ShadowActor;
-                this.shadow = ShadowClass ? new ShadowClass(winActor, this._container) : null;
+                this.shadow = ShadowClass ? new ShadowClass(winActor, this._container, this._St) : null;
             } else {
                 this.shadow?.destroy?.();
                 this.shadow = null;

@@ -191,12 +191,13 @@ export function isIntegerAlignedSurfaceBox(candidate) {
  *
  * @param {{phaseInTransform: boolean}|null} target - A resolveClipTarget() result
  * @param {object|null} win - Meta.Window behind the target
+ * @param {object|null} [St] - The St namespace the target was resolved with
  * @returns {{x: number, y: number}|null}
  */
-export function resolveClipPhase(target, win) {
+export function resolveClipPhase(target, win, St = null) {
     if (target?.phaseInTransform)
         return ZERO_PHASE;
-    return getWindowSubpixelOffset(win);
+    return getWindowSubpixelOffset(win, St);
 }
 
 /**
@@ -216,10 +217,11 @@ export function resolveClipPhase(target, win) {
  * @param {{phaseInTransform: boolean}|null} target - A resolveClipTarget() result
  * @param {object|null} win - Meta.Window behind the target
  * @param {{x: number, y: number}|null} [lastPhase=null] - The caller's last good phase
+ * @param {object|null} [St] - The St namespace the clip target path uses, for the fallback read
  * @returns {{x: number, y: number, width: number, height: number}|null}
  */
-export function clipFrameForTarget(actorSize, insets, scale, target, win, lastPhase = null) {
-    const phase = resolveClipPhase(target, win) ?? lastPhase;
+export function clipFrameForTarget(actorSize, insets, scale, target, win, lastPhase = null, St = null) {
+    const phase = resolveClipPhase(target, win, St) ?? lastPhase;
     if (!phase)
         return null;
     return clipFrameFor(actorSize, insets, scale, phase);

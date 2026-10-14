@@ -13,7 +13,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
     // Spy classes
     class MockClipEffect {
-        constructor() {
+        constructor(St = null) {
+            this.St = St;
             this.enabled = true;
             this.params = null;
             // Models Clutter's actor back-reference: add_effect()/remove_effect() on an actor
@@ -35,9 +36,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     }
 
     class MockShadowActor {
-        constructor(actor, container) {
+        constructor(actor, container, St = null) {
             this.actor = actor;
             this.container = container;
+            this.St = St;
             this.destroyed = false;
             this.insets = null;
             this.style = null;
@@ -400,6 +402,26 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(false, mockActor);
         expect(deco.hasShadow).toBeFalse();
         expect(shadow.destroyed).toBeTrue();
+    });
+
+    it('hands the clip and the shadow the same St it resolved the target with', () => {
+        // The phase readers identify the surface container by this St; the decoration constructs
+        // both consumers, so it is the one place the clip's own value has to reach them.
+        const St = {Widget: class {}};
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            St,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        deco._syncClip(true, mockActor, {left: 0, top: 0, right: 0, bottom: 0}, false);
+        deco._syncShadow(true, mockActor);
+
+        expect(deco.clip.St).toBe(St);
+        expect(deco.shadow.St).toBe(St);
     });
 
     it('manages resize band lifecycle and geometry updates in _syncResizeBand', () => {

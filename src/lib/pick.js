@@ -100,10 +100,12 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
  * the mirror for the same reason. This runs only when a user asks for the pick, never per frame.
  *
  * @param {object|null} win - Meta.Window
+ * @param {object|null} [St] - The St namespace the clip path uses, so both phase reads identify
+ *        the surface container by the clip's rule rather than the constructor-name heuristic
  * @returns {Record<string,string>} mirrorPhaseX/Y and appliedPhaseX/Y
  */
-export function extractPhaseProperties(win) {
-    const mirror = getWindowSubpixelOffset(win);
+export function extractPhaseProperties(win, St = null) {
+    const mirror = getWindowSubpixelOffset(win, St);
     const properties = {
         // null is "the monitor scan could not complete", not a phase of zero; say so rather than
         // report a fabricated zero the user would compare against the applied read.
@@ -119,7 +121,7 @@ export function extractPhaseProperties(win) {
         return properties;
     }
 
-    const applied = getAppliedSubpixelPhase(win);
+    const applied = getAppliedSubpixelPhase(win, St);
     properties.appliedPhaseX = applied ? String(applied.x) : 'unavailable';
     properties.appliedPhaseY = applied ? String(applied.y) : 'unavailable';
     return properties;
@@ -236,11 +238,12 @@ const PHASE_FIELDS = Object.freeze([
  * @param {object|null} win - Meta.Window
  * @param {object|null} [deco] - The window's live WindowDecoration, or null when untracked
  * @param {object} [reads] - Read seam; defaults to the live platform reads, tests inject throws
+ * @param {object|null} [St] - The St namespace the clip path uses, forwarded to the phase reads
  * @returns {Record<string,string>}
  */
-export function extractDiagnosticProperties(win, deco = null, reads = null) {
+export function extractDiagnosticProperties(win, deco = null, reads = null, St = null) {
     const read = reads ?? {
-        phases: w => extractPhaseProperties(w),
+        phases: w => extractPhaseProperties(w, St),
         frameRect: w => getWindowFrameRect(w),
         bufferRect: w => getWindowBufferRect(w),
         actor: w => getWindowActor(w),

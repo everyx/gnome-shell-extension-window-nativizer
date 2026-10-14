@@ -199,7 +199,7 @@ export class InspectorService {
 
         if (diagnostics) {
             Object.assign(properties, extractDiagnosticProperties(
-                win, this._manager?.decorationFor?.(win) ?? null));
+                win, this._manager?.decorationFor?.(win) ?? null, null, St));
             // The process classification is read from the cache only. A diagnostic must not start
             // the async probe (that would mutate the state it observes); `unknown` is "no answer
             // cached yet" and `cannotTell` is "no classifier to ask".

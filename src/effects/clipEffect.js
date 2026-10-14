@@ -94,9 +94,15 @@ export const RoundedClipEffect = GObject.registerClass({
         };
     }
 
-    _init() {
+    /**
+     * @param {object|null} [St] - The St namespace the decoration resolved the clip target with,
+     *        handed to the fallback phase read so it identifies the surface container by the
+     *        clip's own rule rather than a global
+     */
+    _init(St = null) {
         super._init();
 
+        this._St = St;
         // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
         // True while the clip has suspended itself because its target has no paint-able body. The
@@ -255,11 +261,11 @@ export const RoundedClipEffect = GObject.registerClass({
         const phaseWin = this._phaseInTransform ? null : win ?? findMetaWindow(actor);
         // An unknown fallback phase (unreadable monitor geometry) keeps the last good frame; the
         // shadow takes the same last good phase, so the two cuts keep agreeing.
-        const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin);
+        const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin, this._St);
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
         const frame = clipFrameForTarget(size, this._insets, scale,
-            {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase);
+            {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase, this._St);
         // Backstop: if the derived body is not paint-able even for a positive actor (a future
         // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.
         if (!isPaintableFrame(frame)) {

@@ -1167,4 +1167,79 @@ describe('platform', () => {
             }]))).toBeNull();
         });
     });
+
+    // The clip identifies the surface container with the St it is handed (manager -> decoration ->
+    // clipTarget), so the phase readers must be handed that same St rather than fall back to
+    // globalThis.St or the constructor-name heuristic. A GJS-defined foreign widget (Blur my Shell's
+    // shape) is an St.Widget subclass whose constructor name is its own class name, so the
+    // heuristic is blind to it; a plain St.Widget is not the only shape that can be injected.
+    describe('phase readers identify the container with the clip\'s St, not a global', () => {
+        class Widget {}
+        class InjectedWidget extends Widget {}
+        const St = {Widget};
+        const foreign = new InjectedWidget();
+        const container = {x: 1, y: 0, width: 800, height: 600};
+
+        let originalGlobal;
+        let originalSt;
+
+        beforeEach(() => {
+            originalGlobal = globalThis.global;
+            originalSt = globalThis.St;
+            delete globalThis.St;
+        });
+
+        afterEach(() => {
+            globalThis.global = originalGlobal;
+            if (originalSt === undefined)
+                delete globalThis.St;
+            else
+                globalThis.St = originalSt;
+        });
+
+        // 4/3 turns the container's +1 layout x into -0.25, and the actor's y=200 into +0.25, so a
+        // reader that misses the container answers a different phase (x = 0) or no phase at all.
+        const monitor = {
+            display: {
+                get_n_monitors: () => 1,
+                get_monitor_scale: () => 4 / 3,
+                get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            },
+        };
+
+        it('the mirror reads the container when handed the same St the clip uses', () => {
+            globalThis.global = monitor;
+            const actor = {x: 240, y: 200, get_children: () => [foreign, container]};
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                get_compositor_private: () => actor,
+            };
+            expect(getWindowSubpixelOffset(win, St).x).toBeCloseTo(-0.25, 6);
+        });
+
+        it('the applied read identifies the container when handed the same St the clip uses', () => {
+            const matrix = {
+                get_x_translation: () => 1.25,
+                get_y_translation: () => 0.25,
+                get_x_scale: () => 1,
+                get_y_scale: () => 1,
+            };
+            const applied = {...container, get_transform: () => matrix};
+            const win = {
+                get_client_type: () => 0, // WAYLAND
+                get_compositor_private: () => ({x: 240, y: 200, get_children: () => [foreign, applied]}),
+            };
+            // 1.25 - (1 + 0) = 0.25; 0.25 - (0 + 0) = 0.25. Missing the container answers null.
+            expect(getAppliedSubpixelPhase(win, St)).toEqual({x: 0.25, y: 0.25});
+        });
+
+        it('names the clip\'s own rule as the one the readers share', () => {
+            const actor = {x: 240, y: 200, get_children: () => [foreign, container]};
+            expect(getSurfaceContainer(actor, St)).toBe(container);
+            // Without St the subclass is not seen as foreign, the tree is ambiguous and the read
+            // the old signatures ran answers null - the miss the explicit St removes.
+            expect(getSurfaceContainer(actor)).toBeNull();
+        });
+    });
 });
