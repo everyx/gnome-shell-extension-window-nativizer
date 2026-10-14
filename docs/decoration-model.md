@@ -643,6 +643,24 @@ together on a monitor change, where the mirror's reconstructed highest-scale mon
 different monitor than Mutter's cached pointer. `shadowPhaseOffset`
 (`src/effects/shadowGeometry.js`) is the one place that choice lives.
 
+**The fallback must land on Mutter's applied phase.** On the fallback path the mirror *is* the
+phase the clip folds and the shadow translates by, so a mirror that does not reproduce the phase
+Mutter actually put on the container's transform moves both cuts off the buffer - the
+fractional-scale hairline, and the class of alignment defect that used to be invisible. The pass
+compares the two reads (`phaseAlignmentWarning`, `src/lib/diagnosticInvariants.js`) whenever the
+resolved target's strategy is the fallback, and emits one `[window-nativizer]` WARNING per episode
+naming both phases and the window. The container path does not compare: there the phase comes from
+the transform and the mirror is unused, so a disagreement is not a defect and the check is not
+even read.
+
+The pair is only compared when both reads name the same surface container: `_readPhases` resolves
+the container once and hands it to both readers, and each read carries that actor. A mirror folded
+from one actor and a transform read from another are a phase against a position - the field false
+positive where a window actor's layout position `(-960,-600)` was reported as a phase - so the pair
+is unavailable and takes no part in the comparison. A read whose magnitude exceeds
+`PHASE_MAGNITUDE_BOUND` (2 logical px, far above the sub-one-pixel range of a real phase) is
+likewise unavailable, but the journal still gets the raw value so the misread is visible.
+
 **The ordering that keeps the read fresh is an assumption, not something we own.**
 `ShadowActor`'s own `notify::allocation` handler sees a fresh transform only because Mutter
 connected the invalidation (`clutter_actor_notify_transform_invalid`) to the window actor's
@@ -795,6 +813,14 @@ draw target to mask into. Both mean "do not mask this pass, cache nothing": the 
 after the buffer or the allocation arrives, installs it. Those are the only gates, and they read
 `_textureBufferKey` (a real texture size) and `isPaintableFrame` (the authority the clip uses).
 
+**A refusal after those gates is the "square in the overview" defect, and it is loud.** Once the
+buffer and the actor are ready, a pass that still cannot install the mask - no mask builder, no
+preview container or shaped-texture context, a non-positive size, or a builder that returned
+nothing - leaves a preview square that should have been rounded. It emits one `[window-nativizer]`
+WARNING per overview episode, naming the gate and the window; an install or leaving the overview
+re-arms it. The same two-pass rule as the geometry invariants applies, because a card rebuild can
+briefly hand a pass a missing preview container even while the shaped texture is ready.
+
 **Why the Wayland refusal was removed.** An earlier version refused the mask for a Wayland window
 whose shaped texture was still on Mutter's direct-read screenshot path, and showed it square. That
 protected a capture-level behaviour no user can perceive, at the cost of a rounded preview the user
@@ -835,13 +861,17 @@ recomputing matrices per frame, and the clone is a plain scene-graph child of th
 
 ## One body, one authority
 
-The clip and the shadow describe the same body, so they read it from the same call. `resolveClipSize(targetRead, windowActorRead)` — the clip target's own read when it is usable, else the window actor — is what the clip paints with, and the shadow derives its cast and its eight slices from that same answer (`shadowLayout`'s `bodySource`, fed by `WindowDecoration` on every pass). Healthy agreement (`frameRect == bufferRect == windowActorAllocation`) produces a byte-identical cast, so nothing changes in the ordinary case.
+The clip and the shadow describe the same body, so they read it from the same call. The authority is chosen by `resolveBodyAuthority(targetRead, windowActorRead, resizeInFlight)`: the clip target's own read - the surface container - in steady state, and the window actor's read while a resize is in flight, because the actor takes its new size a frame or two before the container's allocation follows, so the actor is the fresh one and the cut must track the frame the user is dragging rather than the older, smaller box. The other read stays the fallback when the preferred one has no extent, exactly as `resolveClipSize` had it. The two body reads and the window's own size are taken live at paint (`resolvePaintBody`): `WindowDecoration` hands both cuts one plan - the insets, scale and phase strategy it already passes through their setters, plus the reference points the hold compares against (`previousBody`, `previousAuthority`, `previousWindowSize`) - and the clip's `vfunc_paint_target` and the shadow's `_relayout` each settle the body from the live reads there, so the cast and its eight slices derive from the same body the cut is drawing that frame. The plan decides no body: it is the pass's data, and the geometry clock is the frame the compositor paints. Reading the window's own size live (`frameRect`, else `bufferRect`) matters because it is what separates a resize from a body that moved on its own, and a resize must be seen on the frame it starts rather than 50 ms later; only its previous value stays on the pass clock. Healthy agreement (`frameRect == bufferRect == windowActorAllocation`) produces a byte-identical cast, so nothing changes in the ordinary case.
 
-A disagreement is not silent: when the authority and the shadow's own box differ by more than `SHADOW_BODY_TOLERANCE = 0.5` logical px, one WARNING per episode names both extents (agreement re-arms it). Health means it never fires — the e2e log audit treats an unexpected WARNING as a failure — and on a real machine it is what leaves the evidence when something outside our code moves one of the two.
+A disagreement is not silent: when the authority and the shadow's own body differ by more than `SHADOW_BODY_TOLERANCE = 1.0` logical px, one WARNING per episode names both body extents, the window actor, and the signed delta, each with two decimals (agreement re-arms it). The tolerance is one logical pixel rather than the old half: at a fractional monitor scale the container's logical body is `buffer / scale` while the window actor's allocation is an integer, so the two differ by a sub-pixel residue by construction, and half a pixel sat below that and false-positived on ordinary windows. The observed defect is 2px, so 1.0 still separates it from normality. Health means it never fires — the e2e log audit treats an unexpected WARNING as a failure — and on a real machine it is what leaves the evidence when something outside our code moves one of the two.
+
+**An unsettled body is not acted on.** The settle runs on the paint clock, but it holds the previous settled body in the same two cases. When the container's read and the window actor disagree by more than `BODY_SETTLE_TOLERANCE` (1.0) logical px and no resize is in flight, at least one of the two reads is stale and this paint alone cannot say which. When they agree but the body moved by `BODY_SETTLE_TOLERANCE` or more since the previous pass while the window's own size (`frameRect`, else `bufferRect`) did not, the pair is stale together - a focus hand-off can leave both trailing by the same whole pixel, which the pair comparison reads as agreement - and the window's own size is the independent authority that separates a moving body from a resizing window; when the window resized too, the body is genuinely new and is used. A resize in flight is the one case the pair disagreement is already resolved: the window actor is the fresh read by construction, so the lagging container is expected and the actor is acted on instead of held. In the two hold cases the geometry path keeps the previous settled body: the clip's cut and the shadow's cast both keep the geometry they had, and the visible decoration does not shift. The fresh authority is still returned, so the body-authority warning above still fires and the journal keeps the record. The hold cannot latch - every paint re-reads the live quantities, and the between-pass rule compares the fresh authority with the previous pass's, which `WindowDecoration` advances once per pass, so once the body stops moving the fresh body is acted on and the settled body is advanced. A degenerate target read is the documented window-actor fallback, not a disagreement, and does not defer.
 
 **The shadow is not resized to match; only its cast follows the authority.** That is deliberate, and it was verified rather than assumed: driving the authority larger than the shadow actor's own allocation in a nested session at 1.3333 (control 700×500; +28 ⇒ +28.5 logical px of visible shadow; +120 ⇒ +120) showed the added area is painted. `ShadowActor` overrides no paint volume, so a custom paint node is not clipped by the allocation, and the extra slices appear.
 
 **A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip — which re-reads its size at paint — moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
+
+**The pass's own two reads must agree.** The body-authority warning above only fires when the authority has already moved away from the actor, so it is blind to the transient where *the authority itself* is briefly wrong: a Wayland window whose buffer rect lags its window actor allocation (or the reverse) has both cuts faithfully following a body that is 2px narrower, and nothing in the authority comparison can say which of the two reads was behind. Every pass that assembles a decoration reading therefore compares the window's `bufferRect` with the window actor's allocation (`bufferAllocationWarning`, `src/lib/diagnosticInvariants.js`): they are equal in health (`frameRect == bufferRect == windowActorAllocation`), so a disagreement names both extents and the window in one `[window-nativizer]` WARNING. Only the extents are compared — origins may legitimately differ by an animation's translation — and one pass is *not* enough: a resize in flight shows the buffer and the allocation settling one pass apart, so the latch requires `INVARIANT_STRIKES = 2` consecutive violating passes and re-arms on agreement. That keeps a real lagging read (which survives the next pass) loud and every resize silent.
 
 ## Identifying the surface container
 
