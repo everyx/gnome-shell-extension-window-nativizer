@@ -120,6 +120,33 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
 }
 
 /**
+ * Whether a fresh clip-target read differs from the one the shadow last laid out from, so the
+ * caller must schedule another layout.
+ *
+ * The shadow's body authority is the target's *read*, not its identity. A surface container
+ * resized in place keeps the same object and hands the shadow a different extent, so comparing
+ * only the reference (the original `setClipTarget` did) leaves the cast on the previous read. The
+ * shadow's own box is bound to the window actor and does not move for a container-only resize, so
+ * no other signal schedules the repaint either: the manager's `notify::allocation` watch re-runs
+ * `apply()`, but every setter on the shadow early-returns when its input is unchanged. An unknown
+ * read (the actor is gone or its size threw) is itself a change from a known one, so a torn-down
+ * target still schedules the layout that falls back through `resolveClipSize`.
+ *
+ * @param {object|null} previousTarget - The target object the shadow last used
+ * @param {object|null} nextTarget - The target object this pass resolved
+ * @param {{width:number,height:number}|null} previousSize - The size read from `previousTarget`
+ * @param {{width:number,height:number}|null} nextSize - The size read from `nextTarget`
+ * @returns {boolean}
+ */
+export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, nextSize) {
+    if (previousTarget !== nextTarget)
+        return true;
+    if (!previousSize || !nextSize)
+        return Boolean(previousSize) !== Boolean(nextSize);
+    return previousSize.width !== nextSize.width || previousSize.height !== nextSize.height;
+}
+
+/**
  * @param {number} value
  * @returns {number}
  */

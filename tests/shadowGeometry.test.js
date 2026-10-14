@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
+import {clipTargetReadChanged, shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -414,6 +414,37 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
     it('stays silent when the authority is unknown', () => {
         expect(shadowBodyWarning(null, shadowBox({width: 400, height: 300}),
             {width: 400, height: 300})).toBeNull();
+    });
+});
+
+describe('clipTargetReadChanged (a changed target read schedules a relayout)', () => {
+    const size = (width, height) => ({width, height});
+
+    it('reports a resized container that keeps the same reference', () => {
+        // The hole this predicate closes: a surface container resized in place hands the shadow a
+        // new body while its own bound box never moves, so no other signal would repaint it.
+        const container = {width: 400, height: 300};
+        expect(clipTargetReadChanged(container, container, size(400, 300), size(428, 300))).toBeTrue();
+        expect(clipTargetReadChanged(container, container, size(400, 300), size(400, 320))).toBeTrue();
+    });
+
+    it('reports nothing when the reference and the read both stand still', () => {
+        const container = {width: 400, height: 300};
+        expect(clipTargetReadChanged(container, container, size(400, 300), size(400, 300))).toBeFalse();
+        expect(clipTargetReadChanged(null, null, null, null)).toBeFalse();
+    });
+
+    it('reports a changed reference even when the read is identical', () => {
+        const first = {width: 400, height: 300};
+        const second = {width: 400, height: 300};
+        expect(clipTargetReadChanged(first, second, size(400, 300), size(400, 300))).toBeTrue();
+        expect(clipTargetReadChanged(first, null, size(400, 300), null)).toBeTrue();
+    });
+
+    it('treats a read that became unknown as a change in both directions', () => {
+        const container = {width: 400, height: 300};
+        expect(clipTargetReadChanged(container, container, size(400, 300), null)).toBeTrue();
+        expect(clipTargetReadChanged(container, container, null, size(400, 300))).toBeTrue();
     });
 });
 
