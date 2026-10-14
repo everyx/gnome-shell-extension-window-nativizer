@@ -61,6 +61,194 @@ export function resolveClipSize(targetSize, windowActorSize) {
 }
 
 /**
+ * How far the clip target's read and the window actor may differ before the body is unsettled.
+ *
+ * The two reads are the same rectangle in health, but they are not always written in the same
+ * step: a Wayland surface container's allocation can trail the window actor's for a pass around a
+ * focus hand-off. At a fractional monitor scale the container's logical extent is `buffer / scale`
+ * while the actor's allocation is an integer, so a sub-pixel difference between the two is normal
+ * by construction and must not be read as movement. One logical pixel sits above that residue and
+ * below the whole-pixel defects this exists to separate (the observed one was 2px), so it is the
+ * threshold both the settle and the body-authority warning use.
+ */
+export const BODY_SETTLE_TOLERANCE = 1.0;
+
+/**
+ * Whether the window's own size moved since the previous pass, i.e. a resize is in flight.
+ *
+ * The window's frame rect (else its buffer rect) is an integer rectangle, so any difference is a
+ * whole logical pixel and `!==` draws the same boundary a one-pixel tolerance would. The read is
+ * independent of the two body reads: during an interactive resize the window actor takes its new
+ * size a frame or two before the surface container does, and this predicate is what tells that lag
+ * apart from a body that moved on its own (a focus hand-off leaves the window's own size standing).
+ * An unknown size on either side is not a resize: with no previous pass there is nothing to
+ * compare, and a failed read is not evidence of movement.
+ *
+ * @param {{width:number,height:number}|null|undefined} windowSize - The window's own size this pass
+ * @param {{width:number,height:number}|null|undefined} previousWindowSize - The previous pass's
+ * @returns {boolean}
+ */
+export function windowResizedSince(windowSize, previousWindowSize) {
+    if (!isPaintableFrame(windowSize) || !isPaintableFrame(previousWindowSize))
+        return false;
+    return windowSize.width !== previousWindowSize.width ||
+        windowSize.height !== previousWindowSize.height;
+}
+
+/**
+ * The body authority for a pass: which of the two reads the clip's cut and the shadow's cast must
+ * follow.
+ *
+ * In steady state the clip target's read wins - on a Wayland window that is the surface container,
+ * the client's real surface - and the window actor is only the documented fallback when the target
+ * read is unusable (`resolveClipSize`). While a resize is in flight the preference flips: the
+ * window actor takes its new size first and the container's allocation trails it by a frame or
+ * two, so the actor's read is the fresh one and the cut must track the frame the user is dragging
+ * rather than the older, smaller box. The unpreferred read is still the fallback when the
+ * preferred one has no extent.
+ *
+ * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
+ * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
+ * @param {boolean} resizeInFlight - Whether the window's own size moved since the previous pass
+ * @returns {{width:number,height:number}|null}
+ */
+export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight) {
+    if (!resizeInFlight)
+        return resolveClipSize(targetSize, windowActorSize);
+    if (isPaintableFrame(windowActorSize))
+        return {width: windowActorSize.width, height: windowActorSize.height};
+    if (isPaintableFrame(targetSize))
+        return {width: targetSize.width, height: targetSize.height};
+    return null;
+}
+
+/**
+ * The body the clip and the shadow should act on, holding the last good one while the two reads
+ * that name it disagree **or** while the body moves on its own between passes.
+ *
+ * The authority itself is chosen by `resolveBodyAuthority`: the clip target's read (the surface
+ * container) in steady state, the window actor's read while a resize is in flight, because then
+ * the actor takes its new size before the container's allocation follows. `resolveClipSize` then
+ * answers which usable read that preference lands on; it does not ask whether the two reads agree,
+ * nor whether the body has moved since the last pass. Two cases are held:
+ *
+ *   - within a pass, the target's read and the window actor's read differ by more than `tolerance`,
+ *     so at least one is stale and this pass alone cannot say which - unless a resize is in
+ *     flight, which already says the window actor is the fresh one and makes the lagging pair
+ *     expected rather than unsettled;
+ *   - between passes, the body authority moved by `tolerance` or more since the previous pass's
+ *     authority while the window's own size (`windowSize`) did not. A focus hand-off can leave the
+ *     target and the window actor trailing together, so the pair comparison sees agreement while
+ *     the cut is a whole pixel or two off; the window's own size is the independent authority that
+ *     separates a moving body from a resizing window. Comparing the fresh authority with the last
+ *     pass's (not with the held body) is what makes the hold last one pass: once the authority
+ *     stops moving it is acted on, even though the held body still differs from it.
+ *
+ * In both cases the fresh authority is returned (so the body-authority warning still names it) but
+ * the *acted-on* body stays the previous settled one, keeping the clip's cut and the shadow's cast
+ * on identical geometry. Neither hold can latch: every pass re-reads the live quantities.
+ *
+ * A degenerate target read is the documented fallback, not a disagreement: `resolveClipSize`
+ * already falls back to the window actor there, and that verdict is stable across paints.
+ *
+ * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
+ * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
+ * @param {{width:number,height:number}|null} [previousBody=null] - The last settled body
+ * @param {{width:number,height:number}|null} [previousAuthority=null] - The previous pass's body
+ *        authority (the fresh read, whether or not it was acted on)
+ * @param {{width:number,height:number}|null} [windowSize=null] - The window's own size this pass
+ * @param {{width:number,height:number}|null} [previousWindowSize=null] - The previous pass's
+ * @param {number} [tolerance=BODY_SETTLE_TOLERANCE]
+ * @returns {{authority: {width:number,height:number}|null, body: {width:number,height:number}|null,
+ *   unsettled: boolean}}
+ */
+export function settleClipBody(targetSize, windowActorSize, previousBody = null,
+    previousAuthority = null, windowSize = null, previousWindowSize = null,
+    tolerance = BODY_SETTLE_TOLERANCE, insets = null, declared = null) {
+    const windowResized = windowResizedSince(windowSize, previousWindowSize);
+    const authority = resolveBodyAuthority(targetSize, windowActorSize, windowResized);
+    if (!authority)
+        return {authority: null, body: null, unsettled: false};
+    // The fallback path is not a disagreement: a target with no extent is handled by the window
+    // actor by construction, and the actor is the authority for whether the window has a body.
+    if (!isPaintableFrame(targetSize) || !isPaintableFrame(windowActorSize))
+        return {authority, body: authority, unsettled: false};
+    // Strictly greater: a difference of exactly the tolerance is agreement, which is also what the
+    // warning's own comparison says (`|delta| <= tolerance` is silent there). The two must read the
+    // same boundary or a pair differing by exactly it would warn while still being acted on.
+    // Like-for-like, not raw-reads-to-raw-reads. The target is the Wayland surface container, whose
+    // box carries the client's declared decoration margins (the journal showed a 22 px-per-side
+    // window reading 44 px wider than its actor, and another with the origin shifted by (69,65) ->
+    // (87,67)); the window actor's box is the frame without them. So both sides are reduced to the
+    // body each implies before comparing: the target by the insets the clip cuts with, the actor by
+    // only the part of those insets that is *our* safe trim (the declared ring is already outside
+    // the actor, the flat safe inset is inside it). Comparing the raw reads reported a permanent
+    // disagreement on every window that declares a ring - which is a false alarm, and in the
+    // steady state it froze the body.
+    const padWidth = insets ? (insets.left ?? 0) + (insets.right ?? 0) : 0;
+    const padHeight = insets ? (insets.top ?? 0) + (insets.bottom ?? 0) : 0;
+    const declaredWidth = declared ? (declared.left ?? 0) + (declared.right ?? 0) : 0;
+    const declaredHeight = declared ? (declared.top ?? 0) + (declared.bottom ?? 0) : 0;
+    const pairDisagrees =
+        Math.abs(targetSize.width - padWidth - (windowActorSize.width - (padWidth - declaredWidth))) > tolerance ||
+        Math.abs(targetSize.height - padHeight - (windowActorSize.height - (padHeight - declaredHeight))) > tolerance;
+    // Between passes the body's normal residue (`buffer / scale` on a fractional monitor) is below
+    // the tolerance and a whole-pixel move is the defect, so this boundary is inclusive. The
+    // window's own size is read independently; when it moved too the body is genuinely new, and an
+    // unknown window size counts as moved so a real resize is never frozen out.
+    const bodyMoved = isPaintableFrame(previousAuthority) &&
+        (Math.abs(authority.width - previousAuthority.width) >= tolerance ||
+         Math.abs(authority.height - previousAuthority.height) >= tolerance);
+    const windowKnown = isPaintableFrame(windowSize) && isPaintableFrame(previousWindowSize);
+    const windowMoved = !windowKnown ||
+        Math.abs(windowSize.width - previousWindowSize.width) >= tolerance ||
+        Math.abs(windowSize.height - previousWindowSize.height) >= tolerance;
+
+    // A resize in flight already explains a pair disagreement: the container trails the actor, so
+    // the actor is trusted and there is nothing to hold. In steady state the same disagreement is
+    // still unresolved. The between-pass hold is unchanged: `windowMoved` vetoes it as before.
+    const unsettled = (pairDisagrees && !windowResized) || (bodyMoved && !windowMoved);
+    if (!unsettled)
+        return {authority, body: authority, unsettled: false};
+    return {
+        authority,
+        body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
+        unsettled: true,
+    };
+}
+
+/**
+ * The body one paint (or the shadow's matching relayout) acts on, resolved from the live actor
+ * reads and the pass's plan.
+ *
+ * The settle rules are the ones `settleClipBody` has always applied; what this adds is their
+ * clock. The two body reads - the clip target's and the window actor's - are taken live at
+ * paint, so the frame the shader uses is the frame the compositor is drawing that frame, rather
+ * than the frame frozen at the last debounced pass. The window's own size is read live too
+ * (`windowSize`), because it is what separates a resize from a body that moved on its own, and a
+ * resize must be seen on the frame it starts, not 50 ms later; only its previous value
+ * (`plan.previousWindowSize`), the last settled body and the previous authority stay on the pass
+ * clock. The two clocks are deliberate: the geometry follows the frame, the hold keeps its pass
+ * boundary.
+ *
+ * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's live read
+ * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's live read
+ * @param {{width:number,height:number}|null} windowSize - The window's own size, live at paint
+ * @param {{previousBody?:object|null, previousAuthority?:object|null,
+ *   previousWindowSize?:object|null, tolerance?:number}|null} [plan] - The pass plan; a null plan
+ *   (before the first pass) behaves as an unknown previous read
+ * @returns {{authority: {width:number,height:number}|null, body: {width:number,height:number}|null,
+ *   unsettled: boolean}}
+ */
+export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan = null) {
+    return settleClipBody(targetSize, windowActorSize,
+        plan?.previousBody ?? null, plan?.previousAuthority ?? null,
+        windowSize, plan?.previousWindowSize ?? null,
+        plan?.tolerance ?? BODY_SETTLE_TOLERANCE,
+        plan?.insets ?? null, plan?.declared ?? null);
+}
+
+/**
  * @param {{left:number,top:number,right:number,bottom:number}|null} a
  * @param {{left:number,top:number,right:number,bottom:number}|null} b
  * @returns {boolean}

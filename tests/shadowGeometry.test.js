@@ -345,6 +345,8 @@ describe('shadow body authority (one body for the clip and the shadow)', () => {
         const layout = shadowLayout({radius: 12}, boundShadowBox(windowBody), zero, 1, {
             targetSize: containerBody,
             windowActorSize: windowBody,
+            windowSize: windowBody,
+            bodyPlan: null,
         });
 
         // The cast and its hole describe the authority body, not the bound box.
@@ -374,10 +376,88 @@ describe('shadow body authority (one body for the clip and the shadow)', () => {
         const withAuthority = shadowLayout({radius: 12}, boundShadowBox(body), zero, 1, {
             targetSize: body,
             windowActorSize: body,
+            windowSize: body,
         });
         const withoutAuthority = shadowLayout({radius: 12}, boundShadowBox(body), zero, 1);
         expect(withAuthority.cast).toEqual(withoutAuthority.cast);
         expect(withAuthority.slices).toEqual(withoutAuthority.slices);
+    });
+
+    it('keeps the previous cast while the target and actor disagree, then restores once the body stops moving', () => {
+        const body = {width: 400, height: 300};
+        const style = {radius: 12};
+        // The actor is bound to the window body grown by PAD a side, so it follows the body.
+        const shadowBoxFor = b => boundShadowBox(b);
+
+        // A settled pass: the target and the window actor agree on the body.
+        const first = shadowLayout(style, shadowBoxFor(body), zero, 1, {
+            targetSize: body,
+            windowActorSize: body,
+            windowSize: body,
+            bodyPlan: null,
+        });
+        style.cast = Object.freeze(first.cast);
+        style.slices = first.slices;
+        style.corner = first.corner;
+
+        // The transient: the target reads 2px narrower than the window actor, so the plan holds
+        // the previous body. The cast (and its hole, the clip's cut) does not follow the unsettled
+        // read; the fresh authority is still returned for the warning. The window's own size is
+        // still the previous one, so the pair disagreement is not read as a resize.
+        const held = shadowLayout(style, shadowBoxFor(body), zero, 1, {
+            targetSize: {width: 398, height: 300},
+            windowActorSize: body,
+            windowSize: body,
+            bodyPlan: {previousBody: body, previousAuthority: body,
+                previousWindowSize: body},
+        });
+        expect(held.body).toEqual(body);
+        expect(held.cast).toEqual(first.cast);
+        expect(held.castChanged).toBeFalse();
+        expect(held.authority).toEqual({width: 398, height: 300});
+
+        // The reads agree again on a 2px-wider body and the authority stops moving at that read:
+        // the fresh body is acted on, so the deferral cannot latch to the held one.
+        const restored = shadowLayout(style, shadowBoxFor(body), zero, 1, {
+            targetSize: {width: 402, height: 300},
+            windowActorSize: {width: 402, height: 300},
+            windowSize: body,
+            bodyPlan: {previousBody: body, previousAuthority: {width: 402, height: 300},
+                previousWindowSize: body},
+        });
+        expect(restored.body).toEqual({width: 402, height: 300});
+        expect(restored.cast).not.toEqual(first.cast);
+    });
+
+    it('follows the live window actor at every relayout while a drag is in flight', () => {
+        // The paint-clock regression this change fixes: the body was settled once per debounced
+        // pass and frozen, so between passes the cast trailed the actor the compositor was drawing
+        // by up to ~8px. The plan is fixed for the pass, but the layout settles the body from the
+        // live reads each time, so the cast tracks the actor at every frame.
+        const style = {radius: 12};
+        // One pass's plan: the reference points and the window's own size as of the previous pass.
+        const plan = {
+            previousBody: {width: 800, height: 600},
+            previousAuthority: {width: 800, height: 600},
+            previousWindowSize: {width: 800, height: 600},
+        };
+        const bodies = [802, 804, 806, 808];
+        const targetReads = [800, 802, 804, 806];
+        for (let i = 0; i < bodies.length; i++) {
+            const windowActor = {width: bodies[i], height: 600};
+            const container = {width: targetReads[i], height: 600};
+            const layout = shadowLayout(style, boundShadowBox(windowActor), zero, 1, {
+                targetSize: container,
+                windowActorSize: windowActor,
+                windowSize: windowActor,
+                bodyPlan: plan,
+            });
+            const hole = layout.cast.width - SHADOW_PAD * 2;
+            expect(hole).withContext(`relayout ${i}: live actor ${bodies[i]}`)
+                .toBeCloseTo(windowActor.width, 0);
+            expect(hole).withContext(`relayout ${i}: container ${targetReads[i]}`)
+                .not.toBeCloseTo(container.width, 0);
+        }
     });
 });
 
@@ -387,19 +467,32 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
         height: body.height + SHADOW_PAD * 2,
     });
 
-    it('names both extents when the authority disagrees beyond the tolerance', () => {
+    it('names both extents with two decimals and the signed delta beyond the tolerance', () => {
         const warning = shadowBodyWarning(
             {width: 428, height: 300},
             shadowBox({width: 400, height: 300}),
             {width: 400, height: 300});
         expect(warning).toContain('[window-nativizer] Shadow body authority');
-        expect(warning).toContain('428x300');
-        expect(warning).toContain('400x300');
+        // The compared shadow extent is the body, not the padded shadow box, and every extent
+        // carries a decimal so a sub-pixel disagreement is visible rather than rounded to equal.
+        expect(warning).toContain('428.00x300.00');
+        expect(warning).toContain('400.00x300.00');
+        expect(warning).toContain('by 28.00x0.00px');
     });
 
-    it('stays silent when the authority and the box agree', () => {
+    it('stays silent when the authority and the body agree', () => {
         expect(shadowBodyWarning(
             {width: 400, height: 300},
+            shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300})).toBeNull();
+    });
+
+    it('stays silent for a sub-pixel container/actor difference the old tolerance flagged', () => {
+        // `buffer / scale` on a fractional monitor leaves a sub-pixel residue between the
+        // container's logical body and the actor's integer allocation; it is not movement. 0.8px
+        // sits below the 1px tolerance and above the old 0.5px one, so it pins the change.
+        expect(shadowBodyWarning(
+            {width: 400.8, height: 300},
             shadowBox({width: 400, height: 300}),
             {width: 400, height: 300})).toBeNull();
     });
@@ -409,6 +502,15 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
             {width: 400 + SHADOW_BODY_TOLERANCE, height: 300},
             shadowBox({width: 400, height: 300}),
             {width: 400, height: 300})).toBeNull();
+    });
+
+    it('fires on the 2px focus hand-off transient the tolerance must not hide', () => {
+        const warning = shadowBodyWarning(
+            {width: 398, height: 300},
+            shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300});
+        expect(warning).toContain('398.00x300.00');
+        expect(warning).toContain('-2.00x0.00px');
     });
 
     it('stays silent when the authority is unknown', () => {

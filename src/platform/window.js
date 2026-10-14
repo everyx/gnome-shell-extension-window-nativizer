@@ -685,9 +685,11 @@ function resolveHighestScaleMonitorIndex(win) {
  * @param {object|null} win - Meta.Window
  * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
  *        St leaves the constructor-name heuristic as the last resort
+ * @param {object|null} [container] - The surface container to read, when the caller has already
+ *        resolved it (so the mirror and the applied read share one authority); null resolves it
  * @returns {{x: number, y: number}|null} Applied offset, or null when it cannot be computed
  */
-export function getWindowSubpixelOffset(win, St = null) {
+export function getWindowSubpixelOffset(win, St = null, container = null) {
     if (!win)
         return {x: 0, y: 0};
 
@@ -719,10 +721,11 @@ export function getWindowSubpixelOffset(win, St = null) {
 
         // Layout coordinates only: the window actor's position plus the surface container's
         // position inside it (zero when the container cannot be identified). The container is
-        // resolved with the same St the clip path is handed, so both run one identification rule.
-        const container = getSurfaceContainer(actor, win, St);
-        const absX = (actor.x ?? 0) + (container?.x ?? 0);
-        const absY = (actor.y ?? 0) + (container?.y ?? 0);
+        // resolved with the same St the clip path is handed, so both run one identification rule;
+        // a caller that already resolved it hands it in, so the applied read names one actor.
+        const surfaceContainer = container ?? getSurfaceContainer(actor, win, St);
+        const absX = (actor.x ?? 0) + (surfaceContainer?.x ?? 0);
+        const absY = (actor.y ?? 0) + (surfaceContainer?.y ?? 0);
         const relX = absX - monitorX;
         const relY = absY - monitorY;
 
@@ -766,9 +769,11 @@ export function getWindowSubpixelOffset(win, St = null) {
  * @param {object|null} win - Meta.Window
  * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
  *        St leaves the constructor-name heuristic as the last resort
+ * @param {object|null} [container] - The surface container to read, when the caller has already
+ *        resolved it (so the mirror and the applied read share one authority); null resolves it
  * @returns {{x: number, y: number}|null} Applied phase, or null when it cannot be read
  */
-export function getAppliedSubpixelPhase(win, St = null) {
+export function getAppliedSubpixelPhase(win, St = null, container = null) {
     try {
         if (!win || getWindowClientType(win) !== WindowClientType.WAYLAND)
             return null;
@@ -778,12 +783,14 @@ export function getAppliedSubpixelPhase(win, St = null) {
             return null;
 
         // The same St the clip resolves its target with, so the applied read and the clip share
-        // one identification rule rather than the heuristic.
-        const container = getSurfaceContainer(actor, win, St);
-        if (!container || typeof container.get_transform !== 'function')
+        // one identification rule rather than the heuristic. A caller hands in the container it
+        // already resolved, so the transform below is read from the same actor whose layout origin
+        // is subtracted - one authority, never a transform against another actor's position.
+        const surfaceContainer = container ?? getSurfaceContainer(actor, win, St);
+        if (!surfaceContainer || typeof surfaceContainer.get_transform !== 'function')
             return null;
 
-        const matrix = container.get_transform();
+        const matrix = surfaceContainer.get_transform();
         if (!matrix ||
             typeof matrix.get_x_translation !== 'function' ||
             typeof matrix.get_y_translation !== 'function')
@@ -798,8 +805,10 @@ export function getAppliedSubpixelPhase(win, St = null) {
         if (Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001)
             return null;
 
-        const x = matrix.get_x_translation() - ((container.x ?? 0) + (container.translation_x ?? 0));
-        const y = matrix.get_y_translation() - ((container.y ?? 0) + (container.translation_y ?? 0));
+        const x = matrix.get_x_translation() -
+            ((surfaceContainer.x ?? 0) + (surfaceContainer.translation_x ?? 0));
+        const y = matrix.get_y_translation() -
+            ((surfaceContainer.y ?? 0) + (surfaceContainer.translation_y ?? 0));
         // A half-torn-down container can hand back a NaN transform; assigning it to an actor's
         // translation is a GLib critical, so an unusable read is "unavailable" and takes the mirror
         // fallback, exactly like a non-unit scale.

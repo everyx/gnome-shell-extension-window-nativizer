@@ -15,9 +15,26 @@
  */
 
 import {ZERO_INSETS} from './frame.js';
+import {
+    evaluateInvariant,
+    freshInvariantState,
+    overviewMaskRefusalWarning,
+    windowIdentityLabel,
+} from './diagnosticInvariants.js';
 import {WindowClientType} from './mutterRules.generated.js';
 import {isPaintableFrame} from '../effects/clipParams.js';
-import {getWindowActor, getWindowFrameRect, getOverviewPreview, getWindowClientType} from '../platform/window.js';
+import {
+    getWindowActor,
+    getWindowDisplayTitle,
+    getWindowFrameRect,
+    getOverviewPreview,
+    getWindowClientType,
+} from '../platform/window.js';
+
+/** The journal sink for the mask-refusal warning; injected by a spec to observe the line. */
+function defaultWarn(message) {
+    console.warn(message);
+}
 
 /**
  * GNOME Shell's cap on an overview thumbnail's scale, from `WINDOW_PREVIEW_MAXIMUM_SCALE`
@@ -70,6 +87,11 @@ export class OverviewDecoration {
         this._scale = 1;
         this._shadowSource = null;
         this._forceOverviewCorners = false;
+        // A readiness refusal is a deferral (nothing cached); a refusal after the readiness gates
+        // passed is the "square in the overview" defect. The latch makes that one line per
+        // episode, re-armed by an install or by leaving the overview.
+        this._warn = options.warn ?? defaultWarn;
+        this._maskRefusalLatch = freshInvariantState();
     }
 
     /** @returns {boolean} Whether the overview visuals are currently applied */
@@ -186,6 +208,7 @@ export class OverviewDecoration {
     }
 
     _release() {
+        this._maskRefusalLatch = freshInvariantState();
         this._clearMask();
         this._clearShadow();
         this._syncHooks();
@@ -282,12 +305,20 @@ export class OverviewDecoration {
         // Already wearing the mask (a reconcile with no card change): the outcome is unchanged.
         if (this._stex)
             return true;
-        if (!this._canMask || !this._maskReady())
+        // Not this pass: a bufferless texture or an unallocated actor is a deferral, not a
+        // refusal. Nothing is cached and the buffer's or the allocation's arrival earns a fresh
+        // reconcile, so this must not be read as the window being stuck square.
+        if (!this._canMask || !this._maskReady()) {
+            this._maskRefusalLatch = freshInvariantState();
             return false;
+        }
 
+        // Every gate below has passed the readiness check: the window has a buffer and a
+        // paint-able actor, so a refusal here leaves a preview that should have been rounded
+        // square. Name the gate; the latch makes it one journal line per episode.
         const buildRoundedMask = this._OverviewMask?.buildRoundedMask;
         if (!buildRoundedMask)
-            return false;
+            return this._refuseMask('no mask builder is available');
 
         const actor = getWindowActor(this._win);
         const stex = actor?.get_texture?.() ?? null;
@@ -295,14 +326,14 @@ export class OverviewDecoration {
         const context = multi?.get_plane?.(0)?.get_context?.() ?? null;
         const container = getOverviewPreview(this._win)?.container ?? null;
         if (!stex || !context || !container)
-            return false;
+            return this._refuseMask('the shaped texture, its context or the preview container is unavailable');
 
         const actorWidth = actor?.width ?? 0;
         const actorHeight = actor?.height ?? 0;
         const textureWidth = multi.get_width?.() ?? 0;
         const textureHeight = multi.get_height?.() ?? 0;
         if (!(actorWidth > 0) || !(actorHeight > 0) || !(textureWidth > 0) || !(textureHeight > 0))
-            return false;
+            return this._refuseMask('the actor or texture has no positive size');
 
         // Insets and radius are logical; the texture carries the client's buffer.
         const bufferScale = textureWidth / actorWidth;
@@ -323,11 +354,13 @@ export class OverviewDecoration {
             erase: this._erase,
         });
         if (!mask)
-            return false;
+            return this._refuseMask('the mask builder returned nothing');
 
         stex.set_mask_texture(mask);
 
         this._stex = stex;
+        // The mask landed: re-arm the latch so a later refusal speaks as its own episode.
+        this._maskRefusalLatch = freshInvariantState();
         this._container = container;
         this._containerDestroyId = container.connect('destroy', () => {
             // The preview can be torn down before the overview 'hidden' signal; drop the
@@ -338,6 +371,28 @@ export class OverviewDecoration {
         this._savedOpacity = container.get_opacity();
         container.set_opacity(Math.min(254, this._savedOpacity));
         return true;
+    }
+
+    /**
+     * Records a mask refusal that happened although the window was ready, and says so once per
+     * episode. With `forceOverviewCorners` the legacy clip is an intended rounding path, not a
+     * square preview, so the refusal is not the defect this watches.
+     *
+     * @param {string} reason - Which gate refused
+     * @returns {false} Always false, so call sites stay `return this._refuseMask(...)`
+     */
+    _refuseMask(reason) {
+        if (this._forceOverviewCorners) {
+            this._maskRefusalLatch = freshInvariantState();
+            return false;
+        }
+        const label = windowIdentityLabel({title: getWindowDisplayTitle(this._win)});
+        const {state, message} = evaluateInvariant(this._maskRefusalLatch,
+            overviewMaskRefusalWarning(reason, label));
+        this._maskRefusalLatch = state;
+        if (message)
+            this._warn(message);
+        return false;
     }
 
     /**

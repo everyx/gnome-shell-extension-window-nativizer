@@ -1,4 +1,5 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
+import {resolvePaintBody} from '../src/effects/clipParams.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -30,6 +31,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.params = params;
         }
 
+        setBodyPlan(plan) {
+            this.bodyPlan = plan;
+        }
+
         get_actor() {
             return this._actor;
         }
@@ -53,6 +58,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setClipTarget(clipTarget) {
             this.clipTarget = clipTarget;
+        }
+
+        setBodyPlan(plan) {
+            this.bodyPlan = plan;
         }
 
         get diagnosticsView() {
@@ -175,6 +184,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         insets = {left: 0, top: 0, right: 0, bottom: 0},
         buildRoundedMaskReturnsNull = false,
         forceOverviewCorners = false,
+        warn = jasmine.createSpy('warn'),
     } = {}) {
         mockWin.get_client_type = () => clientType;
 
@@ -272,6 +282,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             ResizeBand: MockResizeBand,
             OverviewMask,
             OverviewShadow: FakeOverviewShadow,
+            warn,
         });
         const flat = !(insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0);
         deco.apply({
@@ -289,7 +300,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         return {
-            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones,
+            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones, warn,
             opaqueCalls: () => opaqueCalls,
             setBuildReturnsNull: value => {
                 buildReturnsNull = value;
@@ -523,6 +534,101 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.scale).toBe(1.25);
         expect(deco.shadow.scale).toBe(1.25);
         expect(deco.resizeBand.geometry.scale).toBe(1.25);
+    });
+
+    it('warns once when the buffer and the window actor allocation disagree for two passes', () => {
+        // The transient the journal could not attribute: the buffer reads 798 while the window
+        // actor is 800 wide, so one of the two reads lagged the other in this pass. A single pass
+        // is the skew a resize in flight shows and must stay silent; the second consecutive pass
+        // is the sustained divergence and speaks exactly once.
+        const warn = jasmine.createSpy('warn');
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            warn,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const insets = {left: 8, top: 8, right: 8, bottom: 8};
+        const drifting = {
+            insets,
+            monitorScale: 1,
+            wmClass: 'firefox',
+            bufferRect: {x: 0, y: 0, width: 798, height: 600},
+        };
+
+        deco.apply({actions, inputs: drifting, actor: mockActor});
+        expect(warn).not.toHaveBeenCalled();
+
+        deco.apply({actions, inputs: drifting, actor: mockActor});
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('798x600');
+        expect(warn.calls.mostRecent().args[0]).toContain('"firefox"');
+
+        // The same episode stays one line, and agreement re-arms for the next one.
+        deco.apply({actions, inputs: drifting, actor: mockActor});
+        expect(warn).toHaveBeenCalledTimes(1);
+        deco.apply({actions,
+            inputs: {...drifting, bufferRect: {x: 0, y: 0, width: 800, height: 600}},
+            actor: mockActor});
+        deco.apply({actions, inputs: drifting, actor: mockActor});
+        deco.apply({actions, inputs: drifting, actor: mockActor});
+        expect(warn).toHaveBeenCalledTimes(2);
+    });
+
+    it('warns once when the fallback phase does not match the phase Mutter applied', () => {
+        // On the fallback path the clip folds the mirror into its geometry; the applied read is
+        // what Mutter actually put on the container. A disagreement is the fractional-scale
+        // hairline. The latch is the same two-pass rule, and the container path never reads the
+        // pair because it uses the applied phase directly.
+        const warn = jasmine.createSpy('warn');
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            warn,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1, wmClass: 'firefox'};
+        const reads = spyOn(deco, '_readPhases').and.returnValue({
+            mirror: {x: 0, y: 0},
+            applied: {x: 1.2, y: 0},
+        });
+        const fallback = {actor: mockActor, phaseInTransform: false};
+
+        deco.apply({actions, inputs, actor: mockActor, target: fallback});
+        expect(warn).not.toHaveBeenCalled();
+        deco.apply({actions, inputs, actor: mockActor, target: fallback});
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('"firefox"');
+
+        // The container path reads the applied phase from the transform, so it must not spend the
+        // mirror read, and a matching pair stays silent on the fallback path.
+        reads.calls.reset();
+        deco.apply({actions, inputs, actor: mockActor, target: {actor: mockActor, phaseInTransform: true}});
+        expect(reads).not.toHaveBeenCalled();
+        reads.and.returnValue({mirror: {x: 0.5, y: 0}, applied: {x: 0.5, y: 0}});
+        deco.apply({actions, inputs, actor: mockActor, target: fallback});
+        deco.apply({actions, inputs, actor: mockActor, target: fallback});
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 
     it('clears every resize band while the monitor bounds cannot be read', () => {
@@ -833,6 +939,151 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.diagnosticsView.shadowHeight).toBe(624);
         expect(deco.diagnosticsView.shadowCast).toEqual({x: 0, y: 0, width: 824, height: 624});
         expect(deco.diagnosticsView.shadowRightBand).toEqual({x1: 812, y1: 0, x2: 824, y2: 624});
+    });
+
+    it('holds the one settled body across a target/actor disagreement so both cuts stay put', () => {
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1};
+        const target = {actor: container, phaseInTransform: true};
+
+        // The body at paint is the settle of the live reads and the plan the pass handed; the
+        // shadow gets the same plan object, so one body serves both cuts. These inputs carry no
+        // frame rect, so the live window size is unknown, as on an early pass.
+        const bodyNow = () => resolvePaintBody(container, mockActor, null, deco.clip.bodyPlan).body;
+
+        // A healthy pass: the resolved target and the window actor agree.
+        deco.apply({actions, inputs, actor: mockActor, target});
+        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(bodyNow()).toEqual({width: 800, height: 600});
+
+        // The container read lags the window actor by 2px: both cuts keep the previous body.
+        container.width = 798;
+        deco.apply({actions, inputs, actor: mockActor, target});
+        expect(bodyNow()).toEqual({width: 800, height: 600});
+
+        // The two agree again: the fresh body is acted on at once, so the deferral cannot latch.
+        container.width = 804;
+        mockActor.width = 804;
+        deco.apply({actions, inputs, actor: mockActor, target});
+        expect(bodyNow()).toEqual({width: 804, height: 600});
+    });
+
+    it('follows the window actor while a resize is in flight so both cuts track the dragged frame', () => {
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const target = {actor: container, phaseInTransform: true};
+        const withFrame = rect => ({
+            insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1,
+            frameRect: rect, bufferRect: rect,
+        });
+
+        // The frame rect is the window's own live size in this fixture, so the body at paint is the
+        // settle of the two live actor reads and the plan the pass handed.
+        const bodyNow = () => resolvePaintBody(container, mockActor,
+            {width: mockActor.width, height: 600}, deco.clip.bodyPlan).body;
+
+        // A healthy pass establishes the settled body and the window's own size.
+        deco.apply({actions, inputs: withFrame({x: 0, y: 0, width: 800, height: 600}),
+            actor: mockActor, target});
+        expect(bodyNow()).toEqual({width: 800, height: 600});
+
+        // The drag grows the window to 802: the window actor is already there and the surface
+        // container still reads the older 800. Both cuts must follow the actor, not hold the
+        // lagging container box. The plan's window size pair is what marks the resize in flight.
+        mockActor.width = 802;
+        deco.apply({actions, inputs: withFrame({x: 0, y: 0, width: 802, height: 600}),
+            actor: mockActor, target});
+        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(bodyNow()).toEqual({width: 802, height: 600});
+    });
+
+    it('holds the body when it moves between passes while the window size stands still', () => {
+        // The focus hand-off: the container and the window actor can trail together by a whole
+        // pixel, so the within-pass pair agrees while the window's own frame has not moved. The
+        // body's movement between passes is the tell the pair comparison misses.
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const rect = {x: 0, y: 0, width: 800, height: 600};
+        const inputs = {
+            insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1,
+            frameRect: rect, bufferRect: rect,
+        };
+        const target = {actor: container, phaseInTransform: true};
+
+        // The window's own live size stands at 800 while the actor trails to 798, then moves to
+        // 700 with the actor; the body at paint is the settle of that live size, the two actor
+        // reads and the plan the pass handed.
+        let liveWindow = {width: 800, height: 600};
+        const bodyNow = () => resolvePaintBody(container, mockActor, liveWindow, deco.clip.bodyPlan).body;
+
+        // A healthy pass establishes the settled body and the window's own size.
+        deco.apply({actions, inputs, actor: mockActor, target});
+        expect(bodyNow()).toEqual({width: 800, height: 600});
+
+        // The container and the window actor trail together to 798; the frame stays 800. Both cuts
+        // keep the previous body instead of following the stale pair.
+        container.width = 798;
+        mockActor.width = 798;
+        deco.apply({actions, inputs, actor: mockActor, target});
+        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(bodyNow()).toEqual({width: 800, height: 600});
+
+        // A genuine resize moves the body and the window's own frame together: the fresh body is
+        // acted on, and the hold does not latch onto the next pass.
+        container.width = 700;
+        mockActor.width = 700;
+        liveWindow = {width: 700, height: 600};
+        const smaller = {x: 0, y: 0, width: 700, height: 600};
+        deco.apply({actions,
+            inputs: {...inputs, frameRect: smaller, bufferRect: smaller},
+            actor: mockActor, target});
+        expect(bodyNow()).toEqual({width: 700, height: 600});
     });
 
     it('resolves the ring plan once and exposes it through the state view', () => {
@@ -1251,6 +1502,44 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const masked = setupMaskHarness();
         expect(masked.deco.overview.setMode(true, readings)).toBe('mask');
         expect(masked.surface.hasMask).toBeTrue();
+    });
+
+    it('warns once when the overview mask refuses although the window was ready', () => {
+        // The "square in the overview" defect: the readiness gates passed (there is a buffer and
+        // a paint-able actor), so a refusal here leaves a preview square that should be rounded.
+        // The bufferless deferral is the healthy case and must stay silent.
+        const readings = {
+            radius: 12,
+            insets: {left: 0, top: 0, right: 0, bottom: 0},
+            erase: false,
+            scale: 1,
+            drawClip: true,
+            hasStyle: true,
+            shadow: null,
+        };
+        const harness = setupMaskHarness({buildRoundedMaskReturnsNull: true});
+        const {deco, warn} = harness;
+
+        // No buffer yet: "not this pass", not a refusal to report.
+        harness.setBuffer(0, 0);
+        expect(deco.overview.setMode(true, readings)).toBe('square');
+        expect(warn).not.toHaveBeenCalled();
+
+        // Ready, but the builder declines: the first pass is the blip, the second speaks once.
+        harness.setBuffer(800, 600);
+        deco.overview.setMode(true, readings);
+        expect(warn).not.toHaveBeenCalled();
+        deco.overview.setMode(true, readings);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('the mask builder returned nothing');
+
+        // The episode stays one line; leaving the overview re-arms for the next entry.
+        deco.overview.setMode(true, readings);
+        expect(warn).toHaveBeenCalledTimes(1);
+        deco.overview.drop();
+        deco.overview.setMode(true, readings);
+        deco.overview.setMode(true, readings);
+        expect(warn).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the forced legacy clip when the mask cannot actually be installed', () => {

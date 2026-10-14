@@ -8,21 +8,25 @@
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
-import {resolveClipSize} from './clipParams.js';
+import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
 
 // Padding in px, derived from maximum Gaussian reach over all shadow layers.
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 
 /**
- * How far the clip's body authority and the shadow's own box may differ before it is a defect.
+ * How far the clip's body authority and the shadow's own body may differ before it is a defect.
  *
  * The clip's cut and the shadow's body are the same rectangle by construction and the pick data
  * showed them equal (frameRect == bufferRect == windowActorAllocation), so a healthy window is
- * exact. Half a logical pixel absorbs float residue and the odd lagging read without hiding a
- * real disagreement, which moves the body by whole pixels (the observed missing band was 28px).
+ * exact. They are not always written in one step though: a fractional monitor scale derives the
+ * container's logical body as `buffer / scale` while the window actor's allocation is an integer,
+ * so a sub-pixel difference between the two is normal by construction. One logical pixel sits
+ * above that residue and below the whole-pixel defects this exists to separate (the observed
+ * missing band was 28px, the focus-hand-off transient 2px), so it no longer false-positives on an
+ * ordinary window while still naming a real disagreement.
  */
-export const SHADOW_BODY_TOLERANCE = 0.5;
+export const SHADOW_BODY_TOLERANCE = BODY_SETTLE_TOLERANCE;
 
 // Offscreen padding matching Mutter clutter-actor-box conventions (2px origin, 3px extra).
 const BAKE_ORIGIN = EFFECT_PADDING_ORIGIN;
@@ -89,16 +93,17 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
 /**
  * Builds the WARNING text for a shadow box that no longer describes the clip's body, or null.
  *
- * The clip's body authority is `resolveClipSize(targetRead, windowActorRead)` - the same call the
- * clip's paint makes, so this is a check of the shadow against the cut it must line up with, not
+ * The clip's body authority is the one `resolvePaintBody` names - the same call the clip's paint
+ * makes, so this is a check of the shadow against the cut it must line up with, not
  * against the shadow itself. The shadow's box is bound to the window actor, so on a healthy
  * window the authority and the box agree; a client focus/refocus hack can resize the actor against
  * the surface container for a moment, the cut stays on the container, and the shadow's right band
- * shrinks - the transient that used to be silent. The text names the authority and the shadow box
- * (plus the window actor when it is known) so a journalctl hit identifies which side moved.
+ * shrinks - the transient that used to be silent. The text names the authority and the shadow's
+ * body (plus the window actor when it is known), each with two decimals and the signed delta, so a
+ * journalctl hit identifies which side moved and by how much.
  *
  * @param {{width:number,height:number}|null} authority - The clip's resolved body
- * @param {{width:number,height:number}|null} shadowBox - The shadow actor's live box
+ * @param {{width:number,height:number}|null} shadowBox - The shadow actor's live box (padded)
  * @param {{width:number,height:number}|null} [windowActorBox] - The window actor's live box
  * @returns {string|null} Warning text, or null when they agree within SHADOW_BODY_TOLERANCE
  */
@@ -112,11 +117,16 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
         return null;
 
     const actor = windowActorBox
-        ? ` (window actor ${round2(windowActorBox.width)}x${round2(windowActorBox.height)})`
+        ? ` (window actor ${fmt2(windowActorBox.width)}x${fmt2(windowActorBox.height)})`
         : '';
-    return `[window-nativizer] Shadow body authority ${round2(authority.width)}x${round2(authority.height)} ` +
-        `disagrees with the shadow box ${round2(shadowBox.width)}x${round2(shadowBox.height)}${actor} ` +
-        `by more than ${SHADOW_BODY_TOLERANCE}px`;
+    // The delta is printed explicitly: the two sides are the *body* extents being compared (the
+    // shadow box carries SHADOW_PAD per side), so a reader sees which side is larger and by how
+    // much instead of reading three near-identical numbers next to a bare tolerance.
+    const deltaWidth = authority.width - bodyWidth;
+    const deltaHeight = authority.height - bodyHeight;
+    return `[window-nativizer] Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
+        `disagrees with the shadow body ${fmt2(bodyWidth)}x${fmt2(bodyHeight)}${actor} ` +
+        `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px`;
 }
 
 /**
@@ -148,10 +158,10 @@ export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, 
 
 /**
  * @param {number} value
- * @returns {number}
+ * @returns {string} The value with two decimal places, so a sub-pixel difference is visible
  */
-function round2(value) {
-    return Math.round(value * 100) / 100;
+function fmt2(value) {
+    return Number(value).toFixed(2);
 }
 
 /**
@@ -291,12 +301,17 @@ export function shadowSlices({corner, window, buffer}, width, height) {
  * Decides the shadow layout for one paint: the cast rect, the slices, the corner, plus
  * whether the cast moved enough to rebuild the slices, and the body authority it used.
  *
- * `bodySource` is the clip's own authority: the target's read and the window actor's read, fed
- * through `resolveClipSize` so the shadow and the clip agree on their body by construction. The
- * shadow's box is bound to the window actor and normally agrees with the target, so this is a
- * no-op there; when a focus/refocus hack parts them, the cast and the slices follow the clip's
- * body instead of the smaller box. Without `bodySource` (unit callers that own their box) the
- * body is the actor box minus SHADOW_PAD per side, today's behaviour.
+ * `bodySource` is the clip's own authority: the target's live read, the window actor's live read
+ * and the window's own live size, fed through `resolvePaintBody` with the pass plan so the shadow
+ * and the clip settle one body by construction. The plan carries no resolved body; the settle runs
+ * here, on the actor's allocation clock (per frame during a drag), so the cast tracks the frame the
+ * compositor is drawing rather than the last debounced pass's read. `authority` still names the
+ * fresh read for the warning, so a pass that holds an unsettled read keeps the previous geometry
+ * without losing the journal record. The shadow's box is bound to the window actor and normally
+ * agrees with the target, so this is a no-op there; when a focus/refocus hack parts them, the cast
+ * and the slices follow the clip's body instead of the smaller box. Without `bodySource` (unit
+ * callers that own their box) the body is the actor box minus SHADOW_PAD per side, today's
+ * behaviour.
  *
  * `style` carries the previous cast/slices/corner (absent on a fresh style), so the slice
  * rebuild only runs when the cast moved or the style is new - the cache policy `_relayout`
@@ -307,15 +322,20 @@ export function shadowSlices({corner, window, buffer}, width, height) {
  * @param {{width:number, height:number}} actorSize - The shadow actor's live size in px
  * @param {import('../lib/frame.js').Insets} [insets] - Ring the client declared, per side
  * @param {number} [scale=1.0] - Physical scale factor
- * @param {{targetSize:object|null, windowActorSize:object|null}|null} [bodySource] - The clip's authority
- * @returns {{cast:object, slices:Array<object>, corner:number, castChanged:boolean, authority:object|null}}
+ * @param {{targetSize:object|null, windowActorSize:object|null, windowSize:object|null,
+ *   bodyPlan?:object|null}|null} [bodySource] - The live reads and the pass plan
+ * @returns {{cast:object, slices:Array<object>, corner:number, castChanged:boolean,
+ *   authority:object|null, body:object|null}}
  */
 export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource = null) {
-    const authority = bodySource
-        ? resolveClipSize(bodySource.targetSize, bodySource.windowActorSize)
+    const settled = bodySource
+        ? resolvePaintBody(bodySource.targetSize, bodySource.windowActorSize, bodySource.windowSize,
+            bodySource.bodyPlan)
         : null;
-    const cast = authority
-        ? shadowCastRectForBody(authority, insets, scale)
+    const authority = settled?.authority ?? null;
+    const body = settled?.body ?? null;
+    const cast = body
+        ? shadowCastRectForBody(body, insets, scale)
         : shadowCastRect(actorSize, insets, scale);
     const previous = style.cast;
     const castChanged = !previous ||
@@ -330,5 +350,5 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
         corner = geometry.corner;
     }
 
-    return {cast, slices, corner, castChanged, authority};
+    return {cast, slices, corner, castChanged, authority, body};
 }
