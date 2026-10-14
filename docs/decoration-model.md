@@ -734,7 +734,9 @@ Entering the overview, the manager tells every decoration, which:
   logical pixels into the client's buffer pixels — and installs it with `set_mask_texture()`.
   Alpha is 255 over the body, carries the corner coverage in the four corner squares, and is
   255 outside the body unless the ring is cleared (flat windows): the same coverage the desktop
-  shader computes. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
+  shader computes. `tools/test-e2e.sh` checks the preview corner's 50% contour against the same
+  corner on the desktop and against a live libadwaita window's preview; at preview resolution it
+  cannot pin the per-byte coverage. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
 - Drops the preview container's opacity to 254. Mutter consults the mask only on its blended
   path (`use_opaque_region = opaque_region && opacity == 255`), and an opaque client declares a
   full-surface opaque region, so the fast path would paint square corners. One step below 255

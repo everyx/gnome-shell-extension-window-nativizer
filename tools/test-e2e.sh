@@ -150,6 +150,23 @@ if wrong:
 PYEOF
 }
 
+# A live libadwaita client is the reference this whole extension copies. Pick one: what matters is
+# that its process maps the provider; the wmclass is the app id on Wayland, which is steadier to
+# match than a process name (`pgrep -x` cannot match one longer than 15 characters, and these are).
+# Sets LIBNATIVE_APP / LIBNATIVE_CLASS; returns non-zero when none is installed.
+discover_libadwaita_client() {
+    LIBNATIVE_APP=""
+    LIBNATIVE_CLASS=""
+    for pair in gnome-calculator:org.gnome.Calculator gnome-text-editor:org.gnome.TextEditor nautilus:org.gnome.Nautilus; do
+        if command -v "${pair%%:*}" >/dev/null 2>&1; then
+            LIBNATIVE_APP="${pair%%:*}"
+            LIBNATIVE_CLASS="${pair##*:}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # The shell's own JS modules cannot be reached from outside it, so the members the extension
 # takes from them are asserted from inside, over the nested session's D-Bus.
 echo ">> [test-e2e] Verifying the shell-module surface (Main.*)..."
@@ -1437,70 +1454,227 @@ fi
 echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 with a shadow clone, all restored on the desktop."
 
 # (f2) The suite passed with the square-in-overview regression because it never looked at a
-# pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. Pin
-# the user-visible fact: a Wayland window wears the rounded mask, so a corner of its overview
-# preview shows the desktop/shadow while the body centre shows the body.
-echo ">> [test-e2e] Verifying the overview preview is rounded, not square (pixel evidence)..."
+# pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. The
+# check now measures the preview's corner coverage against the two things the user can compare it
+# to: the same window on the desktop, where the clip draws the rounded body, and a live libadwaita
+# window in the same overview, which is the decoration this extension copies. It sees what the
+# user sees - downscaled and anti-aliased - so it pins the 50% contour of the corner, not the
+# per-byte coverage the removed unit spec compared between two of our own computations.
+echo ">> [test-e2e] Verifying the overview preview reproduces the desktop and libadwaita corner coverage..."
+
+# Capture the desktop before the native reference joins, so nothing can occlude the declared
+# window's corner there. Read its frame rect in the same breath: that corner is the origin the
+# preview scales from.
+OVERVIEW_DESK_GEOM="$(shell_eval '
+(() => {
+    const s = global.display.get_monitor_scale(0);
+    const w = global.get_window_actors().map(a => a.meta_window)
+        .find(w => w && w.get_title() === "Window Nativizer E2E Declared");
+    if (!w) return JSON.stringify({error: "declared window not found"});
+    const r = w.get_frame_rect();
+    return JSON.stringify({x: r.x, y: r.y, width: r.width, height: r.height, scale: s});
+})()
+')"
+if echo "$OVERVIEW_DESK_GEOM" | grep -q 'error'; then
+    echo "!! The declared window was not on the desktop for the overview corner check: $OVERVIEW_DESK_GEOM"
+    exit 1
+fi
+OVERVIEW_DESKTOP_SHOT="/tmp/window-nativizer-overview-desktop.png"
+rm -f "$OVERVIEW_DESKTOP_SHOT"
+OVERVIEW_BUS="$(get_dbus_bus)"
+gdbus call --address "$OVERVIEW_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
+    --method org.gnome.Shell.Screenshot.Screenshot false false "$OVERVIEW_DESKTOP_SHOT" >/dev/null 2>&1
+
+# A live libadwaita window is the reference for a rounded preview.
+discover_libadwaita_client || true
+if [ -n "$LIBNATIVE_APP" ]; then
+    "$DEV" app "$LIBNATIVE_APP" >/dev/null 2>&1 &
+    OVERVIEW_NATIVE_PID=$!
+    native_found=0
+    for i in $(seq 1 80); do
+        native_found="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
+        [ "$native_found" = "1" ] && break
+        sleep 0.25
+    done
+    if [ "$native_found" != "1" ]; then
+        echo "!! The libadwaita reference client ($LIBNATIVE_APP) never mapped a '$LIBNATIVE_CLASS' window"
+        exit 1
+    fi
+fi
+
+# One settled overview read for both previews: a preview reports `mapped` before its placement
+# animation ends, so the boxes are polled until they hold still rather than read once.
 OVERVIEW_BOX="$(shell_eval '
 (async () => {
     const Main = await import("resource:///org/gnome/shell/ui/main.js");
     const GLib = imports.gi.GLib;
-    const target = global.get_window_actors().find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
-    if (!target) return JSON.stringify({error: "window not found"});
-    Main.overview.show();
-    for (let i = 0; i < 60; i++) {
-        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
-        const preview = target.meta_window._delegate ?? null;
-        if (Main.overview.visible && preview && preview.mapped) {
+    const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => { r(); return GLib.SOURCE_REMOVE; }));
+    const snap = () => {
+        const out = {};
+        for (const a of global.get_window_actors()) {
+            const w = a.meta_window;
+            if (!w) continue;
+            const key = w.get_title() === "Window Nativizer E2E Declared" ? "declared"
+                : (w.get_wm_class() === "'"$LIBNATIVE_CLASS"'" ? "native" : null);
+            if (!key) continue;
+            const preview = w._delegate ?? null;
+            if (!(Main.overview.visible && preview && preview.mapped)) return null;
             const [x, y] = preview.get_transformed_position();
-            const [w, h] = preview.get_transformed_size();
-            if (w > 0 && h > 0)
-                return JSON.stringify({x, y, w, h});
+            const [pw, ph] = preview.get_transformed_size();
+            const r = w.get_frame_rect();
+            out[key] = {box: {x, y, w: pw, h: ph}, frame: {width: r.width, height: r.height}};
         }
+        return out.declared ? out : null;
+    };
+    Main.overview.show();
+    let prev = null, stable = 0;
+    for (let i = 0; i < 100; i++) {
+        await sleep(100);
+        const cur = snap();
+        if (cur && prev && JSON.stringify(cur) === JSON.stringify(prev)) {
+            stable++;
+            if (stable >= 3) return JSON.stringify(cur);
+        } else {
+            stable = 0;
+        }
+        prev = cur;
     }
-    return JSON.stringify({error: "no preview"});
+    return JSON.stringify({error: "previews did not settle"});
 })()
 ')"
 if echo "$OVERVIEW_BOX" | grep -q 'error'; then
     shell_eval '(async () => { const M = await import("resource:///org/gnome/shell/ui/main.js"); M.overview.hide(); })()' >/dev/null 2>&1 || true
-    echo "!! Overview preview box was not readable: $OVERVIEW_BOX"
+    echo "!! Overview preview boxes were not readable: $OVERVIEW_BOX"
     exit 1
 fi
 OVERVIEW_SHOT="/tmp/window-nativizer-overview.png"
 rm -f "$OVERVIEW_SHOT"
-OVERVIEW_BUS="$(get_dbus_bus)"
 gdbus call --address "$OVERVIEW_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
     --method org.gnome.Shell.Screenshot.Screenshot false false "$OVERVIEW_SHOT" >/dev/null 2>&1
 shell_eval '(async () => { const M = await import("resource:///org/gnome/shell/ui/main.js"); M.overview.hide(); })()' >/dev/null 2>&1 || true
-if ! python3 - "$OVERVIEW_BOX" "$SCALE" "$OVERVIEW_SHOT" <<'PYEOF'
+
+if ! python3 - "$OVERVIEW_DESK_GEOM" "$OVERVIEW_BOX" "$OVERVIEW_DESKTOP_SHOT" "$OVERVIEW_SHOT" <<'PYEOF'
 import json, re, sys
-box = json.loads(re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S).group(0))
-scale = float(sys.argv[2])
 from PIL import Image
-im = Image.open(sys.argv[3]).convert('RGB')
-W, H = im.size
-sx, sy, sw, sh = box['x'] * scale, box['y'] * scale, box['w'] * scale, box['h'] * scale
-# The rounded mask cuts the four corners; the body centre stays. Sample just inside the top-left
-# corner and the centre, both inside the preview's visual box.
+
+
+def load(reply):
+    match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
+    if not match:
+        sys.exit(f"no JSON in {reply!r}")
+    return json.loads(match.group(0))
+
+
+desk = load(sys.argv[1])
+box = load(sys.argv[2])
+dimg = Image.open(sys.argv[3]).convert('RGB')
+oimg = Image.open(sys.argv[4]).convert('RGB')
+
+# The standard is the preview's resample width, not a number picked to pass. The preview is
+# downscaled (0.95x here, ~0.25x for a large window) and mipmapped, so the 50% body/backdrop
+# contour can move by up to one source texel - one logical pixel - between the desktop and its
+# preview. Both comparisons below are contour distances, which cancel the different body colours
+# and backdrops; one logical pixel is what the resample can move a contour.
+STANDARD_PX = 1.0
+# Kept from the check this replaces: a square preview shows body at the corner, so the corner must
+# be clearly darker than the body centre.
+CORNER_DARKER = 20
+
+
+def luma(p):
+    return (p[0] + p[1] + p[2]) / 3.0
+
+
+def bilinear(im, x, y):
+    x0, y0 = int(x), int(y)
+    fx, fy = x - x0, y - y0
+    x1, y1 = min(x0 + 1, im.width - 1), min(y0 + 1, im.height - 1)
+    return (luma(im.getpixel((x0, y0))) * (1 - fx) * (1 - fy)
+            + luma(im.getpixel((x1, y0))) * fx * (1 - fy)
+            + luma(im.getpixel((x0, y1))) * (1 - fx) * fy
+            + luma(im.getpixel((x1, y1))) * fx * fy)
+
+
+def corner_boundary(im, x0, y0, eff):
+    """Distance, in logical px, from the corner to the 50% body/backdrop contour on the diagonal."""
+    samples = []
+    o = 0.0
+    while o <= 20.0:
+        samples.append((o, bilinear(im, x0 + o * eff, y0 + o * eff)))
+        o += 0.1
+    backdrop = min(v for _, v in samples[:20])
+    body = max(v for _, v in samples[-20:])
+    if body - backdrop < 20:
+        sys.exit(f"corner has no body/backdrop contrast: body {body:.0f}, backdrop {backdrop:.0f}")
+    mid = (backdrop + body) / 2
+    for i in range(1, len(samples)):
+        if samples[i][1] >= mid:
+            o0, v0 = samples[i - 1]
+            o1, v1 = samples[i]
+            return o0 + (mid - v0) / (v1 - v0) * (o1 - o0), backdrop, body
+    sys.exit(f"the body is never reached on the corner diagonal: body {body:.0f}, backdrop {backdrop:.0f}")
+
+
+scale = desk['scale']
+decl_eff = scale * box['declared']['box']['w'] / box['declared']['frame']['width']
+desk_b, desk_bg, desk_body = corner_boundary(dimg, desk['x'] * scale, desk['y'] * scale, scale)
+decl_b, decl_bg, decl_body = corner_boundary(
+    oimg, box['declared']['box']['x'] * scale, box['declared']['box']['y'] * scale, decl_eff)
+print(f"DEBUG: desktop corner boundary={desk_b:.3f} logical px (backdrop {desk_bg:.0f}, body {desk_body:.0f})")
+print(f"DEBUG: preview corner boundary={decl_b:.3f} logical px (backdrop {decl_bg:.0f}, body {decl_body:.0f})")
+if abs(desk_b - decl_b) > STANDARD_PX:
+    sys.exit(f"the preview's corner does not reproduce the desktop's coverage: {decl_b:.3f} vs "
+             f"{desk_b:.3f} logical px (standard {STANDARD_PX})")
+
+# The existing centre-versus-corner fact, kept.
+sx, sy = box['declared']['box']['x'] * scale, box['declared']['box']['y'] * scale
+sw, sh = box['declared']['box']['w'] * scale, box['declared']['box']['h'] * scale
 cx, cy = int(sx + 3), int(sy + 3)
 mx, my = int(sx + sw / 2), int(sy + sh / 2)
-if not (0 <= cx < W and 0 <= cy < H and 0 <= mx < W and 0 <= my < H):
-    sys.exit(f"preview box outside the screenshot: {box} shot {W}x{H}")
-corner = sum(im.getpixel((cx, cy))) / 3
-middle = sum(im.getpixel((mx, my))) / 3
-print(f"DEBUG: preview box={box} corner=({cx},{cy}) rgb={im.getpixel((cx, cy))} luma={corner:.0f} "
-      f"centre=({mx},{my}) rgb={im.getpixel((mx, my))} luma={middle:.0f}")
-# A square preview shows the body (light) at the corner too; a rounded one shows the darker
-# desktop/shadow. The subject is an undecorated light GTK body on the dark overview backdrop, so
-# demand the corner be clearly darker than the body centre.
-if middle - corner < 20:
+if not (0 <= cx < oimg.width and 0 <= cy < oimg.height and 0 <= mx < oimg.width and 0 <= my < oimg.height):
+    sys.exit(f"preview box outside the screenshot: {box['declared']} shot {oimg.size}")
+corner = luma(oimg.getpixel((cx, cy)))
+middle = luma(oimg.getpixel((mx, my)))
+print(f"DEBUG: preview corner=({cx},{cy}) luma={corner:.0f} centre=({mx},{my}) luma={middle:.0f}")
+if middle - corner < CORNER_DARKER:
     sys.exit("overview preview corner is not cut: the shape is square, not masked")
+
+if 'native' in box:
+    native_eff = scale * box['native']['box']['w'] / box['native']['frame']['width']
+    native_b, native_bg, native_body = corner_boundary(
+        oimg, box['native']['box']['x'] * scale, box['native']['box']['y'] * scale, native_eff)
+    print(f"DEBUG: native  corner boundary={native_b:.3f} logical px (backdrop {native_bg:.0f}, body {native_body:.0f})")
+    if abs(decl_b - native_b) > STANDARD_PX:
+        sys.exit(f"the decorated preview's corner is not libadwaita's: {decl_b:.3f} vs "
+                 f"{native_b:.3f} logical px (standard {STANDARD_PX})")
+else:
+    print("DEBUG: no libadwaita reference client; the native corner comparison did not run")
 PYEOF
 then
-    echo "!! Overview preview is square: a Wayland window did not wear the rounded mask!"
+    echo "!! Overview preview corner did not match the desktop or libadwaita reference!"
     exit 1
 fi
-echo ">> Overview preview verified: the masked Wayland window's corner is cut (rounded, not square)."
+
+if [ -n "$LIBNATIVE_APP" ]; then
+    OVERVIEW_NATIVE_NOTE=", and a live libadwaita window"
+else
+    cannot_run "no libadwaita client is installed, so the overview corner was not compared against native rendering."
+    OVERVIEW_NATIVE_NOTE=", libadwaita reference not run"
+fi
+echo ">> Overview preview verified: corner cut, reproducing the desktop${OVERVIEW_NATIVE_NOTE}."
+
+# Retire the native reference before section (h) launches its own, so the two cannot race through
+# the client's single-instance handling.
+if [ -n "$LIBNATIVE_APP" ]; then
+    pkill -x "$LIBNATIVE_APP" 2>/dev/null || true
+    pkill -f "$LIBNATIVE_APP" 2>/dev/null || true
+    kill "$OVERVIEW_NATIVE_PID" 2>/dev/null || true
+    for i in $(seq 1 40); do
+        left="$(shell_eval "global.get_window_actors().some(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS') ? 1 : 0" | grep -o '[01]' | head -1 || echo 0)"
+        [ "$left" = "0" ] && break
+        sleep 0.25
+    done
+fi
 
 kill "$DECLARED_PID" 2>/dev/null || true
 
@@ -1583,16 +1757,7 @@ echo ">> Shadow actor close sync verified: shadow opacity synchronized during wi
 # on the process (libadwaita in /proc/<pid>/maps) rather than on the window's declared ring.
 LIBNATIVE_APP=""
 LIBNATIVE_CLASS=""
-# Any libadwaita client will do: what matters is that its process maps the provider. The wmclass is
-# the app id on Wayland, which is steadier to match than a process name (`pgrep -x` cannot match one
-# longer than 15 characters, and these are).
-for pair in gnome-calculator:org.gnome.Calculator gnome-text-editor:org.gnome.TextEditor nautilus:org.gnome.Nautilus; do
-    if command -v "${pair%%:*}" >/dev/null 2>&1; then
-        LIBNATIVE_APP="${pair%%:*}"
-        LIBNATIVE_CLASS="${pair##*:}"
-        break
-    fi
-done
+discover_libadwaita_client || true
 LIBNATIVE_RESULT="SKIPPED (no libadwaita client installed)"
 if [ -n "$LIBNATIVE_APP" ]; then
     echo ">> [test-e2e] Verifying a libadwaita client is left alone ($LIBNATIVE_APP)..."
@@ -2538,7 +2703,7 @@ summary "Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 summary "Maximize Easing Animation & Band Lifecycle: PASSED (transitions uninterrupted, actor translation preserved)"
 summary "Window Destruction: PASSED (0 leaked shadow actors, 0 leaked resize bands)"
 summary "Extension Reload: PASSED (band dropped on disable, rebuilt on enable)"
-summary "Overview Clip Mode: PASSED (clip suspended, shaped-texture mask + preview shadow in overview, restored on desktop; preview corner cut, not square)"
+summary "Overview Clip Mode: PASSED (clip suspended, shaped-texture mask + preview shadow in overview, restored on desktop; preview corner cut, reproducing the desktop${OVERVIEW_NATIVE_NOTE})"
 summary "Close Shadow Actor Sync: PASSED (shadow opacity synchronized with windowActor ease animation)"
 summary "Partial & Full Maximize: PASSED (band attached while tiled, dropped when fully maximized, restored after)"
 summary "Subpixel Phase Straight Edge & Corner Monotonicity: PASSED (zero dark edge or corner artifacts across fractional phases)"
