@@ -546,7 +546,7 @@ scan (19 rays sampled every 5° from top to left shoulder) verifies both minimum
 and monotonic radial/tangential color transitions, ensuring zero dark stroke bleed, notch artifacts,
 or subpixel phase jitter.
 
-## Four rules this work generalised
+## Five rules this work generalised
 
 All four were learned by getting them wrong in the edge and overview work above, and none is
 specific to this decoration.
@@ -580,6 +580,15 @@ into either of the others caches a guess, and a guess is wrong for the rest of t
 rule's original instance - Mutter's `paint_to_bitmap()` returning a bitmap, NULL, or nothing at
 all - went with the removed probe described below.
 
+**A reading taken inside our own pass is not evidence about a frame.** The clip diagnostics printed
+the effects attached to the target before the same pass reached `_syncClip`; the `effects=0` it
+showed was read as "the window is drawn unclipped for one frame" and drove two attempted fixes. It
+was the state before our own mutation, and the clip was installed later in that same pass. This is
+the fourth rule read along the time axis instead of the object axis: a probe after our change reports
+our change, a probe before it reports neither, and only the frame boundary reports the frame. An
+instrument meant to speak about a frame must be taken where the frame is drawn, or must name the
+moment it belongs to.
+
 **An observation must not be taken after we have mutated the thing observed.** A probe read after
 our own change reports our change, not the original state. The overview probe was the instance: it
 decided whether installing the mask would move Mutter's screenshot path, and the answer was only
@@ -588,3 +597,50 @@ capture-level behaviour no user can perceive at the cost of a rounded preview th
 it failed the standard that user-perceptible UI behaviour is the criterion and captures are out of
 scope (`decoration-model.md`) - but the rule outlives it.
 
+
+## The root criterion, and the one rule under the others
+
+Everything above follows from a single criterion: **what we draw must match the frame the user is
+looking at**, and that frame is defined by the state the compositor is using *in that frame*. The
+rule under the other rules is therefore about ownership:
+
+> **A state the compositor owns and changes on its own may only be read in the frame it is used, or
+> followed in that same frame. Never copy it into a second copy of our own, update that copy on our
+> own clock, and then treat our copy as authoritative. Only when the object the value describes has
+> itself not changed may the previous value stand.**
+
+The rules recorded above are the forms that failure takes. *Same quantity* means the copy was
+already converted into something else on the way (raw reads instead of the body they imply, a layout
+position instead of a subpixel phase). *The frame clock* means the copy is refreshed on our
+debounced decision clock while the compositor draws on the frame clock. *Settledness* means the copy
+was taken while the object was mid-update - a ring that reads 4 px for one pass and 1 px after, a
+probe read after our own mutation.
+
+Two consequences worth keeping in view. What is *ours* - whether a window is decorated, which style,
+which insets we chose, the shadow's style - may be cached and decided on the debounced clock, because
+it is an input to the drawing rather than an observation of it. What is *not* ours - the window's
+frame and buffer rects, the actor's allocation, the surface container's box, the phase, the monitor
+scale - must be read when it is used. And the only legitimate reuse of a previous value is the case
+where the object has not changed, which is exactly why the settle helpers take "did the subject
+itself change" rather than "is this value noisy".
+
+
+## An externally rebuilt window is a rhythm to follow, not a fault to fix
+
+The WeChat window is unmanaged and re-managed by the compositor once or twice a second: the journal
+names `unmanaging` as the caller of our teardown, `winActor=gone` at that moment, and a new window id
+on every return, while the X11 window id `xdotool` sees never moves. The window flashes on each
+rebuild, and **it still flashes with the extension disabled**, so the rebuild is not ours and not
+something to eliminate - what changes with the extension on is only what we contribute to those
+frames.
+
+Our obligation in that rhythm is one sentence: **be present in the frames the window is drawn in, and
+absent from the frames where its object is not drawn.** The clip is installed on the pass the new
+actor exists, never a pass later, because the pass after that is a frame the user has already looked
+at. And nothing of ours may outlive the object it describes: a shadow kept for an actor that is gone
+is a drawing of something that is not in the frame, which is the state-ownership rule applied to our
+own output rather than to our reads.
+
+The test that settles whether we honour it is a differential one: with the extension off and on, the
+user-visible result must be the same apart from the decoration itself. Any difference that survives
+that comparison is ours to fix.
