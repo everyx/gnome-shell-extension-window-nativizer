@@ -1324,6 +1324,41 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.outline).toEqual(outline);
     });
 
+    it('derives the flat cover from the device pixel count at fractional scales (issue #129)', () => {
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+
+        const outline = {color: [255, 255, 255], alpha: 0.07};
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            ring: {clear: false, safeInset: true},
+            style: {radius: 15, outline, shadows: []},
+        };
+        const zeroInsets = {left: 0, top: 0, right: 0, bottom: 0};
+        const inputs = {
+            insets: zeroInsets,
+            monitorScale: 1.25,
+        };
+
+        deco.apply({actions, inputs, actor: mockActor});
+        // 3 device px at 1.25x (2 for the border, 1 paint slack): the fixed 1px cover would
+        // leave most of the client's own border behind, so the plan carries the device-derived
+        // cover instead.
+        const cover = {left: 2.4, top: 2.4, right: 2.4, bottom: 2.4};
+        expect(deco.ring.insets).toEqual(cover);
+        expect(deco.clipInsets).toEqual(cover);
+        expect(deco.clip.params.insets).toEqual(cover);
+        expect(deco.shadow.insets).toEqual(cover);
+    });
+
     it('keeps the clip body on the declared frame so it matches the shadow body', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,

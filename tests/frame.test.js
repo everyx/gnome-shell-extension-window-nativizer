@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {frameFromInsets, insetsFromRects, ZERO_INSETS, FLAT_SAFE_INSET} from '../src/lib/frame.js';
+import {frameFromInsets, insetsFromRects, ZERO_INSETS, FLAT_SAFE_INSET, flatSafeInsets} from '../src/lib/frame.js';
 
 const rect = (x, y, width, height) => ({x, y, width, height});
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
@@ -75,6 +75,43 @@ describe('insetsFromRects', () => {
         expect(FLAT_SAFE_INSET).toEqual(insets(1, 1, 1, 1));
         expect(frameFromInsets({width: 100, height: 100}, FLAT_SAFE_INSET))
             .toEqual(rect(1, 1, 98, 98));
+    });
+});
+
+describe('flatSafeInsets', () => {
+    it('is exactly FLAT_SAFE_INSET at integer scales', () => {
+        expect(flatSafeInsets(1)).toEqual(insets(1, 1, 1, 1));
+        expect(flatSafeInsets(2)).toEqual(insets(1, 1, 1, 1));
+    });
+
+    it('covers a whole device pixel count at fractional scales, plus paint slack', () => {
+        // ceil(scale) for the border, one spare device px for the paint-mapping drift.
+        expect(flatSafeInsets(1.25)).toEqual(insets(2.4, 2.4, 2.4, 2.4));
+        expect(flatSafeInsets(1.5)).toEqual(insets(2, 2, 2, 2));
+        expect(flatSafeInsets(4 / 3).left).toBeCloseTo(3 / (4 / 3), 12);
+    });
+
+    it('always covers a 1-logical-px client border plus the paint drift, symmetric per side', () => {
+        const deviceCover = {1: 1, 1.25: 3, 1.5: 3, 2: 2};
+        for (const [scale, count] of Object.entries(deviceCover)) {
+            const cover = flatSafeInsets(Number(scale));
+            // Device px the cut removes per side: the asserted whole count.
+            expect(cover.left * Number(scale)).toBeCloseTo(count, 9);
+            expect(cover).toEqual(insets(cover.left, cover.left, cover.left, cover.left));
+        }
+    });
+
+    it('falls back to FLAT_SAFE_INSET when the scale is unreadable', () => {
+        expect(flatSafeInsets(null)).toBe(FLAT_SAFE_INSET);
+        expect(flatSafeInsets(0)).toBe(FLAT_SAFE_INSET);
+        expect(flatSafeInsets(NaN)).toBe(FLAT_SAFE_INSET);
+    });
+
+    it('normalises near-integer scales before ceiling (PR #132 review)', () => {
+        // 1.0005 reads as integer yet ceils to 2; without normalising the integer branch
+        // would yield a ~2px cover. Same the other way round.
+        expect(flatSafeInsets(1.0005)).toEqual(insets(1, 1, 1, 1));
+        expect(flatSafeInsets(1.9996)).toEqual(insets(1, 1, 1, 1));
     });
 });
 
