@@ -155,7 +155,7 @@ ring is kept unless the ring we draw is ours.
 
 The corner is a distance field; the anti-alias ramp is confined strictly to the corner arcs and
 the straight edge is cut hard, with the model and the measurements in `decoration-alignment.md`. A 1px inner outline is drawn half a physical
-pixel inside the body, and a zero alpha disables it - which is how overview suppresses it. For flat ringless windows (such as WeChat) that paint client-side rectangular borders right up to the actor boundary, a 1px safe inward inset (`FLAT_SAFE_INSET`) excises the client-drawn rectangular border outside the body, allowing the native Adwaita inner outline and box shadow to decorate the entire perimeter consistently without double lines or corner seam artifacts.
+pixel inside the body, and a zero alpha disables it - which is how overview suppresses it. For flat ringless windows (such as WeChat) that paint client-side rectangular borders right up to the actor boundary, a device-derived safe inward inset (`flatSafeInsets`, 1px at integer scales) excises the client-drawn rectangular border outside the body, allowing the native Adwaita inner outline and box shadow to decorate the entire perimeter consistently without double lines or corner seam artifacts.
 
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed

@@ -17,7 +17,7 @@ import {
     phaseAlignmentWarning,
     windowIdentityLabel,
 } from './diagnosticInvariants.js';
-import {FLAT_SAFE_INSET} from './frame.js';
+import {flatSafeInsets} from './frame.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
 import {resolveMonitorBounds, safeRead} from './window.js';
@@ -367,7 +367,7 @@ export class WindowDecoration {
         this._lastRing = ringNow;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
-                ? FLAT_SAFE_INSET : ringNow,
+                ? flatSafeInsets(scale) : ringNow,
             clear: actions.ring.clear,
             erase: actions.ring.clear || actions.ring.safeInset,
         };

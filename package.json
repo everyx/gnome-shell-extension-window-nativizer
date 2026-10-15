@@ -16,6 +16,7 @@
     "test": "jasmine --module tests/",
     "test:e2e": "tools/test-e2e.sh",
     "test:bench": "python3 tools/benchmark-decoration.py",
+    "test:flat-border": "python3 tools/flat-border-runs.py",
     "test:perf": "python3 tools/benchmark-perf.py",
     "lint": "eslint src/ tests/ tools/",
     "lint:ego": "bash \"${EGO_LINT:-$HOME/.local/share/gnome-extension-reviewer/ego-lint}\" src/",
