@@ -472,11 +472,11 @@ The decoration is measured against **libadwaita's own, on one frame**, because t
 window we decorate is decorated the way libadwaita decorates one.
 
 ```bash
-pnpm run test:bench          # measure and print every profile
-pnpm run check:bench         # exit 1 unless both decorated windows match the reference
+pnpm run test:decoration          # measure and print every profile
+pnpm run check:decoration         # exit 1 unless both decorated windows match the reference
 ```
 
-Source: `tools/benchmark-decoration.py`.
+Source: `tools/check-decoration.py`.
 
 Three windows are on screen at once, all unfocused, over one maximized white backdrop, and one
 screenshot is compared:
@@ -538,7 +538,7 @@ without anyone noticing it had been failing. Wiring it into a hook or a CI job i
 
 ### GTK3 CSD Pixel-Level Verification in E2E
 
-While `benchmark-decoration.py` focuses on GTK4 shadow curves, GTK3 CSD edge transitions and
+While `check-decoration.py` focuses on GTK4 shadow curves, GTK3 CSD edge transitions and
 corner anti-aliasing are asserted directly in the automated E2E test suite (`tools/test-e2e.sh`).
 A minimal GTK3 client with declared margins (`tools/gtk3-probe.py`) is rendered over a pure white
 backdrop across four subpixel phase positions (x = 240, 241, 242, 243). A continuous radial ray

@@ -25,4 +25,4 @@ if git diff --cached --name-only | inert_paths_only; then
     exit 0
 fi
 
-run_checks pre-commit lint check:style test check:bench
+run_checks pre-commit lint check:style test check:decoration

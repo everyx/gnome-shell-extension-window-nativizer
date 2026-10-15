@@ -17,12 +17,12 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
-| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `test`, and `check:bench` |
+| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `test`, and `check:decoration` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
-| `pnpm run test:bench` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
-| `pnpm run check:bench` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
+| `pnpm run test:decoration` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
+| `pnpm run check:decoration` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
@@ -105,7 +105,7 @@ owns only the manifest's `$.version-name` (`release-please-config.json`).
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
 both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs `lint`, `check:style`, the unit tests and `check:bench` (or all via `check`). Each guards
+- **every commit** runs `lint`, `check:style`, the unit tests and `check:decoration` (or all via `check`). Each guards
   something the commit itself can break, so the commit that breaks one is the commit that fixes it,
   and every commit stays valid on its own. The rendering is one of those things: the unit tests see
   the decisions, not the pixels, so a shadow or a clip change that misses libadwaita by a level is

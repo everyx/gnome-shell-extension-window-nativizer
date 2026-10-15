@@ -1,6 +1,6 @@
 """Shared screenshot-pixel primitives for the decoration harness.
 
-One home for the pixel reading that benchmark-decoration.py and the test-e2e.sh
+One home for the pixel reading that check-decoration.py and the test-e2e.sh
 rendering checks each carried on their own: extracting the geometry JSON from a
 shell Eval reply, loading screenshots, and sampling axis-aligned runs, corner
 rays, luma and bilinear reads - plus the frame-rect-anchored G-channel profiles
@@ -18,7 +18,7 @@ import re
 from PIL import Image
 
 # How far outward from the frame edge a straight-edge cast is read, and how far
-# inward the body is read. From benchmark-decoration.py, unchanged.
+# inward the body is read. From check-decoration.py, unchanged.
 PROFILE_ROWS = 18
 INWARD_ROWS = 4
 
