@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-benchmark-decoration.py - Measures this extension's decoration against libadwaita's own, on one frame.
+check-decoration.py - Guards this extension's decoration fidelity against libadwaita's own, on one frame.
 
 The claim is "a window we decorate is decorated the way libadwaita decorates one", so the reference is
 a live libadwaita window - and it is measured in the *same screenshot* as the windows under test, with
@@ -38,10 +38,10 @@ and a backdrop one, and two windows cannot both be focused, so the only state th
 is unfocused. The focused half of the claim needs a second run and is not what this measures.
 
 Usage:
-  python3 tools/benchmark-decoration.py            # Measure and print all three profiles
-  python3 tools/benchmark-decoration.py --check    # Exit 1 unless both decorated windows match the
+  python3 tools/check-decoration.py            # Measure and print all three profiles
+  python3 tools/check-decoration.py --check    # Exit 1 unless both decorated windows match the
                                                    # reference within the tolerance below
-  python3 tools/benchmark-decoration.py --keep     # Leave the windows up afterwards, to look at
+  python3 tools/check-decoration.py --keep     # Leave the windows up afterwards, to look at
 """
 
 import sys
@@ -370,7 +370,7 @@ COMPARISONS = (
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Window Nativizer decoration benchmark")
+    parser = argparse.ArgumentParser(description="Window Nativizer decoration fidelity")
     parser.add_argument("--check", action="store_true",
                         help="Exit 1 unless both decorated windows match the live libadwaita one, "
                              "straight edges and corners, focused and unfocused")
@@ -384,7 +384,7 @@ def main():
 
         print()
         print("=" * 84)
-        print("        WINDOW NATIVIZER DECORATION BENCHMARK (alternating focus, shared backdrop)")
+        print("        WINDOW NATIVIZER DECORATION FIDELITY (alternating focus, shared backdrop)")
         print("=" * 84)
         for frame, focused in FRAMES:
             states = ", ".join(f"{s} {'focused' if s == focused else 'backdrop'}" for s in FOCUS_ORDER)

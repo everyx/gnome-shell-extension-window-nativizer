@@ -1,6 +1,6 @@
 """Shared nested-session bus access for the decoration harness.
 
-One home for the three idioms benchmark-decoration.py and benchmark-perf.py each
+One home for the three idioms check-decoration.py and benchmark-perf.py each
 carried on their own: resolving the nested session's bus address off the live
 shell, calling org.gnome.Shell.Eval, polling a predicate instead of sleeping a
 fixed delay, and reading a count out of an Eval reply. Thresholds, budgets and
