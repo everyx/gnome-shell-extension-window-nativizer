@@ -212,27 +212,24 @@ describe('settleClipBody (do not act on an unsettled target/actor pair)', () => 
         expect(past.body).toEqual({width: 402, height: 300});
     });
 
-    // A window that declares a ring: the surface container is the client's surface, so its box is
-    // wider than the frame by the declared margins. Comparing the raw reads called that a permanent
-    // disagreement (the journal showed 44 px on a 22 px-per-side window) and froze the body.
-    it('compares target and actor as bodies when the client declares a ring', () => {
-        const insets = {left: 22, top: 22, right: 22, bottom: 22};
-        const actor = {width: 800, height: 600};
-        const target = {width: 800 + 44, height: 600 + 44};
-        const settled = settleClipBody(target, actor, null, null, null, null,
-            BODY_SETTLE_TOLERANCE, insets, insets);
+    // A window that declares a ring: both reads name the same buffer box - Mutter sizes the
+    // window actor from the window's buffer rect and the clip target is only adopted when its
+    // geometry matches that same rect - so the pair reads exactly as it does on any other
+    // window. The removed reduction compared the target's body against the actor instead, which
+    // read as a permanent ring-sized disagreement: measured live on a 25 px-per-side window
+    // (buffer 850x650, frame 800x600), raw difference 0 against a reduced difference of 50,
+    // with `unsettled` true on every healthy pass and the body latched until the next resize.
+    it('reads the same buffer box from both sides on a window that declares a ring', () => {
+        const buffer = {width: 850, height: 650};
+        const frame = {width: 800, height: 600};
+        const settled = settleClipBody(buffer, buffer, buffer, buffer, frame, frame);
         expect(settled.unsettled).toBeFalse();
-        expect(settled.body).toEqual(target);
-    });
+        expect(settled.body).toEqual(buffer);
 
-    // A flat window: target and actor agree, and the 1 px safe inset trims inside the actor, so that
-    // trim must not read as a disagreement either.
-    it('does not read our own flat safe inset as a disagreement', () => {
-        const insets = {left: 1, top: 1, right: 1, bottom: 1};
-        const declared = {left: 0, top: 0, right: 0, bottom: 0};
-        const settled = settleClipBody({width: 800, height: 600}, {width: 800, height: 600},
-            null, null, null, null, BODY_SETTLE_TOLERANCE, insets, declared);
-        expect(settled.unsettled).toBeFalse();
+        // A stale half - one reader not yet written - still holds, ringed or not.
+        const held = settleClipBody(buffer, frame, buffer, buffer, frame, frame);
+        expect(held.unsettled).toBeTrue();
+        expect(held.body).toEqual(buffer);
     });
 
     it('holds the previous body when it moves between passes and the window size stands still', () => {

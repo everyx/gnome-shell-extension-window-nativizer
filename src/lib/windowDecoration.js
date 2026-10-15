@@ -308,15 +308,10 @@ export class WindowDecoration {
             previousWindowSize: this._lastWindowSize,
             previousBody: this._lastBody,
             previousAuthority: this._lastAuthority,
-            // The comparison needs both kinds of inset: the ones the clip cuts with (the declared
-            // ring, or our flat safe inset) and the declared ring alone, because only the flat case
-            // trims *inside* the actor's box.
-            insets: this.ring?.insets ?? null,
-            declared: rawInsets ?? null,
         };
         const passSettle = settleClipBody(readActorExtent(clipTarget), readActorExtent(winActor),
             this._lastBody, this._lastAuthority, windowSize, this._lastWindowSize,
-            BODY_SETTLE_TOLERANCE, this.ring?.insets ?? null, rawInsets ?? null);
+            BODY_SETTLE_TOLERANCE);
         this._lastBody = passSettle.body;
         this._lastAuthority = passSettle.authority;
         this._lastWindowSize = windowSize;
