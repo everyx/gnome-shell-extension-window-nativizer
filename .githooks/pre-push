@@ -1,21 +1,22 @@
 #!/bin/sh
 #
-# The checks that belong to what leaves the machine rather than to the commits that make it up:
-# ego-lint reviews the extension as a whole, pack builds the zip a user installs, and shexli reads that
-# zip the way extensions.gnome.org will. None of them guards a single commit, so none runs at commit
-# time.
+# The check that belongs to what leaves the machine: test:e2e. It guards what a
+# commit can break - a lifecycle, a resize band - but it drives a whole nested
+# session, and a commit hook slow enough to be bypassed is worth less than a push
+# hook nobody minds. Measured on this machine: about two minutes. Pushes are rare;
+# commits are not.
 #
-# test:e2e and check:perf are here rather than in the commit hook for a different reason: both do
-# guard what a commit can break - a lifecycle, a resize band, a per-window cost - but they drive a
-# whole nested session, and a commit hook slow enough to be bypassed is worth less than a push hook
-# nobody minds. Measured on this machine: two minutes for e2e, 104s for check:perf (shell 5s, warmup
-# 10s, three rounds 59s, band 27s). Pushes are rare; commits are not.
+# ego-lint, pack (build) and shexli (lint:zip) used to run here too, but CI runs exactly the
+# same three jobs (ego-lint, pack) on every push/PR - running them locally as well taxed every
+# push twice for the same verdict. They were removed from this hook; CI is their guard now.
 #
-# check:perf does not need a quiet machine: its budget is a ratio against the same round's disabled
-# baseline, so a busy or slower machine moves both arms and the guard reads it the same. A machine on
-# battery may still be a different machine - the old absolute budget false-failed there - but that has
-# not been measured since the budget became relative, so it is not skipped. Add the precondition to
-# run-checks if it ever flakes that way.
+# check:perf does NOT run here anymore, gated or otherwise. Its swing across sessions
+# (0.70-0.90 measured on one commit against a 0.85 budget) is wider than its guard
+# band, so as a per-push gate it flips coins; and at ~100s a leg it is exactly the
+# bloat this hook is being slimmed of. Run it by hand after pushes that touch the
+# frame paths (effects, lib reconcile, platform, extension wiring):
+# `pnpm run check:perf`. A lone stress miss inside the known swing exits 2, which
+# is the tool telling you a single re-run is worth it.
 #
 # A commit made with --no-verify therefore reaches CI with its style and behaviour unchecked; CI is
 # the backstop for that, which is cheaper than running the commit checks twice on every push.
@@ -25,7 +26,8 @@
 # four minutes for nothing before this. A new branch, a range git will not resolve, or any path the
 # inert list does not recognise runs the checks as before.
 #
-# Bypass with `git push --no-verify` when that is what you mean.
+# Bypass with `git push --no-verify` when that is what you mean. Expected cost: ~2min
+# (e2e); a slow leg names itself via per-leg timestamps.
 
 set -e
 
@@ -51,17 +53,5 @@ if [ "$inert" = 1 ]; then
     echo "pre-push: documentation and assets only, nothing to check"
     exit 0
 fi
-set -- lint:ego
-if command -v gnome-extensions >/dev/null 2>&1; then
-    set -- "$@" build
-else
-    echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
-fi
-if command -v uvx >/dev/null 2>&1 || command -v shexli >/dev/null 2>&1; then
-    set -- "$@" lint:zip
-else
-    echo "pre-push: no shexli or uvx, skipping the package analysis" >&2
-fi
-set -- "$@" test:e2e check:perf
 
-run_checks pre-push "$@"
+run_checks pre-push test:e2e
