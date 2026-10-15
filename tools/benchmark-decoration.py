@@ -19,6 +19,20 @@ paths through the code:
     bare       a GTK4 client with no decoration at all, so the extension draws corners and a shadow
                around a body that reserved nothing
 
+Each window is read on its four straight edges and on three rays off each of its four corner arcs,
+the arc centres at the libadwaita radius. The corners were added after a report that a flat window's
+corner "looked soft, with a light band along the arc" - a defect this file could not have seen,
+because a profile read from the middle of an edge never crosses a corner. The gate on them is
+`light_band()`, a check of the profile's own shape rather than a comparison against the reference's
+corner, because a 45-degree ray lands on a different sub-pixel phase at every corner of every
+window and two symmetric corners of one window can differ by tens of gray levels on the phase alone.
+
+The `bare` subject keeps its plain body colour. It was tried with a saturated one, so the G
+channel would separate body from cast unambiguously, and that breaks the rest of the file:
+`shape()` cancels the edge row against the body, and the 0.07-alpha white outline this extension
+draws there is invisible on a light body but reads 18 levels of green on a red one, which turns
+every straight-edge comparison into a 18-level failure that has nothing to do with corners.
+
 The backdrop is a maximized white window, and it also holds the focus: libadwaita has a focused shadow
 and a backdrop one, and two windows cannot both be focused, so the only state three windows can share
 is unfocused. The focused half of the claim needs a second run and is not what this measures.
@@ -34,6 +48,7 @@ import sys
 import os
 import re
 import json
+import math
 import time
 import subprocess
 import argparse
@@ -258,6 +273,70 @@ def profile_from(image, rect, side):
     return values
 
 
+def corner_from(image, rect, corner, degrees, rows=PROFILE_ROWS, inward=INWARD_ROWS, body_g=None):
+    """Outward along a ray from one corner's arc, into whatever the shadow falls on.
+
+    Ray 0 is the apex (the corner's diagonal, where a Gaussian-blurred rounded rect is weakest and
+    any band along the arc is widest); the other two sweep toward the tangent points, where an arc
+    and a straight edge meet and a seam between them would show.
+
+    The origin is the arc: `CORNER_RADIUS` out from the body's corner, along a ray whose apex points
+    away from the window. Ray 0 is the corner's diagonal; the other two sweep toward the tangent
+    points, where an arc meets a straight edge and a seam between them would show. Every subject is
+    cut to `frame_rect` (the extension clears a declared CSD ring down to it), so `frame_rect` is
+    the body's edge on all three.
+
+    Returns `unreadable` when nothing on the ray is darker than the body, which means there is no
+    cast at this arc and therefore no band to detect. `light_band()` returns 0 for it and the
+    report says so, rather than printing a clean profile that never looked at a corner.
+    """
+    px = image.load()
+    width, height = image.size
+    scale = rect["scale"]
+    radius = CORNER_RADIUS * scale
+    left = round(rect["x"] * scale)
+    top = round(rect["y"] * scale)
+    right = round((rect["x"] + rect["width"]) * scale) - 1
+    bottom = round((rect["y"] + rect["height"]) * scale) - 1
+    cx, cy = {
+        "tl": (left + radius, top + radius),
+        "tr": (right - radius, top + radius),
+        "bl": (left + radius, bottom - radius),
+        "br": (right - radius, bottom - radius),
+    }[corner]
+    angle = math.radians(CORNER_APEX[corner] + degrees)
+    ux, uy = math.cos(angle), math.sin(angle)
+
+    def darkest(d):
+        """The darkest G in a 3x3 block centred on the point `d` px out from the arc centre.
+
+        A 45-degree ray advances 0.707 px per step per axis, so the same arc read from two corners
+        rounds its samples to different sub-pixel phases and the profile can shift a whole pixel
+        between them - tens of gray levels, on a decoration that is symmetric by construction. The
+        darkest pixel in the block absorbs that, because a shadow edge is darkest at its darkest
+        point. An axis-aligned straight-edge ray never had this problem: it lands on whole pixels
+        at any position, which is why corners were the only place the phase could leak in.
+        """
+        x = int(round(cx + ux * d))
+        y = int(round(cy + uy * d))
+        samples = [px[x + dx, y + dy][1]
+                   for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                   if 0 <= x + dx < width and 0 <= y + dy < height]
+        return min(samples) if samples else 255
+
+    # d = radius is the arc itself: the point on the circle where the ray leaves the body. The
+    # frames to follow are inward (client body) and outward (the cast).
+    profile = [darkest(radius + offset) for offset in range(rows)]
+    return {
+        "profile": profile,
+        "body": [darkest(radius - offset) for offset in range(1, inward + 1)],
+        # A corner whose cast never darkens below the body has no band to detect - there is no
+        # shadow at the arc to break one out of. Saying so beats reporting a "clean" profile that
+        # was never looking at a corner.
+        "unreadable": body_g is not None and min(profile) >= body_g,
+    }
+
+
 def body_from(image, rect, side):
     """Inward from the frame edge: the client's own body, nearest row first.
 
@@ -289,6 +368,36 @@ def body_from(image, rect, side):
 
 
 SIDES = ("top", "bottom", "left", "right")
+
+# The corners, which SIDES has never covered. Every profile above is read from the *middle* of an
+# edge, which is exactly where a straight edge and its neighbours are indistinguishable - so the
+# whole arc, and the tangent points where an arc meets a straight edge, were unmeasured. A report
+# of "the corner looks soft, there is a light band along the arc" is therefore the class of defect
+# this file was structurally unable to see. The same shadow under a rounded rect really is weaker
+# along the arc than along the flat of an edge (a Gaussian sees less material behind a convex
+# curve), which is why the corner cannot simply be held to the straight-edge profile either: both
+# libadwaita and this extension run the same kernel and produce the same falloff, and comparing a
+# corner against a straight edge would report that shared geometry as a fault.
+#
+# So the corners are measured the way everything else here is - against libadwaita's own corner, in
+# the same screenshot - rather than against our own straight edge. Rays leave each arc centre, with
+# CORNER_RAYS[0] (the apex) being the worst case and the other two straddling the tangent points.
+# CORNER_RADIUS is ADWAITA_STYLE.window.radius in logical px (src/lib/adwaitaStyle.generated.js);
+# it is stated here rather than imported because that file is generated for GJS and is not a Python
+# module. All three subjects draw the same radius, so a drift in it moves both sides of every
+# comparison together and cannot masquerade as a difference.
+CORNERS = ("tl", "tr", "bl", "br")
+# Screen coordinates, y downward, so the angle is measured the way atan2(dy, dx) would give it.
+# Each apex points *away* from the window's interior: the top-left arc is entered on its upper-left
+# diagonal, not its lower-right. Getting this backwards is not a subtle error - every ray runs
+# inward from the arc centre and reads flat body for its whole length, so the profile degenerates
+# to a constant and the gate passes without ever having looked at a corner.
+CORNER_APEX = {"tl": 225.0, "tr": 315.0, "bl": 135.0, "br": 45.0}
+CORNER_RAYS = (0.0, 22.5, -22.5)
+CORNER_RADIUS = 15
+# The one ray printed in the report: the apex of the top-left arc, which is the worst case and the
+# place a "light band along the corner" would be widest.
+CORNER_HEADLINE = "tl@+0.0"
 # The frames, and which subject each one focuses: one frame cannot hold two focused windows, so the
 # focused half of the claim is measured by alternating which window has the focus. `D` repeats `B`, so
 # the same window can be read focused twice and the difference between them is what says whether a
@@ -352,14 +461,22 @@ def measure(env):
         path = f"{SHOT_PATH}.{frame}"
         shoot(path, env)
         image = Image.open(path).convert("RGB")
-        shots[frame] = {
-            subject: {
-                side: {"profile": profile_from(image, rects[subject], side),
-                       "body": body_from(image, rects[subject], side)}
-                for side in SIDES
-            }
-            for subject in FOCUS_ORDER
-        }
+        shots[frame] = {}
+        for subject in FOCUS_ORDER:
+            sides = {side: {"profile": profile_from(image, rects[subject], side),
+                            "body": body_from(image, rects[subject], side)}
+                     for side in SIDES}
+            # The corner rays are told where the body begins by looking for its own colour, taken
+            # from the straight-edge inward rows - those are already anchored and verified, and a
+            # corner's arc is not at frame_rect for a client that kept its own decoration.
+            body_g = sides["top"]["body"][0]
+            # Keyed by (corner, ray) rather than corner alone: the three rays of one corner are
+            # three separate readings, and a dict keyed only by corner would keep the last.
+            shots[frame][subject] = dict(sides, **{
+                f"{corner}@{ray:+.1f}": corner_from(image, rects[subject], corner, ray, body_g=body_g)
+                for corner in CORNERS
+                for ray in CORNER_RAYS
+            })
     return shots
 
 
@@ -392,6 +509,53 @@ def worst_delta(shots, frame, subject, reference_frame, reference):
                for side in SIDES)
 
 
+def corner_keys():
+    return [f"{corner}@{ray:+.1f}" for corner in CORNERS for ray in CORNER_RAYS]
+
+
+# How far a corner profile may break the monotone shape of a shadow edge before it is called a
+# light band. Two gray levels is one 8-bit quantisation step of the bake: this extension bakes the
+# cast into a texture and libadwaita paints it straight into the window's buffer, so one extra step
+# of rounding is the whole difference between the two, and it is the same reason
+# ALTERNATING_FRAME_TOLERANCE is 1 on the straight edges. The reported defect was a visible pale
+# ring, which measures in the tens, so nothing a person can see hides inside this.
+BAND_TOLERANCE = 2
+
+
+def light_band(reading):
+    """How far the corner profile breaks the shape a shadow edge must have, in gray levels.
+
+    A cast that meets the body monotonically falls from the body's colour to the shadow's darkest
+    point and then climbs back out to the backdrop - one turning point, at the darkest. A light band
+    between the body and the dark surround ("the corner looks soft, there is a pale ring along the
+    arc") breaks exactly that, by climbing and then falling again.
+
+    Offset 0 is the arc pixel, which is the body's own colour, so it is the first entry of the
+    descent and not a reading of the cast at all.
+
+    This is deliberately a check of our own profile's SHAPE, not a comparison with libadwaita's
+    corner. A straight edge can be compared across windows because its ray is axis-aligned and lands
+    on whole pixels at any position; a 45-degree ray rounds to a different sub-pixel phase at every
+    corner of every window, so two symmetric corners of one window can differ by tens of gray
+    levels on the phase alone. Measuring the phase would report it as decoration, and widening a
+    tolerance to absorb it would accept a real band of the same size. The shape has no phase in it:
+    a band is a band wherever it falls.
+    """
+    profile = reading["profile"]
+    if reading.get("unreadable"):
+        return 0
+    darkest = min(range(len(profile)), key=lambda i: profile[i])
+    # Sign matters and is easy to get backwards, which is what the first version did: it read the
+    # healthy climb out of the shadow as a fall and fired on every healthy corner in the file,
+    # libadwaita's included. Before the darkest point the profile must not get lighter (a dip is a
+    # band); after it, it must not get darker (a second dip is a band further out).
+    rise_before = max((profile[i + 1] - profile[i] for i in range(darkest)), default=0)
+    fall_after = max((profile[i] - profile[i + 1] for i in range(darkest, len(profile) - 1)), default=0)
+    # max(0, …): a monotone climb out of the shadow gives a negative fall_after, and a band is a
+    # departure above the shape, never below it.
+    return max(0, rise_before, fall_after)
+
+
 # state, subject, the frame it is read from, the reference, the frame the reference is read from, and
 # the standard that comparison is held to.
 COMPARISONS = (
@@ -406,7 +570,7 @@ def main():
     parser = argparse.ArgumentParser(description="Window Nativizer decoration benchmark")
     parser.add_argument("--check", action="store_true",
                         help="Exit 1 unless both decorated windows match the live libadwaita one, "
-                             "focused and unfocused")
+                             "straight edges and corners, focused and unfocused")
     parser.add_argument("--keep", action="store_true", help="Leave the windows up, to look at")
     args = parser.parse_args()
 
@@ -426,6 +590,7 @@ def main():
 
         for state, subject, frame, reference, reference_frame, tolerance in COMPARISONS:
             worst = worst_delta(shots, frame, subject, reference_frame, reference)
+            worst = worst_delta(shots, frame, subject, reference_frame, reference)
             print(f"{state:<28} {subject:<9} vs native: {worst} gray level(s), standard {tolerance}")
             # Where the difference sits, so a number that is not zero can be explained rather than
             # tolerated: the top side of each reading, with the reference's, and the body rows on
@@ -437,6 +602,17 @@ def main():
             print(f"  top {subject:<9} {sub_top['profile']}")
             print(f"  top delta     {[a - b for a, b in zip(shape(sub_top), shape(ref_top))]}")
             print(f"  top body      {sub_top['body']}  (reference {ref_top['body']})")
+            # The corner the report was about: the apex ray of the top-left arc, with the reference's
+            # beside it. These are printed for a human to read, not compared - see light_band()
+            # for why a corner cannot be held to the reference across windows. Both are lighter
+            # than the straight edge's first cast pixel (a Gaussian sees less shadow material behind
+            # a convex curve), and libadwaita's is just as light, which is the whole finding.
+            corner = shots[frame][subject][CORNER_HEADLINE]
+            ref_corner = shots[reference_frame][reference][CORNER_HEADLINE]
+            note = "no cast below the body - nothing to gate" if corner.get("unreadable") else \
+                f"band {light_band(corner)} (standard {BAND_TOLERANCE})"
+            print(f"  corner tl apex  reference {ref_corner['profile'][:8]}")
+            print(f"  corner tl apex  {subject:<9} {corner['profile'][:8]}  {note}")
         print("-" * 84)
 
         # Same window, same state, two frames: if the machine moved between them, this is where it
@@ -457,10 +633,21 @@ def main():
         for frame, focused in FRAMES:
             for subject in FOCUS_ORDER:
                 sides = shots[frame][subject]
-                if not all(shape(sides[side]) == shape(sides["top"])
-                           for side in ("bottom", "left", "right")):
-                    failures.append(f"the {subject} window's four sides diverge in frame {frame} "
-                                    f"(focused on {focused})")
+                for side in ("bottom", "left", "right"):
+                    if not shape(sides[side]) == shape(sides["top"]):
+                        failures.append(f"the {subject} window's four sides diverge in frame {frame} "
+                                        f"(focused on {focused})")
+                # No light band on any corner. See light_band(): this is a shape check, not a
+                # comparison against the reference's corner, because a 45-degree ray lands on a
+                # different sub-pixel phase at every corner of every window and would report the
+                # phase as decoration.
+                for key in corner_keys():
+                    band = light_band(sides[key])
+                    if band > BAND_TOLERANCE:
+                        failures.append(f"the {subject} window's {key} corner carries a light band: "
+                                        f"{sides[key]['profile'][:8]} breaks the shadow shape by "
+                                        f"{band} gray level(s) (standard {BAND_TOLERANCE}) in frame "
+                                        f"{frame} (focused on {focused})")
                 # A clean edge steps to a flat body; a cast leaking past the clip boundary keeps
                 # the rows next to the edge dark and the spread is what catches it.
                 for side in SIDES:
@@ -489,7 +676,8 @@ def main():
                 for failure in failures:
                     print(f"[FAIL] {failure}")
                 sys.exit(1)
-            print("\n[OK] Both decorated windows wear libadwaita's decoration, focused and unfocused.")
+            print("\n[OK] Both decorated windows wear libadwaita's decoration - straight edges and "
+                  "corners alike, focused and unfocused.")
     finally:
         if not args.keep:
             subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
