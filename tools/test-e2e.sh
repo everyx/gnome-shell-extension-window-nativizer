@@ -1370,7 +1370,9 @@ done
 # outside, so this window keeps its band. Where the strips sit relative to the frame is a
 # pure-function fact the unit specs own; the e2e asserts the band is on every edge.
 echo ">> [test-e2e] Verifying the band on a window that declares its own margins..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 30000 >/dev/null 2>&1 &
+# The hold is a self-destruct timer: it has to outlast the lifecycle check, the animation
+# sampler and the corner check below, which together add a few seconds of live animation.
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 40000 >/dev/null 2>&1 &
 DECLARED_PID=$!
 for i in $(seq 1 60); do
     found="$(shell_eval 'global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
@@ -1467,6 +1469,82 @@ if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "
     exit 1
 fi
 echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 with a shadow clone, all restored on the desktop."
+
+# (f1b) The lifecycle check above samples only once the overview has settled. A preview that is
+# mapped for even one painted frame without the container at <=254 (or without its shadow clone)
+# is a square-cornered or unshadowed frame inside the transition - the class of defect a settled
+# check cannot see. There is no paint hook to hang this on in the headless session (Clutter's
+# after-paint is not emitted there), so the state is sampled on an 8ms timer - half a compositor
+# frame - through show -> self-resize -> workspace switch -> hide, the three card-rebuild
+# triggers. Every mutation on this path runs in one JS turn, so a violating sample is a
+# violating frame. The mask's *content* is what the pixel check below measures; this pins its
+# *ordering*.
+echo ">> [test-e2e] Sampling the preview mask state through the overview animation..."
+OVERVIEW_ANIM="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    const GLib = imports.gi.GLib;
+    const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => { r(); return GLib.SOURCE_REMOVE; }));
+    const win = global.get_window_actors().map(a => a.meta_window)
+        .find(w => w && w.get_title() === "Window Nativizer E2E Declared");
+    if (!win) return JSON.stringify({error: "window not found"});
+    const wm = global.workspace_manager;
+    if (wm.get_n_workspaces() < 2)
+        wm.append_new_workspace(false, global.get_current_time());
+
+    const samples = [];
+    let recording = true;
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8, () => {
+        if (!recording) return GLib.SOURCE_REMOVE;
+        const preview = win._delegate ?? null;
+        const container = preview ? preview.window_container : null;
+        samples.push({
+            mapped: Boolean(preview && preview.mapped),
+            opacity: container ? container.get_opacity() : null,
+            shadow: preview ? preview.get_children().some(c => c.name === "WindowNativizerOverviewShadow") : false,
+        });
+        return GLib.SOURCE_CONTINUE;
+    });
+
+    Main.overview.show();
+    await sleep(500);
+    const r = win.get_frame_rect();
+    moveResizeFrame(win, r.x, r.y, r.width + 60, r.height + 40);
+    await sleep(600);
+    win.change_workspace(wm.get_workspace_by_index(1));
+    await sleep(600);
+    Main.overview.hide();
+    await sleep(500);
+    recording = false;
+    GLib.source_remove(id);
+
+    const mapped = samples.filter(s => s.mapped);
+    const bad = mapped.filter(s => s.opacity !== 254 || !s.shadow);
+    win.change_workspace(wm.get_workspace_by_index(0));
+
+    // The desktop read the corner check takes next must see the window settled: wait for the
+    // frame rect to hold still before handing the window back.
+    let prev = null, stable = 0;
+    for (let i = 0; i < 50 && stable < 2; i++) {
+        await sleep(40);
+        const cur = JSON.stringify(win.get_frame_rect());
+        stable = cur === prev ? stable + 1 : 0;
+        prev = cur;
+    }
+
+    return JSON.stringify({
+        total: samples.length, mapped: mapped.length, bad: bad.length,
+        firstBad: bad[0] ?? null,
+        ok: bad.length === 0 && mapped.length >= 100,
+    });
+})()
+')"
+echo ">> Overview animation samples: $OVERVIEW_ANIM"
+if ! check_fields "$OVERVIEW_ANIM" '{"ok": true}'; then
+    echo "!! A preview was unmasked (or unshadowed) while mapped during the overview animation!"
+    exit 1
+fi
+echo ">> Overview animation verified: every mapped sample carried the mask and the shadow clone."
 
 # (f2) The suite passed with the square-in-overview regression because it never looked at a
 # pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. The
