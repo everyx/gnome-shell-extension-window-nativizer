@@ -223,8 +223,11 @@ fi
 echo ">> Shell session confirmed settled onto desktop."
 
 # 3. Launch GTK4 test client in background
+# Its stdout is the step log the Dynamic Resize Stress gate greps: every timeline step
+# announcing itself is what distinguishes "ran" from "mapped and exited cleanly".
 echo ">> [test-e2e] Launching GTK4 client (resize, maximize, close sequence)..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated &
+rm -f "$STATE_DIR/e2e-client.log"
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated > "$STATE_DIR/e2e-client.log" 2>&1 &
 CLIENT_PID=$!
 
 # Wait for client window actor to be mapped
@@ -492,9 +495,42 @@ for i in 1 2 3 4 5; do
     " >/dev/null
 done
 
+# The moves above are the setup, not the assertion: positions must track synchronously,
+# so read back the frame origin the final move targeted (80+5*40, 60+5*30) and fail on
+# drift. move_frame(true, …) is a user operation placed directly, with no animation to
+# wait out - and an empty stage fails here instead of silently passing the loop above.
+MOVE_STATE="$(shell_eval '
+(() => {
+    const actors = global.get_window_actors();
+    if (!actors.length) return JSON.stringify({error: "no actor to verify the moves on"});
+    const f = actors[0].meta_window.get_frame_rect();
+    return JSON.stringify({x: f.x, y: f.y});
+})()
+')"
+if ! check_fields "$MOVE_STATE" '{"x": 280, "y": 210}'; then
+    echo "!! Compositor moves did not track synchronously (expected origin 280,210): $MOVE_STATE"
+    exit 1
+fi
+echo ">> Compositor moves tracked synchronously to (280, 210)."
+
 # Wait for client process to finish remaining steps (resize, maximize, unmaximize, close)
 wait $CLIENT_PID
-echo ">> Client exited normally."
+CLIENT_STATUS=$?
+if [[ "$CLIENT_STATUS" -ne 0 ]]; then
+    echo "!! The resize-timeline client exited with status $CLIENT_STATUS (timeline log tail):"
+    tail -8 "$STATE_DIR/e2e-client.log" 2>/dev/null || true
+    exit 1
+fi
+# The exit status only says the client survived: the step log says it ran. All eight
+# timeline steps (five resizes, maximize, unmaximize, close) must have fired.
+CLIENT_STEPS="$(grep -c '^STEP:' "$STATE_DIR/e2e-client.log" 2>/dev/null || true)"
+CLIENT_STEPS="${CLIENT_STEPS:-0}"
+if [[ "$CLIENT_STEPS" -ne 8 ]]; then
+    echo "!! The resize timeline fired $CLIENT_STEPS of 8 steps:"
+    cat "$STATE_DIR/e2e-client.log" 2>/dev/null || true
+    exit 1
+fi
+echo ">> Client ran its full 8-step resize timeline and exited normally."
 
 # 5. Verify scene graph cleanup (0 leaked shadow actors): poll for the empty stage
 # instead of sleeping a fixed 0.2s - the gate below still decides pass or fail.

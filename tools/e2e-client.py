@@ -69,6 +69,10 @@ def on_activate(app):
     for delay, action, desc in steps:
         def make_cb(act, d):
             def cb():
+                # The harness asserts every step fired (see the step log it greps),
+                # so report each one: a client that maps and instantly exits cleanly
+                # must not read as a client that ran its timeline.
+                print("STEP:", d, flush=True)
                 label.set_text(d)
                 act()
                 return GLib.SOURCE_REMOVE
