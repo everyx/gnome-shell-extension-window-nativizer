@@ -496,8 +496,23 @@ done
 wait $CLIENT_PID
 echo ">> Client exited normally."
 
-# 5. Verify scene graph cleanup (0 leaked shadow actors)
-sleep 0.2
+# 5. Verify scene graph cleanup (0 leaked shadow actors): poll for the empty stage
+# instead of sleeping a fixed 0.2s - the gate below still decides pass or fail.
+for _ in $(seq 1 20); do
+    CLEANUP_POLL="$(shell_eval '
+(() => {
+    const windowGroupChildren = global.window_group.get_children().map(c => c.toString());
+    return JSON.stringify({
+        leakedShadowCount: windowGroupChildren.filter(c => c.includes("WindowNativizerShadowActor")).length,
+        leakedBandCount: windowGroupChildren.filter(c => c.includes("WindowNativizerResizeBand")).length
+    });
+})()
+')"
+    if check_fields "$CLEANUP_POLL" '{"leakedShadowCount": 0, "leakedBandCount": 0}'; then
+        break
+    fi
+    sleep 0.1
+done
 echo ">> [test-e2e] Verifying complete cleanup after window close..."
 CLEANUP_CHECK="$(shell_eval '
 (() => {
@@ -755,21 +770,21 @@ for _ in $(seq 1 20); do
     rm -f /tmp/window-nativizer-ring.png
     gdbus call --address "$RING_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
         --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-ring.png >/dev/null 2>&1
-    if python3 - "$RING_PIXEL" <<'PYEOF'
-import json, re, sys
-from PIL import Image
+    if PYTHONPATH="$ROOT/tools" python3 - "$RING_PIXEL" <<'PYEOF'
+import sys
+from shot_profile import parse_reply, load_rgb, alpha_over
 
 reply = sys.argv[1]
-match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
-if not match:
+try:
+    g = parse_reply(reply)
+except ValueError:
     sys.exit(f"no geometry in reply: {reply!r}")
-g = json.loads(match.group(0))
-im = Image.open('/tmp/window-nativizer-ring.png').convert('RGB')
+im = load_rgb('/tmp/window-nativizer-ring.png')
 x, y = g['left'], g['y']
 s = g.get('scale', 1.0)
 backdrop = im.getpixel((x - 8, y))
 ring = im.getpixel((x - 1, y))
-expected = [[round(a * 0.15 + b * 0.85) for a, b in ((theme, backdrop[i]) for i in range(3))]
+expected = [[alpha_over(theme, backdrop[i], 0.15) for i in range(3)]
             for theme in (0, 255)]
 close = any(all(abs(ring[i] - e[i]) <= 6 for i in range(3)) for e in expected)
 if not close and abs(s - round(s)) > 0.001:
@@ -861,21 +876,21 @@ for _ in $(seq 1 20); do
         });
     })()
     ')"
-    if python3 - "$SCALED_RING_STATE" <<'PYEOF'
-import json, re, sys
-from PIL import Image
+    if PYTHONPATH="$ROOT/tools" python3 - "$SCALED_RING_STATE" <<'PYEOF'
+import sys
+from shot_profile import parse_reply, load_rgb
 
 reply = sys.argv[1]
-match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
-if not match:
+try:
+    g = parse_reply(reply)
+except ValueError:
     sys.exit(f"no geometry in reply: {reply!r}")
-g = json.loads(match.group(0))
 if "error" in g:
     sys.exit(f"scaled-ring geometry error: {g}")
 scale = g['scaleX']
 if abs(scale - 1.3333) > 1e-3:
     sys.exit(f"window actor scale did not survive the screenshot frame: scale_x={scale}")
-im = Image.open('/tmp/window-nativizer-scaled-ring.png').convert('RGB')
+im = load_rgb('/tmp/window-nativizer-scaled-ring.png')
 x, y = g['left'], g['y']
 # A clean reference well beyond SHADOW_PAD's reach at this display scale, so a cutout displaced by
 # the pad cannot move the reference with it.
@@ -1168,36 +1183,38 @@ for test_x in 240 241 242 243; do
         });
     })()
     ')"
-    rm -f /tmp/window-nativizer-phase.png /tmp/window-nativizer-red.png
+    # One frame serves both reads: the GTK3 subject (x 240..243) and the red subject
+    # (x 900..903) sit side by side, so a single screenshot holds both windows. Two
+    # back-to-back shots could even straddle a repaint and disagree with each other;
+    # one frame cannot.
+    rm -f /tmp/window-nativizer-phase.png
     gdbus call --address "$EDGE_PHASE_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
         --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-phase.png >/dev/null 2>&1
-    gdbus call --address "$EDGE_PHASE_BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell/Screenshot \
-        --method org.gnome.Shell.Screenshot.Screenshot false false /tmp/window-nativizer-red.png >/dev/null 2>&1
-    if ! python3 - "$PHASE_POS" "$test_x" "$RED_POS" <<'PYEOF'
-import json, math, re, sys
-from PIL import Image
+    if ! PYTHONPATH="$ROOT/tools" python3 - "$PHASE_POS" "$test_x" "$RED_POS" <<'PYEOF'
+import math, sys
+from shot_profile import parse_reply, load_rgb, run_samples
 
-match = re.search(r'\{.*\}', sys.argv[1].replace('\\', ''), re.S)
-if not match:
+try:
+    pos = parse_reply(sys.argv[1])
+except ValueError:
     sys.exit("invalid position")
-pos = json.loads(match.group(0))
 if "error" in pos:
     sys.exit(f"target error: {pos}")
 test_x = sys.argv[2]
-red_match = re.search(r'\{.*\}', sys.argv[3].replace('\\', ''), re.S)
-if not red_match:
+try:
+    red = parse_reply(sys.argv[3])
+except ValueError:
     sys.exit("invalid red position")
-red = json.loads(red_match.group(0))
 if "error" in red:
     sys.exit(f"red target error: {red}")
-im = Image.open('/tmp/window-nativizer-phase.png').convert('RGB')
-rim = Image.open('/tmp/window-nativizer-red.png').convert('RGB')
+im = load_rgb('/tmp/window-nativizer-phase.png')
+rim = load_rgb('/tmp/window-nativizer-phase.png')  # same frame as im: both windows share the shot
 s = pos.get('scale', 1.0)
 cx, cy = pos['left'], pos['top']
 
 # 1. Straight edge transition check:
 px, py = pos['left'], pos['y']
-straight_row = [im.getpixel((x, py))[0] for x in range(px - 5, px + 5)]
+straight_row = run_samples(im, px - 5, py, px + 5, 0)
 straight_min = min(straight_row)
 
 # In pure white backdrop (>240), Adwaita shadow layers have a theoretical maximum saturation
@@ -1212,7 +1229,7 @@ if straight_min < 185:
 # The 1.25x hairline is a neutral (245) pixel there: its green rebounds toward white before the
 # body, which is the signature the downward-only check above cannot see.
 rleft, rmidy = red['left'], red['midy']
-red_col = [rim.getpixel((x, rmidy))[1] for x in range(rleft - 8, rleft + 8)]
+red_col = run_samples(rim, rleft - 8, rmidy, rleft + 8, 1)
 body_at = next((i for i, g in enumerate(red_col) if g < 64), None)
 if body_at is None:
     sys.exit(f"red straight edge: body not reached in profile {red_col}")
@@ -1551,22 +1568,22 @@ gdbus call --address "$OVERVIEW_BUS" --dest org.gnome.Shell --object-path /org/g
     --method org.gnome.Shell.Screenshot.Screenshot false false "$OVERVIEW_SHOT" >/dev/null 2>&1
 shell_eval '(async () => { const M = await import("resource:///org/gnome/shell/ui/main.js"); M.overview.hide(); })()' >/dev/null 2>&1 || true
 
-if ! python3 - "$OVERVIEW_DESK_GEOM" "$OVERVIEW_BOX" "$OVERVIEW_DESKTOP_SHOT" "$OVERVIEW_SHOT" <<'PYEOF'
-import json, re, sys
-from PIL import Image
+if ! PYTHONPATH="$ROOT/tools" python3 - "$OVERVIEW_DESK_GEOM" "$OVERVIEW_BOX" "$OVERVIEW_DESKTOP_SHOT" "$OVERVIEW_SHOT" <<'PYEOF'
+import sys
+from shot_profile import parse_reply, load_rgb, luma, bilinear
 
 
 def load(reply):
-    match = re.search(r'\{.*\}', reply.replace('\\', ''), re.S)
-    if not match:
+    try:
+        return parse_reply(reply)
+    except ValueError:
         sys.exit(f"no JSON in {reply!r}")
-    return json.loads(match.group(0))
 
 
 desk = load(sys.argv[1])
 box = load(sys.argv[2])
-dimg = Image.open(sys.argv[3]).convert('RGB')
-oimg = Image.open(sys.argv[4]).convert('RGB')
+dimg = load_rgb(sys.argv[3])
+oimg = load_rgb(sys.argv[4])
 
 # The standard is the preview's resample width, not a number picked to pass. The preview is
 # downscaled (0.95x here, ~0.25x for a large window) and mipmapped, so the 50% body/backdrop
@@ -1577,20 +1594,6 @@ STANDARD_PX = 1.0
 # Kept from the check this replaces: a square preview shows body at the corner, so the corner must
 # be clearly darker than the body centre.
 CORNER_DARKER = 20
-
-
-def luma(p):
-    return (p[0] + p[1] + p[2]) / 3.0
-
-
-def bilinear(im, x, y):
-    x0, y0 = int(x), int(y)
-    fx, fy = x - x0, y - y0
-    x1, y1 = min(x0 + 1, im.width - 1), min(y0 + 1, im.height - 1)
-    return (luma(im.getpixel((x0, y0))) * (1 - fx) * (1 - fy)
-            + luma(im.getpixel((x1, y0))) * fx * (1 - fy)
-            + luma(im.getpixel((x0, y1))) * (1 - fx) * fy
-            + luma(im.getpixel((x1, y1))) * fx * fy)
 
 
 def corner_boundary(im, x0, y0, eff):
@@ -1823,7 +1826,13 @@ for i in $(seq 1 40); do
 done
 if [[ "$count" -ne 0 ]]; then
     shell_eval 'global.get_window_actors().forEach(a => a.meta_window?.delete(global.get_current_time()))' >/dev/null || true
-    sleep 0.5
+    # Let the compositor process the deletes (was a fixed 0.5s); fall through either
+    # way, as before - the popup section re-reads the stage itself.
+    for _ in $(seq 1 50); do
+        count="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' || echo "0")"
+        [ "$count" = "0" ] && break
+        sleep 0.1
+    done
 fi
 
 # (i) Test transient popup menu gate & unmanaged focus protection (Issue #13):
@@ -2500,7 +2509,7 @@ DBUS_SESSION_BUS_ADDRESS="$PREF_BUS" timeout 20 gnome-extensions prefs "$UUID" >
 PREF_STATE='{}'
 PREF_OPEN=0
 PREF_CLOSED=0
-for _ in $(seq 1 20); do
+for _ in $(seq 1 160); do
     PREF_STATE="$(shell_eval '
 (async () => {
     const wins = global.get_window_actors().map(a => a.meta_window)
@@ -2520,7 +2529,8 @@ for _ in $(seq 1 20); do
             break
         fi
     fi
-    sleep 2
+    # 0.25s granularity at 160 iterations keeps the 40s cap the 2s x 20 loop had.
+    sleep 0.25
 done
 if [[ "$PREF_OPEN" != 1 ]]; then
     echo "!! The preferences window never appeared: $PREF_STATE"

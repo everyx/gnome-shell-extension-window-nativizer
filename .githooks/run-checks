@@ -36,21 +36,57 @@ run_checks() {
     hook=$1
     shift
     log=$(mktemp)
-    trap 'rm -f "$log"' EXIT INT TERM
+    # Original stderr: when TERM lands mid-leg the foreground command is
+    # `pnpm ... >"$log" 2>&1`, so a plain >&2 inside the trap would write into
+    # $log (then deleted). Fd 3 keeps the pusher-facing stderr.
+    exec 3>&2
+    current_check=""
+    check_start=0
+    check_child=""
+    on_term() {
+        # Kill the leg so a pusher timeout does not leave it (and its nested
+        # session) running behind the hook; its own EXIT trap still reaps state.
+        if [ -n "$check_child" ]; then
+            kill "$check_child" 2>/dev/null
+        fi
+        if [ -n "$current_check" ]; then
+            now=$(date +%s)
+            elapsed=$((now - check_start))
+            printf '\n%s: interrupted during %s after %ss (pusher timeout or Ctrl-C). The %s did NOT land; retrying is safe.\n' \
+                "$hook" "$current_check" "$elapsed" "${hook#pre-}" >&3
+        else
+            printf '\n%s: interrupted before any check finished. The %s did NOT land; retrying is safe.\n' "$hook" "${hook#pre-}" >&3
+        fi
+        rm -f "$log"
+        exit 130
+    }
+    trap on_term INT TERM
+    trap 'rm -f "$log"' EXIT
     for check in "$@"; do
-        printf '%-16s' "$check"
         if ! check_precondition "$check"; then
-            printf 'skipped (this machine cannot run it)\n'
+            printf '[%s] %-12s skipped (this machine cannot run it)\n' "$(date +%H:%M:%S)" "$check"
             continue
         fi
-        if pnpm run --silent "$check" >"$log" 2>&1; then
-            printf 'ok\n'
+        current_check="$check"
+        check_start=$(date +%s)
+        printf '[%s] %-12s started ...\n' "$(date +%H:%M:%S)" "$check"
+        pnpm run --silent "$check" >"$log" 2>&1 &
+        check_child=$!
+        if wait "$check_child"; then
+            check_child=""
+            now=$(date +%s)
+            printf '[%s] %-12s ok (%ss)\n' "$(date +%H:%M:%S)" "$check" "$((now - check_start))"
         else
-            printf 'FAILED\n\n'
+            status=$?
+            check_child=""
+            now=$(date +%s)
+            printf '[%s] %-12s FAILED after %ss\n\n' "$(date +%H:%M:%S)" "$check" "$((now - check_start))"
             cat "$log"
             printf '\n%s: %s failed. Fix it, or %s with --no-verify.\n' \
                 "$hook" "$check" "${hook#pre-}"
-            exit 1
+            exit "$status"
         fi
+        current_check=""
     done
+    exec 3>&-
 }
