@@ -164,7 +164,7 @@ export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight
  */
 export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     previousAuthority = null, windowSize = null, previousWindowSize = null,
-    tolerance = BODY_SETTLE_TOLERANCE, insets = null, declared = null) {
+    tolerance = BODY_SETTLE_TOLERANCE) {
     const windowResized = windowResizedSince(windowSize, previousWindowSize);
     const authority = resolveBodyAuthority(targetSize, windowActorSize, windowResized);
     if (!authority)
@@ -176,22 +176,20 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     // Strictly greater: a difference of exactly the tolerance is agreement, which is also what the
     // warning's own comparison says (`|delta| <= tolerance` is silent there). The two must read the
     // same boundary or a pair differing by exactly it would warn while still being acted on.
-    // Like-for-like, not raw-reads-to-raw-reads. The target is the Wayland surface container, whose
-    // box carries the client's declared decoration margins (the journal showed a 22 px-per-side
-    // window reading 44 px wider than its actor, and another with the origin shifted by (69,65) ->
-    // (87,67)); the window actor's box is the frame without them. So both sides are reduced to the
-    // body each implies before comparing: the target by the insets the clip cuts with, the actor by
-    // only the part of those insets that is *our* safe trim (the declared ring is already outside
-    // the actor, the flat safe inset is inside it). Comparing the raw reads reported a permanent
-    // disagreement on every window that declares a ring - which is a false alarm, and in the
-    // steady state it froze the body.
-    const padWidth = insets ? (insets.left ?? 0) + (insets.right ?? 0) : 0;
-    const padHeight = insets ? (insets.top ?? 0) + (insets.bottom ?? 0) : 0;
-    const declaredWidth = declared ? (declared.left ?? 0) + (declared.right ?? 0) : 0;
-    const declaredHeight = declared ? (declared.top ?? 0) + (declared.bottom ?? 0) : 0;
+    //
+    // Raw reads, because both sides name the same rectangle: Mutter sizes the window actor from
+    // the window's buffer rect (`meta_window_actor_sync_actor_geometry` takes its position and
+    // size from `meta_window_get_buffer_rect`), and the clip target is only adopted when its
+    // geometry matches that same buffer rect, so a declared ring widens both reads or neither.
+    // Reducing each side to "the body it implies" (the target by the clip's insets, the actor by
+    // the declared ring) compared the target's body against the actor's buffer instead: measured
+    // live on a 25 px-per-side window (buffer 850x650, frame 800x600, both readers 850x650), the
+    // raw difference is 0 while the reduced one is 50 - so every healthy pass of every window
+    // that declares a ring read as a disagreement, `unsettled` stayed true, and the one-pass
+    // hold could only ever be released by a window resize, not by the pair agreeing again.
     const pairDisagrees =
-        Math.abs(targetSize.width - padWidth - (windowActorSize.width - (padWidth - declaredWidth))) > tolerance ||
-        Math.abs(targetSize.height - padHeight - (windowActorSize.height - (padHeight - declaredHeight))) > tolerance;
+        Math.abs(targetSize.width - windowActorSize.width) > tolerance ||
+        Math.abs(targetSize.height - windowActorSize.height) > tolerance;
     // Between passes the body's normal residue (`buffer / scale` on a fractional monitor) is below
     // the tolerance and a whole-pixel move is the defect, so this boundary is inclusive.
     const bodyMoved = isPaintableFrame(previousAuthority) &&
@@ -251,8 +249,7 @@ export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan =
     return settleClipBody(targetSize, windowActorSize,
         plan?.previousBody ?? null, plan?.previousAuthority ?? null,
         windowSize, plan?.previousWindowSize ?? null,
-        plan?.tolerance ?? BODY_SETTLE_TOLERANCE,
-        plan?.insets ?? null, plan?.declared ?? null);
+        plan?.tolerance ?? BODY_SETTLE_TOLERANCE);
 }
 
 /**
