@@ -143,6 +143,10 @@ export class WindowDecoration {
         this._lastBody = null;
         this._lastAuthority = null;
         this._lastWindowSize = null;
+        // The ring hold's witness. The declared ring is `buffer - frame`, so only a buffer that
+        // moved can make a new ring real; see the ring plan below for why the window's own size
+        // cannot answer that.
+        this._lastBuffer = null;
         // The plan handed to the clip and the shadow for the paints after this pass.
         this._bodyPlan = null;
         // The manager's "force corners" setting for this pass; handed to the overview, which
@@ -319,18 +323,39 @@ export class WindowDecoration {
 
         // One plan per pass: the insets the body uses, and the two meanings the clip shader gives
         // the ring. Every consumer below reads this instead of recombining the detector's answer.
-        // The client's declared ring is the compositor's state, not ours. During a focus hand-off
-        // the buffer and the frame rects are updated a step apart, so the derived ring can read 4px
-        // for one pass and 1px again after - the journal showed exactly that, a 6px body swing, and
-        // it looks like the window edge stepping in and back. Only a change in the window's own size
-        // can make a different ring real, so with the size unchanged the previous ring stands (the
-        // "subject itself unchanged" case the state-ownership rule allows).
-        const ringWindowSize = readWindowExtent(inputs);
-        const ringSizeChanged = !ringWindowSize || !this._lastWindowSize ||
-            Math.abs(ringWindowSize.width - this._lastWindowSize.width) >= 1 ||
-            Math.abs(ringWindowSize.height - this._lastWindowSize.height) >= 1;
+        //
+        // The ring hold exists for a ring that moves while nothing else does: the buffer and the
+        // frame rects are read in one pass, and if they are updated a step apart the ring is
+        // momentarily a mixture of both, which shows as the window edge stepping in and back. So a
+        // ring that moved with the buffer standing still is held - the "subject itself unchanged"
+        // case the state-ownership rule allows.
+        //
+        // The witness is the BUFFER, not the window's own size, and it has to be: the ring is
+        // `buffer - frame`, so the buffer is the only quantity the ring's own pixels come from.
+        // `readWindowExtent` prefers the frame rect, and across a rebuild the frame can stand still
+        // while the ring legitimately changes - measured on an unmaximize, frame stayed at
+        // 400x300 through nine ring changes (20 -> 25) while the buffer grew 440 -> 450. Asking
+        // the frame whether the ring may move answers "no" for every one of those, which would hold
+        // a correct ring indefinitely.
+        //
+        // That is not hypothetical. The hold used to compare the window's own size against itself,
+        // because the comparison was made after `_lastWindowSize` had been overwritten with this
+        // pass's value from the same `inputs` (windowDecoration.js read it twice, from one object).
+        // The predicate was therefore constant false, so the hold fired on *every* ring change and
+        // then compared against its own output: one wrong ring latched in and never came back. A
+        // Firefox window that was first seen maximized kept ring 0 after being unmaximized, and the
+        // clip and the shadow's cutout both followed the full surface - a 24px band of the client's
+        // own shadowless CSD area between the window and its shadow.
+        //
+        // So the predicate is now the one it was always meant to be, and it is the buffer's. A
+        // rebuild moves the buffer on every one of its steps, so the hold releases through all of
+        // them; nothing else can latch, because any move at all re-opens the decision.
+        const buffer = inputs?.bufferRect ?? null;
+        const bufferMoved = !this._lastBuffer || !buffer ||
+            buffer.x !== this._lastBuffer.x || buffer.y !== this._lastBuffer.y ||
+            buffer.width !== this._lastBuffer.width || buffer.height !== this._lastBuffer.height;
         let ringNow = rawInsets;
-        if (!ringSizeChanged && this._lastRing) {
+        if (!bufferMoved && this._lastRing) {
             const drifted = Math.abs((this._lastRing.left ?? 0) - (rawInsets.left ?? 0)) >= 1 ||
                 Math.abs((this._lastRing.top ?? 0) - (rawInsets.top ?? 0)) >= 1 ||
                 Math.abs((this._lastRing.right ?? 0) - (rawInsets.right ?? 0)) >= 1 ||
@@ -338,6 +363,7 @@ export class WindowDecoration {
             if (drifted)
                 ringNow = this._lastRing;
         }
+        this._lastBuffer = buffer;
         this._lastRing = ringNow;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
@@ -691,6 +717,12 @@ export class WindowDecoration {
         this.drawClip = false;
         this._style = null;
         this.ring = null;
+        // The ring hold's witness goes with the ring. A decoration that is dropped for a reading it
+        // could not take and rebuilt when the geometry reads again must not resume holding a ring
+        // from before the gap - the buffer it was compared against is gone with it, so any later
+        // comparison would be against a subject this decoration never saw.
+        this._lastBuffer = null;
+        this._lastRing = null;
         this.overview.drop();
         this._syncClip(false);
         this._syncShadow(false);

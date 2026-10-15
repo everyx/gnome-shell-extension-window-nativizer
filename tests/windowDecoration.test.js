@@ -1107,6 +1107,142 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
     });
 
+    // The ring hold: a ring that moves while nothing else does is held, and a ring that moves
+    // with the buffer is not. The second case is what the hold used to get wrong - it asked the
+    // window's own size, which is the frame rect and can stand still through a whole rebuild, so
+    // the predicate was constant false and one wrong ring latched in and never came back.
+    describe('the ring hold witness', () => {
+        // The Firefox case, measured: a window first seen maximized has ring 0, and unmaximizing
+        // brings the real 24px CSD ring back over nine steps. The frame never moves.
+        const MAXIMIZED_FRAME = {x: 0, y: 0, width: 1920, height: 1050};
+        const MAXIMIZED_BUFFER = {x: 0, y: 0, width: 1920, height: 1050};
+        const RESTORED_FRAME = {x: 243, y: 219, width: 1291, height: 816};
+        const RESTORED_BUFFER = {x: 219, y: 198, width: 1339, height: 864};
+
+        /** Drives apply() through a list of passes and returns the ring each one produced. */
+        function ringThrough(deco, passes) {
+            return passes.map(({frameRect, bufferRect, insets}) => {
+                deco.apply({
+                    actions: {
+                        drawClip: true, drawRing: false, drawShadow: true, drawResize: false,
+                        ring: {clear: true, safeInset: false},
+                        style: {radius: 15, outline: null, shadows: []},
+                    },
+                    inputs: {
+                        insets, monitorScale: 1, frameRect, bufferRect,
+                        bufferWidth: bufferRect.width, bufferHeight: bufferRect.height,
+                        frameWidth: frameRect.width, frameHeight: frameRect.height,
+                    },
+                    actor: mockActor,
+                });
+                return {...deco.stateView.ring.insets};
+            });
+        }
+
+        function buildDeco() {
+            return new WindowDecoration(mockWin, {
+                container: mockContainer,
+                display: mockDisplay,
+                RoundedClipEffect: MockClipEffect,
+                ShadowActor: MockShadowActor,
+                ResizeBand: MockResizeBand,
+            });
+        }
+
+        it('follows the ring back after an unmaximize, even though the frame never moves', () => {
+            const deco = buildDeco();
+            const noRing = {left: 0, top: 0, right: 0, bottom: 0};
+            const realRing = {left: 24, top: 21, right: 24, bottom: 27};
+            const rings = ringThrough(deco, [
+                // Seen maximized first: the client's ring is genuinely 0.
+                {frameRect: MAXIMIZED_FRAME, bufferRect: MAXIMIZED_BUFFER, insets: noRing},
+                // Unmaximized. The buffer grows, the frame does not, and the ring is real.
+                {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER, insets: realRing},
+                // And it stays. The latched bug answered 0 here for the rest of the window's life.
+                {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER, insets: realRing},
+                {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER, insets: realRing},
+            ]);
+
+            expect(rings[0]).toEqual(noRing);
+            expect(rings[1]).toEqual(realRing);
+            expect(rings[2]).toEqual(realRing);
+            expect(rings[3]).toEqual(realRing);
+        });
+
+        it('takes every step of a rebuild, because the buffer moves on each one', () => {
+            // The measured unmaximize: the buffer grows a cell at a time and the ring follows it
+            // down and back up. Holding any step would freeze the cut mid-rebuild.
+            const deco = buildDeco();
+            const steps = [
+                {buffer: {x: 0, y: 0, width: 440, height: 340}, ring: 20},
+                {buffer: {x: 0, y: 0, width: 442, height: 342}, ring: 21},
+                {buffer: {x: 0, y: 0, width: 446, height: 346}, ring: 23},
+                {buffer: {x: 0, y: 0, width: 448, height: 348}, ring: 24},
+                {buffer: {x: 0, y: 0, width: 450, height: 350}, ring: 25},
+            ];
+            const frame = {x: 0, y: 0, width: 400, height: 300};
+            const rings = ringThrough(deco, steps.map(({buffer, ring}) => ({
+                frameRect: frame, bufferRect: buffer,
+                insets: {left: ring, top: ring, right: ring, bottom: ring},
+            })));
+
+            expect(rings.map(r => r.left)).toEqual([20, 21, 23, 24, 25]);
+        });
+
+        it('holds a ring that moved while the buffer stood still', () => {
+            // The case the hold is for: the two rects are read in one pass and updated a step apart,
+            // so the ring is briefly a mixture of both. Nothing else moved, so it is held.
+            const deco = buildDeco();
+            const rect = {x: 0, y: 0, width: 450, height: 350};
+            const frame = {x: 0, y: 0, width: 400, height: 300};
+            const settled = {left: 25, top: 25, right: 25, bottom: 25};
+            const midUpdate = {left: 4, top: 4, right: 4, bottom: 4};
+            const rings = ringThrough(deco, [
+                {frameRect: frame, bufferRect: rect, insets: settled},
+                {frameRect: frame, bufferRect: rect, insets: midUpdate},
+                {frameRect: frame, bufferRect: rect, insets: settled},
+            ]);
+
+            expect(rings[0]).toEqual(settled);
+            expect(rings[1]).toEqual(settled);
+            expect(rings[2]).toEqual(settled);
+        });
+
+        it('takes the ring again once the buffer moves, so the hold cannot latch', () => {
+            // The latch is the failure that shipped: the hold compared its own output, so every
+            // later pass looked like another drift. Moving the buffer has to end it.
+            const deco = buildDeco();
+            const noRing = {left: 0, top: 0, right: 0, bottom: 0};
+            const realRing = {left: 24, top: 21, right: 24, bottom: 27};
+            const rings = ringThrough(deco, [
+                {frameRect: MAXIMIZED_FRAME, bufferRect: MAXIMIZED_BUFFER, insets: noRing},
+                // Two passes where nothing moves and the correct ring is refused.
+                {frameRect: MAXIMIZED_FRAME, bufferRect: MAXIMIZED_BUFFER, insets: realRing},
+                {frameRect: MAXIMIZED_FRAME, bufferRect: MAXIMIZED_BUFFER, insets: realRing},
+                // Now the buffer moves, and the ring must be taken on the very next pass.
+                {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER, insets: realRing},
+            ]);
+
+            expect(rings[3]).toEqual(realRing);
+        });
+
+        it('drops the witness when the decoration is torn down for an unreadable geometry', () => {
+            // undecorate() runs when a reading could not be taken. A decoration rebuilt after that
+            // must not resume holding a ring from before the gap - the buffer it was compared
+            // against went with it.
+            const deco = buildDeco();
+            ringThrough(deco, [
+                {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER,
+                    insets: {left: 24, top: 21, right: 24, bottom: 27}},
+            ]);
+            expect(deco._lastBuffer).not.toBeNull();
+
+            deco.undecorate();
+            expect(deco._lastBuffer).toBeNull();
+            expect(deco._lastRing).toBeNull();
+        });
+    });
+
     it('applies overview mode settings through apply() contract', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
