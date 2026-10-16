@@ -1774,6 +1774,24 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.overview.stateView.hasBypass).toBeTrue();
     });
 
+    it('re-lowers the bypass when the surface container is rebuilt while the overview is open', () => {
+        // A window actor re-creation swaps the surface container under the open overview. The
+        // bypass was keyed on whether `_bypassContainer` existed, so the new container was never
+        // lowered to 254; Mutter's opaque fast path then ignored the shaped-texture mask and the
+        // preview went square with no journal line.
+        const {container, makeContainer, deco} = setupMaskHarness();
+        deco.setOverviewMode(true);
+        expect(container.opacity).toBe(254);
+
+        const rebuilt = makeContainer();
+        mockActor.get_children = () => [rebuilt];
+        deco.setOverviewMode(true);
+
+        expect(rebuilt.opacity).toBe(254);
+        expect(container.opacity).toBe(255);
+        expect(deco.overview.stateView.hasBypass).toBeTrue();
+    });
+
     it('masks a Wayland window whose preview the overview has not built', () => {
         // The removed gate refused with "the shaped texture, its context or the preview container
         // is unavailable". The mask hangs on the shaped texture every clone paints, so it does
@@ -2149,6 +2167,27 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadowClones.length).toBe(2);
         expect(shadowClones[1].preview).toBe(secondPreview);
         expect(shadowClones[1].container).toBe(secondPreview.window_container);
+    });
+
+    it('re-mounts the shadow clones when the desktop shadow source is replaced', () => {
+        // The desktop shadow actor is rebuilt while the overview stays open. The mounted set was
+        // keyed on the count, so a pass that handed in the new source returned early and left the
+        // clones pointing at the destroyed one: every preview lost its shadow for the rest of the
+        // overview.
+        const {shadowClones, deco} = setupMaskHarness({drawShadow: true});
+        deco.setOverviewMode(true);
+        expect(shadowClones.length).toBe(1);
+        const first = shadowClones[0];
+
+        deco.shadow.destroy();
+        const replacement = new MockShadowActor(mockActor, mockContainer);
+        deco.shadow = replacement;
+        deco.setOverviewMode(true);
+
+        expect(shadowClones.length).toBe(2);
+        expect(first.destroyed).toBeTrue();
+        expect(shadowClones[1].source).toBe(replacement);
+        expect(shadowClones[1].destroyed).toBeFalse();
     });
 
     it('does not let an unreadable frame rect escape the shadow clone build', () => {

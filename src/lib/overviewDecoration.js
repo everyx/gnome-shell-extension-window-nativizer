@@ -68,6 +68,9 @@ export class OverviewDecoration {
         this._erase = false;
         this._scale = 1;
         this._shadowSource = null;
+        // The source the mounted clones were built from, so a replaced desktop shadow actor
+        // re-mounts them instead of leaving them on a destroyed one.
+        this._mountedShadowSource = null;
         this._forceOverviewCorners = false;
         // A readiness refusal is a deferral (nothing cached); a refusal after the readiness gates
         // passed is the "square in the overview" defect. The latch makes that one line per
@@ -329,11 +332,24 @@ export class OverviewDecoration {
      * window actor's. Every clone paints through the same container, so one actor covers all of them.
      */
     _applyOpacityBypass() {
-        if (this._bypassContainer)
-            return;
+        // Resolved here rather than taken from the clip target: the clip resolver refuses a container
+        // the clip cannot use (unallocated, off-origin geometry, non-integer alignment) while the
+        // shaped texture still paints through it, so its answer is not this one.
         const container = getWindowSurfaceContainer(this._win);
         if (!container)
             return;
+        if (container === this._bypassContainer)
+            return;
+        // A rebuilt surface container arrives with a fresh actor: restore the one already lowered,
+        // if it is still alive, then lower this one. Keying on existence alone left the new actor at
+        // 255, so Mutter's opaque fast path ignored the mask and the preview went square.
+        if (this._bypassContainer) {
+            try {
+                this._bypassContainer.set_opacity(this._savedBypassOpacity);
+            } catch {
+                // Previous container already destroyed; nothing left to restore.
+            }
+        }
         try {
             this._savedBypassOpacity = container.get_opacity();
             container.set_opacity(Math.min(254, this._savedBypassOpacity));
@@ -436,6 +452,14 @@ export class OverviewDecoration {
         const OverviewShadow = this._OverviewShadowClass;
         if (!this._shadowSource || !OverviewShadow)
             return;
+        // The source is the desktop shadow actor, and a window actor rebuild replaces it while the
+        // mounted clones still reference the destroyed one. Keyed on the count alone the pass
+        // returned early and handed the new source to nothing; keying on the source re-mounts the
+        // set so every preview keeps its shadow.
+        if (this._mountedShadowSource !== this._shadowSource) {
+            this._clearShadow();
+            this._mountedShadowSource = this._shadowSource;
+        }
         if (this._shadows.length >= this._expectedPreviewCount())
             return;
 
@@ -472,6 +496,7 @@ export class OverviewDecoration {
     _clearShadow() {
         const shadows = this._shadows;
         this._shadows = [];
+        this._mountedShadowSource = null;
         for (const {shadow} of shadows) {
             try {
                 shadow.destroy();
