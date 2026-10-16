@@ -248,7 +248,8 @@ export class WindowDecoration {
         // actor Mutter just re-created, and a postponed clip there is an unclipped frame - square corners
         // and a visible margin. An approximate scale costs a fraction of a pixel for one frame; the body
         // stays guarded by settleClipBody.
-        const scale = this._resolveScale(inputs) ?? 1.0;
+        const readableScale = this._resolveScale(inputs);
+        const scale = readableScale ?? 1.0;
 
         // Hand the geometry path the plan, not a resolved body: the actors and the window's own size are
         // read live at paint, so the cut and the cast settle from them there and track the frame being drawn.
@@ -302,7 +303,7 @@ export class WindowDecoration {
 
         // The style is this pass's own reading of the corner state; the overview re-reads it, so a
         // pass that draws nothing (maximized, fullscreen) must still clear the previous one's.
-        this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale);
+        this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale, readableScale);
 
         this._checkDiagnosticInvariants(inputs, winActor);
 
@@ -459,9 +460,11 @@ export class WindowDecoration {
         });
     }
 
-    _applyStyle(style, insets, drawClip, scale = 1.0) {
+    _applyStyle(style, insets, drawClip, scale = 1.0, lastGoodScale = scale) {
         this._style = style;
-        this._scale = scale;
+        // Only a readable reading becomes the last good one. The substituted 1.0 still lays this
+        // pass out through `scale`, but storing it would hand 1.0 to every later unreadable pass.
+        this._scale = lastGoodScale;
         // Record what is drawn, not what was asked: a pass whose insets are null has no clip to
         // attach, so the overview must not later mask a corner the desktop never shows.
         this.drawClip = Boolean(this.clip && drawClip && style.radius > 0);

@@ -585,6 +585,44 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.resizeBand.geometry.scale).toBe(1.25);
     });
 
+    it('does not persist a substituted 1.0: an unreadable first scale leaves _scale null', () => {
+        // A first pass whose monitorScale read fails still lays out with the 1.0 substitute, but
+        // only a readable reading is the last good one. Storing the substitute would make every
+        // later failing pass read 1.0 as the last good scale, and `flatSafeInsets(1.0)` would
+        // leave a client's 1px border unexcised on a fractional monitor.
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: true,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const insets = {left: 10, top: 10, right: 10, bottom: 10};
+
+        deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
+        expect(deco._scale).toBeNull();
+        expect(deco._resolveScale({monitorScale: null})).toBeNull();
+        // The pass itself still laid out at 1.0: the shadow cut took the substitute, while the
+        // clip records the unread null and falls back to 1.0 at paint.
+        expect(deco.shadow.scale).toBe(1);
+        expect(deco.clip.params.scale).toBeNull();
+
+        // A later readable pass stores the reading, and a failing pass after that keeps it.
+        deco.apply({actions, inputs: {insets, monitorScale: 1.25}, actor: mockActor});
+        expect(deco._scale).toBe(1.25);
+        deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
+        expect(deco._resolveScale({monitorScale: null})).toBe(1.25);
+        expect(deco.shadow.scale).toBe(1.25);
+    });
+
     it('warns once when the buffer and the window actor allocation disagree for two passes', () => {
         // The transient the journal could not attribute: the buffer reads 798 while the window
         // actor is 800 wide, so one of the two reads lagged the other in this pass. A single pass
