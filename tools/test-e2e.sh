@@ -1429,9 +1429,10 @@ echo ">> Declared-margin window verified: band present on all four edges."
 
 # (f) Overview lifecycle assertion: on Wayland the offscreen clip is suspended during the
 # overview and the rounding moves into the window's shaped-texture mask, which rides Mutter's
-# own mipmapped pipeline; the preview container drops to opacity 254 so Mutter takes its
-# blended path (where the mask is consulted), and the preview gets a shadow clone. All of it
-# is restored on the desktop.
+# own mipmapped pipeline; the window's surface container - the actor every preview clone paints
+# through - drops to opacity 254 so Mutter takes its blended path (where the mask is consulted),
+# and every preview the shell built for the window gets a shadow clone. All of it is restored on
+# the desktop.
 echo ">> [test-e2e] Verifying shaped-texture mask lifecycle in overview..."
 OVERVIEW_STATE="$(shell_eval '
 (async () => {
@@ -1447,18 +1448,41 @@ OVERVIEW_STATE="$(shell_eval '
     const initialClip = getClip();
     const initialEnabled = initialClip ? initialClip.get_enabled() : null;
 
+    // The bypass actor is the surface container of the window actor - the same actor the
+    // extension lowers - not the preview card, so one bypass covers every preview of the window.
+    const surfaceContainer = () => (target.get_children ? target.get_children() : [])[0] ?? null;
+    // Every live preview of the window, read the way the extension does: a stage walk for actors
+    // carrying the window and a container, not `metaWindow._delegate` (only the last-built card).
+    const previews = () => {
+        const found = [];
+        const visit = (a, depth) => {
+            if (!a || depth > 16) return;
+            let kids = [];
+            try {
+                if (a.metaWindow === target.meta_window && a.window_container) found.push(a);
+                kids = a.get_children ? a.get_children() : [];
+            } catch { return; }
+            for (const c of kids) visit(c, depth + 1);
+        };
+        for (const c of (global.stage.get_children ? global.stage.get_children() : [])) visit(c, 0);
+        return found;
+    };
+    const hasShadow = p => p.get_children().some(c => c.name === "WindowNativizerOverviewShadow");
+
+    const initialOpacity = surfaceContainer() ? surfaceContainer().get_opacity() : null;
+
     const snapshot = () => {
         const clip = getClip();
-        const preview = target.meta_window._delegate ?? null;
-        const wc = preview?.window_container ?? null;
-        const hasShadow = preview?.get_children?.().some(c => c.name === "WindowNativizerOverviewShadow") ?? false;
+        const sc = surfaceContainer();
+        const ps = previews();
         return {
             clip,
             clipEnabled: clip ? clip.get_enabled() : null,
             clearStroke: clip?._clearStroke ?? null,
-            hasContainer: Boolean(wc),
-            containerOpacity: wc ? wc.get_opacity() : null,
-            hasShadow,
+            hasContainer: Boolean(sc),
+            containerOpacity: sc ? sc.get_opacity() : null,
+            previewCount: ps.length,
+            shadowedCount: ps.filter(hasShadow).length,
         };
     };
 
@@ -1469,9 +1493,12 @@ OVERVIEW_STATE="$(shell_eval '
             const expectedEnabled = !expectOverview;
             const expectedClearStroke = !expectOverview;
             const containerOk = expectOverview ? (s.hasContainer && s.containerOpacity === 254) : true;
+            const shadowOk = expectOverview
+                ? (s.previewCount > 0 && s.shadowedCount === s.previewCount)
+                : s.shadowedCount === 0;
             if (Main.overview.visible === expectOverview && s.clip && s.clipEnabled === expectedEnabled &&
                 s.clearStroke === expectedClearStroke &&
-                containerOk && s.hasShadow === expectOverview) {
+                containerOk && shadowOk) {
                 return {...s, matched: true, overviewVisible: Main.overview.visible};
             }
         }
@@ -1480,7 +1507,7 @@ OVERVIEW_STATE="$(shell_eval '
 
     Main.overview.show();
     const overviewRes = await pollState(true);
-    const inOverviewShadow = overviewRes.hasShadow;
+    const inOverviewShadow = overviewRes.previewCount > 0 && overviewRes.shadowedCount === overviewRes.previewCount;
     const inOverviewOpacity = overviewRes.containerOpacity;
 
     Main.overview.hide();
@@ -1495,16 +1522,17 @@ OVERVIEW_STATE="$(shell_eval '
         inOverviewShadow,
         desktopOverviewVisible: desktopRes.overviewVisible,
         restoredEnabled: desktopRes.clipEnabled,
-        restoredShadow: desktopRes.hasShadow
+        restoredOpacity: desktopRes.containerOpacity === initialOpacity,
+        desktopShadowGone: desktopRes.shadowedCount === 0
     });
 })()
 ')"
 echo ">> Overview state check: $OVERVIEW_STATE"
-if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "overviewVisible": true, "inOverviewEnabled": false, "inOverviewOpacity": 254, "inOverviewShadow": true, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredShadow": false}'; then
-    echo "!! Overview assertion failed: shaped-texture mask, container opacity, or preview shadow lifecycle was not managed!"
+if ! check_fields "$OVERVIEW_STATE" '{"hasClip": true, "initialEnabled": true, "overviewVisible": true, "inOverviewEnabled": false, "inOverviewOpacity": 254, "inOverviewShadow": true, "desktopOverviewVisible": false, "restoredEnabled": true, "restoredOpacity": true, "desktopShadowGone": true}'; then
+    echo "!! Overview assertion failed: shaped-texture mask, surface container opacity, or preview shadow lifecycle was not managed!"
     exit 1
 fi
-echo ">> Overview lifecycle verified: clip suspended, preview at opacity 254 with a shadow clone, all restored on the desktop."
+echo ">> Overview lifecycle verified: clip suspended, surface container at opacity 254 with a per-preview shadow clone, all restored on the desktop."
 
 # (f1b) The lifecycle check above samples only once the overview has settled. A preview that is
 # mapped for even one painted frame without the container at <=254 (or without its shadow clone)
@@ -1524,6 +1552,7 @@ OVERVIEW_ANIM="$(shell_eval '
     const win = global.get_window_actors().map(a => a.meta_window)
         .find(w => w && w.get_title() === "Window Nativizer E2E Declared");
     if (!win) return JSON.stringify({error: "window not found"});
+    const targetActor = win.get_compositor_private();
     const wm = global.workspace_manager;
     if (wm.get_n_workspaces() < 2)
         wm.append_new_workspace(false, global.get_current_time());
@@ -1533,7 +1562,8 @@ OVERVIEW_ANIM="$(shell_eval '
     const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8, () => {
         if (!recording) return GLib.SOURCE_REMOVE;
         const preview = win._delegate ?? null;
-        const container = preview ? preview.window_container : null;
+        // The bypass rides the surface container of the window, not the preview card.
+        const container = targetActor && targetActor.get_children ? targetActor.get_children()[0] : null;
         samples.push({
             mapped: Boolean(preview && preview.mapped),
             opacity: container ? container.get_opacity() : null,
@@ -1581,6 +1611,82 @@ if ! check_fields "$OVERVIEW_ANIM" '{"ok": true}'; then
     exit 1
 fi
 echo ">> Overview animation verified: every mapped sample carried the mask and the shadow clone."
+
+# (f1c) A window shown on all workspaces has one preview per workspace (`_updateWorkspaces`
+# builds a `Workspace` for each and `_isMyWindow` accepts the sticky window in every one), while
+# `metaWindow._delegate` names only the last card built. The bypass rides the window's surface
+# container, so one actor covers every card, and the shadow clone is mounted per preview. Stick the
+# probe window, enter the overview, and assert both across every preview the shell built, then
+# unstick and leave.
+echo ">> [test-e2e] Verifying the bypass and per-preview shadows for a window on all workspaces..."
+STICKY_STATE="$(shell_eval '
+(async () => {
+    const Main = await import("resource:///org/gnome/shell/ui/main.js");
+    const GLib = imports.gi.GLib;
+    const sleep = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => { r(); return GLib.SOURCE_REMOVE; }));
+    const actor = global.get_window_actors().find(a => a.meta_window && a.meta_window.get_title() === "Window Nativizer E2E Declared");
+    if (!actor) return JSON.stringify({error: "window not found"});
+    const win = actor.meta_window;
+    win.stick();
+
+    const surfaceContainer = () => (actor.get_children ? actor.get_children() : [])[0] ?? null;
+    const previews = () => {
+        const found = [];
+        const visit = (a, depth) => {
+            if (!a || depth > 16) return;
+            let kids = [];
+            try {
+                if (a.metaWindow === win && a.window_container) found.push(a);
+                kids = a.get_children ? a.get_children() : [];
+            } catch { return; }
+            for (const c of kids) visit(c, depth + 1);
+        };
+        for (const c of (global.stage.get_children ? global.stage.get_children() : [])) visit(c, 0);
+        return found;
+    };
+    const hasShadow = p => p.get_children().some(c => c.name === "WindowNativizerOverviewShadow");
+
+    Main.overview.show();
+    let state = null;
+    for (let i = 0; i < 40; i++) {
+        await sleep(50);
+        const sc = surfaceContainer();
+        const ps = previews();
+        state = {
+            overviewVisible: Main.overview.visible,
+            previewCount: ps.length,
+            shadowedCount: ps.filter(hasShadow).length,
+            surfaceOpacity: sc ? sc.get_opacity() : null,
+        };
+        if (state.overviewVisible && state.previewCount > 1 &&
+            state.shadowedCount === state.previewCount && state.surfaceOpacity === 254)
+            break;
+    }
+    const matched = Boolean(state && state.overviewVisible && state.previewCount > 1 &&
+        state.shadowedCount === state.previewCount && state.surfaceOpacity === 254);
+
+    Main.overview.hide();
+    await sleep(400);
+    win.unstick();
+
+    // Hand the window back settled for the corner check.
+    let prev = null, stable = 0;
+    for (let i = 0; i < 50 && stable < 2; i++) {
+        await sleep(40);
+        const cur = JSON.stringify(win.get_frame_rect());
+        stable = cur === prev ? stable + 1 : 0;
+        prev = cur;
+    }
+
+    return JSON.stringify({...state, matched});
+})()
+')"
+echo ">> Sticky-window overview state: $STICKY_STATE"
+if ! check_fields "$STICKY_STATE" '{"overviewVisible": true, "matched": true}'; then
+    echo "!! Sticky-window assertion failed: the bypass or the per-preview shadow clone was missing!"
+    exit 1
+fi
+echo ">> Sticky window verified: every preview shadowed, surface container at opacity 254."
 
 # (f2) The suite passed with the square-in-overview regression because it never looked at a
 # pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. The

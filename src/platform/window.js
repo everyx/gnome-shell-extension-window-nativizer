@@ -3,7 +3,7 @@
  */
 
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
-import {getMonitorScale, getMonitorGeometry, getMonitorCount} from './display.js';
+import {getMonitorScale, getMonitorGeometry, getMonitorCount, getStage} from './display.js';
 import {roundHalfAwayFromZero} from './numeric.js';
 
 /**
@@ -161,24 +161,69 @@ export function getWindowActor(win) {
 }
 
 /**
- * Reads the overview preview's window container for a window, or null outside the overview.
+ * The actor every overview preview clone of a window paints through: the window actor's surface
+ * container (`meta_window_actor_wayland_rebuild_surface_tree()` puts the whole surface tree under
+ * it), identified by the same resolver the clip target uses so the extension keeps one authority
+ * for which child that is.
  *
- * The overview's preview is Shell-private (`metaWindow._delegate`, set in
- * `js/ui/windowPreview.js`) and the container is its child, so the whole chain — parent and
- * container — is read here rather than in the decoration modules. The container's parent is
- * the preview the shadow clone is mounted under.
+ * This is the actor that decides whether Mutter consults a shaped-texture mask: its own opacity
+ * multiplies into every surface's paint, and the preview clone only overrides the window actor's
+ * own opacity above it. One handle therefore covers every preview of a window, whenever the
+ * preview was built.
  *
  * @param {object|null} win - Meta.Window
- * @returns {{container: object, preview: object}|null} Actors, or null outside the overview
+ * @returns {object|null} The surface container actor, or null when it cannot be identified
  */
-export function getOverviewPreview(win) {
+export function getWindowSurfaceContainer(win) {
+    return getSurfaceContainer(getWindowActor(win), win, null);
+}
+
+/**
+ * Every live overview preview of a window, in scene order.
+ *
+ * The overview's preview is Shell-private: `metaWindow._delegate` is the *last* `WindowPreview`
+ * built for the window (`js/ui/windowPreview.js` sets it in `_init`), and a window shown on all
+ * workspaces has one preview per workspace (`WorkspacesView._updateWorkspaces` builds a
+ * `Workspace` for each, and `Workspace._isMyWindow` accepts such a window in every one). The
+ * singular reading therefore names a card that may be off-screen - or may not exist yet - while
+ * the window is drawn from another. `Shell.WindowPreview` keeps `metaWindow` and
+ * `window_container` on the actor, so the live set is read by walking the stage.
+ *
+ * @param {object|null} win - Meta.Window
+ * @returns {object[]} The window's preview actors, in scene order (possibly empty)
+ */
+export function getOverviewPreviews(win) {
+    const found = [];
+    const stage = getStage();
+    if (!stage || !win)
+        return found;
+
+    // The stage holds the window group and the shell's own UI; a preview is a handful of levels
+    // below it. The cap keeps a pathological tree from turning a settle into a hang.
+    const MAX_DEPTH = 16;
+    const visit = (actor, depth) => {
+        if (!actor || depth > MAX_DEPTH)
+            return;
+        let children = [];
+        try {
+            if (actor.metaWindow === win && actor.window_container)
+                found.push(actor);
+            children = actor.get_children?.() ?? [];
+        } catch {
+            // A half-destroyed actor: it is not a preview of this pass.
+            return;
+        }
+        for (const child of children)
+            visit(child, depth + 1);
+    };
+
     try {
-        const preview = win?._delegate ?? null;
-        const container = preview?.window_container ?? null;
-        return preview && container ? {preview, container} : null;
+        for (const child of stage.get_children?.() ?? [])
+            visit(child, 0);
     } catch {
-        return null;
+        // Stage tearing down.
     }
+    return found;
 }
 
 /**

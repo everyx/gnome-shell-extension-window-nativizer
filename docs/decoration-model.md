@@ -786,14 +786,32 @@ Entering the overview, the manager tells every decoration, which:
   shader computes. `tools/test-e2e.sh` checks the preview corner's 50% contour against the same
   corner on the desktop and against a live libadwaita window's preview; at preview resolution it
   cannot pin the per-byte coverage. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
-- Drops the preview container's opacity to 254. Mutter consults the mask only on its blended
-  path (`use_opaque_region = opaque_region && opacity == 255`), and an opaque client declares a
-  full-surface opaque region, so the fast path would paint square corners. One step below 255
-  forces the blended path; the cost is 1/255 of alpha, a single level of difference on a 0-255
-  channel, measured and imperceptible.
+- Drops the window's **surface container** — the window actor's child that every preview clone
+  paints through — to 254. Mutter consults the mask only on its blended path
+  (`use_opaque_region = stex->opaque_region && opacity == 255`, `meta-shaped-texture.c`), and an
+  opaque client declares a full-surface opaque region, so the fast path would paint square
+  corners. One step below 255 forces the blended path; the cost is 1/255 of alpha, a single level
+  of difference on a 0-255 channel, measured and imperceptible. The actor is the window's own
+  container rather than a preview card: its opacity multiplies into every surface the clone
+  paints, so one handle covers every preview of the window. The card used before was
+  `metaWindow._delegate`, which `WindowPreview._init` overwrites on every build and which is
+  therefore only the *last-built* card. A window shown on all workspaces has one preview per
+  workspace (`WorkspacesView._updateWorkspaces` builds a `Workspace` for each and
+  `Workspace._isMyWindow` accepts the window in every one), so the delegate can name an off-screen
+  card, and a card built after the pass gets no bypass at all; a preview left at 255 then takes
+  Mutter's opaque fast path and paints square although the mask could round it. A card's own
+  opacity is also what the shell animates, so it was never ours to hold.
+
+The mask is keyed on the readings it was built from: buffer size, buffer scale, insets, radius,
+erase and monitor scale. Mutter clears the `mask_texture` slot itself on any destination-size
+change (`update_size()` in `meta-shaped-texture.c` calls
+`meta_shaped_texture_set_mask_texture (stex, NULL)`), and a buffer-scale or viewport move reaches
+the extension through no signal it listens to, so "already wearing the mask" is only true while
+that key is unchanged; a moved key re-installs. Comparing the key turns the install into a reading
+of this pass instead of a memory of an earlier one.
 
 Leaving the overview, the mask is replaced by a 1x1 fully opaque texture (`set_mask_texture`
-rejects `null`) and the container opacity is restored; the clip effect is re-enabled.
+rejects `null`) and the surface container's opacity is restored; the clip effect is re-enabled.
 
 **The acceptance standard is the user's screen.** A refusal to round a preview is admissible only
 when the user can perceive the problem it avoids. A screenshot or a window-level capture is not
@@ -801,11 +819,29 @@ part of that test: our decoration already changes what a capture of a window sho
 simply what the decoration is. So the criterion for every branch below is a user-visible effect -
 a deformed window, or a missing rounded preview - never a capture-level difference.
 
-**XWayland is the one refusal.** An XWayland window keeps the window's shape in that same
-`mask_texture` slot, and Mutter rewrites it from the shape on every surface sync.
-`set_mask_texture` cannot be undone from GJS (it rejects `null`, and nothing else reaches the
-slot), so an overwritten slot would deform a shaped window once the overview ends. That is a
-perceptible deformation, so the exclusion stays. Every Wayland window takes the mask.
+**XWayland is one refusal; the mask's own reach is the other.** An XWayland window keeps the
+window's shape in that same `mask_texture` slot, and Mutter rewrites it from the shape on every
+surface sync. `set_mask_texture` cannot be undone from GJS (it rejects `null`, and nothing else
+reaches the slot), so an overwritten slot would deform a shaped window once the overview ends.
+That is a perceptible deformation, so the exclusion stays.
+
+**A Wayland window takes the mask - but taking it is not the same as rounding the window.** The
+mask lives on one shaped texture: `mask_texture` is a per-texture slot (`meta-shaped-texture.c`),
+and `meta_window_actor_get_texture()` returns only the main surface's texture
+(`meta_surface_actor_get_texture (priv->surface)`, `meta-window-actor.c`), while
+`meta_window_actor_wayland_rebuild_surface_tree()` makes the whole surface tree - the toplevel and
+every subsurface - children of the surface container the clone paints. A window whose visible
+corners another surface of the same window paints therefore keeps square previews although the
+mask installs and the container drops to 254. Measured on Firefox's Picture-in-Picture window,
+which holds two live `560x315` surfaces at `(0,0)`: the mask installed, the container dropped to
+254, and re-installing the mask changed nothing. The extension cannot even detect it in 51 - the
+other surfaces' textures are unreachable from GJS (`MetaSurfaceActor.content` is a private
+`MetaSurfaceContent`, and `Meta.SurfaceActor.get_texture()` and `Meta.WindowActor.get_image()`
+are not in the introspection data). This is the same kind of admitted square as XWayland's, so it
+keeps the same policy: display quality first, the sharp mask as the primary path, and the legacy
+offscreen clip only behind the `force-overview-corners` setting. It is tracked upstream in issue
+#27 (`Track upstream limits on overview corner fidelity: offscreen-effect blur and
+per-shaped-texture masks`), whose body records this analysis and a third re-enable criterion.
 
 **Not ready yet is not a refusal.** A window whose preview is built before the client's first
 buffer arrives has no shape to mask, and one whose window actor has no positive allocation has no
@@ -815,11 +851,11 @@ after the buffer or the allocation arrives, installs it. Those are the only gate
 
 **A refusal after those gates is the "square in the overview" defect, and it is loud.** Once the
 buffer and the actor are ready, a pass that still cannot install the mask - no mask builder, no
-preview container or shaped-texture context, a non-positive size, or a builder that returned
-nothing - leaves a preview square that should have been rounded. It emits one `[window-nativizer]`
-WARNING per overview episode, naming the gate and the window; an install or leaving the overview
-re-arms it. The same two-pass rule as the geometry invariants applies, because a card rebuild can
-briefly hand a pass a missing preview container even while the shaped texture is ready.
+shaped-texture context, a non-positive size, or a builder that returned nothing - leaves a preview
+square that should have been rounded. It emits one `[window-nativizer]` WARNING per overview
+episode, naming the gate and the window; an install or leaving the overview re-arms it. As with
+the geometry invariants, the warning speaks on the second consecutive violating pass
+(`INVARIANT_STRIKES`), so a single transient miss does not journal.
 
 **Why the Wayland refusal was removed.** An earlier version refused the mask for a Wayland window
 whose shaped texture was still on Mutter's direct-read screenshot path, and showed it square. That
@@ -830,8 +866,9 @@ session, and GJS cannot detach it (`set_mask_texture` rejects `null`), so a wind
 share of a masked window carries the transparent corners; under this standard that is not a cost,
 because it is the same kind of capture-level difference the decoration already makes. The
 `force-overview-corners` setting (off by default) still keeps the legacy offscreen clip for
-XWayland and for the fallback cases where the mask cannot be built: rounded, and blurrier. The clip
-never touches the mask slot, so the desktop is left exactly as Mutter had it either way.
+XWayland, for the window whose corners another surface paints, and for the fallback cases where the
+mask cannot be built: rounded, and blurrier. The clip never touches the mask slot, so the desktop
+is left exactly as Mutter had it either way.
 
 Upstream has no native window rounded-clip to fall back on —
 `Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only
@@ -839,8 +876,8 @@ implementation (MR !1717) and the Clutter rounded-corner-clipping roadmap item (
 still open.
 
 **Cost.** The mask is one byte per texel, generated once per window per overview entry and rebuilt
-when the preview card or the client buffer changes
-(only the four corner squares are computed; the body is a memset) and released on exit. Its
+when the mask key moves - the buffer, its scale, the resolved insets, radius, erase or monitor
+scale (only the four corner squares are computed; the body is a memset) - and released on exit. Its
 resolution is the largest preview the overview can draw — Shell's `WINDOW_PREVIEW_MAXIMUM_SCALE`
 (0.95, js/ui/workspace.js) applied to the window at the monitor's scale, expressed in buffer
 texels as `0.95 * monitorScale / bufferScale` — with a hard ceiling of 2560 texels on the
@@ -851,10 +888,19 @@ it gradually beyond. No per-frame work, no offscreen pass, no mipmap regeneratio
 
 ### Overview shadows via a preview shadow clone
 
-The desktop shadow is a sibling of the window actor in `global.window_group`, so the preview's
-`Clutter.Clone` of the window actor never carries it. `overviewShadow.js` adds a
-`Clutter.Clone` of the shadow actor as a child of the preview, below `window_container`, and
-overrides `vfunc_allocate()` to expand the thumbnail box by `SHADOW_PAD` scaled to the preview.
+The desktop shadow is a sibling of the window actor in `global.window_group`, so a preview's
+`Clutter.Clone` of the window actor never carries it. A `Clutter.Clone` has one parent, so one
+preview's clone of the shadow cannot be mounted under another: `overviewShadow.js` adds one
+`Clutter.Clone` of the shadow actor per preview, as a child of that preview below
+`window_container`, and overrides `vfunc_allocate()` to expand the thumbnail box by `SHADOW_PAD`
+scaled to the preview. The extension mounts them by walking the stage for every actor carrying
+`metaWindow === win && window_container` (`getOverviewPreviews`), so a window shown on all
+workspaces - one preview per workspace - gets one clone each. The walk visits every actor in the
+scene (2189 of them with five windows open on the machine this was measured on, 3.6ms a call), so
+it runs only while the mounted set is smaller than the window's preview set can be (one, or the
+workspace count for a window on all workspaces): a complete set costs no walk, and a preview built
+after the pass is topped up on the next reconcile while the set is short. Beyond that the entry
+that follows re-resolves it.
 The clone paints the shadow's baked 8-slice mesh, so scaling it is a texture sample, not a
 re-blur. It monkey-patches nothing: the allocation is a Clutter vfunc, not a GJS signal handler
 recomputing matrices per frame, and the clone is a plain scene-graph child of the preview.

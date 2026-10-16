@@ -266,6 +266,23 @@ export function getActiveWorkspaceIndex() {
 }
 
 /**
+ * Returns the number of workspaces, or 1 when the read is unavailable.
+ *
+ * One is the answer that never over-states what a window can have: the count is used to size the
+ * set of overview previews a window on all workspaces must have, and an unknown count must not
+ * turn into a promise of more cards than exist.
+ * @returns {number}
+ */
+export function getWorkspaceCount() {
+    try {
+        const count = globalThis.global?.workspace_manager?.n_workspaces ?? 1;
+        return count > 0 ? count : 1;
+    } catch {
+        return 1;
+    }
+}
+
+/**
  * Returns the currently active workspace object, or null.
  * @returns {object|null}
  */

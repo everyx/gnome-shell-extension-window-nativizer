@@ -11,6 +11,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     let mockActor;
     let mockContainer;
     let mockDisplay;
+    let hadGlobal;
+    let originalGlobal;
 
     // Spy classes
     class MockClipEffect {
@@ -140,6 +142,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     }
 
     beforeEach(() => {
+        // The overview's previews are read through the stage, so a spec that fakes one has to
+        // put the real `global` back; capture it here rather than in the harness, which a spec
+        // may call more than once.
+        hadGlobal = 'global' in globalThis;
+        originalGlobal = globalThis.global;
         mockActor = makeEffectActor();
 
         mockWin = {
@@ -160,11 +167,18 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         };
     });
 
+    afterEach(() => {
+        if (hadGlobal)
+            globalThis.global = originalGlobal;
+        else
+            delete globalThis.global;
+    });
+
     /**
-     * Wires the mask path up: a shaped-texture stand-in that records the mask, a preview
-     * container whose opacity can be observed, and the mask builders. The stand-in also carries
-     * the pre-fix `paint_to_bitmap()` member, so a spec can pin that the decoration never reads
-     * the texture back now.
+     * Wires the mask path up: a shaped-texture stand-in that records the mask, the window's
+     * surface container and the stage's overview previews, and the mask builders. The stand-in
+     * also carries the pre-fix `paint_to_bitmap()` member, so a spec can pin that the decoration
+     * never reads the texture back now.
      *
      * @param {object} [options]
      * @param {number} [options.clientType=WindowClientType.WAYLAND]
@@ -172,6 +186,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
      * @param {boolean} [options.drawShadow=false]
      * @param {boolean} [options.buildRoundedMaskReturnsNull=false]
      * @param {boolean} [options.forceOverviewCorners=false]
+     * @param {boolean} [options.allWorkspaces=false] - Whether the window is shown on every workspace
+     * @param {number} [options.workspaceCount=1] - Workspaces the preview set is sized against
      * @param {boolean} [options.ringClear=false]
      * @param {object} [options.insets] - Declared ring, per side
      * @returns {object}
@@ -184,13 +200,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         insets = {left: 0, top: 0, right: 0, bottom: 0},
         buildRoundedMaskReturnsNull = false,
         forceOverviewCorners = false,
+        allWorkspaces = false,
+        workspaceCount = 1,
         warn = jasmine.createSpy('warn'),
     } = {}) {
         mockWin.get_client_type = () => clientType;
+        mockWin.is_on_all_workspaces = () => allWorkspaces;
 
         const mask = {tag: 'rounded'};
         const opaque = {tag: 'opaque'};
         let opaqueCalls = 0;
+        // Rounded installs only: the retirement writes the opaque mask, and a spec that counts
+        // "how often was this buffer masked" must not count the retirement as one.
+        let roundedCalls = 0;
         let bufferWidth = 800;
         let bufferHeight = 600;
         let buildReturnsNull = buildRoundedMaskReturnsNull;
@@ -217,6 +239,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 // cannot pass by pretending the slot was detached.
                 if (texture === null || texture === undefined)
                     throw new Error('Argument mask_texture may not be null');
+                if (texture === mask)
+                    roundedCalls++;
                 this.mask = texture;
                 this.hasMask = true;
             },
@@ -240,7 +264,30 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             disconnect: () => {},
         });
         const container = makeContainer();
-        mockWin._delegate = {window_container: container};
+
+        // The mask bypass hangs on the window's surface container - the window actor's child every
+        // preview clone paints through - not on a preview card. The old `_delegate` wiring put it
+        // on the last-built card, which left a window shown on all workspaces rounded on one
+        // workspace and square on the others.
+        mockActor.get_children = () => [container];
+
+        // The overview's live previews are read by walking the stage: `metaWindow._delegate`
+        // names only the last-built card, while the shadow needs one clone per preview.
+        const makePreview = previewContainer => ({metaWindow: mockWin, window_container: previewContainer});
+        const previews = [makePreview(container)];
+        const addPreview = () => {
+            const previewContainer = makeContainer();
+            const preview = makePreview(previewContainer);
+            previews.push(preview);
+            return {preview, container: previewContainer};
+        };
+        globalThis.global = {
+            ...globalThis.global,
+            stage: {get_children: () => previews},
+            // The preview set a window must have is sized from the workspace count, so the walk only
+            // runs while the mounted set looks short.
+            workspace_manager: {n_workspaces: workspaceCount},
+        };
 
         const windowSignals = [];
         mockWin.connect = (signal, cb) => {
@@ -300,8 +347,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         return {
-            mask, opaque, surface, container, makeContainer, windowSignals, shadowClones, warn,
+            mask, opaque, surface, container, makeContainer, makePreview, previews, addPreview,
+            windowSignals, shadowClones, warn,
             opaqueCalls: () => opaqueCalls,
+            roundedCalls: () => roundedCalls,
             setBuildReturnsNull: value => {
                 buildReturnsNull = value;
             },
@@ -354,7 +403,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasShadow: false,
             hasResizeBand: false,
             ring: null,
-            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false},
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasBypass: false},
         });
     });
 
@@ -1465,7 +1514,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             hasShadow: false,
             hasResizeBand: false,
             ring: null,
-            overview: {inOverview: false, hasMask: false, hasShadow: false, hasContainer: false},
+            overview: {inOverview: false, hasMask: false, hasShadow: false, hasBypass: false},
         });
     });
 
@@ -1631,6 +1680,87 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         expect(harness.surface.mask).toBe(harness.mask);
         expect(harness.surface.paintCalls).toBe(0);
+    });
+
+    it('re-installs the mask when the readings it was built from move', () => {
+        // Mutter clears a shaped texture's mask whenever its destination size changes, and a
+        // display-scale move or a fractional-scale renegotiation moves that size with no window
+        // signal at all. The install is keyed on the buffer, the scale and the decoration, so a
+        // reconcile whose key moved installs again instead of trusting its own bookkeeping.
+        const {mask, surface, roundedCalls, setBuffer, deco} = setupMaskHarness();
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(mask);
+        expect(roundedCalls()).toBe(1);
+
+        setBuffer(1600, 1200);
+        deco.setOverviewMode(true);
+
+        expect(surface.mask).toBe(mask);
+        expect(roundedCalls()).toBe(2);
+    });
+
+    it('does not spend a second install when the mask readings are unchanged', () => {
+        // The cheap reconcile: a re-settle with the same buffer, scale and decoration leaves the
+        // shaped texture's mask slot alone.
+        const {mask, surface, roundedCalls, deco} = setupMaskHarness();
+        deco.setOverviewMode(true);
+        deco.setOverviewMode(true);
+
+        expect(surface.mask).toBe(mask);
+        expect(roundedCalls()).toBe(1);
+    });
+
+    it('installs the mask again when the shaped texture is replaced under an unchanged key', () => {
+        // The key describes the mask's content, not where it went: "installed" has to mean *this*
+        // texture wears it. Mutter destroys and rebuilds surface actors
+        // (`meta_wayland_actor_surface_reset_actor()`), and a swap that leaves every reading equal
+        // is invisible to the key, so the texture's identity is part of the condition.
+        const {mask, surface, roundedCalls, deco} = setupMaskHarness();
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBe(mask);
+        expect(roundedCalls()).toBe(1);
+
+        const replacement = {...surface, mask: null};
+        mockActor.get_texture = () => replacement;
+        deco.setOverviewMode(true);
+
+        expect(replacement.mask).toBe(mask);
+        expect(roundedCalls()).toBe(2);
+    });
+
+    it('retries the opacity bypass on a pass whose mask key has not moved', () => {
+        // A mask that is installed while the surface container cannot be read is a mask Mutter
+        // never consults: its opaque fast path is decided by that container's paint opacity. The
+        // next pass with the same key never reaches the install, so the bypass has to be
+        // re-asserted on the cheap path too.
+        const {mask, surface, container, deco} = setupMaskHarness();
+        mockActor.get_children = () => [];
+        deco.setOverviewMode(true);
+
+        expect(surface.mask).toBe(mask);
+        expect(deco.overview.stateView.hasBypass).toBeFalse();
+
+        mockActor.get_children = () => [container];
+        deco.setOverviewMode(true);
+
+        expect(container.opacity).toBe(254);
+        expect(deco.overview.stateView.hasBypass).toBeTrue();
+    });
+
+    it('masks a Wayland window whose preview the overview has not built', () => {
+        // The removed gate refused with "the shaped texture, its context or the preview container
+        // is unavailable". The mask hangs on the shaped texture every clone paints, so it does
+        // not need a card to exist: an empty stage is the entry that beats the overview's first
+        // card, and the window still comes out rounded.
+        const {mask, surface, previews, shadowClones, warn, deco} =
+            setupMaskHarness({drawShadow: true});
+        previews.length = 0;
+
+        deco.setOverviewMode(true);
+
+        expect(surface.mask).toBe(mask);
+        expect(shadowClones.length).toBe(0);
+        expect(warn).not.toHaveBeenCalled();
     });
 
     it('re-installs the mask on re-entry after drop()', () => {
@@ -1826,7 +1956,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(forced.surface.paintCalls).toBe(0);
     });
 
-    it('applies the shaped-texture mask and the container-opacity bypass on Wayland', () => {
+    it('applies the shaped-texture mask and the surface-container opacity bypass on Wayland', () => {
         const {mask, opaque, surface, container, deco} = setupMaskHarness();
 
         deco.setOverviewMode(true);
@@ -1838,6 +1968,21 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(surface.mask).toBe(opaque);
         expect(container.opacity).toBe(255);
         expect(deco.clip.enabled).toBeTrue();
+    });
+
+    it('restores the surface container to its own saved opacity, not a hard-coded 255', () => {
+        // The container is the shell's actor, not ours: it can already sit below opaque (an
+        // overview animation, another decoration). The bypass records what it carried and puts
+        // that back, so leaving the overview never raises an actor we found lowered.
+        const {container, deco} = setupMaskHarness();
+        container.opacity = 200;
+
+        deco.setOverviewMode(true);
+        // Already on Mutter's blended path, so the value that goes back is the one it carried.
+        expect(container.opacity).toBe(200);
+
+        deco.setOverviewMode(false);
+        expect(container.opacity).toBe(200);
     });
 
     it('keeps the corner state current on a pass that draws nothing', () => {
@@ -1872,22 +2017,81 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.overview.stateView.hasMask).toBeFalse();
     });
 
-    it('re-applies the mask when the window moves to another workspace in the overview', () => {
-        const {mask, surface, container, makeContainer, windowSignals, deco} = setupMaskHarness();
+    it('keeps the mask and the bypass on the client tree when the window moves to another workspace', () => {
+        const {mask, surface, container, addPreview, windowSignals, deco} = setupMaskHarness();
 
         deco.setOverviewMode(true);
         expect(container.opacity).toBe(254);
         expect(surface.mask).toBe(mask);
 
-        // The window moves to another workspace: a fresh preview with its container at full opacity.
-        const secondCard = makeContainer();
-        mockWin._delegate = {window_container: secondCard};
-        const moved = windowSignals.find(s => s.signal === 'workspace-changed');
-        expect(moved).toBeDefined();
-        moved.cb();
+        // The window moves to another workspace, so the overview builds a fresh preview with a
+        // container of its own. The mask is re-installed against the client's own tree, and the
+        // bypass stays on the one container every clone paints through; the new card's container
+        // keeps whatever opacity the shell gave it.
+        const moved = addPreview();
+        const handler = windowSignals.find(s => s.signal === 'workspace-changed');
+        expect(handler).toBeDefined();
+        handler.cb();
 
-        expect(secondCard.opacity).toBe(254);
+        expect(moved.container.opacity).toBe(255);
+        expect(container.opacity).toBe(254);
         expect(surface.mask).toBe(mask);
+    });
+
+    it('gives every preview of a window its own shadow clone', () => {
+        // A window shown on all workspaces has one preview per workspace, and a Clutter.Clone has
+        // one parent: `_delegate` named only the last-built card, so the other previews went
+        // without a shadow. The previews are read from the stage, so each one gets its own clone.
+        const {addPreview, previews, shadowClones, deco} =
+            setupMaskHarness({drawShadow: true, allWorkspaces: true, workspaceCount: 2});
+        const second = addPreview();
+
+        deco.setOverviewMode(true);
+
+        expect(shadowClones.length).toBe(2);
+        expect(shadowClones[0].preview).toBe(previews[0]);
+        expect(shadowClones[0].container).toBe(previews[0].window_container);
+        expect(shadowClones[1].preview).toBe(second.preview);
+        expect(shadowClones[1].container).toBe(second.container);
+    });
+
+    it('stops resolving previews once the window has one per workspace', () => {
+        // The walk visits every actor in the scene (2189 of them with five windows open on the
+        // machine this was measured on, 3.6ms a call), so it must not run on a pass that has
+        // nothing to learn. A window on all workspaces expects one preview per workspace; a
+        // complete set costs no walk, and the third card is left to the entry that follows.
+        const {addPreview, shadowClones, deco} =
+            setupMaskHarness({drawShadow: true, allWorkspaces: true, workspaceCount: 2});
+        addPreview();
+        deco.setOverviewMode(true);
+        expect(shadowClones.length).toBe(2);
+
+        // A third card appears, which the window's workspaces do not account for: the mounted set
+        // is already as large as the window can have, so this pass learns nothing and pays nothing.
+        addPreview();
+        deco.setOverviewMode(true);
+
+        expect(shadowClones.length).toBe(2);
+    });
+
+    it('tops up the shadow clones when a preview appears after the entry pass', () => {
+        // A card can appear after the entry pass, and a settle - the tail of every apply(), not the
+        // clear-and-rebuild a workspace refresh runs - tops the set up rather than restarting it:
+        // the clone already mounted stays, and the new preview gets its own.
+        const {addPreview, shadowClones, deco} =
+            setupMaskHarness({drawShadow: true, allWorkspaces: true, workspaceCount: 2});
+        deco.setOverviewMode(true);
+        expect(shadowClones.length).toBe(1);
+        const first = shadowClones[0];
+
+        const added = addPreview();
+        deco.setOverviewMode(true);
+
+        expect(shadowClones.length).toBe(2);
+        expect(shadowClones[0]).toBe(first);
+        expect(first.destroyed).toBeFalse();
+        expect(shadowClones[1].preview).toBe(added.preview);
+        expect(shadowClones[1].container).toBe(added.container);
     });
 
     it('gives the overview shadow to a window that has no clip (prefer-crisp-text)', () => {
@@ -1903,18 +2107,21 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
     });
 
     it('re-mounts the shadow clone when the window moves to another workspace', () => {
-        const {shadowClones, makeContainer, windowSignals, deco} = setupMaskHarness({drawShadow: true});
+        const {shadowClones, makeContainer, makePreview, previews, windowSignals, deco} =
+            setupMaskHarness({drawShadow: true});
         deco.setOverviewMode(true);
         expect(shadowClones.length).toBe(1);
 
-        // The workspace move destroys the old preview, taking its clone with it.
+        // The workspace move destroys the old preview, taking its clone with it, and the window is
+        // drawn from a fresh preview. That card is the one the next settle has to find.
         shadowClones[0].destroy();
-        const secondCard = makeContainer();
-        mockWin._delegate = {window_container: secondCard};
+        const secondPreview = makePreview(makeContainer());
+        previews.splice(0, previews.length, secondPreview);
         windowSignals.find(s => s.signal === 'workspace-changed').cb();
 
         expect(shadowClones.length).toBe(2);
-        expect(shadowClones[1].container).toBe(secondCard);
+        expect(shadowClones[1].preview).toBe(secondPreview);
+        expect(shadowClones[1].container).toBe(secondPreview.window_container);
     });
 
     it('does not let an unreadable frame rect escape the shadow clone build', () => {

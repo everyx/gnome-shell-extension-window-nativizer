@@ -187,7 +187,7 @@ export class WindowDecoration {
      *   hasShadow: boolean,
      *   hasResizeBand: boolean,
      *   ring: {insets: object|null, clear: boolean, erase: boolean}|null,
-     *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasContainer: boolean},
+     *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasBypass: boolean},
      * }}
      */
     get stateView() {
