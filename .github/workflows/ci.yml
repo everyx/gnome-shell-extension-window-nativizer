@@ -107,9 +107,6 @@ jobs:
           meson setup /tmp/jasmine-gjs/build /tmp/jasmine-gjs --prefix=/usr
           sudo ninja -C /tmp/jasmine-gjs/build install
 
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Run Jasmine unit tests
         run: pnpm test
 
@@ -139,9 +136,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gnome-shell gettext libglib2.0-dev-bin
-
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Pack extension
         run: pnpm run build
