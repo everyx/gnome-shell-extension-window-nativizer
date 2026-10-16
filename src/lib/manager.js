@@ -33,6 +33,7 @@ import {
     getWindowType,
     getWindowPid,
     getSurfaceContainer,
+    invalidateMonitorCache,
 } from '../platform/window.js';
 
 
@@ -136,8 +137,12 @@ export class Manager {
         });
 
         const monitorManager = getMonitorManager();
-        if (monitorManager)
-            this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
+        if (monitorManager) {
+            this._connect(this._signals, monitorManager, 'monitors-changed', () => {
+                invalidateMonitorCache();
+                this._reconcile();
+            });
+        }
 
         this._settingsHandlerIds = [];
         for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text', 'force-overview-corners']) {

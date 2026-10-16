@@ -3,7 +3,7 @@
  */
 
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
-import {getMonitorScale, getMonitorGeometry, getMonitorCount, getStage} from './display.js';
+import {getMonitorScale, getMonitorGeometry, getMonitorCount, getDisplay, getStage} from './display.js';
 import {roundHalfAwayFromZero} from './numeric.js';
 
 /**
@@ -533,35 +533,80 @@ function rectanglesOverlap(a, b) {
 }
 
 /**
+ * The monitor list and the resolved index are cached because the phase mirror runs on every paint,
+ * and re-reading the display per monitor each frame is O(monitors) GI calls. The manager's existing
+ * `monitors-changed` handler is the topology seam that clears both.
+ */
+let monitorList = null;
+let resolvedMonitor = new WeakMap();
+
+/**
+ * Drops the cached monitor list and every resolved index. The manager calls this from the display's
+ * `monitors-changed` signal, so the next read rebuilds from the new topology.
+ */
+export function invalidateMonitorCache() {
+    monitorList = null;
+    resolvedMonitor = new WeakMap();
+}
+
+/**
+ * The current display's monitors as {geometry, scale}, cached until a topology signal. Null is
+ * "unreadable", never a fabricated empty list. The scale is read eagerly and kept null when the
+ * geometry is unreadable; the scan only consults it for an overlapping monitor, so a null on a
+ * non-overlapping one changes no answer.
+ */
+function readMonitorList() {
+    const display = getDisplay();
+    if (monitorList && monitorList.display === display)
+        return monitorList.entries;
+
+    const count = getMonitorCount({strict: true});
+    if (count === null)
+        return null;
+
+    const entries = [];
+    for (let i = 0; i < count; i++) {
+        const geometry = getMonitorGeometry(i);
+        const scale = geometry ? getMonitorScale(i, {strict: true}) : null;
+        entries.push({geometry, scale});
+    }
+
+    monitorList = {display, entries};
+    return entries;
+}
+
+/**
  * The highest-scale logical monitor whose layout rect intersects the window's frame: -1 when a
  * readable frame overlaps none, null when the frame is degenerate or unreadable or the scan cannot
  * complete - an unreadable monitor count, geometry or scale, each of which a defaulting read would
- * fold into "no overlap".
+ * fold into "no overlap". The index is reused while the frame stays on it.
  */
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
     if (!frame || !(frame.width > 0) || !(frame.height > 0))
         return null;
 
+    const entries = readMonitorList();
+    if (entries === null)
+        return null;
+
+    const cached = resolvedMonitor.get(win);
+    if (cached && cached.entries === entries && cacheHoldsFrame(cached, frame))
+        return cached.index;
+
     let bestIndex = -1;
     let bestScale = 0;
-    // An unreadable count is "unknown", not "no monitors": folding it into 0 would skip the scan
-    // and answer -1, which the mirror maps to a zero phase.
-    const count = getMonitorCount({strict: true});
-    if (count === null)
-        return null;
-    for (let i = 0; i < count; i++) {
-        const geom = getMonitorGeometry(i);
+    for (let i = 0; i < entries.length; i++) {
+        const {geometry, scale} = entries[i];
         // An unreadable geometry cannot be ruled out of the intersection, so the scan cannot
         // tell "no overlap" from "overlap unknown". Surface that instead of skipping it.
-        if (!geom)
+        if (!geometry)
             return null;
-        if (!rectanglesOverlap(geom, frame))
+        if (!rectanglesOverlap(geometry, frame))
             continue;
         // A strict read: an unreadable scale is "unknown", not the integer 1.0. On a fractional
         // monitor the fallback would pick it as an integer and return a zero offset while Mutter
         // applies a real phase; the caller keeps its last good phase for the null instead.
-        const scale = getMonitorScale(i, {strict: true});
         if (scale === null)
             return null;
         if (scale > bestScale) {
@@ -569,7 +614,43 @@ function resolveHighestScaleMonitorIndex(win) {
             bestIndex = i;
         }
     }
+
+    resolvedMonitor.set(win, {
+        entries,
+        frame,
+        index: bestIndex,
+        geometry: bestIndex >= 0 ? entries[bestIndex].geometry : null,
+    });
     return bestIndex;
+}
+
+/** Whether the cached index still describes the new frame. */
+function cacheHoldsFrame(cached, frame) {
+    if (rectEquals(cached.frame, frame))
+        return true;
+    return cached.index >= 0 && cached.geometry && rectContains(cached.geometry, frame);
+}
+
+function rectEquals(a, b) {
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function rectContains(outer, inner) {
+    return outer.x <= inner.x && outer.y <= inner.y &&
+        outer.x + outer.width >= inner.x + inner.width &&
+        outer.y + outer.height >= inner.y + inner.height;
+}
+
+/** The resolved monitor's scale, read from the cached list so a paint takes no display call. */
+function monitorScaleAt(index) {
+    const entries = readMonitorList();
+    return entries?.[index]?.scale ?? null;
+}
+
+/** The resolved monitor's geometry, read from the cached list so a paint takes no display call. */
+function monitorGeometryAt(index) {
+    const entries = readMonitorList();
+    return entries?.[index]?.geometry ?? null;
 }
 
 /**
@@ -600,13 +681,13 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
         if (monitorIndex < 0)
             return {x: 0, y: 0};
 
-        const scale = getMonitorScale(monitorIndex, {strict: true});
+        const scale = monitorScaleAt(monitorIndex);
         if (scale === null)
             return null;
         if (!(scale > 0) || !Number.isFinite(scale) || Math.abs(scale - Math.round(scale)) < 0.001)
             return {x: 0, y: 0};
 
-        const geom = getMonitorGeometry(monitorIndex);
+        const geom = monitorGeometryAt(monitorIndex);
         const monitorX = geom?.x ?? 0;
         const monitorY = geom?.y ?? 0;
 
