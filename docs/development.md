@@ -154,6 +154,23 @@ gdbus call --address "$BUS" --dest org.gnome.Shell --object-path /org/gnome/Shel
     --method org.gnome.Shell.Eval 'global.get_window_actors().length + " windows"'
 ```
 
+**Runs queue instead of colliding.** The nested shell, the installed extension path and
+`/tmp/window-nativizer-dev` are one shared resource, and two runs that overlap corrupt each
+other's session: a fidelity check can read a neighbour's frame (`environment witness ... 28 gray
+level(s)`) and the e2e can fail purely because a second session is up, and both pass again on a
+quiet re-run. Every tool that drives the session - `tools/devkit.sh`, `tools/dev.sh`,
+`tools/dev-shell.sh`, `tools/test-e2e.sh`, `tools/benchmark-perf.py`,
+`tools/check-decoration.py`, `tools/flat-border-runs.py` and `tools/generate-preview.py` - queues
+on an exclusive `flock` at `${XDG_RUNTIME_DIR:-/tmp}/window-nativizer-session.lock` for the part
+that drives the session only; lint, the unit tests and the style checks never take it. A second
+run prints `[session-lock] waiting for the nested session (held by PID ...)` and waits instead of
+driving the session underneath the first. The lock is re-entrant within one process tree: the
+helper exports `WN_SESSION_LOCK_HELD`, so a holder that starts another tool (`test-e2e.sh` starts
+`dev.sh`, which starts `dev-shell.sh`) skips it instead of deadlocking against itself.
+`WN_SESSION_LOCK_TIMEOUT` is the wait in whole seconds; `0` fails immediately with a clear message
+instead of queueing and the default is 1800. The lock is released when the command exits,
+whatever its status, so a failing run does not wedge the machine.
+
 Things about it that cost time to find:
 
 - **Session readiness contract (`$STATE_DIR/ready`).** Starting the nested shell
