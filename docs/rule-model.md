@@ -108,6 +108,13 @@ decision - at the style radius, not radius 0. A radius-0 clip is attached only w
 has to be cleared without our corners. The boundaries are listed in
 [decoration-model.md](decoration-model.md).
 
+One axis reaches a second decision: a `resize` reversal carries the tiled ring with it. The
+tiled 1px ring is drawn only while `clip || shadow || drawResize`, and the client's ring is
+erased only while the ring we draw is ours. For a tiled window `clip` and `shadow` are both
+false, so the band is the only thing we draw; without `drawResize` in that predicate the
+default tiled ring would never be drawn, and turning the band off deliberately leaves the
+client's ring unerased.
+
 ## One rule per window kind
 
 A rule is keyed by the whole window kind, not by the application, because one
