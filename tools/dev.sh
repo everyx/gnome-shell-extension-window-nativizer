@@ -17,6 +17,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under tools/)
+# The nested session is one shared resource; queue behind anyone already driving it. Re-entrant
+# within this tree, so a holder that calls back into dev.sh (test-e2e.sh does this) does not
+# deadlock. `log` only reads the log file and never touches the session, so it never queues.
+if [ -z "${WN_SESSION_LOCK_HELD:-}" ] && [ "${1:-}" != "log" ]; then
+    exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/dev.sh" "$@"
+fi
 # Sets SRC_DIR, UUID, EXT_DIR and deploy_ext().
 source "$ROOT/tools/deploy-ext.sh"
 WL_DISPLAY="wayland-window-nativizer"
