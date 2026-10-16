@@ -32,6 +32,7 @@ import {
     getWindowDisplayTitle,
     getWindowFromActor,
     findMetaWindow,
+    findMetaWindowCached,
     getSurfaceContainer,
     getWindowSubpixelOffset,
     getAppliedSubpixelPhase,
@@ -492,6 +493,29 @@ describe('platform', () => {
             };
             expect(findMetaWindow(childActor)).toBe(mockWin);
             expect(findMetaWindow(null)).toBeNull();
+        });
+
+        it('memoizes the resolved window per actor and re-resolves a rebuilt actor', () => {
+            let resolves = 0;
+            const actorFor = win => ({get_meta_window: () => { resolves++; return win; }});
+            const first = actorFor({id: 'first'});
+            expect(findMetaWindowCached(first)).toEqual({id: 'first'});
+            expect(resolves).toBe(1);
+            expect(findMetaWindowCached(first)).toEqual({id: 'first'});
+            expect(resolves).toBe(1);
+
+            // A rebuilt actor is a new object, so the stale window cannot survive it.
+            const rebuilt = actorFor({id: 'rebuilt'});
+            expect(findMetaWindowCached(rebuilt)).toEqual({id: 'rebuilt'});
+            expect(resolves).toBe(2);
+        });
+
+        it('does not cache an unresolved actor, so a later attach still resolves', () => {
+            let win = null;
+            const actor = {get_meta_window: () => win};
+            expect(findMetaWindowCached(actor)).toBeNull();
+            win = {id: 'late'};
+            expect(findMetaWindowCached(actor)).toEqual({id: 'late'});
         });
 
         it('safely extracts metadata and state flags', () => {

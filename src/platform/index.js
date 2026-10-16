@@ -27,6 +27,7 @@ export {
     getWindowTileMatch,
     getWindowFromActor,
     findMetaWindow,
+    findMetaWindowCached,
     getWindowSubpixelOffset,
     getAppliedSubpixelPhase,
     invalidateMonitorCache

@@ -12,7 +12,7 @@ import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosi
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {findMetaWindow, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
+import {findMetaWindowCached, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
@@ -133,7 +133,7 @@ export const ShadowActor = GObject.registerClass({
     _syncGeometry() {
         if (!this._windowActor)
             return;
-        const offset = shadowPhaseOffset(findMetaWindow(this._windowActor), this._phaseInTransform, this._St);
+        const offset = shadowPhaseOffset(findMetaWindowCached(this._windowActor), this._phaseInTransform, this._St);
         // A null offset is an unreadable monitor geometry, not a zero phase: keep the last good
         // phase so the shadow's cutout stays on the clip's line instead of hopping to zero.
         if (offset)
@@ -338,7 +338,7 @@ export const ShadowActor = GObject.registerClass({
             this._insets ?? ZERO_INSETS, scale, {
                 targetSize: readActorSize(this._clipTarget),
                 windowActorSize: readActorSize(this._windowActor),
-                windowSize: readWindowSize(findMetaWindow(this._windowActor)),
+                windowSize: readWindowSize(findMetaWindowCached(this._windowActor)),
                 bodyPlan: this._bodyPlan,
             });
         this._warnOnBodyDisagreement(layout.authority);

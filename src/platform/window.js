@@ -49,6 +49,26 @@ export function findMetaWindow(actorOrWin, maxDepth = 8) {
 }
 
 /**
+ * The window an actor resolves to, memoized per actor. The paint path calls this every frame for an
+ * actor whose Meta.Window cannot change, so the ancestor walk runs once. The actor is the key, so a
+ * rebuilt actor resolves afresh; a null read is not stored, so an actor attached later can still
+ * find its window.
+ */
+const actorWindowCache = new WeakMap();
+
+export function findMetaWindowCached(actor) {
+    if (!actor)
+        return null;
+    const cached = actorWindowCache.get(actor);
+    if (cached !== undefined)
+        return cached;
+    const win = findMetaWindow(actor);
+    if (win)
+        actorWindowCache.set(actor, win);
+    return win;
+}
+
+/**
  * Checks if the window is fully maximized (GNOME 50+).
  * @param win - Meta.Window
  */
