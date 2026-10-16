@@ -519,13 +519,14 @@ function rectanglesOverlap(a, b) {
 
 /**
  * The highest-scale logical monitor whose layout rect intersects the window's frame: -1 when a
- * readable frame overlaps none, null when the scan cannot complete - an unreadable monitor count,
- * geometry or scale, each of which a defaulting read would fold into "no overlap".
+ * readable frame overlaps none, null when the frame is degenerate or unreadable or the scan cannot
+ * complete - an unreadable monitor count, geometry or scale, each of which a defaulting read would
+ * fold into "no overlap".
  */
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
     if (!frame || !(frame.width > 0) || !(frame.height > 0))
-        return -1;
+        return null;
 
     let bestIndex = -1;
     let bestScale = 0;
@@ -559,8 +560,9 @@ function resolveHighestScaleMonitorIndex(win) {
 /**
  * The mirror of Mutter's subpixel phase, computed from public API: the arithmetic
  * `surface_container_apply_transform` runs, with `roundf`'s snap-away-from-zero rule rather than
- * `Math.round`'s toward +Infinity. Null when the monitor scan cannot complete, {x: 0, y: 0} when a
- * readable frame overlaps no monitor or on a non-Wayland window.
+ * `Math.round`'s toward +Infinity. Null when the frame is degenerate or unreadable, or the monitor
+ * scan cannot complete, {x: 0, y: 0} when a readable frame overlaps no monitor or on a non-Wayland
+ * window.
  */
 export function getWindowSubpixelOffset(win, St = null, container = null) {
     if (!win)
@@ -575,8 +577,9 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
             return {x: 0, y: 0};
 
         const monitorIndex = resolveHighestScaleMonitorIndex(win);
-        // null is "a monitor geometry could not be read", distinct from -1's "no overlap":
-        // surface it so the caller keeps its last good phase rather than collapse to zero.
+        // null is "the frame or a monitor reading could not be taken", distinct from -1's
+        // "no overlap": surface it so the caller keeps its last good phase rather than collapse
+        // to zero.
         if (monitorIndex === null)
             return null;
         if (monitorIndex < 0)
@@ -610,7 +613,7 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
             y: adjRelY - relY,
         };
     } catch {
-        return {x: 0, y: 0};
+        return null;
     }
 }
 

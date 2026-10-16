@@ -927,9 +927,9 @@ describe('platform', () => {
         });
 
         // The fallback to win.get_monitor() is gone, so a frame the scan cannot read resolves to
-        // -1, and a valid frame whose scan finds no monitor does the same. Both must stay {0,0} and
-        // must not reach for the window's own monitor index.
-        it('returns zero offset for a degenerate frame, without the monitor fallback', () => {
+        // null, and a valid frame whose scan finds no monitor resolves to -1. The unreadable frame
+        // is unknown, not a zero offset, and must not reach for the window's own monitor index.
+        it('answers unknown for a degenerate frame, without the monitor fallback', () => {
             globalThis.global = monitor(4 / 3);
             let monitorAsked = false;
             const win = {
@@ -938,11 +938,11 @@ describe('platform', () => {
                 get_compositor_private: () => ({x: 242, y: 200}),
                 get_frame_rect: () => ({x: 0, y: 0, width: 0, height: 0}),
             };
-            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(win)).toBeNull();
             expect(monitorAsked).toBeFalse();
         });
 
-        it('returns zero offset when the frame rect is unreadable, without the monitor fallback', () => {
+        it('answers unknown when the frame rect is unreadable, without the monitor fallback', () => {
             globalThis.global = monitor(4 / 3);
             let monitorAsked = false;
             const win = {
@@ -951,7 +951,7 @@ describe('platform', () => {
                 get_compositor_private: () => ({x: 242, y: 200}),
                 get_frame_rect: () => { throw new Error('window destroyed'); },
             };
-            expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(win)).toBeNull();
             expect(monitorAsked).toBeFalse();
         });
 
@@ -1126,13 +1126,18 @@ describe('platform', () => {
             expect(getWindowSubpixelOffset(win).x).toBeCloseTo(0.25, 6);
         });
 
-        it('defends against exceptions and returns zero offset', () => {
-            const throwingWin = {
-                get_client_type: () => {
-                    throw new Error('Compositor window destroyed');
+        it('defends against exceptions and answers unknown, not zero', () => {
+            globalThis.global = monitor(4 / 3);
+            // The actor read throws after the client-type and frame checks, so this is the mirror's
+            // own catch and not one of the helper defaults. A torn-down actor is unknown, not a
+            // phase of zero the consumers would latch.
+            const throwingActor = {
+                get x() {
+                    throw new Error('actor finalized');
                 },
+                y: 0,
             };
-            expect(getWindowSubpixelOffset(throwingWin)).toEqual({x: 0, y: 0});
+            expect(getWindowSubpixelOffset(waylandWin(throwingActor))).toBeNull();
         });
     });
 
