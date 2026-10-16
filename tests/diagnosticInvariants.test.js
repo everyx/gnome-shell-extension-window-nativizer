@@ -13,6 +13,7 @@ import {
     freshInvariantState,
     overviewMaskRefusalWarning,
     phaseAlignmentWarning,
+    shadowBakeFailureWarning,
     windowIdentityLabel,
 } from '../src/lib/diagnosticInvariants.js';
 
@@ -165,5 +166,38 @@ describe('overviewMaskRefusalWarning (the square-in-the-overview class)', () => 
         const warning = overviewMaskRefusalWarning('no preview container', '"firefox"');
         expect(warning).toContain('no preview container');
         expect(warning).toContain('"firefox"');
+    });
+});
+
+describe('shadowBakeFailureWarning (one line per bake-failure episode)', () => {
+    // The bake retries on every paint until it allocates, so an episode must stay one line and the
+    // first successful bake must re-arm the latch. This drives the policy the same way
+    // shadowTexture.bake() does; that module imports Cogl, so a unit test cannot load it.
+    const attempt = (state, allocated, warn) => {
+        const {state: next, message} = evaluateInvariant(state,
+            allocated ? null : shadowBakeFailureWarning(1024), 1);
+        if (message)
+            warn(message);
+        return next;
+    };
+
+    it('speaks once while the allocation keeps failing', () => {
+        const warn = jasmine.createSpy('warn');
+        let state = freshInvariantState();
+        state = attempt(state, false, warn);
+        state = attempt(state, false, warn);
+        attempt(state, false, warn);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('1024x1024');
+    });
+
+    it('re-arms after a successful bake, so the next failure speaks again', () => {
+        const warn = jasmine.createSpy('warn');
+        let state = freshInvariantState();
+        state = attempt(state, false, warn);
+        expect(warn).toHaveBeenCalledTimes(1);
+        state = attempt(state, true, warn);
+        attempt(state, false, warn);
+        expect(warn).toHaveBeenCalledTimes(2);
     });
 });

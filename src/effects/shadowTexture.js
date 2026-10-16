@@ -7,6 +7,8 @@ import Cogl from 'gi://Cogl';
 
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 import {SHADOW_PAD, shadowGeometry} from './shadowGeometry.js';
+import {evaluateInvariant, freshInvariantState, shadowBakeFailureWarning}
+    from '../lib/diagnosticInvariants.js';
 
 const LAYER_COUNT = 3; // shader expects 3 layers
 
@@ -18,6 +20,9 @@ const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
 let destroyed = false; // sealed after destroy()
+// The bake-failure latch: the retry loop must not repeat the line every paint, and a bake that
+// allocates re-arms it so a later shortage still speaks.
+let bakeLatch = freshInvariantState();
 
 /**
  * Clears baked cache and seals it until reset().
@@ -29,6 +34,7 @@ export function destroy() {
 
 export function reset() {
     destroyed = false;
+    bakeLatch = freshInvariantState();
 }
 
 /**
@@ -90,9 +96,14 @@ function bake(context, radius, shadows) {
     const texture = Cogl.Texture2D.new_with_size(context, buffer, buffer);
     const framebuffer = Cogl.Offscreen.new_with_texture(texture);
     if (!framebuffer.allocate()) {
-        console.warn(`[window-nativizer] Could not allocate a ${buffer}x${buffer} shadow buffer`);
+        // No pass-apart settle here: an allocation either succeeds or not, so one failure speaks.
+        const {state, message} = evaluateInvariant(bakeLatch, shadowBakeFailureWarning(buffer), 1);
+        bakeLatch = state;
+        if (message)
+            console.warn(message);
         return null;
     }
+    bakeLatch = freshInvariantState();
 
     const pipeline = Cogl.Pipeline.new(context);
     pipeline.set_color(opaqueWhite());
