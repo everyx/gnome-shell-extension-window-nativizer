@@ -117,6 +117,12 @@ XWayland (with a declared 4px ring), and some of its dialogs are
 self-decorated where others are not. An app-wide rule would have to be wrong for one
 of them, so the picker writes exactly the kind it was pointed at and nothing else.
 
+**A rule is a correction, so it is captured for the state the window was in.** Picking a window
+while it misbehaves records the state the user can see misbehaving, and the rule then matches that
+state: this window, and any other window that reaches it. That is also why a key carries the
+readings (`has_ring`, `allows_resize`) and not only the application - the symptom is what is being
+corrected, and a window that never reaches the symptom needs no rule.
+
 There is no direction any more, and so no collision inside the model: one kind has one row,
 and that row names the axes to reverse (or follows the decision). An import can still collide
 with that row for the same kind (same key, different state), which the import-conflict dialog

@@ -91,6 +91,16 @@ describe('resolveRule', () => {
         expect([...resolveRule('wechat', rules)]).toEqual(['shadow']);
     });
 
+    it('matches the state a rule was captured in, and not the other state of the same window', () => {
+        // A rule is a correction: the picker records the state the window was in, so the rule
+        // matches that state - the symptom - and not the same window once it reads differently.
+        const flatKey = buildRuleKey('wechat', {hasRing: false});
+        const rules = {[flatKey]: 'shadow'};
+
+        expect(resolved(resolveRule('wechat', rules, {hasRing: false}))).toBe('shadow');
+        expect(resolveRule('wechat', rules, {hasRing: true})).toBeNull();
+    });
+
     it('does not fall back to the application: a different window kind of the same app does not match', () => {
         const rules = {[fixedChildKey]: 'corners,shadow'};
 

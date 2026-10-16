@@ -485,6 +485,32 @@ describe('evaluateWindowActions', () => {
         expect(wayland.reason).toBe('no-csd(0.0x0.0)');
     });
 
+    it('an unreadable ring is covered like a flat one, so the client ring stays painted', () => {
+        // `insetsFromRects` refuses when the frame overshoots the buffer, so `insets` is null and
+        // the pass reads flat. The takeover is kept: our shadow is still drawn while `ring.clear`
+        // is false, so the client's own shadow stays painted under ours and the clip covers only
+        // `flatSafeInsets` of its ring - a double shadow for as long as the reading lasts. That is
+        // deliberate; the owner corrects the takeover per window with a rule.
+        const ringed = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 408, bufferHeight: 304,
+            insets: {left: 4, top: 4, right: 4, bottom: 4},
+            wmClass: 'intermittent-ring',
+        });
+        expect(ringed.drawShadow).toBeTrue();
+        expect(ringed.drawClip).toBeTrue();
+        expect(ringed.ring.clear).toBeTrue();
+
+        const unreadable = evaluateWindowActions({
+            ...baseWin,
+            insets: null,
+            wmClass: 'intermittent-ring',
+        });
+        expect(unreadable.drawShadow).toBeTrue();
+        expect(unreadable.ring.clear).toBeFalse();
+        expect(unreadable.ring.safeInset).toBeTrue();
+    });
+
     it('a margin on one axis only is a declared ring too (asymmetric extents, e.g. TLBR 0,0,12,12)', () => {
         const res = evaluateWindowActions({
             ...baseWin,
