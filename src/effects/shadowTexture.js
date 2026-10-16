@@ -33,18 +33,11 @@ export function reset() {
 
 /**
  * The colour a style's layers are drawn in: the first one that names a colour, else black.
- * @param {Array<object>} shadows
- * @returns {Array<number>}
  */
 function styleColor(shadows) {
     return shadows.find(s => s.color)?.color ?? [0, 0, 0];
 }
 
-/**
- * @param {number} radius
- * @param {Array<object>} shadows
- * @returns {string}
- */
 export function styleKey(radius, shadows) {
     // Include color in key to prevent collision between light and dark theme bakes.
     const layers = shadows.map(s => `${s.blur},${s.spread},${s.alpha},${(s.color ?? [0, 0, 0]).join(',')}`);
@@ -52,10 +45,7 @@ export function styleKey(radius, shadows) {
 }
 
 /**
- * @param {Cogl.Context} context - exists only inside paint
- * @param {number} radius
- * @param {Array<object>} shadows
- * @returns {Cogl.Pipeline|null}
+ * @param context - exists only inside paint
  */
 function shadowPipeline(context, radius, shadows) {
     if (destroyed)
@@ -75,10 +65,6 @@ function shadowPipeline(context, radius, shadows) {
 /**
  * Per-window pipeline sharing the baked texture (for cross-fade opacity).
  *
- * @param {Cogl.Context} context
- * @param {number} radius
- * @param {Array<object>} shadows
- * @returns {Cogl.Pipeline|null}
  */
 export function shadowPipelineFor(context, radius, shadows) {
     const source = shadowPipeline(context, radius, shadows);
@@ -91,8 +77,7 @@ export function shadowPipelineFor(context, radius, shadows) {
 }
 
 /**
- * @param {Cogl.Pipeline} pipeline
- * @param {number} opacity - 0..1
+ * @param opacity - 0..1
  */
 export function setPipelineOpacity(pipeline, opacity) {
     const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);

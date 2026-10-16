@@ -23,8 +23,6 @@ const SYNCED_PROPERTIES = [
  * A live actor's size, or null when the actor is gone or its read throws. The body authority is
  * read from actors we do not own (the surface container can be replaced mid-flight), so a torn-down
  * read is "unknown" and falls through resolveClipSize rather than aborting the paint.
- * @param {{width:number,height:number}|null} actor
- * @returns {{width:number,height:number}|null}
  */
 function readActorSize(actor) {
     if (!actor)
@@ -40,8 +38,6 @@ function readActorSize(actor) {
  * The window's own size, read live at relayout: its frame rect, else its buffer rect. The cast
  * must see a resize on the frame it starts, so this is read here rather than taken from the
  * pass; only its previous value travels in the body plan.
- * @param {object|null} win
- * @returns {{width:number,height:number}|null}
  */
 function readWindowSize(win) {
     const frame = getWindowFrameRect(win);
@@ -59,9 +55,8 @@ export const ShadowActor = GObject.registerClass({
     GTypeName: SHADOW_ACTOR_G_TYPE,
 }, class ShadowActor extends Clutter.Actor {
     /**
-     * @param {Clutter.Actor} windowActor
-     * @param {Clutter.Actor} container - windowGroup; shadow inserted below windowActor
-     * @param {object|null} [St] - The St namespace the clip target path uses, so the applied
+     * @param container - windowGroup; shadow inserted below windowActor
+     * @param [St] - The St namespace the clip target path uses, so the applied
      *        phase read identifies the surface container by the clip's rule, not a global
      */
     _init(windowActor, container, St = null) {
@@ -116,13 +111,9 @@ export const ShadowActor = GObject.registerClass({
         this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
-        // `x`/`y`, the translations, the actor scale and the pivot all move the shadow's cutout.
-        // `allocation` is also needed because the applied phase is read from the surface
-        // container's cached transform, and Mutter only invalidates it on the window actor's
-        // allocation change: synced on position alone the read held the previous position's phase
-        // indefinitely (measured at 1.25x: the shadow stayed one x behind while the clip painted
-        // the new phase, opening the straight-edge hairline). On allocation the invalidation
-        // handler runs first, so the read is the phase the clip paints with.
+        // Position, translation, actor scale and pivot all move the cutout. `allocation` is also
+        // needed: the applied phase is read from the surface container's cached transform, which
+        // Mutter only invalidates on the window actor's allocation change.
         this._geometrySignals = ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y',
             'pivot-point', 'allocation'].map(prop =>
             windowActor.connect(`notify::${prop}`, () => this._syncGeometry()));
@@ -134,21 +125,10 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Synchronizes the shadow's derived position and translation with the window actor.
-     *
-     * The layout position is the bind constraint's `window - PAD`. The position that puts the
-     * scaled cutout on the window's visual box is `shadowLayoutPosition`, and the difference
-     * between the two is carried as a translation: a layout-space offset is in parent space and
-     * ignores the actor's own scale, which is what left the cutout a pivot-dependent pad off the
-     * window (see shadowLayoutPosition). The translation also carries the window's own translation
-     * plus Mutter's Wayland subpixel offset.
-     *
-     * Every assignment notifies and queues a relayout, and this runs on each position, allocation,
-     * translation, scale and pivot change - a resize fires several per frame, and each call writes
-     * both axes and both translations, so half of these assignments would restate a value that did
-     * not move. Only write what changed: the signals firing twice per frame is what this method's
-     * cost is made of (293 calls over one window's 150-step resize, ~27us of shell CPU per call in
-     * the assignments and the relayout they queue; the allocation signal adds one more to that set).
+     * Synchronizes the shadow's derived position and translation with the window actor. The bind
+     * constraint's `window - PAD` is the layout position; `shadowLayoutPosition` and the window's
+     * translation plus Mutter's subpixel offset are folded into a translation, since a layout-space
+     * offset ignores the actor's scale. Only writes what changed: every assignment queues a relayout.
      */
     _syncGeometry() {
         if (!this._windowActor)
@@ -174,7 +154,7 @@ export const ShadowActor = GObject.registerClass({
      * Follows the resolved clip target's phase strategy so both cuts read one source. Flips when
      * the container becomes identified or refused, and re-syncs the translation the shadow already
      * carries so the strategy change is not deferred to the next position change.
-     * @param {boolean} phaseInTransform - True when the clip target carries the phase in its transform
+     * @param phaseInTransform - True when the clip target carries the phase in its transform
      */
     setPhaseInTransform(phaseInTransform) {
         const next = Boolean(phaseInTransform);
@@ -184,39 +164,31 @@ export const ShadowActor = GObject.registerClass({
         this._syncGeometry();
     }
 
-    /** @returns {boolean} Whether a cross-fade animation is currently active */
     get isFading() {
         return this._fade.isFading;
     }
 
-    /** @returns {boolean} Whether the shadow is completely settled */
     get isSettled() {
         return this._fade.isSettled;
     }
 
-    /** @returns {number} Current incoming fade progress [0..1] */
     get progress() {
         return this._fade.progress;
     }
 
-    /** @returns {{style: object, weight: number}|null} */
     get outgoing() {
         return this._fade.outgoing;
     }
 
-    /** @returns {object|null} Current target shadow style */
     get style() {
         return this._fade.style;
     }
 
     /**
      * Points the shadow at the clip's resolved target, whose read is the body authority the clip
-     * cuts. Called by the decoration on every pass after the target is resolved; a changed target
-     * *or* a changed read of the same target re-derives the next paint's cast from it, while a pass
-     * that leaves both the reference and the extent alone does nothing. The extent matters because
-     * a surface container can resize in place: the same object then hands the shadow a new body,
-     * the shadow's bound box does not move, and without the read comparison no paint would follow.
-     * @param {Clutter.Actor|null} clipTarget
+     * cuts. A changed target or a changed read of the same target re-derives the cast; the read
+     * matters because a surface container can resize in place while the shadow's bound box does not
+     * move, so nothing else would schedule that paint.
      */
     setClipTarget(clipTarget) {
         const next = clipTarget ?? null;
@@ -230,18 +202,15 @@ export const ShadowActor = GObject.registerClass({
 
     /**
      * Sets the body plan the next layout settles from. WindowDecoration hands the same plan to the
-     * clip, so the shadow's cast and the clip's cut derive one body by construction; the plan
-     * carries no resolved body, and the layout evaluates the settle from the live reads at its own
-     * relayout clock (which follows the actor's allocation, so per frame during a drag).
-     * @param {{previousBody:object|null, previousAuthority:object|null,
-     *   previousWindowSize:object|null}|null} plan
+     * clip, so cast and cut derive one body; the plan carries no resolved body, and the layout
+     * settles from the live reads at its own relayout clock.
      */
     setBodyPlan(plan) {
         this._bodyPlan = plan ?? null;
     }
 
     /**
-     * @returns {{width:number, height:number, cast:object|null, rightBand:object|null}} Live,
+     * @returns Live,
      *          read-only shadow geometry for the debug reply; every field is a read.
      */
     get diagnosticsView() {
@@ -263,7 +232,6 @@ export const ShadowActor = GObject.registerClass({
 
     /**
      * Sets display scale externally, eliminating Shell queries from paint passes.
-     * @param {number} scale
      */
     setScale(scale) {
         if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale) {
@@ -276,7 +244,7 @@ export const ShadowActor = GObject.registerClass({
     /**
      * The ring the client declared, per side. Stored, not the body: the body is recomputed
      * from this actor's live size on every paint, so a resize cannot leave a stale cast.
-     * @param {import('../lib/frame.js').Insets|null} insets - null = whole actor
+     * @param insets - null = whole actor
      */
     setShadowInsets(insets) {
         const next = insets
@@ -293,7 +261,7 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * @param {{radius:number,shadows:Array<object>,animate?:boolean,border?:boolean}} style - resolved for current window state
+     * @param style - resolved for current window state
      */
     setShadowStyle(style) {
         const {radius, shadows, animate = false} = style;
@@ -361,8 +329,10 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    // The layout decision (cast, slices, snapped quads) lives in the pure shadowLayout;
-    // this method owns only the Clutter box objects it reuses per physical scale.
+    /**
+     * The layout decision (cast, slices, snapped quads) lives in the pure shadowLayout;
+     * this method owns only the Clutter box objects it reuses per physical scale.
+     */
     _relayout(style, scale) {
         const layout = shadowLayout(style, {width: this.width, height: this.height},
             this._insets ?? ZERO_INSETS, scale, {
@@ -377,7 +347,7 @@ export const ShadowActor = GObject.registerClass({
         if (slicesChanged) {
             style.slices = layout.slices;
             style.corner = layout.corner;
-            style.cast = Object.freeze(layout.cast);
+            style.cast = layout.cast;
         }
 
         if (!style.boxesByScale)
@@ -409,12 +379,9 @@ export const ShadowActor = GObject.registerClass({
 
     /**
      * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip
-     * cuts (resolveClipSize of the target and the window actor); the shadow's box is bound to the
-     * window actor, so on a healthy window the two agree and this is silent. A disagreement is the
-     * glitch this warning exists to catch: the clip follows the container while the shadow follows
-     * the actor, and the right band shrinks. Edge-triggered, so a persistent disagreement is one
-     * WARNING naming the numbers rather than one per paint frame; agreement re-arms it.
-     * @param {{width:number,height:number}|null} authority
+     * cuts; the shadow's box is bound to the window actor, so on a healthy window the two agree and
+     * this is silent. Edge-triggered, so a persistent disagreement is one WARNING, not one per frame;
+     * agreement re-arms it.
      */
     _warnOnBodyDisagreement(authority) {
         const warning = shadowBodyWarning(authority,

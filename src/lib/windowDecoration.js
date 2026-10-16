@@ -28,9 +28,6 @@ import {getAppliedSubpixelPhase, getSurfaceContainer, getWindowActor, getWindowS
  * Names the actor a phase read came from, so `phaseAlignmentWarning` can refuse a pair read from
  * two actors. A null read stays null; a read with no actor (an X11 zero, a spec stub) stays
  * untagged and is compared as before.
- * @param {{x:number,y:number}|null} phase
- * @param {object|null} actor
- * @returns {{x:number,y:number,actor?:object}|null}
  */
 function tagPhase(phase, actor) {
     if (!phase || !actor)
@@ -39,20 +36,9 @@ function tagPhase(phase, actor) {
 }
 
 /**
- * The journal sink for the edge-triggered diagnostics. `console.warn` is not writable, so the
- * sink is injectable and a spec can observe the line instead of the process log.
- * @param {string} message
- */
-function warnToJournal(message) {
-    console.warn(message);
-}
-
-/**
  * A live actor's extent, or null when the actor is gone or its read throws. The body the clip and
  * the shadow act on comes from actors we do not own, so a torn-down read is "unknown" and leaves
  * the settle to fall back rather than aborting the pass.
- * @param {{width:number,height:number}|null} actor
- * @returns {{width:number,height:number}|null}
  */
 function readActorExtent(actor) {
     if (!actor)
@@ -65,12 +51,9 @@ function readActorExtent(actor) {
 }
 
 /**
- * The window's own size from this pass's reading, or null when neither rect is usable. The frame
- * rect is the logical window size a focus hand-off or an animation does not change; the buffer
- * rect is the fallback when the frame read is unavailable. It is the independent authority that
- * tells a body moving on its own from a window actually resizing.
- * @param {object|null} inputs - The pass's WindowReading
- * @returns {{width:number,height:number}|null}
+ * The window's own size from this pass's reading: the frame rect, else the buffer rect, or null when
+ * neither is usable. It is the independent authority that separates a body moving on its own from a
+ * window actually resizing.
  */
 function readWindowExtent(inputs) {
     for (const rect of [inputs?.frameRect, inputs?.bufferRect]) {
@@ -82,16 +65,12 @@ function readWindowExtent(inputs) {
 
 export class WindowDecoration {
     /**
-     * @param {Meta.Window} win
-     * @param {object} [options]
-     * @param {Clutter.Actor} [options.container] - Usually getWindowGroup()
-     * @param {Meta.Display} [options.display] - Usually getDisplay()
-     * @param {object} [options.St] - Usually imports.gi.St
-     * @param {Function} [options.RoundedClipEffect]
-     * @param {Function} [options.ShadowActor]
-     * @param {Function} [options.ResizeBand]
-     * @param {object} [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
-     * @param {Function} [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
+     * @param [options.container] - Usually getWindowGroup()
+     * @param [options.display] - Usually getDisplay()
+     * @param [options.St] - Usually imports.gi.St
+     * @param [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
+     * @param [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
+     * @param [options.warn] - Journal sink for the edge-triggered diagnostics; a spec injects one
      */
     constructor(win, options = {}) {
         this._win = win;
@@ -102,7 +81,7 @@ export class WindowDecoration {
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
-        this._warn = options.warn ?? warnToJournal;
+        this._warn = options.warn ?? (message => console.warn(message));
 
         // The overview's own decoration (mask, container opacity, shadow clone) is a
         // lifecycle of its own; the desktop reads it for clip decisions but never reaches in.
@@ -133,13 +112,9 @@ export class WindowDecoration {
         // Not 1.0: an unread scale is *unknown*, and `apply()` refuses to act on it. A decoration
         // rebuilt while the previous one kept its visuals must not read that as "scale = 1".
         this._scale = null;
-        // The settle reference points, advanced once per pass. `_lastBody` is the last settled
-        // body, `_lastAuthority` the authority it was settled from, and `_lastWindowSize` the
-        // window's own size at the pass. The pass hands them to the geometry path as the plan; the
-        // clip and the shadow read the actors and the window's own size live at their own clock and
-        // settle the body there, so the cut tracks the frame the compositor draws rather than
-        // freezing between the manager's 50 ms passes. `_lastBody`/`_lastAuthority` are only
-        // advanced when the pass's own settle acts on the fresh body, so the hold cannot latch.
+        // The settle reference points, advanced once per pass: the last settled body, its authority, and
+        // the window's own size then. The geometry path decides no body from them - the clip and the shadow
+        // settle live - and they advance only when a pass acts on the fresh body, so the hold cannot latch.
         this._lastBody = null;
         this._lastAuthority = null;
         this._lastWindowSize = null;
@@ -157,22 +132,18 @@ export class WindowDecoration {
         this.resizeBand = null;
     }
 
-    /** @returns {boolean} Whether the window is actively managed with a rounded clip effect */
     get isActivelyClipped() {
         return Boolean(this.clip && this.drawClip);
     }
 
-    /** @returns {boolean} Whether a clip effect is attached */
     get hasClip() {
         return Boolean(this.clip);
     }
 
-    /** @returns {boolean} Whether a shadow actor is attached */
     get hasShadow() {
         return Boolean(this.shadow);
     }
 
-    /** @returns {boolean} Whether an active resize band is attached */
     get hasResizeBand() {
         return Boolean(this.resizeBand);
     }
@@ -180,15 +151,6 @@ export class WindowDecoration {
     /**
      * Returns a fresh snapshot copy of the current decoration state flags.
      *
-     * @returns {{
-     *   hasClip: boolean,
-     *   drawClip: boolean,
-     *   isActivelyClipped: boolean,
-     *   hasShadow: boolean,
-     *   hasResizeBand: boolean,
-     *   ring: {insets: object|null, clear: boolean, erase: boolean}|null,
-     *   overview: {inOverview: boolean, hasMask: boolean, hasShadow: boolean, hasBypass: boolean},
-     * }}
      */
     get stateView() {
         return {
@@ -203,13 +165,10 @@ export class WindowDecoration {
     }
 
     /**
-     * A live, read-only view of the decoration's clip internals for the diagnostic reply. Unlike
-     * the compact `stateView` contract the e2e asserts, this reaches into the live clip effect for
-     * the values the width-shrink investigation needs. Every field is a read; nothing here mutates
-     * state, probes, or queues a repaint. A value that cannot be reached is null, which the reply
-     * renders as an explicit `unavailable`.
-     *
-     * @returns {object}
+     * A live, read-only view of the decoration's clip internals for the diagnostic reply. This is not the
+     * compact `stateView` contract the e2e asserts: it reaches into the live effect for the values the
+     * width-shrink investigation needs. Every field is a read, and an unreachable value is null, which the
+     * reply renders as `unavailable`.
      */
     get diagnosticsView() {
         const clip = this.clip;
@@ -247,8 +206,6 @@ export class WindowDecoration {
 
     /**
      * Safely retrieves the window compositor private actor.
-     * @param {Clutter.Actor} [actor]
-     * @returns {Clutter.Actor|null}
      */
     _getActor(actor = null) {
         if (actor)
@@ -260,13 +217,9 @@ export class WindowDecoration {
      * Applies evaluated actions and inputs to the tri-axis window decoration.
      * Core public interface: apply(params), setOverviewMode(inOverview), destroy(options).
      *
-     * @param {object} params
-     * @param {import('./detector.js').WindowActions} params.actions
-     * @param {object} params.inputs
-     * @param {Clutter.Actor} [params.actor] - Window actor
-     * @param {{actor: Clutter.Actor, phaseInTransform: boolean}} [params.target] - A
+     * @param [params.actor] - Window actor
+     * @param [params.target] - A
      *        resolveClipTarget() result; resolved from the window when omitted
-     * @param {boolean} [params.inOverview=false]
      */
     apply({actions, inputs, actor = null, target = null, inOverview = false, forceOverviewCorners = false}) {
         const winActor = this._getActor(actor);
@@ -291,18 +244,14 @@ export class WindowDecoration {
         }
         const clipTarget = this.clipTarget;
         const rawInsets = inputs.insets;
-        // An unreadable scale must not postpone the decoration. This pass can be the first frame of
-        // an actor Mutter has just re-created, and a postponed clip there is an *unclipped* frame -
-        // square corners and a visible margin, the focus hand-off flicker the journal shows. An
-        // approximate scale instead costs a fraction of a pixel of corner rounding for one frame,
-        // and only until the next pass reads the monitor for real. The body itself is still guarded
-        // against acting on a disagreeing read, by settleClipBody below.
+        // An unreadable scale must not postpone the decoration: this pass can be the first frame of an
+        // actor Mutter just re-created, and a postponed clip there is an unclipped frame - square corners
+        // and a visible margin. An approximate scale costs a fraction of a pixel for one frame; the body
+        // stays guarded by settleClipBody.
         const scale = this._resolveScale(inputs) ?? 1.0;
 
-        // Hand the geometry path the plan, not a resolved body: the actors and the window's own
-        // size are read live at paint, so the clip's cut and the shadow's cast settle from them
-        // there and track the frame the compositor is drawing. The pass advances the reference
-        // points on its own debounced clock, which is what the between-pass hold compares against.
+        // Hand the geometry path the plan, not a resolved body: the actors and the window's own size are
+        // read live at paint, so the cut and the cast settle from them there and track the frame being drawn.
         const windowSize = readWindowExtent(inputs);
         this._bodyPlan = {
             previousWindowSize: this._lastWindowSize,
@@ -316,35 +265,9 @@ export class WindowDecoration {
         this._lastAuthority = passSettle.authority;
         this._lastWindowSize = windowSize;
 
-        // One plan per pass: the insets the body uses, and the two meanings the clip shader gives
-        // the ring. Every consumer below reads this instead of recombining the detector's answer.
-        //
-        // The ring hold exists for a ring that moves while nothing else does: the buffer and the
-        // frame rects are read in one pass, and if they are updated a step apart the ring is
-        // momentarily a mixture of both, which shows as the window edge stepping in and back. So a
-        // ring that moved with the buffer standing still is held - the "subject itself unchanged"
-        // case the state-ownership rule allows.
-        //
-        // The witness is the BUFFER, not the window's own size, and it has to be: the ring is
-        // `buffer - frame`, so the buffer is the only quantity the ring's own pixels come from.
-        // `readWindowExtent` prefers the frame rect, and across a rebuild the frame can stand still
-        // while the ring legitimately changes - measured on an unmaximize, frame stayed at
-        // 400x300 through nine ring changes (20 -> 25) while the buffer grew 440 -> 450. Asking
-        // the frame whether the ring may move answers "no" for every one of those, which would hold
-        // a correct ring indefinitely.
-        //
-        // That is not hypothetical. The hold used to compare the window's own size against itself,
-        // because the comparison was made after `_lastWindowSize` had been overwritten with this
-        // pass's value from the same `inputs` (windowDecoration.js read it twice, from one object).
-        // The predicate was therefore constant false, so the hold fired on *every* ring change and
-        // then compared against its own output: one wrong ring latched in and never came back. A
-        // Firefox window that was first seen maximized kept ring 0 after being unmaximized, and the
-        // clip and the shadow's cutout both followed the full surface - a 24px band of the client's
-        // own shadowless CSD area between the window and its shadow.
-        //
-        // So the predicate is now the one it was always meant to be, and it is the buffer's. A
-        // rebuild moves the buffer on every one of its steps, so the hold releases through all of
-        // them; nothing else can latch, because any move at all re-opens the decision.
+        // One plan per pass: the insets the body uses, and the meanings the clip shader gives the ring.
+        // The ring hold covers a ring that moves while nothing else does; its witness is the BUFFER, since
+        // the ring is `buffer - frame` and a rebuild moves the buffer at every step.
         const buffer = inputs?.bufferRect ?? null;
         const bufferMoved = !this._lastBuffer || !buffer ||
             buffer.x !== this._lastBuffer.x || buffer.y !== this._lastBuffer.y ||
@@ -388,19 +311,9 @@ export class WindowDecoration {
     }
 
     /**
-     * The physical scale for this pass, or the last good one when the read is unknown.
-     *
-     * The monitor scale reaches the clip cut, the shadow cutout and the resize band in one pass,
-     * so substituting 1.0 for an unknown read would jump an already-correct fractional display to
-     * scale 1 and back. A read failure is transient - a topology change or a torn-down window - and
-     * says nothing about the monitor, so keep the scale the display was last built at; it starts at
-     * 1.0, the identity the scale=1 path is bit-identical to. The clip's own decision still sees the
-     * null (the detector skips the clip under prefer-crisp-text) rather than guessing an integer
-     * here. Deferring the whole pass would also freeze geometry that is not scale-driven, so this
-     * keeps the last good scale and lets the rest of the pass apply.
-     *
-     * @param {object|null} inputs
-     * @returns {number}
+     * The physical scale for this pass, or the last good one when the read is unknown. Substituting 1.0
+     * would jump an already-correct fractional display to scale 1 and back, since one pass feeds the clip
+     * cut, the shadow cutout and the resize band; a failed read is transient. The clip still sees the null.
      */
     _resolveScale(inputs) {
         const scale = inputs?.monitorScale;
@@ -410,14 +323,10 @@ export class WindowDecoration {
     }
 
     /**
-     * Updates decoration state when entering or exiting Shell overview.
-     *
-     * The overview's own visuals live in `this.overview`; this only hands it the readings it
-     * cannot take for itself, then keeps the desktop clip in step with the choice it made. The
-     * mask replaces the clip for every Wayland window, the legacy offscreen clip stays for
-     * XWayland or when the user forces corners, and on exit the clip comes back.
-     *
-     * @param {boolean} inOverview
+     * Updates decoration state when entering or exiting the Shell overview: it hands `this.overview` the
+     * readings it cannot take for itself, then keeps the desktop clip in step with the choice the overview
+     * made - the mask for every Wayland window, the offscreen clip for XWayland or a forced setting, and the
+     * clip back on exit.
      */
     setOverviewMode(inOverview) {
         const mode = this.overview.setMode(inOverview, {
@@ -439,7 +348,6 @@ export class WindowDecoration {
      * a pass enters or leaves the overview, and when the overview rebuilds its card under a
      * resize or workspace change - the two paths that can change the mode.
      *
-     * @param {'mask'|'clip'|'square'} mode
      */
     _syncOverviewClip(mode) {
         if (!this.clip)
@@ -453,12 +361,6 @@ export class WindowDecoration {
         this._syncClipParams();
     }
 
-    /**
-     * @param {boolean} wantEffect
-     * @param {Clutter.Actor|null} [clipTarget=null]
-     * @param {import('./frame.js').Insets|null} [insets=null]
-     * @param {boolean} [inOverview=false]
-     */
     _syncClip(wantEffect, clipTarget = null, insets = null, inOverview = false) {
         // Clip effect requires valid insets (null indicates frame does not fit inside buffer).
         const wanted = wantEffect && Boolean(insets);
@@ -476,13 +378,10 @@ export class WindowDecoration {
                 this.clipTarget = null;
             }
         } else if (wanted) {
-            // Re-pin when the effect is not actually on the wanted actor. The effect's own actor is
-            // the source of truth: apply() records the wanted target in `this.clipTarget` before
-            // calling here, so comparing the wanted target with that field is always false and a
-            // moved target is silently ignored. `get_actor()` cannot drift from what is attached,
-            // and `_removeClipEffect()` detaches from that same actor, so a replaced surface
-            // container is followed rather than left cutting the old actor (or lost with it when
-            // the old container goes away).
+            // Re-pin when the effect is not on the wanted actor. The effect's own `get_actor()` is the source
+            // of truth: comparing against `this.clipTarget` is always false, since apply() records the wanted
+            // target before calling here, so a moved target would be silently ignored. `_removeClipEffect()`
+            // detaches from that same actor.
             if (clipTarget !== (this.clip?.get_actor?.() ?? null)) {
                 this._removeClipEffect();
                 this.clipTarget = clipTarget;
@@ -500,10 +399,6 @@ export class WindowDecoration {
             this.setOverviewMode(inOverview);
     }
 
-    /**
-     * @param {boolean} wantShadow
-     * @param {Clutter.Actor} [actor]
-     */
     _syncShadow(wantShadow, actor = null) {
         const winActor = this._getActor(actor);
         if (!winActor)
@@ -521,12 +416,6 @@ export class WindowDecoration {
         }
     }
 
-    /**
-     * @param {boolean} want
-     * @param {object} inputs
-     * @param {import('./frame.js').Insets|null} insets
-     * @param {Clutter.Actor} [actor]
-     */
     _syncResizeBand(want, inputs, insets, actor = null) {
         if (!want) {
             this.resizeBand?.destroy?.();
@@ -568,12 +457,6 @@ export class WindowDecoration {
         });
     }
 
-    /**
-     * @param {object} style
-     * @param {import('./frame.js').Insets|null} insets
-     * @param {boolean} drawClip
-     * @param {number} [scale=1.0]
-     */
     _applyStyle(style, insets, drawClip, scale = 1.0) {
         this._style = style;
         this._scale = scale;
@@ -601,23 +484,10 @@ export class WindowDecoration {
     }
 
     /**
-     * Runs this pass's diagnostic invariants: the conditions a healthy pass must satisfy, made loud
-     * once per episode. The predicates are pure (`diagnosticInvariants.js`); the per-window latches
-     * live here, and each speaks only after `INVARIANT_STRIKES` consecutive violating passes.
-     *
-     * The buffer-versus-allocation pair is this pass's own assembled reading - the `bufferRect` the
-     * manager read from the Meta.Window against the window actor's live allocation. In health they
-     * are equal, so a disagreement means one of the two reads lagged the other in this pass; that
-     * is the right-edge transient the shadow-vs-authority warning cannot see, because there the
-     * authority itself is the value that moved.
-     *
-     * The phase pair is checked only on the fallback path. There the clip folds the mirror into its
-     * geometry, so a mirror that does not reproduce the phase Mutter applied moves our cut off the
-     * buffer. On the container path the phase is read back from the transform and the mirror is
-     * unused, so a disagreement there is not a defect.
-     *
-     * @param {object} inputs - The pass's assembled reading (bufferRect, wmClass, pid)
-     * @param {object} winActor - The window actor
+     * Runs this pass's diagnostic invariants: the conditions a healthy pass must satisfy, made loud once per
+     * episode. The predicates are pure, the per-window latches live here, and each speaks after
+     * `INVARIANT_STRIKES` consecutive violations. The buffer-versus-allocation pair is this pass's own
+     * reading; the phase pair is compared on the fallback path only.
      */
     _checkDiagnosticInvariants(inputs, winActor) {
         const label = windowIdentityLabel(inputs ?? {});
@@ -641,7 +511,6 @@ export class WindowDecoration {
      * container. The mirror is the reconstructed phase; the applied read is what Mutter put on the
      * surface container's transform.
      *
-     * @returns {{mirror: object|null, applied: object|null}}
      */
     _readPhases() {
         // One container, both reads: the mirror folds that container's layout and the applied read
@@ -659,8 +528,8 @@ export class WindowDecoration {
     /**
      * Advances one latch by one pass and logs the text when this pass is the episode's first
      * sustained violation.
-     * @param {string} key - The latch field name on this decoration
-     * @param {string|null} warning - This pass's warning text, or null when healthy
+     * @param key - The latch field name on this decoration
+     * @param warning - This pass's warning text, or null when healthy
      */
     _fireInvariant(key, warning) {
         const {state, message} = evaluateInvariant(this[key], warning);
@@ -688,7 +557,6 @@ export class WindowDecoration {
 
     /**
      * Restacks shadow actor below the window actor and syncs resize band stack order.
-     * @param {Clutter.Actor} [actor]
      */
     restack(actor = null) {
         const winActor = this._getActor(actor);
@@ -712,10 +580,9 @@ export class WindowDecoration {
         this.drawClip = false;
         this._style = null;
         this.ring = null;
-        // The ring hold's witness goes with the ring. A decoration that is dropped for a reading it
-        // could not take and rebuilt when the geometry reads again must not resume holding a ring
-        // from before the gap - the buffer it was compared against is gone with it, so any later
-        // comparison would be against a subject this decoration never saw.
+        // The ring hold's witness goes with the ring: a decoration dropped for a reading it could not take
+        // must not resume holding a ring from before the gap, because the buffer it was compared against is
+        // gone with it.
         this._lastBuffer = null;
         this._lastRing = null;
         this.overview.drop();
@@ -743,16 +610,9 @@ export class WindowDecoration {
     }
 
     /**
-     * Phased teardown of the window decoration:
-     * 1. Destroys the resize band (preventing stray clicks);
-     * 2. Drops the overview decoration;
-     * 3. Detaches and destroys clip and shadow actors (unless keepVisualsForClose is true).
-     *
-     * The signals, debounce and first-frame idle are the manager's, torn down there.
-     *
-     * @param {object} [options]
-     * @param {boolean} [options.keepVisualsForClose=false] - Keep clip and shadow attached
-     *        so MetaWindowActor's close animation completes without visual pop.
+     * Phased teardown: destroys the resize band (no stray clicks), drops the overview decoration, then
+     * detaches the clip and shadow actors unless the caller keeps the visuals for a close animation. The
+     * signals, the debounce and the first-frame idle belong to the manager and are torn down there.
      */
     destroy({keepVisualsForClose = false} = {}) {
         try {

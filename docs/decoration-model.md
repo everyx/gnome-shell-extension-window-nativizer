@@ -112,6 +112,14 @@ and triggers transient visual flicker. The manager drives the probe from the win
 the inspector from its hit-test and its pick request; a query handed an unprobed pid answers that it
 does not know yet, and never starts the read itself.
 
+The pid a classification is keyed on is read once and remembered. A later read during teardown can
+come back empty, which would leave the process classified with no owner left to forget it by;
+tracking happens on `window-created`, so an X11 client that sets `_NET_WM_PID` only after the window
+exists has its pid learned on the next reconcile instead. A `/proc` read that fails is "unknown",
+not a verdict: caching it as definitely not libadwaita would last the process's lifetime, so the
+entry is left empty and a bounded retry is scheduled, rather than answering for a window that
+recovered with our clip and band over its own handle.
+
 ## Which rectangle the clip lands on
 
 The actor a clip is attached to is not the rectangle to round: for a client-side
@@ -159,8 +167,10 @@ the client drew its frame there. Measured: WeChat's CEF window (XWayland, Depth 
 extents `4,4,4,4`) paints a 1px decorated edge inside its ring, which clearing removes
 along with the square corner it was drawn for.
 
-The reading is resolved once, in the detector, into a single plan: the insets the body
-uses, whether the ring is erased, and whether the stroke is pushed. The clip, the shadow and
+The reading is resolved once, in the detector, into a single plan: the ring decision it hands on
+(`clear`, `safeInset`), whether the stroke is pushed, and from which `WindowDecoration` resolves the
+insets the clip is attached with - the fresh ring, the previous one while a fresh read has drifted by
+a whole pixel, or `flatSafeInsets(scale)` for a flat client. The clip, the shadow and
 the overview mask each read that plan instead of re-deriving it, and `hasPositiveInsets`'
 second reading of the same insets is gone.
 
@@ -465,11 +475,16 @@ the reading being one-sided; the last is simply not verified yet.
 - **A client whose own corners are larger than ours** keeps a sliver of its shadow
   just inside our arc, where clearing cannot reach: erasing it would need its measured
   corner radius, which we do not have.
-- **A window whose body cannot be placed inside its buffer is never rounded.**
-  The margin reading answers null when the frame does not fit inside the buffer at all;
-  a rect read that throws is caught where the inputs are gathered, so the window is skipped —
-  same outcome: the body cannot be placed;
-  the guard keeps the clip from cutting a ring it cannot place. A framed XWayland window is not
+- **A window whose body cannot be placed inside its buffer is rounded as a flat one.**
+  The margin reading answers null when the frame does not fit inside the buffer at all, and a null
+  reading is read as *flat*: the clip is attached at `flatSafeInsets(scale)` instead of at a ring the
+  window never declared, so the ring is never cut where it cannot be placed and the corners are
+  still ours, one logical pixel inside. The guess is deliberate rather than a leftover: in the
+  desktop state a wrong one is recoverable, because a rule can pin the ring, the size or the shadow
+  for that window, so the choice is to read the margin as the case that is most often behind an
+  unreadable one - a client that painted to the actor edge - and keep the corners, rather than leave
+  the window square. A rect read that throws is caught where the inputs are
+  gathered and the window is skipped instead - a different outcome. A framed XWayland window is not
   that case: Mutter sets `buffer_rect = frame->rect`, and `frame->rect` is the frame grown
   by the frame's **invisible borders** (`window-x11.c`, `meta-x11-frame.c`), so the insets
   are that border width (≥ 0) and the body lands exactly on `frame_rect`. Measured in the
@@ -555,8 +570,11 @@ local damage included. Measured against one 500x350 target (`pnpm run test:perf`
 no idle CPU difference, about 0.59 ms of shell CPU per frame while dragging a resize (five
 counterbalanced rounds of `pnpm run test:perf`, the shell's CPU read from schedstat
 nanoseconds; the 0.9 ms recorded earlier came from a jiffy clock that cannot resolve it), and the
-framebuffer's size in the shell's memory. The harness' budget for that is 120 ms per 150 frames,
-which the measured 88 ms leaves about a third of.
+framebuffer's size in the shell's memory. The harness' budget for that is a ratio, 0.85 of the same
+round's disabled baseline (`BUDGET_MAX_STRESS_CPU_RATIO`), not a flat time: the delta tracked its own
+baseline and moved by ±13 ms between sessions, so a flat guard flaked instead of guarding. Six
+sessions read 0.514-0.681, and a failure inside the 0.06 marginal band exits 2 so the hook measures
+once more before it fails.
 
 That per-window cost is what `nativeLikeCorners.js` exists to avoid paying where the
 clip would be an identity — a window already drawn with libadwaita's radius.
@@ -597,18 +615,20 @@ geometry instead, where the FBO's box rounding can still part the two cuts. `dec
 owns that limitation and the model behind it.
 
 **How the container is identified.** The container's type (`MetaSurfaceContainerActorWayland`) is
-private and unreachable from GJS, so `getSurfaceContainer` (`src/platform/window.js`) infers it
-from the window actor's children in three branches: exactly one non-foreign child is the container
-(the original rule); otherwise the unique non-foreign child whose box passes
+private and unreachable from GJS, so `getSurfaceContainer` (`src/platform/window.js`) infers it from
+the window actor's children: a sole non-foreign child is the container, an unallocated one is
+returned so the resolver defers on it, and otherwise the unique non-foreign child whose box passes
 `isCompatibleSurfaceGeometry` - origin at (0,0), dimensions equal to the buffer, the same predicate
-the clip re-checks before attaching - is the container; otherwise the answer is null and the
-resolver falls back to the window actor, never a guess. The geometric filter is what separates
-Mutter's black full-monitor backing (`do_sync_geometry`'s plain `Clutter.Actor`, not an `St.Widget`,
-so it counts as non-foreign) from the buffer-sized container for an acked-fullscreen window that
-does not cover the monitor opaquely; when both are monitor-sized - the opaque-fullscreen shape -
-two children pass and the third branch falls back. Every actor the rule offers has passed the same
-`isCompatibleSurfaceGeometry` predicate the container path trusts, so the new branch can never
-select something the container path would have rejected.
+the clip re-checks before attaching - is the container. A geometry that cannot be verified is not
+accepted: an unreadable buffer or an unallocated candidate once failed open, so an offset or
+letterboxed container could be attached on a failed read and the clip then cut the wrong body. The four branches, with what each does about
+an ambiguous tree, are in *Identifying the surface container* below. The geometric filter is what
+separates Mutter's black full-monitor backing (`do_sync_geometry`'s plain `Clutter.Actor`, not an
+`St.Widget`, so it counts as non-foreign) from the buffer-sized container for an acked-fullscreen
+window that does not cover the monitor opaquely; when both are monitor-sized - the opaque-fullscreen
+shape - two children pass and the tree is ambiguous, so the rule falls back exactly as a tie does.
+Every actor the rule offers has passed the same `isCompatibleSurfaceGeometry` predicate the container
+path trusts, so the new branch can never select something the container path would have rejected.
 
 **The residual, and its consequence.** If the real container has not allocated yet while another
 non-foreign child is already buffer-compatible, the unique-compatible branch could take that
@@ -659,7 +679,11 @@ from one actor and a transform read from another are a phase against a position 
 positive where a window actor's layout position `(-960,-600)` was reported as a phase - so the pair
 is unavailable and takes no part in the comparison. A read whose magnitude exceeds
 `PHASE_MAGNITUDE_BOUND` (2 logical px, far above the sub-one-pixel range of a real phase) is
-likewise unavailable, but the journal still gets the raw value so the misread is visible.
+likewise unavailable, but the journal still gets the raw value so the misread is visible. The bound
+is generous: Mutter's `surface_container_apply_transform` shifts a layout coordinate to the nearest
+physical grid line, so a real phase is smaller than half a physical pixel - below `1 / scale`
+logical px, strictly under one logical pixel at any monitor scale - while a layout position or a
+transform read from the wrong actor is hundreds of pixels.
 
 **The ordering that keeps the read fresh is an assumption, not something we own.**
 `ShadowActor`'s own `notify::allocation` handler sees a fresh transform only because Mutter
@@ -680,6 +704,32 @@ mirror is not machine-guarded - the monitor scan in `resolveHighestScaleMonitorI
 also re-checked by hand on a Mutter bump: re-read
 `meta_window_find_highest_scale_monitor_from_frame_rect` (`window.c`) and that manager function and
 confirm the scan still matches, as `docs/shell-compatibility.md` records.
+
+**What the mirror's monitor scan answers, and why.** `resolveHighestScaleMonitorIndex` returns `-1`
+for a degenerate frame - unreadable, or a width or height that is not positive - which the caller
+maps to a zero offset; a readable frame that overlaps no monitor was already `-1` for the same
+reason. It used to return `win.get_monitor()`, the main monitor, as a third rule on top of upstream's
+two, but Mutter's own two writers of the cached pointer disagree: `meta_window_constructed` stores
+the current logical monitor (`window.c:1250-1260`) while `meta_window_update_monitor` stores
+`window->monitor`, the last resolved main monitor (`window.c:4195-4199`).
+`surface_container_apply_transform` (`meta-window-actor-wayland.c:130`) applies no phase at all while
+that pointer is NULL, so mirroring either path buys nothing once a decoration is live - and a
+degenerate frame means exactly that it is not. An unreadable monitor geometry, count or intersecting
+scale is answered as null rather than skipped or defaulted: "unknown" and "no overlap" are different
+answers, and `getMonitorCount` would fold a failed read into 0 (an empty scan, read as no overlap)
+and `getMonitorScale` into 1.0 (an integer scale, read as a zero offset). Those strict reads are
+scoped to this resolver; the helpers keep their defaults for every other caller.
+
+**The mirror's snap is `roundf`, not `Math.round`.** `Math.round` sends an exact half toward
++Infinity while `roundf` sends it away from zero, so on a negative half they differ by one snapped
+integer: at 1.25, `relX = -2` gives `-2.5`, where `roundf` snaps to `-3` and `Math.round` stays at
+`-2` - 0.8 logical px, one physical pixel of offset. An earlier revision claimed this could not
+happen; that holds on the 4/3 path, where an integer times 4/3 never ends in .5, but not in general:
+on a 1.25 monitor the negative halves are reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5.
+`roundHalfAwayFromZero` (`platform/numeric.js`) encodes `roundf`'s rule and leaves the 4/3 path
+unchanged. The window's `translation_x`/`translation_y` is deliberately not a term of the mirror:
+Mutter computes the phase from layout coordinates and carries the translation in the base transform,
+so folding it in would move our cut while the buffer was somewhere else.
 
 Mutter never needs the clip pass, and Shell 50/51 ships no rounded-clip effect (the
 typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
@@ -912,6 +962,18 @@ The clip and the shadow describe the same body, so they read it from the same ca
 A disagreement is not silent: when the authority and the shadow's own body differ by more than `SHADOW_BODY_TOLERANCE = 1.0` logical px, one WARNING per episode names both body extents, the window actor, and the signed delta, each with two decimals (agreement re-arms it). The tolerance is one logical pixel rather than the old half: at a fractional monitor scale the container's logical body is `buffer / scale` while the window actor's allocation is an integer, so the two differ by a sub-pixel residue by construction, and half a pixel sat below that and false-positived on ordinary windows. The observed defect is 2px, so 1.0 still separates it from normality. Health means it never fires — the e2e log audit treats an unexpected WARNING as a failure — and on a real machine it is what leaves the evidence when something outside our code moves one of the two.
 
 **An unsettled body is not acted on.** The settle runs on the paint clock, but it holds the previous settled body in the same two cases. When the container's read and the window actor disagree by more than `BODY_SETTLE_TOLERANCE` (1.0) logical px and no resize is in flight, at least one of the two reads is stale and this paint alone cannot say which. When they agree but the body moved by `BODY_SETTLE_TOLERANCE` or more since the previous pass while the window's own size (`frameRect`, else `bufferRect`) did not, the pair is stale together - a focus hand-off can leave both trailing by the same whole pixel, which the pair comparison reads as agreement - and the window's own size is the independent authority that separates a moving body from a resizing window; when the window resized too, the body is genuinely new and is used. A resize in flight is the one case the pair disagreement is already resolved: the window actor is the fresh read by construction, so the lagging container is expected and the actor is acted on instead of held. In the two hold cases the geometry path keeps the previous settled body: the clip's cut and the shadow's cast both keep the geometry they had, and the visible decoration does not shift. The fresh authority is still returned, so the body-authority warning above still fires and the journal keeps the record. The hold cannot latch - every paint re-reads the live quantities, and the between-pass rule compares the fresh authority with the previous pass's, which `WindowDecoration` advances once per pass, so once the body stops moving the fresh body is acted on and the settled body is advanced. A degenerate target read is the documented window-actor fallback, not a disagreement, and does not defer.
+
+**The ring is held on the buffer's witness.** The ring is read in one pass, and its two inputs - the
+buffer and the frame rect - can be updated a step apart, which leaves a ring that is a mixture of both
+and shows as the window edge stepping in and back. A ring that moved while its witness stood still is
+therefore held; any move at all re-opens the decision, so nothing latches. The witness has to be the
+**buffer**: the ring is `buffer - frame`, so the buffer is the only quantity the ring's own pixels come
+from. A rebuild moves it on every one of its steps - measured on an unmaximize, the frame stayed at
+400x300 through nine ring changes (20 -> 25) while the buffer grew 440 -> 450 - whereas the frame can
+stand still while the ring legitimately changes, so asking the frame whether the ring may move would
+hold a correct ring indefinitely. A decoration dropped for a reading it could not take drops the
+witness with it: the buffer it was compared against is gone, so a later hold cannot compare against a
+subject this decoration never saw.
 
 **The shadow is not resized to match; only its cast follows the authority.** That is deliberate, and it was verified rather than assumed: driving the authority larger than the shadow actor's own allocation in a nested session at 1.3333 (control 700×500; +28 ⇒ +28.5 logical px of visible shadow; +120 ⇒ +120) showed the added area is painted. `ShadowActor` overrides no paint volume, so a custom paint node is not clipped by the allocation, and the extra slices appear.
 

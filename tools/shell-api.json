@@ -536,18 +536,6 @@
             }
         },
         {
-            "id": "backend_get_default_seat",
-            "member": "backend.get_default_seat()",
-            "repo": "mutter",
-            "kind": "fn",
-            "file": "clutter/clutter/clutter-backend.h",
-            "sym": "clutter_backend_get_default_seat",
-            "decl": {
-                "50": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);",
-                "51": "CLUTTER_EXPORT ClutterSeat * clutter_backend_get_default_seat (ClutterBackend *backend);"
-            }
-        },
-        {
             "id": "mutter_api_version",
             "member": "Meta-<api> / Shell-<api> typelibs",
             "repo": "mutter",

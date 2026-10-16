@@ -50,9 +50,7 @@ export const INSPECTOR_DBUS_IFACE_XML = `
 </node>`;
 
 /**
- * @param {object} winOrReading - Meta.Window or existing WindowReading
- * @param {string|null} [wmClassOverride]
- * @returns {Record<string,string>}
+ * @param winOrReading - Meta.Window or existing WindowReading
  */
 export function extractWindowProperties(winOrReading, wmClassOverride = null) {
     if (!winOrReading)
@@ -88,21 +86,9 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
 }
 
 /**
- * Builds the pick reply's subpixel-phase diagnostic fields, so a user can compare the phase we
- * cut on with the phase Mutter actually applied.
- *
- * The mirror is `getWindowSubpixelOffset`; the applied phase is read back from the surface
- * container's cached transform (`getAppliedSubpixelPhase`). The applied read is also the
- * production source on the container path (the shadow reads it too, see `shadowPhaseOffset`), so
- * this reply is where a user compares the two when the mirror's monitor scan cannot be exercised
- * locally. The reply is an `a{ss}` map, so every field is a string, and an unreadable applied
- * phase says so rather than claiming a zero; an unreadable monitor scan answers "unknown" for
- * the mirror for the same reason. This runs only when a user asks for the pick, never per frame.
- *
- * @param {object|null} win - Meta.Window
- * @param {object|null} [St] - The St namespace the clip path uses, so both phase reads identify
- *        the surface container by the clip's rule rather than the constructor-name heuristic
- * @returns {Record<string,string>} mirrorPhaseX/Y and appliedPhaseX/Y
+ * Builds the pick reply's subpixel-phase diagnostic fields, letting a user compare the mirror we
+ * cut on with the phase Mutter applied. Both are strings; an unreadable read says so rather than
+ * claiming zero. Runs only on a pick, never per frame. Both reads use the clip's container rule.
  */
 export function extractPhaseProperties(win, St = null) {
     const mirror = getWindowSubpixelOffset(win, St);
@@ -131,7 +117,7 @@ export function extractPhaseProperties(win, St = null) {
  * The decoration-side diagnostics keys, in reply order. Named once so `extractDiagnosticProperties`
  * and `WindowDecoration.diagnosticsView` cannot silently disagree about what crossing the bus is.
  * The live clip and the shadow over the same body are carried here; the overview is deliberately
- * left out (see development.md).
+ * left out.
  */
 export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
     'clipTargetType',
@@ -150,16 +136,10 @@ export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
 ]);
 
 /**
- * Reads the D-Bus in-args into the two facts the inspector branches on: whether the required
- * boolean was passed and whether it asks for diagnostics. `debug = false` is exactly the quiet
- * interactive pick; there is one knob, so a map would add parsing rules without adding meaning.
- *
- * A call with no argument at all is *invalid*, not `false`: D-Bus has no default arguments, and
- * treating a caller that forgot the argument as a quiet pick would hide the arity break. There is
- * no non-interactive path - diagnostics only add fields to the pick the user is about to make.
- *
- * @param {Array|null} params - GJS hands the in-args to `PickWindowAsync` as one array
- * @returns {{valid: boolean, diagnostics: boolean}}
+ * Reads the D-Bus in-args into the two facts the inspector branches on: was the required boolean
+ * passed, and does it ask for diagnostics. A call with no argument is *invalid*, not `false` - D-Bus
+ * has no default arguments, and treating it as a quiet pick would hide the arity break. There is no
+ * non-interactive path.
  */
 export function parseDebugFlag(params) {
     if (!Array.isArray(params) || params.length < 1)
@@ -174,15 +154,9 @@ export function parseDebugFlag(params) {
 }
 
 /**
- * Renders the cached Adwaita classification for the reply without starting a probe. A diagnostic
- * must not change what it observes, so the async read is never triggered here: `unknown` means the
- * process has not been classified yet, `cannotTell` means there is no classifier to ask, and only
- * a landed answer becomes `true`/`false`. Without this a cache miss could be read as a negative
- * "not libadwaita" answer.
- *
- * @param {object|null} classifier - ProcessClassifier, or null when the manager has none
- * @param {number} pid
- * @returns {'true'|'false'|'unknown'|'cannotTell'}
+ * Renders the cached Adwaita classification without starting a probe: a diagnostic must not change
+ * what it observes. `unknown` means not yet classified, `cannotTell` means no classifier, and only a
+ * landed answer becomes `true`/`false` - without that a cache miss would read as "not libadwaita".
  */
 export function cachedNativeLikeCorners(classifier, pid) {
     if (!classifier || typeof classifier.adwaitaLook !== 'function' || !(pid > 0))
@@ -197,8 +171,6 @@ export function cachedNativeLikeCorners(classifier, pid) {
  * Renders a read value as the stringly `a{ss}` reply expects. Nullish and non-finite reads become
  * an explicit `unavailable` rather than being dropped, so a caller can tell "not reachable" from
  * "not in this reply".
- * @param {*} value
- * @returns {string}
  */
 function diagnosticText(value) {
     if (value === null || value === undefined)
@@ -212,7 +184,6 @@ function diagnosticText(value) {
     return String(value);
 }
 
-/** @param {object|null} rect @returns {string} JSON x/y/width/height, or `unavailable` */
 function diagnosticRect(rect) {
     if (!rect)
         return 'unavailable';
@@ -222,24 +193,14 @@ function diagnosticRect(rect) {
     return JSON.stringify({x, y, width, height});
 }
 
-/** The diagnostics-only field names per logical read group. */
 const PHASE_FIELDS = Object.freeze([
     'mirrorPhaseX', 'mirrorPhaseY', 'appliedPhaseX', 'appliedPhaseY',
 ]);
 
 /**
- * Builds the diagnostics-only half of the `PickWindow` reply: the live geometry and the live
- * clip internals the width-shrink question was blind on.
- *
- * Every live read is isolated in its own group, so one throw degrades only that group's fields to
- * `unavailable` rather than discarding the whole reply - which is exactly when a transient failure
- * is most worth observing. Nothing writes, probes or queues a repaint.
- *
- * @param {object|null} win - Meta.Window
- * @param {object|null} [deco] - The window's live WindowDecoration, or null when untracked
- * @param {object} [reads] - Read seam; defaults to the live platform reads, tests inject throws
- * @param {object|null} [St] - The St namespace the clip path uses, forwarded to the phase reads
- * @returns {Record<string,string>}
+ * Builds the diagnostics-only half of the `PickWindow` reply. Every live read is isolated in its own
+ * group, so one throw degrades only that group to `unavailable` rather than discarding the reply,
+ * and nothing writes, probes or queues a repaint.
  */
 export function extractDiagnosticProperties(win, deco = null, reads = null, St = null) {
     const read = reads ?? {
@@ -284,9 +245,6 @@ export function extractDiagnosticProperties(win, deco = null, reads = null, St =
 
 /**
  * Assigns one logical read group, degrading just its fields to `unavailable` when it throws.
- * @param {Record<string,string>} properties
- * @param {string[]} keys
- * @param {() => object} read
  */
 function readGroup(properties, keys, read) {
     try {

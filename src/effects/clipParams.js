@@ -1,18 +1,12 @@
 /**
- * Pure uniform-upload decisions for RoundedClipEffect.
- *
- * `setParams()` and `vfunc_paint_target()` decide what to send to the GPU by diffing the
- * incoming values against the cached ones. That diff is arithmetic, but it lived inside a
- * Cogl/Clutter class, so no unit test could reach it. It lives here now: the effect hands
- * over the previous and next values, this module decides what changed, and the effect only
- * performs the uploads.
+ * Pure uniform-upload decisions for RoundedClipEffect: the effect hands over the previous and next
+ * values, this module decides what changed, and the effect only performs the uploads. The diff is
+ * arithmetic that used to live inside a Cogl/Clutter class, where no unit test could reach it.
  */
 
 /**
  * Normalizes an outline to the shader's vec4. `null` means "no outline", which the shader
  * reads as alpha 0.
- * @param {{color:number[],alpha:number}|null} outline
- * @returns {number[]}
  */
 export function outlineVector(outline) {
     return outline
@@ -26,31 +20,18 @@ export function outlineVector(outline) {
 }
 
 /**
- * Whether a derived body frame can be painted without erasing the actor.
- *
- * A frame with a non-positive extent has no body. Compositing it is not a no-op: the clip shader's
- * `inSquare` is 0 everywhere, so the offscreen effect draws nothing and the window reads as fully
- * transparent while its sibling shadow actor keeps drawing. The caller suspends the clip instead.
- *
- * @param {{width:number,height:number}|null|undefined} frame
- * @returns {boolean}
+ * Whether a derived body frame can be painted. A frame with a non-positive extent has no body, and
+ * compositing it is not a no-op: the shader's `inSquare` is 0 everywhere, so the window reads as fully
+ * transparent while its shadow sibling keeps drawing. The caller suspends the clip instead.
  */
 export function isPaintableFrame(frame) {
     return Boolean(frame) && frame.width > 0 && frame.height > 0;
 }
 
 /**
- * The size the clip derives its frame from, or null when there is no body to paint.
- *
- * The target's own allocation is preferred: normally it is the buffer. A Wayland surface
- * container's allocation can read 0 while its surface child still paints at full size (a buffer
- * swap while opening, a layout that has not settled), so a non-positive target read falls back to
- * the window actor - the authority for whether the window has a body. Only when the window actor
- * has no extent either is the target genuinely degenerate.
- *
- * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
- * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
- * @returns {{width:number,height:number}|null} Paint-able size, or null to suspend
+ * The size the clip derives its frame from: the target's own allocation, falling back to the window
+ * actor when that read is not positive - a Wayland container's allocation can read 0 while its surface
+ * child still paints at full size - or null when neither has an extent, which suspends the clip.
  */
 export function resolveClipSize(targetSize, windowActorSize) {
     if (isPaintableFrame(targetSize))
@@ -61,32 +42,17 @@ export function resolveClipSize(targetSize, windowActorSize) {
 }
 
 /**
- * How far the clip target's read and the window actor may differ before the body is unsettled.
- *
- * The two reads are the same rectangle in health, but they are not always written in the same
- * step: a Wayland surface container's allocation can trail the window actor's for a pass around a
- * focus hand-off. At a fractional monitor scale the container's logical extent is `buffer / scale`
- * while the actor's allocation is an integer, so a sub-pixel difference between the two is normal
- * by construction and must not be read as movement. One logical pixel sits above that residue and
- * below the whole-pixel defects this exists to separate (the observed one was 2px), so it is the
- * threshold both the settle and the body-authority warning use.
+ * How far the clip target's read and the window actor may differ before the body is unsettled: one
+ * logical pixel, which sits above the fractional-scale residue between `buffer / scale` and an integer
+ * allocation, and below the whole-pixel defects this separates. The settle and the authority warning
+ * share it.
  */
 export const BODY_SETTLE_TOLERANCE = 1.0;
 
 /**
- * Whether the window's own size moved since the previous pass, i.e. a resize is in flight.
- *
- * The window's frame rect (else its buffer rect) is an integer rectangle, so any difference is a
- * whole logical pixel and `!==` draws the same boundary a one-pixel tolerance would. The read is
- * independent of the two body reads: during an interactive resize the window actor takes its new
- * size a frame or two before the surface container does, and this predicate is what tells that lag
- * apart from a body that moved on its own (a focus hand-off leaves the window's own size standing).
- * An unknown size on either side is not a resize: with no previous pass there is nothing to
- * compare, and a failed read is not evidence of movement.
- *
- * @param {{width:number,height:number}|null|undefined} windowSize - The window's own size this pass
- * @param {{width:number,height:number}|null|undefined} previousWindowSize - The previous pass's
- * @returns {boolean}
+ * Whether the window's own size moved since the previous pass, i.e. a resize is in flight. The read is an
+ * integer rectangle, so `!==` draws the same boundary a one-pixel tolerance would. An unknown size on
+ * either side is not a resize: a failed read is no evidence of movement.
  */
 export function windowResizedSince(windowSize, previousWindowSize) {
     if (!isPaintableFrame(windowSize) || !isPaintableFrame(previousWindowSize))
@@ -96,21 +62,10 @@ export function windowResizedSince(windowSize, previousWindowSize) {
 }
 
 /**
- * The body authority for a pass: which of the two reads the clip's cut and the shadow's cast must
- * follow.
- *
- * In steady state the clip target's read wins - on a Wayland window that is the surface container,
- * the client's real surface - and the window actor is only the documented fallback when the target
- * read is unusable (`resolveClipSize`). While a resize is in flight the preference flips: the
- * window actor takes its new size first and the container's allocation trails it by a frame or
- * two, so the actor's read is the fresh one and the cut must track the frame the user is dragging
- * rather than the older, smaller box. The unpreferred read is still the fallback when the
- * preferred one has no extent.
- *
- * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
- * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
- * @param {boolean} resizeInFlight - Whether the window's own size moved since the previous pass
- * @returns {{width:number,height:number}|null}
+ * The body authority for a pass: the read the clip's cut and the shadow's cast must follow. The clip
+ * target's read wins in steady state, the window actor is its fallback; while a resize is in flight
+ * the preference flips, because the actor takes its new size first and the container trails by a
+ * frame or two.
  */
 export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight) {
     if (!resizeInFlight)
@@ -123,44 +78,9 @@ export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight
 }
 
 /**
- * The body the clip and the shadow should act on, holding the last good one while the two reads
- * that name it disagree **or** while the body moves on its own between passes.
- *
- * The authority itself is chosen by `resolveBodyAuthority`: the clip target's read (the surface
- * container) in steady state, the window actor's read while a resize is in flight, because then
- * the actor takes its new size before the container's allocation follows. `resolveClipSize` then
- * answers which usable read that preference lands on; it does not ask whether the two reads agree,
- * nor whether the body has moved since the last pass. Two cases are held:
- *
- *   - within a pass, the target's read and the window actor's read differ by more than `tolerance`,
- *     so at least one is stale and this pass alone cannot say which - unless a resize is in
- *     flight, which already says the window actor is the fresh one and makes the lagging pair
- *     expected rather than unsettled;
- *   - between passes, the body authority moved by `tolerance` or more since the previous pass's
- *     authority while the window's own size (`windowSize`) did not. A focus hand-off can leave the
- *     target and the window actor trailing together, so the pair comparison sees agreement while
- *     the cut is a whole pixel or two off; the window's own size is the independent authority that
- *     separates a moving body from a resizing window. Comparing the fresh authority with the last
- *     pass's (not with the held body) is what makes the hold last one pass: once the authority
- *     stops moving it is acted on, even though the held body still differs from it.
- *
- * In both cases the fresh authority is returned (so the body-authority warning still names it) but
- * the *acted-on* body stays the previous settled one, keeping the clip's cut and the shadow's cast
- * on identical geometry. Neither hold can latch: every pass re-reads the live quantities.
- *
- * A degenerate target read is the documented fallback, not a disagreement: `resolveClipSize`
- * already falls back to the window actor there, and that verdict is stable across paints.
- *
- * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's own read
- * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's read
- * @param {{width:number,height:number}|null} [previousBody=null] - The last settled body
- * @param {{width:number,height:number}|null} [previousAuthority=null] - The previous pass's body
- *        authority (the fresh read, whether or not it was acted on)
- * @param {{width:number,height:number}|null} [windowSize=null] - The window's own size this pass
- * @param {{width:number,height:number}|null} [previousWindowSize=null] - The previous pass's
- * @param {number} [tolerance=BODY_SETTLE_TOLERANCE]
- * @returns {{authority: {width:number,height:number}|null, body: {width:number,height:number}|null,
- *   unsettled: boolean}}
+ * The body the clip and the shadow should act on, holding the last good one while the two reads that name
+ * it disagree within a pass, or while the authority moved between passes with the window's own size
+ * standing still. The fresh authority is still returned so the warning names it; neither hold can latch.
  */
 export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     previousAuthority = null, windowSize = null, previousWindowSize = null,
@@ -173,20 +93,10 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     // actor by construction, and the actor is the authority for whether the window has a body.
     if (!isPaintableFrame(targetSize) || !isPaintableFrame(windowActorSize))
         return {authority, body: authority, unsettled: false};
-    // Strictly greater: a difference of exactly the tolerance is agreement, which is also what the
-    // warning's own comparison says (`|delta| <= tolerance` is silent there). The two must read the
-    // same boundary or a pair differing by exactly it would warn while still being acted on.
-    //
-    // Raw reads, because both sides name the same rectangle: Mutter sizes the window actor from
-    // the window's buffer rect (`meta_window_actor_sync_actor_geometry` takes its position and
-    // size from `meta_window_get_buffer_rect`), and the clip target is only adopted when its
-    // geometry matches that same buffer rect, so a declared ring widens both reads or neither.
-    // Reducing each side to "the body it implies" (the target by the clip's insets, the actor by
-    // the declared ring) compared the target's body against the actor's buffer instead: measured
-    // live on a 25 px-per-side window (buffer 850x650, frame 800x600, both readers 850x650), the
-    // raw difference is 0 while the reduced one is 50 - so every healthy pass of every window
-    // that declares a ring read as a disagreement, `unsettled` stayed true, and the one-pass
-    // hold could only ever be released by a window resize, not by the pair agreeing again.
+    // Strictly greater: a difference of exactly the tolerance is agreement, the same boundary the warning
+    // uses. Both sides are compared raw, because they name the same rectangle - Mutter sizes the actor from
+    // the buffer rect and the target is adopted only when it matches - so a declared ring widens both or
+    // neither.
     const pairDisagrees =
         Math.abs(targetSize.width - windowActorSize.width) > tolerance ||
         Math.abs(targetSize.height - windowActorSize.height) > tolerance;
@@ -195,15 +105,9 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     const bodyMoved = isPaintableFrame(previousAuthority) &&
         (Math.abs(authority.width - previousAuthority.width) >= tolerance ||
          Math.abs(authority.height - previousAuthority.height) >= tolerance);
-    // The window's own size is read independently; when it moved too the body is genuinely new,
-    // and an unknown window size counts as moved. That is the one asymmetry here, and it is
-    // deliberate: `windowResizedSince` above reads the same unknown as "not a resize" because there
-    // it only picks which read is the authority, where the steady-state preference is the safe
-    // answer. Here the unknown decides whether to veto the hold, and vetoing freezes the cut for a
-    // pass. An unreadable window size is an interactive drag - the one case where a frame of lag is
-    // most visible - so the unknown is spent on acting. The accepted cost is the focus hand-off
-    // this hold was written for: with no window size to compare, a body that moved while the window
-    // stood still is followed for that pass instead of held.
+    // An unknown window size counts as moved here, deliberately: `windowResizedSince` reads it as "not a
+    // resize" because there it only picks the authority. Here it vetoes the hold, and vetoing freezes the
+    // cut - an unreadable size is a drag, where a frame of lag shows most.
     const windowKnown = isPaintableFrame(windowSize) && isPaintableFrame(previousWindowSize);
     const windowMoved = !windowKnown ||
         Math.abs(windowSize.width - previousWindowSize.width) >= tolerance ||
@@ -223,27 +127,9 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
 }
 
 /**
- * The body one paint (or the shadow's matching relayout) acts on, resolved from the live actor
- * reads and the pass's plan.
- *
- * The settle rules are the ones `settleClipBody` has always applied; what this adds is their
- * clock. The two body reads - the clip target's and the window actor's - are taken live at
- * paint, so the frame the shader uses is the frame the compositor is drawing that frame, rather
- * than the frame frozen at the last debounced pass. The window's own size is read live too
- * (`windowSize`), because it is what separates a resize from a body that moved on its own, and a
- * resize must be seen on the frame it starts, not 50 ms later; only its previous value
- * (`plan.previousWindowSize`), the last settled body and the previous authority stay on the pass
- * clock. The two clocks are deliberate: the geometry follows the frame, the hold keeps its pass
- * boundary.
- *
- * @param {{width:number,height:number}|null|undefined} targetSize - The clip target's live read
- * @param {{width:number,height:number}|null|undefined} windowActorSize - The window actor's live read
- * @param {{width:number,height:number}|null} windowSize - The window's own size, live at paint
- * @param {{previousBody?:object|null, previousAuthority?:object|null,
- *   previousWindowSize?:object|null, tolerance?:number}|null} [plan] - The pass plan; a null plan
- *   (before the first pass) behaves as an unknown previous read
- * @returns {{authority: {width:number,height:number}|null, body: {width:number,height:number}|null,
- *   unsettled: boolean}}
+ * The body one paint (or the shadow's matching relayout) acts on, resolved from live actor reads and the
+ * pass's plan. The settle rules are `settleClipBody`'s; what this adds is their clock: the reads are live
+ * at paint, while the previous values stay on the pass clock.
  */
 export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan = null) {
     return settleClipBody(targetSize, windowActorSize,
@@ -252,37 +138,19 @@ export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan =
         plan?.tolerance ?? BODY_SETTLE_TOLERANCE);
 }
 
-/**
- * @param {{left:number,top:number,right:number,bottom:number}|null} a
- * @param {{left:number,top:number,right:number,bottom:number}|null} b
- * @returns {boolean}
- */
 function sameInsets(a, b) {
     return Boolean(a) && Boolean(b) &&
         a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
 }
 
-/**
- * @param {number[]} a
- * @param {number[]} b
- * @returns {boolean}
- */
 function sameVector(a, b) {
     return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }
 
 /**
- * Diffs the styling decisions `setParams()` stores and uploads.
- *
- * `prev` is the effect's cached state, or null when nothing is cached yet. Its `outline` is
- * the stored normalized vec4; `next.outline` is the raw `{color, alpha}` or null. The
- * returned `frame: true` is not an upload: it is the invalidation the caller applies to the
- * cached frame, because insets moved the body that the next paint recomputes from.
- *
- * @param {object|null} prev - {insets, radius, outline, erase, clearStroke, scale}
- * @param {object} next - {insets, radius, outline, erase, clearStroke, scale}
- * @returns {{changed:boolean, scale?:number, radius?:number, outline?:number[],
- *   erase?:boolean, clearStroke?:boolean, frame?:true}}
+ * Diffs the styling decisions `setParams()` stores and uploads. `prev` is the cached state, or null when
+ * nothing is cached. A returned `frame: true` is not an upload: it invalidates the cached frame, because
+ * the insets moved the body the next paint recomputes from.
  */
 export function clipParamChanges(prev, next) {
     const scaleValid = typeof next.scale === 'number' && next.scale > 0 && Number.isFinite(next.scale);
@@ -319,9 +187,8 @@ export function clipParamChanges(prev, next) {
  * The effect compares the actor's live size and the frame it snapped from it against the
  * last values it uploaded. `next.frame` is reused from the snap, not copied.
  *
- * @param {object|null} prev - {scale, width, height, frame:{x,y,width,height}}
- * @param {object} next - {scale, width, height, frame}
- * @returns {{scale?:number, size?:number[], frame?:number[]}}
+ * @param prev - {scale, width, height, frame:{x,y,width,height}}
+ * @param next - {scale, width, height, frame}
  */
 export function clipGeometryChanges(prev, next) {
     const changes = {};

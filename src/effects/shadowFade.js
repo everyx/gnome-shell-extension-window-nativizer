@@ -13,9 +13,9 @@ export const DEFAULT_FADE_EASING = ADWAITA_STYLE.transition.easing;
  * Solves cubic-bezier(x1, y1, x2, y2) for a given progress t in [0..1]
  * using Newton-Raphson iteration.
  *
- * @param {number} t - Time progression [0..1]
- * @param {readonly [number, number, number, number]} curve - [x1, y1, x2, y2]
- * @returns {number} Value in [0..1]
+ * @param t - Time progression [0..1]
+ * @param curve - [x1, y1, x2, y2]
+ * @returns Value in [0..1]
  */
 export function solveCubicBezier(t, [x1, y1, x2, y2]) {
     const clampedT = Math.max(0, Math.min(1, t));
@@ -33,9 +33,8 @@ export function solveCubicBezier(t, [x1, y1, x2, y2]) {
 /**
  * Computes individual incoming and outgoing opacity weights from transition progress.
  *
- * @param {number} progress - Progress in [0..1]
- * @param {number} [outgoingWeight=1] - Inherited weight factor for outgoing style
- * @returns {{incoming: number, outgoing: number}}
+ * @param progress - Progress in [0..1]
+ * @param [outgoingWeight=1] - Inherited weight factor for outgoing style
  */
 export function computeFadeWeights(progress, outgoingWeight = 1) {
     const p = Math.max(0, Math.min(1, progress));
@@ -45,22 +44,7 @@ export function computeFadeWeights(progress, outgoingWeight = 1) {
     };
 }
 
-/**
- * @typedef {object} FadeState
- * @property {object|null} style - Current active/incoming target style
- * @property {{style: object, weight: number}|null} outgoing - Outgoing style and its inherited weight factor
- * @property {number} progress - Interpolated progress [0..1]
- * @property {number} fadeStart - Clock start timestamp in milliseconds, or 0 when not fading
- * @property {number} durationMs - Configured transition duration in milliseconds
- * @property {readonly [number, number, number, number]} easing - Cubic bezier coordinates
- */
 
-/**
- * @param {object} [options]
- * @param {number} [options.durationMs]
- * @param {readonly [number, number, number, number]} [options.easing]
- * @returns {FadeState}
- */
 export function createFadeState(options = {}) {
     return {
         style: null,
@@ -75,12 +59,10 @@ export function createFadeState(options = {}) {
 /**
  * Pure state transition: computes new fade state when a style update arrives.
  *
- * @param {FadeState} state - Previous fade state
- * @param {object} nextStyle - Newly requested style
- * @param {object} [options]
- * @param {boolean} [options.animate=false] - Whether to animate the transition
- * @param {number} [options.nowMs=0] - Current clock timestamp in milliseconds
- * @returns {FadeState}
+ * @param state - Previous fade state
+ * @param nextStyle - Newly requested style
+ * @param [options.animate=false] - Whether to animate the transition
+ * @param [options.nowMs=0] - Current clock timestamp in milliseconds
  */
 export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 0} = {}) {
     if (!state.style || !animate) {
@@ -127,9 +109,8 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
 /**
  * Pure state advance: advances the transition clock to nowMs.
  *
- * @param {FadeState} state - Previous fade state
- * @param {number} nowMs - Current clock timestamp in milliseconds
- * @returns {{state: FadeState, running: boolean}}
+ * @param state - Previous fade state
+ * @param nowMs - Current clock timestamp in milliseconds
  */
 export function advanceFadeState(state, nowMs) {
     if (state.fadeStart === 0 || !state.outgoing)
@@ -165,10 +146,7 @@ export function advanceFadeState(state, nowMs) {
  */
 export class ShadowFadeStateMachine {
     /**
-     * @param {object} [options]
-     * @param {number} [options.durationMs]
-     * @param {readonly [number, number, number, number]} [options.easing]
-     * @param {() => number} [options.now] - Clock function returning milliseconds
+     * @param [options.now] - Clock function returning milliseconds
      */
     constructor(options = {}) {
         this._durationMs = options.durationMs ?? DEFAULT_FADE_DURATION_MS;
@@ -212,11 +190,7 @@ export class ShadowFadeStateMachine {
     }
 
     /**
-     * @param {object} nextStyle
-     * @param {object} [options]
-     * @param {boolean} [options.animate=false]
-     * @param {number} [options.nowMs]
-     * @returns {boolean} Whether a fade transition is running
+     * @returns Whether a fade transition is running
      */
     setStyle(nextStyle, options = {}) {
         const nowMs = typeof options.nowMs === 'number' ? options.nowMs : this._now();
@@ -228,8 +202,7 @@ export class ShadowFadeStateMachine {
     }
 
     /**
-     * @param {number} [nowMs]
-     * @returns {boolean} Whether a fade transition is still running (requires another frame)
+     * @returns Whether a fade transition is still running (requires another frame)
      */
     advance(nowMs = null) {
         const time = typeof nowMs === 'number' ? nowMs : this._now();

@@ -11,8 +11,7 @@ import {roundHalfAwayFromZero} from './numeric.js';
  * variations: `meta_window` (current), `metaWindow`, then the `get_meta_window()`
  * modern method. A getter may throw on a half-destroyed actor, which must not escape.
  *
- * @param {object|null} actor
- * @returns {object|null} Meta.Window or null
+ * @returns Meta.Window or null
  */
 export function getWindowFromActor(actor) {
     if (!actor)
@@ -27,9 +26,8 @@ export function getWindowFromActor(actor) {
 /**
  * Resolves the enclosing MetaWindow from a window actor, child container, or Meta.Window instance.
  *
- * @param {object|null} actorOrWin - Window actor, child, or Meta.Window instance
- * @param {number} [maxDepth=8]
- * @returns {object|null} MetaWindow instance if found
+ * @param actorOrWin - Window actor, child, or Meta.Window instance
+ * @returns MetaWindow instance if found
  */
 export function findMetaWindow(actorOrWin, maxDepth = 8) {
     if (!actorOrWin)
@@ -52,8 +50,7 @@ export function findMetaWindow(actorOrWin, maxDepth = 8) {
 
 /**
  * Checks if the window is fully maximized (GNOME 50+).
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowMaximized(win) {
     try {
@@ -65,8 +62,7 @@ export function isWindowMaximized(win) {
 
 /**
  * Checks if the window is fullscreen.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowFullscreen(win) {
     try {
@@ -78,8 +74,7 @@ export function isWindowFullscreen(win) {
 
 /**
  * Checks if the window is minimized.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowMinimized(win) {
     try {
@@ -91,11 +86,7 @@ export function isWindowMinimized(win) {
 
 /**
  * Checks if the window is tiled (split half, edge tile, or tile matched).
- * @param {object|null} win - Meta.Window
- * @param {object} [options={}]
- * @param {boolean} [options.isMaximized]
- * @param {boolean} [options.hasTileMatch]
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowTiled(win, options = {}) {
     if (!win)
@@ -115,10 +106,8 @@ export function isWindowTiled(win, options = {}) {
 
 /**
  * Reads the window frame rectangle in logical coords, or null if destroyed/inaccessible.
- * @param {object|null} win - Meta.Window
- * @param {object} [options={}]
- * @param {boolean} [options.throwOnError=false]
- * @returns {object|null} Frame rect {x, y, width, height} or null
+ * @param win - Meta.Window
+ * @returns Frame rect {x, y, width, height} or null
  */
 export function getWindowFrameRect(win, {throwOnError = false} = {}) {
     try {
@@ -132,10 +121,8 @@ export function getWindowFrameRect(win, {throwOnError = false} = {}) {
 
 /**
  * Reads the window buffer rectangle in logical coords, or null if destroyed/inaccessible.
- * @param {object|null} win - Meta.Window
- * @param {object} [options={}]
- * @param {boolean} [options.throwOnError=false]
- * @returns {object|null} Buffer rect {x, y, width, height} or null
+ * @param win - Meta.Window
+ * @returns Buffer rect {x, y, width, height} or null
  */
 export function getWindowBufferRect(win, {throwOnError = false} = {}) {
     try {
@@ -149,8 +136,8 @@ export function getWindowBufferRect(win, {throwOnError = false} = {}) {
 
 /**
  * Resolves the underlying compositor window actor (MetaWindowActor).
- * @param {object|null} win - Meta.Window
- * @returns {object|null} Window actor or null
+ * @param win - Meta.Window
+ * @returns Window actor or null
  */
 export function getWindowActor(win) {
     try {
@@ -161,36 +148,19 @@ export function getWindowActor(win) {
 }
 
 /**
- * The actor every overview preview clone of a window paints through: the window actor's surface
- * container (`meta_window_actor_wayland_rebuild_surface_tree()` puts the whole surface tree under
- * it), identified by the same resolver the clip target uses so the extension keeps one authority
- * for which child that is.
- *
- * This is the actor that decides whether Mutter consults a shaped-texture mask: its own opacity
- * multiplies into every surface's paint, and the preview clone only overrides the window actor's
- * own opacity above it. One handle therefore covers every preview of a window, whenever the
- * preview was built.
- *
- * @param {object|null} win - Meta.Window
- * @returns {object|null} The surface container actor, or null when it cannot be identified
+ * The actor every overview preview clone paints through: the window actor's surface container, so
+ * one handle covers every preview whenever it was built. The mask is consulted per shaped texture,
+ * and a preview clone overrides only the window actor's own opacity, so this container's opacity is
+ * what carries the bypass.
  */
 export function getWindowSurfaceContainer(win) {
     return getSurfaceContainer(getWindowActor(win), win, null);
 }
 
 /**
- * Every live overview preview of a window, in scene order.
- *
- * The overview's preview is Shell-private: `metaWindow._delegate` is the *last* `WindowPreview`
- * built for the window (`js/ui/windowPreview.js` sets it in `_init`), and a window shown on all
- * workspaces has one preview per workspace (`WorkspacesView._updateWorkspaces` builds a
- * `Workspace` for each, and `Workspace._isMyWindow` accepts such a window in every one). The
- * singular reading therefore names a card that may be off-screen - or may not exist yet - while
- * the window is drawn from another. `Shell.WindowPreview` keeps `metaWindow` and
- * `window_container` on the actor, so the live set is read by walking the stage.
- *
- * @param {object|null} win - Meta.Window
- * @returns {object[]} The window's preview actors, in scene order (possibly empty)
+ * Every live overview preview of a window, in scene order. The overview's preview is Shell-private
+ * and `metaWindow._delegate` names only the last-built card, while a window on all workspaces has
+ * one preview per workspace, so the live set is read by walking the stage.
  */
 export function getOverviewPreviews(win) {
     const found = [];
@@ -228,8 +198,8 @@ export function getOverviewPreviews(win) {
 
 /**
  * Reads the Meta.WindowClientType (Wayland or X11).
- * @param {object|null} win - Meta.Window
- * @returns {number|null} Meta.WindowClientType or null
+ * @param win - Meta.Window
+ * @returns Meta.WindowClientType or null
  */
 export function getWindowClientType(win) {
     try {
@@ -241,8 +211,8 @@ export function getWindowClientType(win) {
 
 /**
  * Reads the window type (Meta.WindowType), defaulting to NORMAL.
- * @param {object|null} win - Meta.Window
- * @returns {number} Meta.WindowType
+ * @param win - Meta.Window
+ * @returns Meta.WindowType
  */
 export function getWindowType(win) {
     try {
@@ -254,8 +224,8 @@ export function getWindowType(win) {
 
 /**
  * Reads the owning process id.
- * @param {object|null} win - Meta.Window
- * @returns {number} PID or -1
+ * @param win - Meta.Window
+ * @returns PID or -1
  */
 export function getWindowPid(win) {
     try {
@@ -267,8 +237,8 @@ export function getWindowPid(win) {
 
 /**
  * Reads the window's transient parent window if one exists.
- * @param {object|null} win - Meta.Window
- * @returns {object|null} Parent Meta.Window or null
+ * @param win - Meta.Window
+ * @returns Parent Meta.Window or null
  */
 export function getWindowTransientFor(win) {
     try {
@@ -280,8 +250,7 @@ export function getWindowTransientFor(win) {
 
 /**
  * Checks whether the window is an attached modal dialog.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowAttachedDialog(win) {
     try {
@@ -293,8 +262,7 @@ export function isWindowAttachedDialog(win) {
 
 /**
  * Checks whether the window allows resizing.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowAllowsResize(win) {
     try {
@@ -311,8 +279,7 @@ export function isWindowAllowsResize(win) {
 
 /**
  * Checks whether the window is currently hidden by Mutter.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowHidden(win) {
     try {
@@ -324,8 +291,7 @@ export function isWindowHidden(win) {
 
 /**
  * Checks whether the window is present on all workspaces.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowOnAllWorkspaces(win) {
     try {
@@ -337,9 +303,8 @@ export function isWindowOnAllWorkspaces(win) {
 
 /**
  * Checks whether the window is located on a specific workspace.
- * @param {object|null} win - Meta.Window
- * @param {object} workspace - Meta.Workspace
- * @returns {boolean}
+ * @param win - Meta.Window
+ * @param workspace - Meta.Workspace
  */
 export function isWindowLocatedOnWorkspace(win, workspace) {
     try {
@@ -351,8 +316,7 @@ export function isWindowLocatedOnWorkspace(win, workspace) {
 
 /**
  * Reads the window's display title, returning empty string if unreadable.
- * @param {object|null} win - Meta.Window
- * @returns {string}
+ * @param win - Meta.Window
  */
 export function getWindowDisplayTitle(win) {
     try {
@@ -364,8 +328,7 @@ export function getWindowDisplayTitle(win) {
 
 /**
  * Checks whether the window is decorated by SSD (decorated property).
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowDecorated(win) {
     try {
@@ -377,8 +340,7 @@ export function isWindowDecorated(win) {
 
 /**
  * Checks whether the window is horizontally maximized.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowMaximizedHorizontally(win) {
     try {
@@ -390,8 +352,7 @@ export function isWindowMaximizedHorizontally(win) {
 
 /**
  * Checks whether the window is vertically maximized.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowMaximizedVertically(win) {
     try {
@@ -403,8 +364,7 @@ export function isWindowMaximizedVertically(win) {
 
 /**
  * Checks whether the window appears focused.
- * @param {object|null} win - Meta.Window
- * @returns {boolean}
+ * @param win - Meta.Window
  */
 export function isWindowAppearsFocused(win) {
     try {
@@ -416,8 +376,8 @@ export function isWindowAppearsFocused(win) {
 
 /**
  * Resolves the matching tile window if one exists.
- * @param {object|null} win - Meta.Window
- * @returns {object|null} Meta.Window or null
+ * @param win - Meta.Window
+ * @returns Meta.Window or null
  */
 export function getWindowTileMatch(win) {
     try {
@@ -434,9 +394,6 @@ export function getWindowTileMatch(win) {
  * subpixel phase reader both need the same answer and the platform layer may not import from
  * `lib/` (see tools/check-platform-boundary.mjs); `clipTarget.js` re-exports it.
  *
- * @param {object|null} child
- * @param {object|null} [St]
- * @returns {boolean}
  */
 export function isForeignWidget(child, St = null) {
     if (!child)
@@ -458,8 +415,6 @@ export function isForeignWidget(child, St = null) {
  * separate from `isCompatibleSurfaceGeometry` because the resolver treats it as the "wait" case
  * (keep the last good target) rather than an incompatibility (fall back to the window actor).
  *
- * @param {object|null} candidate
- * @returns {boolean}
  */
 export function isUnallocatedSurfaceBox(candidate) {
     if (!candidate)
@@ -479,9 +434,6 @@ export function isUnallocatedSurfaceBox(candidate) {
  * comparison: an allocated child this size but off the buffer origin is either the container
  * mid-move or the backing, and the identity rule refuses to guess between them.
  *
- * @param {object|null} candidate
- * @param {object|null} win
- * @returns {boolean}
  */
 function hasBufferDimensions(candidate, win) {
     if (!candidate || !win)
@@ -502,82 +454,28 @@ function hasBufferDimensions(candidate, win) {
 }
 
 /**
- * Verifies that candidate surface container geometry starts at (0,0) and matches buffer dimensions.
- *
- * A geometry that cannot be verified is not accepted. An unreadable buffer is an independent read
- * failure, and an unallocated candidate is the "wait" case the resolver defers (`isUnallocatedSurfaceBox`);
- * both used to fail open, so a container whose box genuinely differs from the buffer - a
- * letterboxed or offset container - could be attached whenever the buffer read happened to fail,
- * and the clip then cut the wrong body. The check exists to reject a coordinate space that
- * genuinely differs, and the resolver's caller re-verifies on the container's `notify::allocation`
- * once the state settles.
- *
- * The identity rule and this predicate live in the platform seam together because the phase
- * readers and the clip resolver must answer "is this actor the container?" with one rule, and
- * platform may not import from `lib/` (see tools/check-platform-boundary.mjs); `clipTarget.js`
- * re-exports the predicate.
- *
- * @param {object|null} candidate
- * @param {object|null} win
- * @returns {boolean}
+ * Verifies that a candidate surface container's geometry starts at (0,0) and matches the buffer
+ * dimensions. A geometry that cannot be verified is not accepted: an unreadable buffer or an
+ * unallocated candidate used to fail open, so an offset container could be attached and the clip
+ * cut the wrong body. The caller re-verifies on the container's `notify::allocation`.
  */
 export function isCompatibleSurfaceGeometry(candidate, win) {
     if (!hasBufferDimensions(candidate, win))
         return false;
 
-    // The container path's premise is that the container's local space IS the buffer's: the clip
-    // derives its frame with ZERO_PHASE, so a real offset in x/y moves the cut against the shadow's
-    // hole by exactly that offset - 0.4 logical px is half a physical pixel at 1.25x, the phase the
-    // two cuts are most likely to part on. Only float residue may pass, so the origin is compared
-    // against a tolerance instead of being rounded to zero; whether the box is integer-aligned is a
-    // separate concern (`isIntegerAlignedSurfaceBox`).
+    // The container path's premise is that its local space IS the buffer's: the clip derives its
+    // frame with ZERO_PHASE, so a real x/y offset moves the cut against the shadow's hole by exactly
+    // that offset - 0.4 logical px is half a physical pixel at 1.25x. Only float residue may pass;
+    // integer alignment is a separate concern (`isIntegerAlignedSurfaceBox`).
     const ORIGIN_EPSILON = 1e-6;
     return Math.abs(candidate.x ?? 0) <= ORIGIN_EPSILON &&
         Math.abs(candidate.y ?? 0) <= ORIGIN_EPSILON;
 }
 
 /**
- * Resolves the actor Mutter positions as the window's Wayland surface container.
- *
- * `surface_container_apply_transform` computes the subpixel phase from the container's layout
- * position inside the window actor - `get_x(windowActor) + get_x(surfaceContainer)` - and
- * `do_sync_geometry` moves that container for letterboxed fullscreen windows, so a reader that
- * wants the phase has to read this actor, not the window actor. The container's type
- * (`MetaSurfaceContainerActorWayland`) is private: it is absent from `meta-window-actor.h` and
- * from the GIR sources, so it is not reachable from GJS and cannot be type-checked. Identity is
- * inferred from the actor tree instead, in three branches:
- *
- *   1. exactly one non-foreign child -> that child (the original rule, unchanged);
- *   2. otherwise, the unique non-foreign child whose box passes `isCompatibleSurfaceGeometry`
- *      for the window's buffer, and no other non-foreign child is buffer-sized but off the
- *      buffer origin -> that child;
- *   3. none passing, more than one passing, or a buffer-sized-but-misplaced sibling making the
- *      pick ambiguous -> null, and the caller falls back to the window actor (never guess).
- *
- * The geometric filter separates Mutter's black full-monitor backing (`do_sync_geometry`'s plain
- * `Clutter.Actor`, not an St.Widget, so it counts as non-foreign) from the buffer-sized container
- * in the letterboxed case; when both are monitor-sized (opaque fullscreen) it finds two and branch
- * 3 falls back. The new path selects only actors the existing container path accepts, because it
- * runs the same `isCompatibleSurfaceGeometry` predicate that path re-checks.
- *
- * The narrow hole is handled explicitly in two directions, never papered over. The container's
- * private type would be the way to identify it and is unreachable from GJS, so:
- *
- *   - When one non-foreign child has not allocated (the tell that the tree is not settled), it may
- *     be the real container waiting for its buffer while a sibling is already compatible. The rule
- *     returns that unallocated child, so the resolver's existing defer path fires and keeps the
- *     last good target instead of attaching to the sibling; this is the same value a sole
- *     unallocated container yields under branch 1.
- *   - When the compatible pick's sibling is buffer-sized but off the buffer origin, it could be
- *     the real container mid-move and the compatible child the backing. Geometry alone cannot
- *     separate them, so the rule falls back exactly as a tie does. The residual is then a brief,
- *     appearance-only mismatch at most - the clip stays on the window actor, the known-worse
- *     phase path, but never a deformation and never a guess.
- *
- * @param {object|null} actor - The window actor
- * @param {object|null} win - Meta.Window behind the actor, for the buffer comparison
- * @param {object|null} [St]
- * @returns {object|null} Surface container actor, or null when it cannot be identified
+ * The actor Mutter positions as the window's Wayland surface container, or null when it cannot be
+ * identified. The container's type is private and unreachable from GJS, so identity comes from the
+ * actor tree; an ambiguous tree answers null so the caller falls back instead of guessing.
  */
 export function getSurfaceContainer(actor, win, St = null) {
     try {
@@ -612,9 +510,6 @@ export function getSurfaceContainer(actor, win, St = null) {
 
 /**
  * Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`.
- * @param {{x:number,y:number,width:number,height:number}} a
- * @param {{x:number,y:number,width:number,height:number}} b
- * @returns {boolean}
  */
 function rectanglesOverlap(a, b) {
     const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
@@ -623,38 +518,9 @@ function rectanglesOverlap(a, b) {
 }
 
 /**
- * The highest-scale logical monitor whose layout rect intersects the window's frame.
- *
- * This is `meta_window_get_highest_scale_monitor` rebuilt from public API: that getter only
- * returns the private `window->highest_scale_monitor` pointer (window-private.h) and is not in
- * the typelib, so the rule behind it -
- * `meta_monitor_manager_get_highest_scale_monitor_from_rect`, max scale over intersecting
- * logical monitors - is re-run here from the public frame rect and monitor geometry. Mutter
- * caches the result on the window and refreshes it on monitor and frame changes, while this runs
- * per read, so the two can disagree for a frame around a move or hotplug; that is the one
- * approximation in the term.
- *
- * A degenerate frame (unreadable, or a width/height that is not positive) returns -1, which
- * `getWindowSubpixelOffset` maps to {x: 0, y: 0}. It used to return `win.get_monitor()` - the
- * main monitor - as a third rule on top of upstream's two, but Mutter's two writers of the
- * cached pointer already disagree: `meta_window_constructed` stores the current logical monitor
- * (window.c:1250-1260), while `meta_window_update_monitor` stores `window->monitor`, the last
- * resolved main monitor (window.c:4195-4199). `surface_container_apply_transform`
- * (meta-window-actor-wayland.c:130) applies no phase at all when that pointer is NULL, so
- * mirroring either path buys nothing once a decoration is live - and a degenerate frame means
- * exactly that it is not (the measurement is in the commit message). The valid-frame,
- * no-intersecting-monitor case was already -1 for the same reason.
- *
- * An unreadable monitor geometry is not a non-overlapping one: the scan cannot rule it out of
- * the intersection, so it answers null ("unknown") rather than skip the monitor and possibly
- * answer -1. The count and the scale come from strict reads for the same reason: `getMonitorCount`
- * would fold a failed read into 0 (an empty scan, read as "no overlap") and `getMonitorScale` into
- * 1.0 (an integer scale, read as a zero offset), so both unknowns are surfaced as null here. The
- * strict reads are scoped to this resolver; the helpers keep their defaults for every other caller.
- *
- * @param {object|null} win - Meta.Window
- * @returns {number|null} Logical monitor index, -1 when no readable monitor overlaps, or null
- *          when the count, a monitor geometry, or an intersecting monitor scale is unreadable
+ * The highest-scale logical monitor whose layout rect intersects the window's frame: -1 when a
+ * readable frame overlaps none, null when the scan cannot complete - an unreadable monitor count,
+ * geometry or scale, each of which a defaulting read would fold into "no overlap".
  */
 function resolveHighestScaleMonitorIndex(win) {
     const frame = getWindowFrameRect(win);
@@ -691,48 +557,10 @@ function resolveHighestScaleMonitorIndex(win) {
 }
 
 /**
- * Computes the Wayland subpixel phase Mutter applies to a window's surface container.
- *
- * The arithmetic is `surface_container_apply_transform`
- * (meta-window-actor-wayland.c:130-147), term for term:
- *
- *   monitor  = meta_window_get_highest_scale_monitor (window)
- *   scale    = meta_logical_monitor_get_scale (monitor)
- *   rect     = meta_logical_monitor_get_layout (monitor)
- *   abs_x    = clutter_actor_get_x (windowActor) + clutter_actor_get_x (surfaceContainer)
- *   rel_x    = abs_x - rect.x
- *   x_off    = roundf (rel_x * scale) / scale - rel_x
- *
- * Two terms are reconstructed rather than read, because their C symbols are not introspectable:
- * the highest-scale monitor (see resolveHighestScaleMonitorIndex) and the surface container (see
- * getSurfaceContainer). Both note what is exact and what is approximated where they are defined.
- *
- * The window's `translation_x/y` is deliberately not a term. Mutter computes the phase from
- * layout coordinates and the base transform carries the translation separately, so animations
- * move the window off the grid on purpose; folding the translation in would move our cut while
- * the buffer was somewhere else.
- *
- * The snap uses `roundf`'s rule, not JavaScript's `Math.round`. `Math.round` sends an exact half
- * toward +Infinity while `roundf` sends it away from zero, so on a negative half they differ by
- * one snapped integer: at 1.25, `relX = -2` gives -2.5, where `roundf` snaps to -3 and
- * `Math.round` stays at -2, a 0.8 logical px (one physical px) difference in the offset. An
- * earlier revision claimed this could not happen; that holds on the 4/3 path, where an integer
- * times 4/3 never ends in .5, but not in general - on a 1.25 monitor negative halves are
- * reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5. The shared
- * `roundHalfAwayFromZero` (`platform/numeric.js`) encodes `roundf`'s rule and leaves the 4/3
- * path unchanged.
- *
- * Returns {x: 0, y: 0} for non-Wayland windows, integer scales, or a frame no readable monitor
- * overlaps, and null when the monitor scan cannot complete - an unreadable count, a failed
- * geometry read, or an unreadable scale on an intersecting monitor. The phase's two consumers
- * keep their last good value on null, so both cuts stay on one line.
- *
- * @param {object|null} win - Meta.Window
- * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
- *        St leaves the constructor-name heuristic as the last resort
- * @param {object|null} [container] - The surface container to read, when the caller has already
- *        resolved it (so the mirror and the applied read share one authority); null resolves it
- * @returns {{x: number, y: number}|null} Applied offset, or null when it cannot be computed
+ * The mirror of Mutter's subpixel phase, computed from public API: the arithmetic
+ * `surface_container_apply_transform` runs, with `roundf`'s snap-away-from-zero rule rather than
+ * `Math.round`'s toward +Infinity. Null when the monitor scan cannot complete, {x: 0, y: 0} when a
+ * readable frame overlaps no monitor or on a non-Wayland window.
  */
 export function getWindowSubpixelOffset(win, St = null, container = null) {
     if (!win)
@@ -787,36 +615,10 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
 }
 
 /**
- * Reads the subpixel phase Mutter actually applied to a Wayland window's surface container.
- *
- * This is the production source on the container path. The clip's target carries the phase in its
- * own transform, so the clip cuts a phase-free local frame and the shadow reads that same transform
- * back to translate its cutout onto the same physical line; both cuts then follow one source.
- * The mirror in `getWindowSubpixelOffset` is the fallback whenever this read is unavailable (a
- * non-Wayland client, an ambiguous container, a non-unit matrix scale, or a throw) and stays the
- * primary source on the clip's fallback path, where the clip folds the mirror into its own frame.
- * Read `docs/decoration-model.md`'s "Where the phase comes from" for the trade-off.
- *
- * `surface_container_apply_transform` (meta-window-actor-wayland.c) folds the phase into the
- * container's transform with `graphene_matrix_translate`; `ensure_valid_actor_transform` caches
- * that matrix on the actor and `clutter_actor_get_transform` reads it back. The matrix also
- * carries the container's layout origin (its `x`/`y` plus `translation_x`/`translation_y`) and no
- * ancestor position, so subtracting the layout origin from the matrix translation leaves the
- * applied phase. The window actor's `geometry_scale` child transform scales the matrix, which
- * would scale that translation and make the subtraction meaningless, so a non-unit scale answers
- * null rather than a wrong number.
- *
- * A caller may stub the container and matrix as plain objects exposing `get_transform()` and the
- * Graphene accessors. Every unavailable case - a non-Wayland client, a missing actor or container,
- * an unreadable matrix, a non-unit scale, or a throw - answers null; it never throws at the pick
- * reply and never claims a fake zero.
- *
- * @param {object|null} win - Meta.Window
- * @param {object|null} [St] - The St namespace the clip identifies the container with; a null
- *        St leaves the constructor-name heuristic as the last resort
- * @param {object|null} [container] - The surface container to read, when the caller has already
- *        resolved it (so the mirror and the applied read share one authority); null resolves it
- * @returns {{x: number, y: number}|null} Applied phase, or null when it cannot be read
+ * The subpixel phase Mutter actually applied to a Wayland window's surface container, read back from
+ * the transform it cached there, or null when it cannot be read - a non-Wayland client, an ambiguous
+ * container, a non-unit matrix scale, or a throw. This is the production source on the container
+ * path; the mirror is the fallback.
  */
 export function getAppliedSubpixelPhase(win, St = null, container = null) {
     try {

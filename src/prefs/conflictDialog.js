@@ -8,10 +8,6 @@ import {setupRuleRowHeader, populateAxisIcons, ensureCustomStyles} from './ruleU
 
 /**
  * Presents a modal dialog for resolving import conflicts between existing rules and imported rules.
- * @param {Gtk.Window} parentWindow
- * @param {import('../prefs.js').PrefsContext} ctx
- * @param {object} importResult
- * @param {(resolutions: Record<string, 'existing'|'imported'>) => void} onApply
  */
 export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     ensureCustomStyles();

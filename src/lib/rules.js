@@ -1,6 +1,5 @@
 import {WindowType} from './mutterRules.generated.js';
 
-/** D-Bus / rule-key tokens for the client-type field. */
 export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
 export const CLIENT_TYPE_TOKEN_X11 = 'x11';
 
@@ -9,7 +8,6 @@ export const RuleAxis = Object.freeze({
     SHADOW: 'shadow',
     RESIZE: 'resize',
 });
-/** Canonical axis order in stored states. */
 export const RULE_AXES = Object.freeze([
     RuleAxis.CORNERS, RuleAxis.SHADOW, RuleAxis.RESIZE,
 ]);
@@ -17,8 +15,7 @@ export const RULE_AXES = Object.freeze([
 /**
  * Parse a stored state: the axes whose automatic decision the user reversed,
  * comma-separated in canonical order. '' (no axis) is valid and means no rule.
- * @param {string} state
- * @returns {Set<string>|null} Null when not valid stored grammar
+ * @returns Null when not valid stored grammar
  */
 export function parseRuleState(state) {
     if (typeof state !== 'string')
@@ -44,8 +41,6 @@ export function parseRuleState(state) {
 /**
  * Renders the canonical stored form: the reversed axes in canonical order, e.g.
  * 'corners,shadow'. Nothing reversed renders as '' (no rule to store).
- * @param {Iterable<string>|null} [axes]
- * @returns {string}
  */
 export function buildRuleState(axes = null) {
     const reversed = new Set(axes ?? []);
@@ -53,8 +48,7 @@ export function buildRuleState(axes = null) {
 }
 
 /**
- * @param {*} value
- * @returns {string} 'true' or 'false'
+ * @returns 'true' or 'false'
  */
 export function boolString(value) {
     return value ? 'true' : 'false';
@@ -62,8 +56,6 @@ export function boolString(value) {
 
 /**
  * Splits a rule key into identity and specifier at the last colon.
- * @param {string} key
- * @returns {{identity: string, specifier: string}}
  */
 function splitRuleKey(key) {
     const sep = key.lastIndexOf(':');
@@ -72,32 +64,20 @@ function splitRuleKey(key) {
 
 /**
  * Normalizes rule key identity to lowercase for case-insensitive matching.
- * @param {string} key
- * @returns {string}
  */
 function canonicalRuleKey(key) {
     const {identity, specifier} = splitRuleKey(key);
     return `${identity.toLowerCase()}:${specifier}`;
 }
 
-/** Shell's per-window placeholder for unattributed windows. */
 const WINDOW_BACKED_APP_ID_PATTERN = /^window:\d+$/;
 
-/**
- * @param {string} appId
- * @returns {boolean}
- */
 export function isWindowBackedAppId(appId) {
     return WINDOW_BACKED_APP_ID_PATTERN.test(appId);
 }
 
 /**
- * @param {object} [candidates={}]
- * @param {string} [candidates.declared='']
- * @param {string} [candidates.peer='']
- * @param {string} [candidates.tracked='']
- * @param {number} [candidates.pid=-1]
- * @returns {string} Identity or '' when nothing identifies the window
+ * @returns Identity or '' when nothing identifies the window
  */
 export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pid = -1} = {}) {
     if (declared?.trim())
@@ -142,19 +122,10 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
 );
 
 /**
- * @param {string} wmClass
- * @param {object} [props={}]
- * @param {string} [props.clientType='wayland']
- * @param {number} [props.windowType=WindowType.NORMAL]
- * @param {boolean} [props.hasParent=false]
- * @param {boolean} [props.allowsResize=true]
- * @param {boolean} [props.isAttachedDialog=false]
- * @param {boolean} [props.hasRing=false]
- * @param {boolean} [props.hasSsd=false]
- * @param {number|null} [props.width=null] - Fixed logical width (only valid when allowsResize is false)
- * @param {number|null} [props.height=null] - Fixed logical height (only valid when allowsResize is false)
- * @returns {string} Canonical key or '' when wmClass is missing
- * @throws {Error} When the rendered specifier is not colon-free (a field the table cannot own)
+ * @param [props.width=null] - Fixed logical width (only valid when allowsResize is false)
+ * @param [props.height=null] - Fixed logical height (only valid when allowsResize is false)
+ * @returns Canonical key or '' when wmClass is missing
+ * @throws When the rendered specifier is not colon-free (a field the table cannot own)
  */
 export function buildRuleKey(wmClass, {
     clientType = CLIENT_TYPE_TOKEN_WAYLAND,
@@ -190,8 +161,7 @@ export function buildRuleKey(wmClass, {
 
 /**
  * Sanitizes window titles associated with picked rules (display only, keyed by canonical rule key).
- * @param {Record<string, string>} [rawTitles={}]
- * @returns {Record<string, string>} Canonical key -> one-line title
+ * @returns Canonical key -> one-line title
  */
 export function sanitizeRuleTitles(rawTitles = {}) {
     if (!rawTitles || typeof rawTitles !== 'object')
@@ -220,8 +190,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
 }
 
 /**
- * @param {Record<string, string>} [rawRules={}]
- * @returns {Record<string, string>} Canonical key -> canonical axis state
+ * @returns Canonical key -> canonical axis state
  */
 export function sanitizeWindowRules(rawRules = {}) {
     if (!rawRules || typeof rawRules !== 'object')
@@ -264,10 +233,6 @@ export function sanitizeWindowRules(rawRules = {}) {
 /**
  * Stores a state, canonicalising it first. A state with nothing reversed ('') stores
  * nothing: it is the same as having no rule, so the key is removed.
- * @param {Record<string, string>} [rules={}]
- * @param {string} key
- * @param {string} state
- * @returns {Record<string, string>}
  */
 export function withRule(rules = {}, key, state) {
     const axes = parseRuleState(state);
@@ -282,10 +247,6 @@ export function withRule(rules = {}, key, state) {
     return next;
 }
 
-/**
- * @param {string} key
- * @returns {{baseWmClass: string, specifier: string|null, properties: Record<string, string|number|boolean>|null}}
- */
 export function parseRuleKey(key) {
     if (!key || typeof key !== 'string' || !VALID_RULE_KEY_PATTERN.test(key))
         return {baseWmClass: '', specifier: null, properties: null};
@@ -313,19 +274,7 @@ export function parseRuleKey(key) {
 }
 
 /**
- * @param {string} wmClass
- * @param {Record<string, string>} [rules={}]
- * @param {object} [options={}]
- * @param {string} [options.clientType='wayland']
- * @param {number} [options.windowType=WindowType.NORMAL]
- * @param {boolean} [options.hasParent=false]
- * @param {boolean} [options.allowsResize=true]
- * @param {boolean} [options.isAttachedDialog=false]
- * @param {boolean} [options.hasRing=false]
- * @param {boolean} [options.hasSsd=false]
- * @param {number|null} [options.frameWidth=null]
- * @param {number|null} [options.frameHeight=null]
- * @returns {Set<string>|null} The reversed axes, or null when no rule matched
+ * @returns The reversed axes, or null when no rule matched
  */
 export function resolveRule(wmClass, rules = {}, options = {}) {
     if (!wmClass)
@@ -371,7 +320,6 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
     return null;
 }
 
-/** @param {Record<string,string>} [properties] @returns {string} canonical key or '' */
 export function buildRuleKeyFromProperties(properties = {}) {
     const allowsResize = properties.allowsResize === 'true';
     return buildRuleKey(properties.wmClass, {

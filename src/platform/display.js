@@ -2,8 +2,6 @@ import {findMetaWindow} from './window.js';
 
 /**
  * Returns the active Meta.Display instance, or null.
- * @param {object|null} [customDisplay=null]
- * @returns {object|null}
  */
 export function getDisplay(customDisplay = null) {
     return customDisplay ?? globalThis.global?.display ?? null;
@@ -11,8 +9,6 @@ export function getDisplay(customDisplay = null) {
 
 /**
  * Returns the currently focused Meta.Window, or null.
- * @param {object|null} [display=null]
- * @returns {object|null}
  */
 export function getFocusWindow(display = null) {
     try {
@@ -24,8 +20,6 @@ export function getFocusWindow(display = null) {
 
 /**
  * Returns the compositor window_group container, or null.
- * @param {object|null} [customGroup=null]
- * @returns {object|null}
  */
 export function getWindowGroup(customGroup = null) {
     return customGroup ?? globalThis.global?.window_group ?? null;
@@ -33,7 +27,6 @@ export function getWindowGroup(customGroup = null) {
 
 /**
  * Returns Meta.MonitorManager from the compositor backend or display, or null.
- * @returns {object|null}
  */
 export function getMonitorManager() {
     try {
@@ -45,16 +38,9 @@ export function getMonitorManager() {
 }
 
 /**
- * Returns the count of connected monitors.
- *
- * The historical default is 0, which callers that only want a loop bound can keep. A caller that
- * must tell "no monitors" apart from "the count could not be read" passes `{strict: true}` and
- * gets `null` for the latter; see `resolveHighestScaleMonitorIndex`, where an unreadable count
- * used to skip the scan and answer "no overlap".
- *
- * @param {object} [options={}]
- * @param {boolean} [options.strict=false] - Answer null instead of 0 when the count is unreadable
- * @returns {number|null}
+ * Returns the count of connected monitors. The historical default is 0, which callers that only
+ * want a loop bound keep; a caller that must tell "no monitors" from "could not read" passes
+ * `strict` and gets null. See `resolveHighestScaleMonitorIndex`.
  */
 export function getMonitorCount({strict = false} = {}) {
     const display = getDisplay();
@@ -71,21 +57,9 @@ export function getMonitorCount({strict = false} = {}) {
 }
 
 /**
- * Reads fractional or integer monitor scale from Meta.Display.
- *
- * The historical default is 1.0 (an integer scale). A caller that must not fold an unreadable
- * scale into 1.0 passes `{strict: true}` and gets `null`; see
- * `resolveHighestScaleMonitorIndex`, where a momentarily unreadable scale on a fractional
- * monitor would otherwise become a definite integer and a zero offset.
- *
- * The strict option follows the same shape as `getWindowFrameRect`'s `throwOnError`: the same
- * read with a different failure mode, rather than a parallel helper every caller has to pick
- * between.
- *
- * @param {number} monitorIndex
- * @param {object} [options={}]
- * @param {boolean} [options.strict=false] - Answer null instead of the 1.0 fallback
- * @returns {number|null}
+ * Reads fractional or integer monitor scale from Meta.Display. The historical default is 1.0 (an
+ * integer scale); a caller that must not fold an unreadable scale into 1.0 passes `strict` and gets
+ * null. Same shape as `getWindowFrameRect`'s `throwOnError`: one read, two failure modes.
  */
 export function getMonitorScale(monitorIndex, {strict = false} = {}) {
     const display = getDisplay();
@@ -104,8 +78,6 @@ export function getMonitorScale(monitorIndex, {strict = false} = {}) {
 
 /**
  * Reads monitor geometry rectangle {x, y, width, height} from Meta.Display.
- * @param {number} monitorIndex
- * @returns {object|null}
  */
 export function getMonitorGeometry(monitorIndex) {
     const display = getDisplay();
@@ -120,17 +92,10 @@ export function getMonitorGeometry(monitorIndex) {
 }
 
 /**
- * Resolves the true physical monitor scale for a window actor or Meta.Window instance.
- *
- * Answers null when the scale cannot be read - no actor, no resolvable window, a stale monitor
- * index, or a throwing display - rather than substituting 1.0. This value drives the clip cut,
- * the shadow cutout, the resize band and the prefer-crisp-text clip decision in one pass, so a
- * wrong integer would move a display that is already correct. Each consumer degrades instead:
- * the clip decision skips the pass (see `shouldClipWindow`) and the geometry consumers keep
- * their last good scale (see `WindowDecoration._resolveScale`).
- *
- * @param {object|null} actorOrWin - Window actor, child, or Meta.Window instance
- * @returns {number|null} Physical monitor scale, or null when it cannot be read
+ * Resolves the true physical monitor scale for a window actor or Meta.Window, or null when it cannot
+ * be read - no actor, no window, a stale index, a throwing display. It drives the clip cut, the
+ * shadow cutout, the resize band and the crisp-text decision, so a wrong integer would move an
+ * already-correct display; each consumer degrades on null.
  */
 export function getPhysicalMonitorScale(actorOrWin) {
     if (!actorOrWin)
@@ -162,9 +127,9 @@ export function getPhysicalMonitorScale(actorOrWin) {
 
 /**
  * Resolves a window's monitor geometry safely bounding the index.
- * @param {object|null} display - Meta.Display
- * @param {object|null} win - Meta.Window
- * @returns {object|null} Monitor rect, or null
+ * @param display - Meta.Display
+ * @param win - Meta.Window
+ * @returns Monitor rect, or null
  */
 export function resolveMonitorBounds(display, win) {
     const disp = display ?? getDisplay();
@@ -182,9 +147,8 @@ export function resolveMonitorBounds(display, win) {
 /**
  * Retrieves the tab list of windows from Meta.Display.
  * Defaults to Meta.TabList.NORMAL_ALL (3).
- * @param {number} [type=3] - Meta.TabList
- * @param {object|null} [workspace=null] - Meta.Workspace or null
- * @returns {Array<object>}
+ * @param [type=3] - Meta.TabList
+ * @param [workspace=null] - Meta.Workspace or null
  */
 export function getTabList(type = 3, workspace = null) {
     const display = getDisplay();
@@ -197,9 +161,7 @@ export function getTabList(type = 3, workspace = null) {
 
 /**
  * Focuses a window via Meta.Display.
- * @param {object} win - Meta.Window
- * @param {number} [timestamp=0]
- * @param {object|null} [customDisplay=null]
+ * @param win - Meta.Window
  */
 export function focusWindow(win, timestamp = 0, customDisplay = null) {
     try {
@@ -211,9 +173,8 @@ export function focusWindow(win, timestamp = 0, customDisplay = null) {
 
 /**
  * Repositions an actor above a sibling actor in the compositor window group.
- * @param {object|null} child - Clutter.Actor
- * @param {object|null} sibling - Clutter.Actor
- * @param {object|null} [customGroup=null]
+ * @param child - Clutter.Actor
+ * @param sibling - Clutter.Actor
  */
 export function setActorAboveSibling(child, sibling, customGroup = null) {
     if (!child || !sibling)
@@ -227,9 +188,8 @@ export function setActorAboveSibling(child, sibling, customGroup = null) {
 
 /**
  * Repositions an actor below a sibling actor in the compositor window group.
- * @param {object|null} child - Clutter.Actor
- * @param {object|null} sibling - Clutter.Actor
- * @param {object|null} [customGroup=null]
+ * @param child - Clutter.Actor
+ * @param sibling - Clutter.Actor
  */
 export function setActorBelowSibling(child, sibling, customGroup = null) {
     if (!child || !sibling)
@@ -243,7 +203,6 @@ export function setActorBelowSibling(child, sibling, customGroup = null) {
 
 /**
  * Returns all window actors currently tracked by the shell.
- * @returns {Array<object>}
  */
 export function getWindowActors() {
     try {
@@ -255,7 +214,6 @@ export function getWindowActors() {
 
 /**
  * Returns the active workspace index.
- * @returns {number}
  */
 export function getActiveWorkspaceIndex() {
     try {
@@ -271,7 +229,6 @@ export function getActiveWorkspaceIndex() {
  * One is the answer that never over-states what a window can have: the count is used to size the
  * set of overview previews a window on all workspaces must have, and an unknown count must not
  * turn into a promise of more cards than exist.
- * @returns {number}
  */
 export function getWorkspaceCount() {
     try {
@@ -284,7 +241,6 @@ export function getWorkspaceCount() {
 
 /**
  * Returns the currently active workspace object, or null.
- * @returns {object|null}
  */
 export function getActiveWorkspace() {
     try {
@@ -296,7 +252,6 @@ export function getActiveWorkspace() {
 
 /**
  * Returns the global Clutter.Stage instance, or null.
- * @returns {object|null}
  */
 export function getStage() {
     return globalThis.global?.stage ?? null;
@@ -304,7 +259,6 @@ export function getStage() {
 
 /**
  * Returns stage dimensions {width, height}.
- * @returns {{width: number, height: number}}
  */
 export function getStageDimensions() {
     try {

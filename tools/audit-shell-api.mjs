@@ -104,7 +104,6 @@ const SURFACE = [
     {id: 'shell_glsl_set_uniform_float', member: 'effect.set_uniform_float() [Shell.GLSLEffect]', repo: 'gnome-shell', kind: 'fn', file: 'src/shell-glsl-effect.h', sym: 'shell_glsl_effect_set_uniform_float'},
     {id: 'backend_get_sprite', member: 'backend.get_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_sprite'},
     {id: 'backend_get_pointer_sprite', member: 'backend.get_pointer_sprite()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_pointer_sprite'},
-    {id: 'backend_get_default_seat', member: 'backend.get_default_seat()', repo: 'mutter', kind: 'fn', file: 'clutter/clutter/clutter-backend.h', sym: 'clutter_backend_get_default_seat'},
     // Build-time facts the typelib naming depends on
     {id: 'mutter_api_version', member: 'Meta-<api> / Shell-<api> typelibs', repo: 'mutter', kind: 'const', file: 'meson.build', sym: 'libmutter_api_version'},
     // gnome-shell

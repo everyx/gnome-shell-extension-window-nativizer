@@ -20,11 +20,7 @@ import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
 /**
- * @param {number} bufferWidth
- * @param {number} bufferHeight
- * @param {number} frameWidth
- * @param {number} frameHeight
- * @returns {{w: number, h: number}} Two-sided totals, each >= 0
+ * @returns Two-sided totals, each >= 0
  */
 export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     return {
@@ -37,8 +33,6 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
  * Whether the window type has an independent, full-fledged form that can accept
  * Adwaita decoration. Transient menus, popups, tooltips, DND layers, and desktop
  * docks are excluded.
- * @param {number} [windowType=WindowType.NORMAL]
- * @returns {boolean}
  */
 export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
     return windowType === WindowType.NORMAL ||
@@ -48,13 +42,8 @@ export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
 }
 
 /**
- * @param {object} [params={}]
- * @param {number} [params.windowType=WindowType.NORMAL]
- * @param {boolean} [params.isMaximized=false]
- * @param {boolean} [params.isFullscreen=false]
- * @param {number} [params.frameWidth=Infinity] - Logical px
- * @param {number} [params.frameHeight=Infinity] - Logical px
- * @returns {{eligible: boolean, reason: string}}
+ * @param [params.frameWidth=Infinity] - Logical px
+ * @param [params.frameHeight=Infinity] - Logical px
  */
 export function checkDecorationEligibility({
     windowType = WindowType.NORMAL,
@@ -77,20 +66,9 @@ export function checkDecorationEligibility({
 }
 
 /**
- * Whether the client declared a decoration ring of its own, on either axis.
- * Same question Mutter answers with the boolean `has_custom_frame_extents` (set
- * whenever the property exists, 4px as much as 40px),
- * and it reads the same way: a declared extent means the client draws its own frame.
- * An SSD window's ring is drawn by the frame client (`mutter-x11-frames`), not by the
- * client itself, so it does not count as a declaration (`hasSsd ⇒ false`). The policy
- * "the SSD ring is ours to clear when we clip" lives in `inferDecorationBaseline`
- * (`hasSsd ⇒ shadow=false, reason='has-ssd-frame'`) and in the ring-clearing logic of
- * `evaluateWindowActions`, not here.
- * @param {object} params
- * @param {boolean} [params.hasSsd=false] - SSD frame ring is not a client declaration
- * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
- * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
- * @returns {boolean}
+ * Whether the client declared a decoration ring of its own, on either axis - the same question
+ * Mutter's boolean `has_custom_frame_extents` answers (any declared margin counts).
+ * An SSD window's ring is drawn by the frame client, not the client, so it is not a declaration.
  */
 export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
     return !hasSsd && (sideW > 0 || sideH > 0);
@@ -99,24 +77,15 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
 /**
  * Whether the window keeps a Mutter X11 shadow we could never clear: a bare XWayland window,
  * with no declared ring and no compositor frame. The remedy is a rule, not our shadow.
- * @param {object} params
- * @param {boolean} [params.hasSsd=false]
- * @param {boolean} [params.isX11=false]
- * @param {boolean} [params.hasRing=false] - Whether the window declared a margin ring
- * @returns {boolean}
+ * @param [params.hasRing=false] - Whether the window declared a margin ring
  */
 function hasUnclearableShadow({hasSsd = false, isX11 = false, hasRing = false} = {}) {
     return !hasSsd && isX11 && !hasRing;
 }
 
 /**
- * @param {object} params
- * @param {boolean} [params.isX11=false]
- * @param {number} params.sideW - Widest declared margin on the horizontal axis, logical px
- * @param {number} params.sideH - Widest declared margin on the vertical axis, logical px
- * @param {boolean} [params.hasSsd=false]
- * @param {boolean} [params.nativeLikeCorners=false]
- * @returns {{shadow: boolean, corners: boolean, reason: string}}
+ * @param params.sideW - Widest declared margin on the horizontal axis, logical px
+ * @param params.sideH - Widest declared margin on the vertical axis, logical px
  */
 export function inferDecorationBaseline({
     isX11 = false,
@@ -147,21 +116,8 @@ export function inferDecorationBaseline({
 }
 
 /**
- * The ring the client declared, read the one way both the decision and the picker's reading need
- * it. Two readings of this fact used to live apart: `readWindow` asked `hasDeclaredMarginRing` (the
- * per-side rectangles, refusing to answer when the frame does not fit inside its buffer) while the
- * decision asked `declaresOwnShadow` over the two-sided totals, which stay positive there. A window
- * in that state therefore carried `has_ring=false` in the key a pick wrote and `has_ring=true` in
- * the lookup the runtime made, so the rule could never match. One function, so they cannot disagree
- * again.
- * @param {object} [params={}]
- * @param {boolean} [params.hasSsd=false]
- * @param {import('./frame.js').Insets|null} [params.insets=null]
- * @param {number} [params.bufferWidth=0]
- * @param {number} [params.bufferHeight=0]
- * @param {number} [params.frameWidth=0]
- * @param {number} [params.frameHeight=0]
- * @returns {boolean}
+ * The ring the client declared, read the one way both the decision and the picker's rule key
+ * need, so the two cannot disagree. Reads per-side rectangles, falling back to two-sided totals.
  */
 export function clientDeclaredRing({
     hasSsd = false,
@@ -173,22 +129,12 @@ export function clientDeclaredRing({
     return declaresOwnShadow({hasSsd, sideW: declaringSides.sideW, sideH: declaringSides.sideH});
 }
 
-/**
- * @param {number|null|undefined} scale
- * @returns {boolean}
- */
 export function isFractionalScale(scale) {
     if (scale === null || scale === undefined || !Number.isFinite(scale) || scale <= 0)
         return false;
     return Math.abs(scale - Math.round(scale)) > 0.001;
 }
 
-/**
- * @param {object} params
- * @param {boolean} [params.preferCrispText=false]
- * @param {number|null} [params.scale=1]
- * @returns {boolean}
- */
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     if (!preferCrispText)
         return true;
@@ -202,67 +148,15 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
 
 export {isWindowMaximized, isWindowTiled};
 
-/**
- * @typedef {object} WindowEvaluationParams
- * @property {number} bufferWidth
- * @property {number} bufferHeight
- * @property {number} frameWidth
- * @property {number} frameHeight
- * @property {import('./frame.js').Insets|null} [insets=null] - Declared ring per side; the widths above are the totals fallback
- * @property {boolean} [animationsEnabled=true] - The user's animation setting; false suppresses the blend
- * @property {boolean} [dark=false] - System colour scheme, for the tiled ring's currentColor
- * @property {number} [monitorScale=1]
- * @property {boolean} [isMaximized=false]
- * @property {boolean} [isFullscreen=false]
- * @property {boolean} [hasSsd=false]
- * @property {boolean} [isX11=false]
- * @property {boolean} [nativeLikeCorners=false] - Whether the process maps an Adwaita provider. The
- *           reading answers null while that is not known yet, and null is not a decision input:
- *           the caller defers rather than decide on a default.
- * @property {number} [windowType=WindowType.NORMAL]
- * @property {boolean} [hasParent=false]
- * @property {boolean} [isAttachedDialog=false]
- * @property {boolean} [allowsResize=true]
- * @property {boolean} [hasGtk4Client=false] - Whether the client is GTK4, whose own handle
- *        the declared margins can prove. The reading answers null while that is not known yet,
- *        and the caller defers on it like `nativeLikeCorners`.
- * @property {boolean} [hasTileMatch=false]
- * @property {boolean} [focused=false]
- * @property {boolean} [tiled=false]
- * @property {boolean} [highContrast=false]
- * @property {string} [wmClass]
- * @property {Record<string, string>} [rules={}]
- * @property {boolean} [preferCrispText=false]
- */
 
 /**
  * What `evaluateWindowActions` decides for one window, per axis plus the resolved style.
- * @typedef {object} WindowActions
- * @property {boolean} drawShadow
- * @property {boolean} drawClip
- * @property {boolean} drawRing
- * @property {boolean} drawResize
- * @property {{clear: boolean, safeInset: boolean}} ring
- * @property {object} style
- * @property {string} reason
  */
 
 /**
- * The declared margin, read the two ways the two questions need. The ring is declared per
- * side (`_GTK_FRAME_EXTENTS` LTRB, read as `buffer_rect - frame_rect`), and a two-sided
- * total loses which side it came from, so neither reading is "the" margin:
- *  - `declaringSides` is the widest margin on each axis. A positive value then means "a ring
- *    on either side of this axis" - the question `declaresOwnShadow()` asks. On non-negative
- *    values `max > 0` is exactly "some side on this axis is positive".
- *  - `narrowestSides` is the smallest margin on each axis. "At least `RESIZE_BAND` on every
- *    side" is that minimum, not the per-axis average a two-sided total gives: a 0,24 ring is
- *    not 12 a side, so `decideResizeBand()` reads this pair.
- * With only the two-sided totals both pairs are equal, which is right for a symmetric
- * measure. The widths are the fallback for a caller that only has totals.
- * @param {object} params
- * @param {import('./frame.js').Insets|null} params.insets
- * @returns {{declaringSides: {sideW: number, sideH: number},
- *            narrowestSides: {sideW: number, sideH: number}}}
+ * The declared margin, read the two ways the questions need. `declaringSides` is the widest margin
+ * per axis - "a ring on either side", the shadow question. `narrowestSides` is the smallest: the band
+ * needs `RESIZE_BAND` on every side, not an average, where a 0,24 ring is not 12. Totals serve as both.
  */
 export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {
     if (!insets) {
@@ -283,24 +177,9 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
 }
 
 /**
- * Whether the window gets the resize band. Independent of the decoration: a
- * `resize-only` rule is valid, and a window we draw nothing else on can still be
- * grabbable. Capability gates (unresizable, maximized/fullscreen, SSD, too small)
- * are never overridden; reversing the axis bypasses only the GTK4 reading below.
- * @param {object} params
- * @param {boolean} [params.reversed=false] - Whether the rule reverses this axis
- * @param {boolean} [params.allowsResize=true]
- * @param {boolean} [params.isMaximized=false]
- * @param {boolean} [params.isFullscreen=false]
- * @param {boolean} [params.hasGtk4Client=false] - Whether the client is GTK4, whose own handle
- *        the declared margins can prove
- * @param {boolean} [params.hasSsd=false]
- * @param {import('./frame.js').Insets|null} [params.insets=null] - Declared ring, per side
- * @param {number} [params.bufferWidth=0]
- * @param {number} [params.bufferHeight=0]
- * @param {number} [params.frameWidth=0]
- * @param {number} [params.frameHeight=0]
- * @returns {boolean}
+ * Whether the window gets the resize band - independent of the decoration, so a `resize-only`
+ * rule is valid. Capability gates (unresizable, maximized/fullscreen, SSD, too small) are never
+ * overridden; a reversed axis bypasses only the GTK4 handle reading below.
  */
 export function decideResizeBand({
     reversed = false,
@@ -325,11 +204,9 @@ export function decideResizeBand({
     if (!(frameWidth >= MIN_BAND_WINDOW) || !(frameHeight >= MIN_BAND_WINDOW))
         return false;
 
-    // The automatic reading: its own handle is already at least as wide as a native one on
-    // every side. Only GTK4 can be read this way: it sizes the handle itself, so its declared
-    // margins prove it, while a GTK3 window's margins are its shadow and say nothing about the
-    // theme's handle. A bare window reserves no
-    // ring, so its band sits on the desktop around it.
+    // The automatic reading: the client's own handle is already at least RESIZE_BAND on every
+    // side. Only GTK4 proves this from its margins - it sizes the handle itself; a GTK3
+    // window's margins are its theme's shadow. A bare window reserves no ring.
     const {narrowestSides} =
         declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const hasNativeHandle = hasGtk4Client &&
@@ -341,19 +218,12 @@ export function decideResizeBand({
 
 /**
  * Resolves one axis: a rule reverses the automatic decision on the axes it names.
- * @param {Set<string>|null} reversedAxes
- * @param {string} axis
- * @param {boolean} baseline - What the heuristic decided
- * @returns {boolean}
+ * @param baseline - What the heuristic decided
  */
 function resolveAxisValue(reversedAxes, axis, baseline) {
     return reversedAxes?.has(axis) ? !baseline : baseline;
 }
 
-/**
- * @param {WindowEvaluationParams} params
- * @returns {WindowActions}
- */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
     insets = null,
@@ -437,21 +307,17 @@ export function evaluateWindowActions({
         insets, bufferWidth, bufferHeight, frameWidth, frameHeight,
     });
 
-    // The tiled ring is the case that is not a shadow: upstream gives a tiled window a 1px ring
-    // instead, and the style's border marker is what says so. It is drawn on the same terms as a
-    // shadow - only on a window we decorate at all - and that one predicate decides both whether the
-    // actor is created and whether the client's own ring is erased: erasing a ring we do not replace
-    // leaves a window with no edge at all, which is what a tiled SSD or non-resizable window got
-    // when the two decisions were made separately.
+    // The tiled ring is not a shadow: upstream gives a tiled window a 1px ring instead, marked by
+    // style.border. One predicate decides both whether it is drawn and whether the client's ring is
+    // erased - erasing a ring we do not replace leaves no edge.
     const drawRing = Boolean(style.border) && (clip || shadow || drawResize);
 
     // Ring is ours to clear exactly when the ring we draw is ours.
     const clear = ownRing && (shadow || drawRing);
 
-    // The ring, read once: whether it is ours to take over, whether it has to be erased, and
-    // whether the clip has to sit 1px inside because the client painted a border up to the actor
-    // edge instead of declaring a ring. `ownRing` folds in the two-sided totals a caller without
-    // per-side insets can still give us, so flatness is read from the side insets themselves.
+    // The ring, resolved once: whether it is ours to take over (`clear`) and whether the clip must
+    // sit `flatSafeInsets` inside because the client painted a border up to the actor edge instead
+    // of declaring one (`safeInset`). Flatness reads the side insets, not the two-sided totals.
     const flat = !insets ||
         (insets.left <= 0 && insets.top <= 0 && insets.right <= 0 && insets.bottom <= 0);
     const ring = {
@@ -482,11 +348,6 @@ export function evaluateWindowActions({
     return {drawShadow: shadow, drawClip: clip, drawRing, drawResize, ring, style, reason};
 }
 
-/**
- * @param {WindowEvaluationParams} params
- * @param {{key: string, state: string}} rule
- * @returns {boolean}
- */
 function ruleWouldChangeActions(params, {key, state}) {
     const before = evaluateWindowActions(params);
     const after = evaluateWindowActions({
@@ -499,7 +360,6 @@ function ruleWouldChangeActions(params, {key, state}) {
         before.drawResize !== after.drawResize;
 }
 
-/** Transient state normalized away; a rule outlives it. */
 function kindParams(params) {
     return {
         ...params,
@@ -514,8 +374,7 @@ function kindParams(params) {
  * Which axes a kind can be corrected on at all - the same answer the preferences window
  * uses to decide whether to offer a switch. Capability, not choice: an axis the runtime
  * cannot act on has no decision to reverse.
- * @param {{windowType?: number, allowsResize?: boolean, hasSsd?: boolean}} [kind]
- * @returns {Record<string, boolean>} Keyed by RuleAxis
+ * @returns Keyed by RuleAxis
  */
 export function ruleAxisCapabilities({
     windowType = WindowType.NORMAL, allowsResize = true, hasSsd = false,
@@ -529,12 +388,9 @@ export function ruleAxisCapabilities({
 }
 
 /**
- * Picker suggestion: correct every axis this kind can be corrected on. The user picked the
- * window because it looks wrong, so the pick is the whole correction rather than the
- * smallest one; an axis the kind cannot be corrected on is left out, because a rule naming
- * it could not take effect.
- * @param {WindowEvaluationParams} params
- * @returns {string} Canonical stored state; '' when the kind can be corrected on nothing
+ * Picker suggestion: correct every axis this kind can be corrected on. The user picked the window
+ * because it looks wrong, so the pick is the whole correction, not the smallest one; an axis the kind
+ * cannot be corrected on is left out, because naming it could not take effect.
  */
 export function suggestedRuleState(params) {
     const caps = ruleAxisCapabilities(params);
@@ -542,10 +398,7 @@ export function suggestedRuleState(params) {
 }
 
 /**
- * @param {Record<string, string>} properties
- * @param {WindowEvaluationParams} params
- * @param {string} state
- * @returns {boolean|null} Null when the window cannot be identified
+ * @returns Null when the window cannot be identified
  */
 export function suggestedRuleWouldChange(properties, params, state) {
     const key = buildRuleKeyFromProperties(properties);
@@ -559,15 +412,7 @@ export function suggestedRuleWouldChange(properties, params, state) {
  * Expected visual corner radius for an inspected window.
  * Maximized, tiled, fullscreen, and unclipped non-Adwaita/SSD windows have square (0px) corners.
  *
- * @param {object} [params={}]
- * @param {boolean} [params.isFullscreen=false]
- * @param {boolean} [params.isMaximized=false]
- * @param {boolean} [params.isTiled=false]
- * @param {boolean} [params.isActivelyClipped=false]
- * @param {boolean} [params.hasNativeLikeCorners=false]
- * @param {boolean} [params.hasSsd=false]
- * @param {number} [params.baseRadius=ADWAITA_STYLE.window.radius]
- * @returns {number} Visual corner radius in pixels (0 for square corners)
+ * @returns Visual corner radius in pixels (0 for square corners)
  */
 export function expectedWindowRadius({
     isFullscreen = false,
@@ -597,9 +442,6 @@ export {HIGHLIGHT_BORDER_WIDTH};
  * Outset bounding box for the inspector highlight border around the window.
  * Outsetting prevents St CSS inward border drawing from eroding into the client window content.
  *
- * @param {{x: number, y: number, width: number, height: number}} frame
- * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]
- * @returns {{x: number, y: number, width: number, height: number}}
  */
 export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
     if (!frame)
@@ -615,9 +457,6 @@ export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH
 /**
  * Concentric outer arc for an outset border; square windows stay 0px.
  *
- * @param {number} innerRadius
- * @param {number} [borderWidth=HIGHLIGHT_BORDER_WIDTH]
- * @returns {number}
  */
 export function highlightOuterRadius(innerRadius, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
     return innerRadius > 0 ? innerRadius + borderWidth : 0;

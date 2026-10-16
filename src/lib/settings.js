@@ -5,8 +5,6 @@ export const SETTINGS_KEY_WINDOW_RULES = 'window-rules';
 
 /**
  * Validates and normalizes raw entries dictionary in a single pass.
- * @param {Record<string, {state?: string, title?: string}>} raw
- * @returns {Record<string, {state: string, title: string}>}
  */
 export function sanitizeEntries(raw) {
     const rawStates = {};
@@ -34,20 +32,16 @@ export function sanitizeEntries(raw) {
 
 /**
  * One entry per rule: active state and display sample title.
- * @param {object} settings
- * @returns {Record<string, {state: string, title: string}>}
  */
 export function readEntries(settings) {
     return sanitizeEntries(readValue(settings, SETTINGS_KEY_WINDOW_RULES));
 }
 
-/** @param {object} settings @returns {Record<string,string>} Canonical key -> axis state */
 export function getWindowRules(settings) {
     return Object.fromEntries(
         Object.entries(readEntries(settings)).map(([key, entry]) => [key, entry.state]));
 }
 
-/** @param {object} settings @returns {Record<string,string>} Canonical key -> title */
 export function getRuleTitles(settings) {
     return Object.fromEntries(
         Object.entries(readEntries(settings))
@@ -55,14 +49,12 @@ export function getRuleTitles(settings) {
             .map(([key, entry]) => [key, entry.title]));
 }
 
-/** @param {object} settings @param {Record<string,string>} rules */
 export function setWindowRules(settings, rules) {
     writeEntries(settings, mergeEntries(readEntries(settings), {rules}));
 }
 
 /**
  * Updates or inserts a single rule entry and its display-only title.
- * @param {object} settings @param {string} key @param {string} state @param {string} [title='']
  */
 export function setWindowRule(settings, key, state, title = '') {
     const entries = readEntries(settings);
@@ -76,8 +68,6 @@ export function setWindowRule(settings, key, state, title = '') {
 
 /**
  * Writes raw entries map directly after sanitization.
- * @param {object} settings
- * @param {Record<string, {state: string, title?: string}>} entries
  */
 export function setAllRuleEntries(settings, entries) {
     writeEntries(settings, entries);
@@ -85,8 +75,7 @@ export function setAllRuleEntries(settings, entries) {
 
 /**
  * Serializes active window rules into a canonical JSON export string.
- * @param {Record<string, {state: string, title?: string}>} entries
- * @returns {string} Formatted JSON string
+ * @returns Formatted JSON string
  */
 export function exportRulesJson(entries) {
     const clean = sanitizeEntries(entries);
@@ -106,18 +95,6 @@ export function exportRulesJson(entries) {
 
 /**
  * Parses and sanitizes rules from JSON text, separating non-conflicting entries from conflicts.
- * @param {Record<string, {state: string, title: string}>} existingEntries
- * @param {string} jsonText
- * @returns {{
- *   hasConflicts: boolean,
- *   nextEntries?: Record<string, {state: string, title: string}>,
- *   addedCount?: number,
- *   updatedCount?: number,
- *   conflicts?: Array<{key: string, existingState: string, importedState: string, existingTitle: string, importedTitle: string}>,
- *   nonConflictingEntries?: Record<string, {state: string, title: string}>,
- *   cleanImported?: Record<string, {state: string, title: string}>,
- *   importedKeys: string[],
- * }}
  */
 export function importRulesJson(existingEntries, jsonText) {
     if (!jsonText || !jsonText.trim())
@@ -222,11 +199,6 @@ export function importRulesJson(existingEntries, jsonText) {
 
 /**
  * Applies user conflict resolutions and merges with non-conflicting entries.
- * @param {Record<string, {state: string, title?: string}>} existingEntries
- * @param {Record<string, {state: string, title?: string}>} nonConflictingEntries
- * @param {Record<string, {state: string, title?: string}>} cleanImported
- * @param {Record<string, 'existing'|'imported'>} resolutions
- * @returns {{nextEntries: Record<string, object>, resolvedUpdatedCount: number}}
  */
 export function applyConflictResolutions(existingEntries, nonConflictingEntries, cleanImported, resolutions) {
     const nextEntries = {...nonConflictingEntries};

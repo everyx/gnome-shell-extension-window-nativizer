@@ -1,10 +1,25 @@
 import gnome from 'eslint-config-gnome';
+import {createSlopConfig} from 'eslint-plugin-slop';
 
 /** The GJS / GNOME ruleset, scoped to the extension source it was written for. */
 const sourceConfig = gnome.configs.recommended.map(config => ({
     ...config,
     files: ['src/**/*.js'],
 }));
+
+/**
+ * The AI-slop guard, scoped to the source it is meant for.
+ *
+ * `recent-changes` is what makes it adoptable here: a construct is reported only when its range
+ * intersects a line the last five commits touched, so prose that predates the budget is tolerated
+ * and new code is held to it. The word budget is the one the comment/docs split already uses - a
+ * comment that outgrows it is carrying knowledge that belongs in `docs/` or in the code.
+ *
+ * `no-em-dash` reads comments only, so the user-facing translated strings keep their own
+ * typography: changing one would change a msgid and drop its translation.
+ */
+const slopConfig = createSlopConfig({inspection: {mode: 'recent-changes', tracebackCommits: 5}})
+    .map(config => ({...config, files: ['src/**/*.js']}));
 
 /**
  * Bug-catching rules for the dev scripts and the tests. They are deliberately not
@@ -38,6 +53,15 @@ export default [
         ],
     },
     ...sourceConfig,
+    ...slopConfig,
+    {
+        files: ['src/**/*.js'],
+        rules: {
+            // JSDoc counts: the longest blocks in the tree are JSDoc, and the default would skip them.
+            'slop/max-comment-length': ['error', {maximumWords: 60, ignoreJSDoc: false}],
+            'slop/no-jargon': ['error', {ignoreJSDoc: false}],
+        },
+    },
     {
         files: ['src/**/*.js'],
         languageOptions: {

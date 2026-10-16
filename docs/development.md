@@ -25,7 +25,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run check:decoration` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
-| `pnpm run check:perf` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
+| `pnpm run check:perf` | automated performance budget guard (exits 1 when a budget is exceeded; a lone stress-ratio miss inside the known swing exits 2, which is the tool saying one re-run is worth it) |
 | `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
@@ -105,7 +105,7 @@ owns only the manifest's `$.version-name` (`release-please-config.json`).
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
 both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs `lint`, `check:style`, the unit tests and `check:decoration` (or all via `check`). Each guards
+- **every commit** runs `lint`, `check:style`, the unit tests and `check:decoration` (or all via `check`), unless every staged path is inert - documentation or assets, the list lives in `run-checks` - because none of them can see such a commit. Each guards
   something the commit itself can break, so the commit that breaks one is the commit that fixes it,
   and every commit stays valid on its own. The rendering is one of those things: the unit tests see
   the decisions, not the pixels, so a shadow or a clip change that misses libadwaita by a level is
@@ -113,13 +113,14 @@ both would only make the second run slow, so the split follows what a check guar
   one skips it and says so rather than blocking every commit there - on a machine that has one it
   runs, and it took the place of a stored baseline that was found to have been failing unnoticed for
   a week;
-- **every push** runs `lint:ego`, which reviews the extension as a whole; builds it (`build`) the way a user
-  installs it; runs `lint:zip` (`shexli`) over that package, which reads it the way extensions.gnome.org will; and
-  drives `test:e2e` and `check:perf` through a nested session. The first three describe what leaves the machine;
-  the last two guard what a commit can break and are here because they are slow - measured on this machine,
-  two minutes for the end-to-end run and 104s for the performance one - and a commit hook slow enough to be
-  bypassed is worth less than a push hook nobody minds. Pushes are rare; commits are not. Neither needs a quiet
-  machine: the performance budget is a ratio against the same round's disabled baseline, so a busy machine moves
+- **every push** drives `test:e2e` through a nested session: it guards what a commit can break - a lifecycle, a
+  resize band - but it costs about two minutes, and a commit hook slow enough to be bypassed is worth less than
+  a push hook nobody minds. Pushes are rare; commits are not. Everything else that covers what leaves the
+  machine moved to CI, which runs it on every push: `lint:ego`, `build`, and `lint:zip` (`shexli`, the reader
+  extensions.gnome.org will use). `check:perf` no longer runs in a hook at all - its swing across sessions
+  (0.70-0.90 against a 0.85 budget) is wider than its guard band, so as a per-push gate it flipped coins; run it
+  by hand after a push that touches the frame paths. It needs no quiet machine either way: the budget is a ratio
+  against the same round's disabled baseline, so a busy machine moves
   both arms and the guard reads it the same.
 
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running

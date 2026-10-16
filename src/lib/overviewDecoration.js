@@ -1,27 +1,7 @@
 /**
- * OverviewDecoration: the overview half of a window's decoration.
- *
- * While the shell overview is shown, a window's preview is decorated differently from its
- * desktop actor. Three things happen, and this owns the lifecycle of all three:
- *
- * - an A_8 mask on the window's shaped texture supplies the rounded corners, so the thumbnail
- *   rides Mutter's own mipmapped pipeline instead of an offscreen FBO;
- * - the window's **surface container** drops one step below opaque, because Mutter consults the
- *   mask only on its blended path (`use_opaque_region = opaque_region && paint_opacity == 255`),
- *   and every preview clone paints the window actor through that container;
- * - a clone of the desktop shadow is mounted under each preview.
- *
- * The mask and the bypass hang on the client's own actor tree rather than on a preview card: one
- * shaped texture and one surface container are what every clone of the window paints, so one
- * install covers a window that has several previews (a window shown on all workspaces has one per
- * workspace) and one that gains a card after this pass. The card itself is only needed by the
- * shadow, because a `Clutter.Clone` has one parent and the desktop shadow - a sibling of the
- * window actor in the window group - is not part of what a preview clones.
- *
- * The mask's content is derived from readings that can move without another `apply()` (the client's
- * buffer, its scale, the resolved insets), and Mutter clears the slot underneath us whenever the
- * shaped texture's destination size changes, so what is installed is keyed on those readings and
- * re-run when the key moves.
+ * The overview half of a window's decoration: the shaped-texture mask that rounds the preview, the opacity
+ * bypass that makes Mutter consult it, and the preview shadow clone. All three hang on the client's own
+ * actors rather than on a preview card.
  */
 
 import {ZERO_INSETS} from './frame.js';
@@ -44,11 +24,6 @@ import {
     isWindowOnAllWorkspaces,
 } from '../platform/window.js';
 
-/** The journal sink for the mask-refusal warning; injected by a spec to observe the line. */
-function defaultWarn(message) {
-    console.warn(message);
-}
-
 /**
  * GNOME Shell's cap on an overview thumbnail's scale, from `WINDOW_PREVIEW_MAXIMUM_SCALE`
  * (js/ui/workspace.js). No preview is drawn larger than this fraction of the window's
@@ -57,22 +32,16 @@ function defaultWarn(message) {
 const OVERVIEW_PREVIEW_MAX_SCALE = 0.95;
 
 /**
- * Hard ceiling on either side of the overview corner mask, in texels.
- *
- * Measured against actual rendering: the corner arc stops looking polygonal (mask texels
- * per screen pixel) at roughly 0.7, and is indistinguishable from a full-resolution mask
- * at 1.0. The ceiling only bites on monitors big enough that this preview never reaches it,
- * which keeps the arc above the visible threshold up to ~4K-wide displays and degrades it
- * gradually beyond.
+ * Hard ceiling on either side of the overview corner mask, in texels. The arc stops looking polygonal at
+ * roughly 0.7 mask texels per screen pixel and is indistinguishable from a full mask at 1.0, so the ceiling
+ * only bites past ~4K-wide displays.
  */
 const OVERVIEW_MASK_MAX_DIMENSION = 2560;
 
 export class OverviewDecoration {
     /**
-     * @param {Meta.Window} win
-     * @param {object} [options]
-     * @param {object} [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
-     * @param {Function} [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
+     * @param [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
+     * @param [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
      */
     constructor(win, options = {}) {
         this._win = win;
@@ -103,16 +72,15 @@ export class OverviewDecoration {
         // A readiness refusal is a deferral (nothing cached); a refusal after the readiness gates
         // passed is the "square in the overview" defect. The latch makes that one line per
         // episode, re-armed by an install or by leaving the overview.
-        this._warn = options.warn ?? defaultWarn;
+        // `console.warn` is not writable, so the sink is injectable and a spec observes the line.
+        this._warn = options.warn ?? (message => console.warn(message));
         this._maskRefusalLatch = freshInvariantState();
     }
 
-    /** @returns {boolean} Whether the overview visuals are currently applied */
     get inOverview() {
         return this._inOverview;
     }
 
-    /** @returns {object} A fresh snapshot of the overview decoration's state */
     get stateView() {
         return {
             inOverview: this._inOverview,
@@ -123,16 +91,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Whether the overview can round this window through the shaped-texture mask. A window
-     * whose corner or outline is not drawn has no mask to build. An XWayland window keeps the
-     * window's shape in the same mask slot and Mutter rewrites it from that shape, so
-     * overwriting it would deform the window once the overview ends — and GJS cannot put it
-     * back (`set_mask_texture` rejects null).
-     *
-     * @param {object} params
-     * @param {boolean} params.drawClip - Whether the window's corner or outline is drawn
-     * @param {boolean} params.hasStyle - Whether a decoration style is resolved
-     * @returns {boolean}
+     * Whether the overview can round this window through the shaped-texture mask: a window whose corner or
+     * outline is not drawn has no mask to build. XWayland keeps the window's shape in the same slot, and GJS
+     * cannot put it back (`set_mask_texture` rejects null), so overwriting it would deform the window.
      */
     canApplyMask({drawClip, hasStyle}) {
         if (!drawClip || !hasStyle)
@@ -147,21 +108,7 @@ export class OverviewDecoration {
         return clientType !== WindowClientType.X11;
     }
 
-    /**
-     * Switches the overview visuals on or off.
-     *
-     * @param {boolean} inOverview
-     * @param {object} readings - The decoration's current values this cannot read itself
-     * @param {number} [readings.radius] - Resolved corner radius, logical px
-     * @param {import('./frame.js').Insets|null} [readings.insets] - Resolved clip insets
-     * @param {boolean} [readings.erase] - Whether the clip shader erases the ring
-     * @param {number} [readings.scale] - Monitor scale for the window
-     * @param {boolean} [readings.drawClip] - Whether the window's corner or outline is drawn
-     * @param {boolean} [readings.hasStyle] - Whether a decoration style is resolved
-     * @param {boolean} [readings.forceOverviewCorners] - Whether the user forces the legacy clip
-     * @param {Clutter.Actor|null} [readings.shadow] - The desktop shadow clone's source
-     * @returns {'mask'|'clip'|'square'} The overview outcome chosen for this pass
-     */
+    /** Switches the overview visuals on or off, from the readings this cannot take for itself. */
     setMode(inOverview, readings = {}) {
         this._inOverview = Boolean(inOverview);
 
@@ -185,7 +132,6 @@ export class OverviewDecoration {
      * mode they hand back is always the one that actually installed - not the one that was merely
      * attempted.
      *
-     * @returns {'mask'|'clip'|'square'}
      */
     _settleMode() {
         if (!this._inOverview) {
@@ -193,13 +139,10 @@ export class OverviewDecoration {
             return 'square';
         }
 
-        // Three ways a window can be shown in the overview. Rounded and sharp comes from the
-        // shaped-texture mask, and every Wayland window takes it; rounded and blurry is the
-        // legacy offscreen clip, kept when the user forces corners; neither leaves the thumbnail
-        // square, and as sharp as an undecorated window. A mask can only round the surface it is
-        // set on, so a window whose visible corners another surface of the same window paints
-        // keeps square previews; that admitted square, like XWayland's, is tracked upstream
-        // (issue #27) and is what `force-overview-corners` exists for.
+        // Three ways a window can be shown: rounded and sharp from the shaped-texture mask, which every
+        // Wayland window takes; rounded and blurry from the legacy offscreen clip, kept when the user forces
+        // corners; or square. A mask can only round the surface it is set on, so a window whose visible
+        // corners another surface paints keeps square previews.
         const maskable = this._canMask && this._maskReady();
         this._syncHooks();
         // A mask is only one of the ways to round the preview; whether it actually landed decides
@@ -217,7 +160,6 @@ export class OverviewDecoration {
         return this._forceOverviewCorners ? 'clip' : 'square';
     }
 
-    /** Drops every overview visual and hook: the overview ended, or the decoration is going away. */
     drop() {
         this._inOverview = false;
         this._release();
@@ -231,11 +173,8 @@ export class OverviewDecoration {
     }
 
     /**
-     * Connects, or drops, the preview-lifecycle hooks.
-     *
-     * The overview rebuilds a window's preview when the window moves to another workspace, and a
-     * client can resize itself while the overview is open. A rebuild replaces the cards a shadow
-     * clone is mounted under, and a resize can move where the mask's content belongs, so both are
+     * Connects, or drops, the preview-lifecycle hooks: a workspace move rebuilds the cards a shadow clone is
+     * mounted under, and a client resize moves where the mask's content belongs, so both installs are
      * re-applied when the hook fires.
      */
     _syncHooks() {
@@ -267,13 +206,8 @@ export class OverviewDecoration {
     }
 
     /**
-     * Reads the shaped texture's own buffer state. A window whose preview is built before the
-     * client's first buffer arrives has no shape to mask, so this distinguishes "no buffer yet"
-     * from the buffered case that can take one. Nothing is cached: the buffer's arrival earns a
-     * fresh pass.
-     *
-     * @param {object|null} stex - MetaShapedTexture, or a stand-in in a spec
-     * @returns {string|null} A key for the buffer the texture holds, or null when it holds none yet
+     * Reads the shaped texture's own buffer state, distinguishing "no buffer yet" (nothing to mask) from the
+     * buffered case, which can take one. Nothing is cached: the buffer's arrival earns a fresh pass.
      */
     _textureBufferKey(stex) {
         const multi = stex?.get_texture?.() ?? null;
@@ -287,12 +221,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Whether the shaped texture is ready to take a mask this pass. Neither missing branch is a
-     * refusal: a texture with no buffer yet, and a window actor without a positive allocation,
-     * both mean "not this pass", with nothing cached, so the buffer's or the allocation's
-     * arrival earns a fresh reconcile. `isPaintableFrame` is the same authority the clip uses.
-     *
-     * @returns {boolean}
+     * Whether the shaped texture is ready to take a mask. Neither missing branch is a refusal - no buffer
+     * yet, or no positive allocation, both mean "not this pass" with nothing cached - and `isPaintableFrame`
+     * is the same authority the clip uses.
      */
     _maskReady() {
         const actor = getWindowActor(this._win);
@@ -301,16 +232,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Rounds the window's shaped texture during the overview.
-     *
-     * Mutter samples the mask with the same minification filter as the window colour, so a
-     * downscaled thumbnail keeps hardware mipmapping. Mutter skips the mask on its opaque fast
-     * path, so the window's surface container is pulled one step below 255 to force the blended
-     * path (`_applyOpacityBypass`); the 1/255 alpha that costs is imperceptible.
-     *
-     * @returns {boolean} Whether the window wears the mask after this call: true when it was
-     *   already installed or was installed now, false when a missing texture, context, size or
-     *   mask left it square
+     * Rounds the window's shaped texture during the overview. Mutter samples the mask with the window
+     * colour's own minification filter, so a downscaled thumbnail keeps hardware mipmapping, and it skips the
+     * mask on its opaque fast path, which is what the container bypass forces.
      */
     _applyMask() {
         // The invariant: our rounded mask is only ever installed while the window is in the
@@ -351,17 +275,10 @@ export class OverviewDecoration {
         const insets = this._insets ?? ZERO_INSETS;
         const key = this._maskKeyFor(textureWidth, textureHeight, bufferScale);
 
-        // Wearing exactly this mask already, on exactly this texture: the outcome is unchanged and
-        // `set_mask_texture` is not spent again. The texture's identity belongs in the condition
-        // because that is what the invariant means - this texture wears the mask - and the key
-        // describes only the mask's content: a swap that kept every reading equal is invisible to
-        // it, and Mutter does destroy and rebuild surface actors (`meta_wayland_actor_surface_
-        // reset_actor()` clears one and constructs the next).
-        //
-        // The bypass is re-asserted on this path too. It is idempotent, and this is the only path a
-        // pass with an unchanged key takes: a pass that could not lower the container (the actor
-        // was momentarily unreadable) would otherwise never retry, leaving a mask installed that
-        // Mutter never consults.
+        // Wearing exactly this mask on exactly this texture: unchanged, so the install is not spent
+        // again. Identity belongs in the condition, the key describes only the mask's content. The
+        // bypass is re-asserted - the only path an unchanged-key pass takes - since a mask Mutter
+        // never consults is not an install.
         if (this._stex === stex && this._maskKey === key) {
             this._applyOpacityBypass();
             return true;
@@ -395,20 +312,10 @@ export class OverviewDecoration {
     }
 
     /**
-     * The readings the installed mask was built from: the buffer that was masked, the scale its
-     * texels map through, and the decoration values that shape the mask's content.
-     *
-     * "Already wearing the mask" is only true while this key is unchanged. Mutter clears the slot
-     * itself whenever the shaped texture's destination size moves (`update_size()` drops the mask
-     * on a size change, and the buffer-scale and viewport setters invalidate that size), and a
-     * size change that is not a window resize — a display-scale move, a fractional-scale
-     * renegotiation — reaches this decoration through no signal at all. Comparing the key turns
-     * the install into a reading of this pass instead of a memory of an earlier one.
-     *
-     * @param {number} textureWidth - Window buffer width, texture px
-     * @param {number} textureHeight - Window buffer height, texture px
-     * @param {number} bufferScale - Buffer texels per logical pixel
-     * @returns {string}
+     * The readings the installed mask was built from: the buffer it masked, the scale, and the decoration
+     * values that shape its content. "Already wearing the mask" holds only while this key is unchanged,
+     * because Mutter clears the slot itself when the texture's destination size moves - and a display-scale
+     * move reaches this decoration through no signal at all.
      */
     _maskKeyFor(textureWidth, textureHeight, bufferScale) {
         const {left = 0, top = 0, right = 0, bottom = 0} = this._insets ?? {};
@@ -417,15 +324,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Drops the window's surface container one step below opaque, which is what makes Mutter
-     * consult the mask at all: its opaque fast path is `opaque_region && paint_opacity == 255`,
-     * and the shaped texture's paint opacity is this container's, times the window actor's - which
-     * the preview clone replaces with the clone's own opacity, one level above this actor.
-     *
-     * The bypass belongs on the client's container rather than on a preview card. Every clone of
-     * the window paints through the same container, so one actor covers all of them: the previews
-     * of a window shown on all workspaces, and any card the overview builds after this pass. A
-     * card's own opacity is also what the shell may animate, so it was never ours to hold.
+     * Drops the window's surface container one step below opaque, which is what makes Mutter consult the mask:
+     * its opaque fast path requires 255, and the shaped texture's paint opacity is this container's times the
+     * window actor's. Every clone paints through the same container, so one actor covers all of them.
      */
     _applyOpacityBypass() {
         if (this._bypassContainer)
@@ -445,12 +346,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Records a mask refusal that happened although the window was ready, and says so once per
-     * episode. With `forceOverviewCorners` the legacy clip is an intended rounding path, not a
-     * square preview, so the refusal is not the defect this watches.
-     *
-     * @param {string} reason - Which gate refused
-     * @returns {false} Always false, so call sites stay `return this._refuseMask(...)`
+     * Records a mask refusal that happened although the window was ready, and says so once per episode. With
+     * `forceOverviewCorners` the legacy clip is an intended rounding path, so the refusal is not the defect
+     * this watches for.
      */
     _refuseMask(reason) {
         if (this._forceOverviewCorners) {
@@ -467,21 +365,10 @@ export class OverviewDecoration {
     }
 
     /**
-     * Resolution factor for the overview corner mask.
-     *
-     * The mask is sampled through the window texture's own coordinates, so it only has to
-     * resolve what the overview actually draws: a thumbnail never larger than
-     * `OVERVIEW_PREVIEW_MAX_SCALE` of the window's logical size, on screen at the monitor
-     * scale. In buffer texels that is `OVERVIEW_PREVIEW_MAX_SCALE * monitorScale / bufferScale`,
-     * so a hidpi-buffer client on a low-dpi monitor gets downsampled, and a 1x client on a
-     * hidpi monitor is capped at buffer resolution. A full-buffer mask would instead cost
-     * a byte per client pixel — tens of megabytes for a 4K window — for detail no preview shows.
-     *
-     * @param {number} textureWidth - Window buffer width, texture px
-     * @param {number} textureHeight - Window buffer height, texture px
-     * @param {number} bufferScale - Buffer texels per logical pixel
-     * @param {number} monitorScale - Monitor scale for the window's monitor
-     * @returns {number} Factor in [0.05, 1]
+     * Resolution factor for the overview corner mask. The mask is sampled through the window texture's own
+     * coordinates, so it only has to resolve what the overview draws: a thumbnail at most
+     * `OVERVIEW_PREVIEW_MAX_SCALE` of the logical size, on screen at the monitor scale - a full-buffer mask
+     * would cost a byte per client pixel for detail no preview shows.
      */
     _overviewMaskScale(textureWidth, textureHeight, bufferScale, monitorScale) {
         const longest = Math.max(textureWidth, textureHeight);
@@ -491,14 +378,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * Re-applies the overview visuals after the card, or the window, changes.
-     *
-     * Both installs are retired first and settled again: that re-resolves the previews the shadow
-     * clones are mounted against, and re-reads the readings the mask is keyed on - a card rebuild
-     * can arrive together with a buffer change, and this is the one path that re-reads them without
-     * a window signal. The mode can differ from the entry's - a mask that declined can land now, or
-     * one that landed can decline - so the caller is handed what actually installed and keeps the
-     * desktop clip in step.
+     * Re-applies the overview visuals after the card or the window changes: both installs are retired and
+     * settled again, which re-resolves the previews the shadow clones mount against and re-reads the mask's
+     * key - the one path that re-reads it without a window signal. The caller is handed what actually installed.
      */
     _refresh() {
         if (!this._inOverview)
@@ -508,7 +390,6 @@ export class OverviewDecoration {
         this._onModeChange?.(this._settleMode());
     }
 
-    /** Retires the overview mask and restores the surface container's opacity. */
     _clearMask() {
         if (this._bypassContainer) {
             try {
@@ -535,14 +416,9 @@ export class OverviewDecoration {
     }
 
     /**
-     * How many previews the window should have: one per workspace it is shown on.
-     *
-     * This is the size of the mounted set that ends a resolution, and it is read from two facts
-     * rather than from the stage: the stage walk behind `getOverviewPreviews` visits every actor
-     * in the scene (2189 with five windows open on this machine, 3.6ms a call), so it must not run
-     * on a pass that has nothing to learn.
-     *
-     * @returns {number}
+     * How many previews the window should have: one per workspace it is shown on. The walk behind
+     * `getOverviewPreviews` visits every actor in the scene, so it must not run on a pass that has nothing to
+     * learn.
      */
     _expectedPreviewCount() {
         if (!isWindowOnAllWorkspaces(this._win))
@@ -551,17 +427,10 @@ export class OverviewDecoration {
     }
 
     /**
-     * Mounts the shadow clone under every preview of the window.
-     *
-     * One clone per preview, because a `Clutter.Clone` has one parent: the desktop shadow is a
-     * sibling of the window actor in the window group, so no preview's clone of the window actor
-     * carries it, and each preview needs its own.
-     *
-     * The previews are resolved by walking the stage, which is why the walk only runs while the
-     * mounted set looks short against `_expectedPreviewCount()`: a complete set costs nothing, and
-     * a card the overview builds after this pass - a workspace is added, the entry animation is
-     * still constructing the views - is topped up on the next reconcile. A clone that goes away
-     * with its card lowers the count and re-arms the walk the same way.
+     * Mounts the shadow clone under every preview of the window: one clone per preview, because a
+     * `Clutter.Clone` has one parent and the desktop shadow is a sibling of the window actor. The walk
+     * runs only while the mounted set looks short, so a complete set costs nothing and a later card is
+     * topped up on the next reconcile.
      */
     _applyShadow() {
         const OverviewShadow = this._OverviewShadowClass;
@@ -600,7 +469,6 @@ export class OverviewDecoration {
         }
     }
 
-    /** Removes every overview shadow clone. */
     _clearShadow() {
         const shadows = this._shadows;
         this._shadows = [];

@@ -18,10 +18,10 @@ export const OverviewShadow = GObject.registerClass({
     GTypeName: OVERVIEW_SHADOW_G_TYPE,
 }, class OverviewShadow extends Clutter.Clone {
     /**
-     * @param {Clutter.Actor} source - The window's ShadowActor
-     * @param {Clutter.Actor} preview - WindowPreview that owns the thumbnail
-     * @param {Clutter.Actor} container - preview.window_container
-     * @param {number} windowWidth - Window frame width, logical px
+     * @param source - The window's ShadowActor
+     * @param preview - WindowPreview that owns the thumbnail
+     * @param container - preview.window_container
+     * @param windowWidth - Window frame width, logical px
      */
     _init(source, preview, container, windowWidth) {
         super._init({
@@ -36,7 +36,6 @@ export const OverviewShadow = GObject.registerClass({
     /**
      * Expands the thumbnail box by the shadow padding so the cloned shadow's body
      * lines up with the window container underneath it.
-     * @param {Clutter.ActorBox} box
      */
     vfunc_allocate(box) {
         const width = box.get_width();
