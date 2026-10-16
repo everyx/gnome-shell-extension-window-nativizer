@@ -112,12 +112,13 @@ export class WindowDecoration {
         // Not 1.0: an unread scale is *unknown*, and `apply()` refuses to act on it. A decoration
         // rebuilt while the previous one kept its visuals must not read that as "scale = 1".
         this._scale = null;
-        // The settle reference points, advanced once per pass: the last settled body, its authority, and
-        // the window's own size then. The geometry path decides no body from them - the clip and the shadow
-        // settle live - and they advance only when a pass acts on the fresh body, so the hold cannot latch.
+        // The settle reference points, advanced once per pass: the last settled body, its authority,
+        // the window's own size then, and the pair-disagreement count that bounds the hold. The geometry
+        // path decides no body from them, and they advance only when a pass acts on the fresh body.
         this._lastBody = null;
         this._lastAuthority = null;
         this._lastWindowSize = null;
+        this._pairDisagreementStrikes = 0;
         // The ring hold's witness. The declared ring is `buffer - frame`, so only a buffer that
         // moved can make a new ring real; see the ring plan below for why the window's own size
         // cannot answer that.
@@ -258,13 +259,15 @@ export class WindowDecoration {
             previousWindowSize: this._lastWindowSize,
             previousBody: this._lastBody,
             previousAuthority: this._lastAuthority,
+            pairDisagreementStrikes: this._pairDisagreementStrikes,
         };
         const passSettle = settleClipBody(readActorExtent(clipTarget), readActorExtent(winActor),
             this._lastBody, this._lastAuthority, windowSize, this._lastWindowSize,
-            BODY_SETTLE_TOLERANCE);
+            BODY_SETTLE_TOLERANCE, this._pairDisagreementStrikes);
         this._lastBody = passSettle.body;
         this._lastAuthority = passSettle.authority;
         this._lastWindowSize = windowSize;
+        this._pairDisagreementStrikes = passSettle.pairDisagreementStrikes;
 
         // One plan per pass: the insets the body uses, and the meanings the clip shader gives the ring.
         // The ring hold covers a ring that moves while nothing else does; its witness is the BUFFER, since

@@ -4,6 +4,8 @@
  * arithmetic that used to live inside a Cogl/Clutter class, where no unit test could reach it.
  */
 
+import {INVARIANT_STRIKES} from '../lib/diagnosticInvariants.js';
+
 /**
  * Normalizes an outline to the shader's vec4. `null` means "no outline", which the shader
  * reads as alpha 0.
@@ -78,21 +80,22 @@ export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight
 }
 
 /**
- * The body the clip and the shadow should act on, holding the last good one while the two reads that name
- * it disagree within a pass, or while the authority moved between passes with the window's own size
- * standing still. The fresh authority is still returned so the warning names it; neither hold can latch.
+ * The body the clip and the shadow should act on. A pair disagreement resolves to the read the
+ * window's own size confirms; after `INVARIANT_STRIKES` passes with no confirmation it falls
+ * back to the window actor instead of holding forever. A body that moved between passes with
+ * the window's own size standing still is held for that pass.
  */
 export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     previousAuthority = null, windowSize = null, previousWindowSize = null,
-    tolerance = BODY_SETTLE_TOLERANCE) {
+    tolerance = BODY_SETTLE_TOLERANCE, pairDisagreementStrikes = 0) {
     const windowResized = windowResizedSince(windowSize, previousWindowSize);
     const authority = resolveBodyAuthority(targetSize, windowActorSize, windowResized);
     if (!authority)
-        return {authority: null, body: null, unsettled: false};
+        return {authority: null, body: null, unsettled: false, pairDisagreementStrikes: 0};
     // The fallback path is not a disagreement: a target with no extent is handled by the window
     // actor by construction, and the actor is the authority for whether the window has a body.
     if (!isPaintableFrame(targetSize) || !isPaintableFrame(windowActorSize))
-        return {authority, body: authority, unsettled: false};
+        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0};
     // Strictly greater: a difference of exactly the tolerance is agreement, the same boundary the warning
     // uses. Both sides are compared raw, because they name the same rectangle - Mutter sizes the actor from
     // the buffer rect and the target is adopted only when it matches - so a declared ring widens both or
@@ -114,15 +117,49 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
         Math.abs(windowSize.height - previousWindowSize.height) >= tolerance;
 
     // A resize in flight already explains a pair disagreement: the container trails the actor, so
-    // the actor is trusted and there is nothing to hold. In steady state the same disagreement is
-    // still unresolved. The between-pass hold is unchanged: `windowMoved` vetoes it as before.
-    const unsettled = (pairDisagrees && !windowResized) || (bodyMoved && !windowMoved);
+    // the actor is trusted and there is nothing to hold. Otherwise the window's own size picks the
+    // read it confirms, and a disagreement no read confirms is bounded by the strike count below.
+    if (pairDisagrees && !windowResized) {
+        const targetMatches = windowKnown &&
+            Math.abs(targetSize.width - windowSize.width) <= tolerance &&
+            Math.abs(targetSize.height - windowSize.height) <= tolerance;
+        const actorMatches = windowKnown &&
+            Math.abs(windowActorSize.width - windowSize.width) <= tolerance &&
+            Math.abs(windowActorSize.height - windowSize.height) <= tolerance;
+        if (targetMatches !== actorMatches) {
+            return {
+                authority,
+                body: targetMatches ? targetSize : windowActorSize,
+                unsettled: false,
+                pairDisagreementStrikes: 0,
+            };
+        }
+        const strikes = pairDisagreementStrikes + 1;
+        if (strikes >= INVARIANT_STRIKES) {
+            return {
+                authority,
+                body: windowActorSize,
+                unsettled: false,
+                pairDisagreementStrikes: strikes,
+            };
+        }
+        return {
+            authority,
+            body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
+            unsettled: true,
+            pairDisagreementStrikes: strikes,
+        };
+    }
+
+    // The between-pass hold is unchanged: `windowMoved` vetoes it as before.
+    const unsettled = bodyMoved && !windowMoved;
     if (!unsettled)
-        return {authority, body: authority, unsettled: false};
+        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0};
     return {
         authority,
         body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
         unsettled: true,
+        pairDisagreementStrikes: 0,
     };
 }
 
@@ -135,7 +172,8 @@ export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan =
     return settleClipBody(targetSize, windowActorSize,
         plan?.previousBody ?? null, plan?.previousAuthority ?? null,
         windowSize, plan?.previousWindowSize ?? null,
-        plan?.tolerance ?? BODY_SETTLE_TOLERANCE);
+        plan?.tolerance ?? BODY_SETTLE_TOLERANCE,
+        plan?.pairDisagreementStrikes ?? 0);
 }
 
 function sameInsets(a, b) {
