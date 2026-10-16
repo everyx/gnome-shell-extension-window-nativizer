@@ -139,6 +139,27 @@ migration commands - is silently dropped from the CHANGELOG. Keep the whole
 explanation in one paragraph and put commands inline in `backticks`, not in a
 fenced block.
 
+## What a log line is for
+
+A line in the journal has exactly two legitimate readers. The first is a developer or a tester, and
+the question they are asking is one of two: which design invariant did the code violate, or which
+exception did a `catch` swallow. The second is the user, whose question is "did I configure this
+wrong".
+
+That decides where a message goes. A problem the user can act on belongs on screen - a dialog, a
+row, a toast - because the journal is not a place a user looks, and a line there is at most the
+developer-side trace of the same event. What the user does on purpose is not logged at all: turning
+a setting on, importing a rule file or picking a window is not an event, and a message that narrates
+it is noise for both readers. A log line earns its place only when it reports a fault the code
+cannot show the user, or one it recovered from.
+
+The warnings that stay on have two shapes. A persistent violation of a design invariant is reported
+through the edge-triggered latch in `evaluateInvariant`, which speaks once per episode and re-arms
+when the violation clears, so a condition that lasts many frames is one line rather than one per
+frame. An exception a `catch` would otherwise swallow is reported through `logError`, which keeps
+the stack and the context the catch would have discarded. Everything else is either the user's
+business (on screen) or nobody's (not written).
+
 ## Measuring in the nested session
 
 `tools/dev.sh shell` starts the headless shell with `--unsafe-mode`, which exposes
