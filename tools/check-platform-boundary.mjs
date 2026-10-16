@@ -153,6 +153,7 @@ const FORBIDDEN_GLOBALS = [
     {pattern: /\bglobal\.stage\b/, desc: 'raw global.stage access (use platform/display.js: getStage())'},
     {pattern: /\bglobal\.workspace_manager\b/, desc: 'raw global.workspace_manager access'},
     {pattern: /\bglobalThis\.global\b/, desc: 'raw globalThis.global access (use platform/display.js)'},
+    {pattern: /\bglobalThis\.imports\b|\bimports\.gi\b/, desc: 'raw imports.gi access (use src/platform/)'},
 ];
 
 const RAW_WINDOW_OPERATIONS = [

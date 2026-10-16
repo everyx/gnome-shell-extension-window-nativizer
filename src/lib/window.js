@@ -1,11 +1,3 @@
-function getShell() {
-    try {
-        return globalThis.imports?.gi?.Shell ?? null;
-    } catch {
-        return null;
-    }
-}
-
 import {WindowType, WindowClientType} from './mutterRules.generated.js';
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
@@ -33,6 +25,7 @@ import {
     getWindowTileMatch,
     getWindowFromActor,
     findMetaWindow,
+    getTrackedAppId,
 } from '../platform/window.js';
 import {
     getPhysicalMonitorScale,
@@ -120,12 +113,7 @@ export function resolveWindowIdentity(win) {
         }
     }
 
-    let tracked = '';
-    try {
-        tracked = getShell()?.WindowTracker?.get_default()?.get_window_app(win)?.get_id?.() ?? '';
-    } catch {
-        // WindowTracker is unusable while the session is tearing down.
-    }
+    const tracked = getTrackedAppId(win);
 
     const identity = chooseWindowIdentity({declared, peer, tracked, pid});
     if (identity && identity !== peer && !identity.startsWith('pid-'))

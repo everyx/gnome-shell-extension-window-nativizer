@@ -7,6 +7,21 @@ import {getMonitorScale, getMonitorGeometry, getMonitorCount, getStage} from './
 import {roundHalfAwayFromZero} from './numeric.js';
 
 /**
+ * The app id Shell's window tracker holds for the window, or '' when the tracker cannot answer.
+ * The namespace is resolved lazily because the preferences process has no Shell typelib and reaches
+ * this module through the rule presenter: a top-level `gi://Shell` import would fail there.
+ */
+export function getTrackedAppId(win) {
+    try {
+        const Shell = globalThis.imports?.gi?.Shell ?? null;
+        return Shell?.WindowTracker?.get_default()?.get_window_app(win)?.get_id?.() ?? '';
+    } catch {
+        // WindowTracker is unusable while the session is tearing down.
+        return '';
+    }
+}
+
+/**
  * Extracts the Meta.Window instance from a MetaWindowActor across Mutter property name
  * variations: `meta_window` (current), `metaWindow`, then the `get_meta_window()`
  * modern method. A getter may throw on a half-destroyed actor, which must not escape.
