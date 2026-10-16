@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 15:34+0800\n"
+"POT-Creation-Date: 2026-10-16 22:53+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -45,8 +45,8 @@ msgstr "視窗邊框本身已可調整大小"
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的視窗沒有可調整大小的邊緣"
 
-#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:152
-#: src/prefs/conflictDialog.js:157
+#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:165
+#: src/prefs/conflictDialog.js:170
 msgid "Automatic"
 msgstr "自動"
 
@@ -142,35 +142,39 @@ msgstr "%s，%s，%s"
 msgid "Resolve Import Conflicts"
 msgstr "解決匯入衝突"
 
-#: src/prefs/conflictDialog.js:36
+#: src/prefs/conflictDialog.js:49
 msgid "Cancel"
 msgstr "取消"
 
-#: src/prefs/conflictDialog.js:42
+#: src/prefs/conflictDialog.js:55
 msgid "Apply"
 msgstr "套用"
 
-#: src/prefs/conflictDialog.js:53
+#: src/prefs/conflictDialog.js:66
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] "%d 條規則存在衝突："
 
-#: src/prefs/conflictDialog.js:69
+#: src/prefs/conflictDialog.js:82
 msgid "Keep"
 msgstr "保留"
 
-#: src/prefs/conflictDialog.js:70
+#: src/prefs/conflictDialog.js:83
 msgid "Keep existing rules for all conflicts"
 msgstr "所有衝突均保留現有規則"
 
-#: src/prefs/conflictDialog.js:75
+#: src/prefs/conflictDialog.js:88
 msgid "Replace"
 msgstr "替換"
 
-#: src/prefs/conflictDialog.js:76
+#: src/prefs/conflictDialog.js:89
 msgid "Replace existing rules with imported rules for all conflicts"
 msgstr "所有衝突均替換為匯入規則"
+
+#: src/prefs/conflictDialog.js:231
+msgid "Could not apply the changes. Review your selections and try again."
+msgstr "無法套用變更。請檢查您的選擇後重試。"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
 #: src/prefs/ruleUi.js:107

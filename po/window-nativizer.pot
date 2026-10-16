@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 15:34+0800\n"
+"POT-Creation-Date: 2026-10-16 22:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -47,8 +47,8 @@ msgstr ""
 msgid "Fixed-size windows have no resize handle"
 msgstr ""
 
-#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:152
-#: src/prefs/conflictDialog.js:157
+#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:165
+#: src/prefs/conflictDialog.js:170
 msgid "Automatic"
 msgstr ""
 
@@ -144,35 +144,39 @@ msgstr ""
 msgid "Resolve Import Conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:36
+#: src/prefs/conflictDialog.js:49
 msgid "Cancel"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:42
+#: src/prefs/conflictDialog.js:55
 msgid "Apply"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:53
+#: src/prefs/conflictDialog.js:66
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs/conflictDialog.js:69
+#: src/prefs/conflictDialog.js:82
 msgid "Keep"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:70
+#: src/prefs/conflictDialog.js:83
 msgid "Keep existing rules for all conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:75
+#: src/prefs/conflictDialog.js:88
 msgid "Replace"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:76
+#: src/prefs/conflictDialog.js:89
 msgid "Replace existing rules with imported rules for all conflicts"
+msgstr ""
+
+#: src/prefs/conflictDialog.js:231
+msgid "Could not apply the changes. Review your selections and try again."
 msgstr ""
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
