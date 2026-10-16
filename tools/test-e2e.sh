@@ -6,6 +6,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# The nested session is one shared resource; queue behind anyone already driving it instead of
+# failing falsely when a second run renders over this one. Re-entrant, so the dev.sh and
+# dev-shell.sh starts below see the marker and do not deadlock against this holder.
+if [ -z "${WN_SESSION_LOCK_HELD:-}" ]; then
+    exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/test-e2e.sh" "$@"
+fi
 DEV="$ROOT/tools/dev.sh"
 UUID="$(python3 -c "import json; print(json.load(open('$ROOT/src/metadata.json'))['uuid'])")"
 STATE_DIR="/tmp/window-nativizer-dev"

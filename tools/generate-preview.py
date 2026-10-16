@@ -8,11 +8,19 @@ Usage:
 """
 
 import os
+import sys
 import time
 import struct
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+
+# The nested session is one shared resource; queue behind anyone already driving it instead of
+# letting two runs corrupt each other's session. The helper re-execs this script with
+# WN_SESSION_LOCK_HELD exported, so the guard is skipped on the way back in.
+if not os.environ.get("WN_SESSION_LOCK_HELD"):
+    _HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "with-session-lock.sh")
+    os.execv(_HELPER, [_HELPER, os.path.abspath(__file__), *sys.argv[1:]])
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"

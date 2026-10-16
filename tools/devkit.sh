@@ -14,6 +14,13 @@ set -e
 cd "$(dirname "$0")/.."
 
 ROOT="$(pwd)"
+# The devkit session, the installed extension path and /tmp/window-nativizer-dev are one shared
+# resource: queue behind anyone already driving them rather than corrupting their session. The
+# marker makes this re-entrant, so a wrapper that already holds the lock is not queued against
+# itself.
+if [ -z "${WN_SESSION_LOCK_HELD:-}" ]; then
+    exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/devkit.sh" "$@"
+fi
 # Sets SRC_DIR, UUID, EXT_DIR and deploy_ext().
 source "$ROOT/tools/deploy-ext.sh"
 LOG=/tmp/window-nativizer-devkit.log

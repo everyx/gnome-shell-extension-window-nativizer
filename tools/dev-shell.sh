@@ -2,6 +2,13 @@
 # Nested session startup script (invoked by dev.sh; separate file to avoid shell quoting issues)
 set -u
 
+# This script is the session; when dev.sh starts us it already holds the lock and exports the
+# marker, so we skip it (a nested start must not deadlock). A direct start queues instead.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -z "${WN_SESSION_LOCK_HELD:-}" ]; then
+    exec "$SCRIPT_DIR/with-session-lock.sh" "$SCRIPT_DIR/dev-shell.sh" "$@"
+fi
+
 # UUID passed from caller (dev.sh) via environment variable
 UUID="${WINDOW_NATIVIZER_UUID:-window-nativizer@everyx.github.io}"
 WL_DISPLAY="wayland-window-nativizer"
