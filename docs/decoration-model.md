@@ -8,6 +8,32 @@ Mutter does, so a change there does not have to rediscover them.
 > policy, and policy wants reasons, so it sits near that line: rationale the call
 > site does not need belongs here rather than in the module.
 
+## The principles these decisions are made under
+
+Three rules decide the trade-offs in this file, and they are ordered: where two disagree, the earlier
+one wins.
+
+1. **No perceivable cost.** Nothing may add work to a path the compositor walks per frame: a paint, a
+   `notify::` handler, a per-window loop. The evidence is a **counting spec** - a stub that counts the
+   platform reads, or a spec that pins the reuse of a table - because it is deterministic and runs in
+   the unit suite. The wall-clock budget (`pnpm run check:perf`) is a whole-extension release check, run
+   by hand: its ratio swings between sessions by more than most changes cost, so it is never attributed
+   to a single change and never gates a commit or a push.
+2. **Display quality first.** When the choice is between a sharp path and a blurry one, take the sharp
+   one and record what it cannot do as a known boundary. A fallback that degrades the picture is opt-in
+   (`force-overview-corners`), never the answer to a case we cannot classify.
+3. **Cover what a rule can correct.** On a decoration axis, apply the decoration when the reading is
+   right in most cases, because the user corrects the rest with a rule. That license has two conditions:
+   the axis must be one a rule can express (the four axes are the whole vocabulary, each with an exit),
+   and the correction must be reachable by picking the window while it shows the problem - a rule is a
+   correction, captured for the state the window was in (`rule-model.md`).
+
+**One reading is never a value.** A failed read answers `null`, and a default is substituted only where
+its caller asks for one: "unknown" and "zero" are different answers, and a fabricated plausible value
+propagates into geometry as a wrong cut - an unread phase read as `{x: 0, y: 0}`, an unread scale stored
+as `1.0`. This is a precondition for the three above: covering on a fabricated value covers the wrong
+thing.
+
 ## Four layers, applied in order
 
 ```
@@ -980,6 +1006,14 @@ subject this decoration never saw.
 **A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip — which re-reads its size at paint — moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
 
 **The pass's own two reads must agree.** The body-authority warning above only fires when the authority has already moved away from the actor, so it is blind to the transient where *the authority itself* is briefly wrong: a Wayland window whose buffer rect lags its window actor allocation (or the reverse) has both cuts faithfully following a body that is 2px narrower, and nothing in the authority comparison can say which of the two reads was behind. Every pass that assembles a decoration reading therefore compares the window's `bufferRect` with the window actor's allocation (`bufferAllocationWarning`, `src/lib/diagnosticInvariants.js`): they are equal in health (`frameRect == bufferRect == windowActorAllocation`), so a disagreement names both extents and the window in one `[window-nativizer]` WARNING. Only the extents are compared — origins may legitimately differ by an animation's translation — and one pass is *not* enough: a resize in flight shows the buffer and the allocation settling one pass apart, so the latch requires `INVARIANT_STRIKES = 2` consecutive violating passes and re-arms on agreement. That keeps a real lagging read (which survives the next pass) loud and every resize silent.
+
+**Reusing a reading is only sound where the consumers accept the same inputs.** Two resolvers in
+one pass can name the same actor and still answer different questions: the clip's target resolution
+refuses a surface container the *clip* cannot use (unallocated, off the buffer origin, not
+integer-aligned) and falls back to the window actor, while the overview's opacity bypass lowers that
+same container because the shaped texture still paints through it. "The same actor was already
+resolved this pass" is therefore not by itself a reason to hand the answer over: where the acceptance
+conditions differ, the second resolution is not duplication but a different question.
 
 ## Identifying the surface container
 
