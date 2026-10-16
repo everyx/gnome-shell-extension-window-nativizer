@@ -1290,6 +1290,33 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             expect(deco._lastBuffer).toBeNull();
             expect(deco._lastRing).toBeNull();
         });
+
+        it('skips the hold and drops the witness when this pass cannot read a ring', () => {
+            // `inputs.insets` is null whenever insetsFromRects refuses (the frame does not fit
+            // inside the buffer), a supported state that routes to the flat path. The hold's drift
+            // comparison dereferenced it, so apply() threw; the manager's catch discarded the whole
+            // pass, so _lastBuffer/_lastRing never advanced and the same throw repeated every frame
+            // with no journal line. A ring that cannot be read cannot be compared: the hold is
+            // skipped and the previous ring is not resurrected from an unreadable pass.
+            const deco = buildDeco();
+            const frame = {x: 0, y: 0, width: 400, height: 300};
+            const buffer = {x: 0, y: 0, width: 450, height: 350};
+            const settled = {left: 25, top: 25, right: 25, bottom: 25};
+
+            const rings = ringThrough(deco, [
+                {frameRect: frame, bufferRect: buffer, insets: settled},
+            ]);
+            expect(rings[0]).toEqual(settled);
+            expect(deco._lastRing).toEqual(settled);
+
+            // Same buffer, so the hold is armed; the ring cannot be read this pass.
+            expect(() => ringThrough(deco, [
+                {frameRect: frame, bufferRect: buffer, insets: null},
+            ])).not.toThrow();
+
+            expect(deco.stateView.ring.insets).toBeNull();
+            expect(deco._lastRing).toBeNull();
+        });
     });
 
     it('applies overview mode settings through apply() contract', () => {
