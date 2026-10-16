@@ -218,10 +218,14 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
     const castChanged = !previous ||
         previous.x !== cast.x || previous.y !== cast.y ||
         previous.width !== cast.width || previous.height !== cast.height;
+    // The slice table carries positions and texture coordinates; only the corner clamp reads the
+    // cast size, so a moved origin reuses it and a resize does not.
+    const sizeChanged = !previous ||
+        previous.width !== cast.width || previous.height !== cast.height;
 
     let slices = style.slices;
     let corner = style.corner;
-    if (castChanged || !slices) {
+    if (sizeChanged || !slices) {
         const geometry = shadowGeometry(style.radius);
         slices = shadowSlices(geometry, cast.width, cast.height);
         corner = geometry.corner;

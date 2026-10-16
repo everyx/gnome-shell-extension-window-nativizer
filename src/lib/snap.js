@@ -162,12 +162,12 @@ export function setActorBox(box, x1, y1, x2, y2) {
 }
 
 /**
- * Snaps the eight slice quads to the physical grid as plain rects, so a spec can read the arithmetic
- * as data. The monotonic clamp is part of the contract: rounding a cast narrower than two corners can
- * invert an edge and leave a seam. Position snaps; the span stays exactly `cornerPx`, or the corner
- * texture is rescaled.
+ * Writes the eight snapped slice coordinates into `out` as x0, x1, x2, x3, y0, y1, y2, y3.
+ * The monotonic clamp is part of the contract: rounding a cast narrower than two corners can
+ * invert an edge and leave a seam. Position snaps; the span stays exactly `cornerPx`, or the
+ * corner texture is rescaled.
  */
-export function snapSliceRects(cast, corner, scale) {
+function writeSnappedSliceCoords(out, cast, corner, scale) {
     const width = Math.max(0, cast.width);
     const height = Math.max(0, cast.height);
     const cornerPx = Math.max(0, Math.min(corner, width / 2, height / 2));
@@ -185,27 +185,39 @@ export function snapSliceRects(cast, corner, scale) {
     // Enforce monotonic non-decreasing coordinate invariant (snappedX0 <= snappedX1 <= snappedX2 <= snappedX3).
     // Floating-point non-associativity on degenerate sizes (e.g. closing animations width < 2*corner)
     // can cause 1-device-pixel inversion around 0.5 rounding boundaries (x1 > x2).
-    const snappedX0 = x0;
-    const snappedX1 = Math.max(snappedX0, x1);
-    const snappedX2 = Math.max(snappedX1, x2);
-    const snappedX3 = Math.max(snappedX2, x3);
+    out[0] = x0;
+    out[1] = Math.max(out[0], x1);
+    out[2] = Math.max(out[1], x2);
+    out[3] = Math.max(out[2], x3);
 
-    const snappedY0 = y0;
-    const snappedY1 = Math.max(snappedY0, y1);
-    const snappedY2 = Math.max(snappedY1, y2);
-    const snappedY3 = Math.max(snappedY2, y3);
+    out[4] = y0;
+    out[5] = Math.max(out[4], y1);
+    out[6] = Math.max(out[5], y2);
+    out[7] = Math.max(out[6], y3);
+}
+
+/**
+ * Snaps the eight slice quads to the physical grid as plain rects, so a spec can read the
+ * arithmetic as data.
+ */
+export function snapSliceRects(cast, corner, scale) {
+    const s = [0, 0, 0, 0, 0, 0, 0, 0];
+    writeSnappedSliceCoords(s, cast, corner, scale);
 
     return [
-        {x1: snappedX0, y1: snappedY0, x2: snappedX1, y2: snappedY1},
-        {x1: snappedX2, y1: snappedY0, x2: snappedX3, y2: snappedY1},
-        {x1: snappedX0, y1: snappedY2, x2: snappedX1, y2: snappedY3},
-        {x1: snappedX2, y1: snappedY2, x2: snappedX3, y2: snappedY3},
-        {x1: snappedX1, y1: snappedY0, x2: snappedX2, y2: snappedY1},
-        {x1: snappedX1, y1: snappedY2, x2: snappedX2, y2: snappedY3},
-        {x1: snappedX0, y1: snappedY1, x2: snappedX1, y2: snappedY2},
-        {x1: snappedX2, y1: snappedY1, x2: snappedX3, y2: snappedY2},
+        {x1: s[0], y1: s[4], x2: s[1], y2: s[5]},
+        {x1: s[2], y1: s[4], x2: s[3], y2: s[5]},
+        {x1: s[0], y1: s[6], x2: s[1], y2: s[7]},
+        {x1: s[2], y1: s[6], x2: s[3], y2: s[7]},
+        {x1: s[1], y1: s[4], x2: s[2], y2: s[5]},
+        {x1: s[1], y1: s[6], x2: s[2], y2: s[7]},
+        {x1: s[0], y1: s[5], x2: s[1], y2: s[6]},
+        {x1: s[2], y1: s[5], x2: s[3], y2: s[6]},
     ];
 }
+
+// Scratch for snapSliceBoxesInto: the paint path reuses it so a relayout allocates no rects.
+const SLICE_COORDS = [0, 0, 0, 0, 0, 0, 0, 0];
 
 /**
  * Mutates a pre-allocated array of 8 Clutter.ActorBox instances in place, avoiding hot-path GC
@@ -213,12 +225,19 @@ export function snapSliceRects(cast, corner, scale) {
  * and bottom edges, 6-7 left and right.
  */
 export function snapSliceBoxesInto(boxes, cast, corner, scale) {
-    const rects = snapSliceRects(cast, corner, scale);
+    writeSnappedSliceCoords(SLICE_COORDS, cast, corner, scale);
+    const s = SLICE_COORDS;
 
     // Using box.init(x1, y1, x2, y2) guarantees zero 32-bit float ULP rounding seams
     // at slice junctions in Mutter's C engine ((float)a + (float)(b-a) != (float)b).
-    for (let i = 0; i < rects.length; i++)
-        setActorBox(boxes[i], rects[i].x1, rects[i].y1, rects[i].x2, rects[i].y2);
+    setActorBox(boxes[0], s[0], s[4], s[1], s[5]);
+    setActorBox(boxes[1], s[2], s[4], s[3], s[5]);
+    setActorBox(boxes[2], s[0], s[6], s[1], s[7]);
+    setActorBox(boxes[3], s[2], s[6], s[3], s[7]);
+    setActorBox(boxes[4], s[1], s[4], s[2], s[5]);
+    setActorBox(boxes[5], s[1], s[6], s[2], s[7]);
+    setActorBox(boxes[6], s[0], s[5], s[1], s[6]);
+    setActorBox(boxes[7], s[2], s[5], s[3], s[6]);
 
     return boxes;
 }
