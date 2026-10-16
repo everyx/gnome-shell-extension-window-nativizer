@@ -208,6 +208,18 @@ that a window we draw a shadow for does not have Mutter's own shadow padding its
 either the client declared extents (so Mutter drops its shadow) or the window reserved no
 ring at all.
 
+**An unreadable ring is covered like a flat one.** `insetsFromRects` answers null when the
+frame does not fit inside the buffer, and the detector reads that null as the flat case:
+`clear` stays false, so the client's ring is not erased and only `flatSafeInsets(scale)` of
+it is covered. The client's own shadow therefore stays painted under ours, and a window that
+declared a ring can show two shadows for as long as the reading lasts. Keeping the takeover
+is deliberate: the margin is read as the case that is most often behind an unreadable one, a
+client that painted to the actor edge, and the state is correctable because a rule is
+captured for the state the window was in when it was picked. The key carries `has_ring`, this
+pass reads it false, so picking the window while the double shadow shows records the flat
+state - and that is the state the rule then corrects, here and on any other window that
+reaches it (`rule-model.md`).
+
 ## Where we deliberately differ from Mutter
 
 - **XWayland without custom frame extents & Server-Side Decorations (SSD).**
@@ -506,10 +518,11 @@ the reading being one-sided; the last is simply not verified yet.
   reading is read as *flat*: the clip is attached at `flatSafeInsets(scale)` instead of at a ring the
   window never declared, so the ring is never cut where it cannot be placed and the corners are
   still ours, one logical pixel inside. The guess is deliberate rather than a leftover: in the
-  desktop state a wrong one is recoverable, because a rule can pin the ring, the size or the shadow
-  for that window, so the choice is to read the margin as the case that is most often behind an
-  unreadable one - a client that painted to the actor edge - and keep the corners, rather than leave
-  the window square. A rect read that throws is caught where the inputs are
+  desktop state a wrong one is recoverable, because a rule can correct the axes it names for that
+  kind, so the choice is to read the margin as the case that is most often behind an unreadable one -
+  a client that painted to the actor edge - and keep the corners, rather than leave the window square.
+  While the ring itself is unreadable, the rule that corrects it is the one captured in that state
+  (*Rounding a window takes its shadow over*). A rect read that throws is caught where the inputs are
   gathered and the window is skipped instead - a different outcome. A framed XWayland window is not
   that case: Mutter sets `buffer_rect = frame->rect`, and `frame->rect` is the frame grown
   by the frame's **invisible borders** (`window-x11.c`, `meta-x11-frame.c`), so the insets
