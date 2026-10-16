@@ -94,24 +94,19 @@ export class InspectorService {
 
         if (this._dbusImpl) {
             this._dbusImpl.unexport();
-            // `wrapJSObject` connects three handlers whose closures capture this service, forming a
-            // reference cycle GJS cannot collect: `unexport()` alone leaves the implementation - and
-            // the service, and the manager - alive forever, one set per enable/disable cycle.
-            // Disconnecting them is what breaks the cycle (both `run_dispose()` and leaving them
-            // connected were measured to misbehave: the first logs Gjs-CRITICAL on the next touch).
+            // `wrapJSObject`'s three handlers close over this service, forming a cycle GJS cannot
+            // collect: `unexport()` alone leaves the implementation, the service and the manager
+            // alive forever, one set per enable/disable cycle. Disconnecting them breaks it.
             GObject.signal_handlers_destroy(this._dbusImpl);
             this._dbusImpl = null;
         }
     }
 
     /**
-     * D-Bus method PickWindow — GJS async name is PickWindowAsync. The boolean argument is required
-     * and is the whole compatibility boundary: `false` is the quiet interactive pick, `true` adds
-     * the read-only diagnostics to the reply. There is no non-interactive path - diagnostics ride
-     * the same user gesture, which is also the authorisation to read that state.
-     *
-     * @param {Array|null} params - The D-Bus in-args ([debug]) as passed by GJS
-     * @param {object} invocation
+     * D-Bus method PickWindow (GJS name `PickWindowAsync`). The required boolean is the whole
+     * compatibility boundary: `false` is the quiet interactive pick, `true` adds read-only
+     * diagnostics. There is no non-interactive path - diagnostics ride the same user gesture, which
+     * is also the authorisation to read that state.
      */
     PickWindowAsync(params, invocation) {
         const {valid, diagnostics} = parseDebugFlag(params);
@@ -188,9 +183,6 @@ export class InspectorService {
      * fields are added only when the caller asked for them, which is the whole point of the
      * debug argument. Nothing here is printed and no journal line is written in either mode.
      *
-     * @param {object} win
-     * @param {boolean} diagnostics
-     * @returns {Record<string,string>}
      */
     _buildReply(win, diagnostics) {
         const properties = {

@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "eslint-config-gnome": "git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git"
+    "eslint-config-gnome": "git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git",
+    "eslint-plugin-slop": "^0.1.3"
   }
 }

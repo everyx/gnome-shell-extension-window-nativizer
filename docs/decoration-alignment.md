@@ -516,14 +516,16 @@ without a stored profile. The standards are fixed from that measurement, and eac
 Reading the same window focused twice gives the same profile here, which is what says the focused
 level is systematic rather than the frame it was taken in.
 
-Three things are asserted, and the split matters when one fails:
+Four things are asserted, and the split matters when one fails:
 
 - **fidelity** - our profile against the live libadwaita window's, within 0 grey levels in one frame
   and 1 across alternating frames (per the comparisons above);
 - **symmetry** - our four sides are identical, and so are libadwaita's;
 - **the environment** - the live libadwaita window read twice, within 0 grey levels. A failure here is
   the machine having moved, not the code, and it says so rather than letting the fidelity number
-  above it be read as a verdict.
+  above it be read as a verdict;
+- **flatness** - every body row the profile samples is flat to `BODY_FLAT_TOLERANCE` (0 grey levels),
+  which is what separates a decoration from a body the clip is deforming.
 
 The tool used to gate on a stored copy of *our own* earlier profile. That can only ever say "we
 changed": when the shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the
@@ -533,8 +535,9 @@ levels away from it. A reference of our own past numbers is blind in the other d
 cannot notice that we never matched libadwaita to begin with. Nothing is stored for later at all, in
 either direction: both witnesses compare live reads of the same session.
 
-**This check needs a session, so nothing runs it automatically yet**, which is how it went a week
-without anyone noticing it had been failing. Wiring it into a hook or a CI job is open work.
+**This check needs a session.** It runs from the pre-commit hook (`run-checks` skips it only on a
+machine without `gnome-shell`), which is what closes the gap that once let it fail for a week
+unnoticed; CI cannot run it, because CI has no session.
 
 ### GTK3 CSD Pixel-Level Verification in E2E
 
@@ -545,6 +548,33 @@ backdrop across four subpixel phase positions (x = 240, 241, 242, 243). A contin
 scan (19 rays sampled every 5° from top to left shoulder) verifies both minimum intensity thresholds
 and monotonic radial/tangential color transitions, ensuring zero dark stroke bleed, notch artifacts,
 or subpixel phase jitter.
+
+## Costs and covers measured on the hot path
+
+**The shadow actor's geometry sync.** `_syncGeometry` runs on every position, allocation,
+translation, scale and pivot change, and each call writes both axes and both translations. A
+one-window 150-step resize measured 293 calls, with the assignments and the relayout they queue
+costing about 27 us of shell CPU per call. It writes only what changed, so the signals firing twice
+per frame do not restate a value that did not move.
+
+**The slice span must stay exactly `cornerPx`.** `snapSliceRects` snaps the eight quads' positions
+to the physical grid but does not re-derive the span from two independently snapped cutlines.
+`shadowSlices` fixes the sampled UV span to `cornerPx / buffer` in bake px, so the destination span
+has to be exactly `cornerPx` or the corner/edge texture is rescaled instead of mapped 1:1 - up to
+about 0.6% at 1.25x, 1.5x and 1.75x.
+
+**The flat safe inset's spare device pixel.** `flatSafeInsets` covers a 1-logical-px client border
+with `ceil(scale)` device px plus one spare on fractional scales. The geometric cut was verified
+live to be exact on all four sides at every scale (`uFrame` read back off the effect matches the
+snap math to float precision), yet at 4/3 the bottom edge kept one full border row at every subpixel
+phase (seven positions swept on both axes). The shortfall sits below the geometry, in the paint
+mapping, which runs at `ceil(scale)` while the screen composites at `scale`; integer scales paint
+1:1 and need no spare. The worst measured drift was about 1.3 device px on the bottom edge at 4/3.
+The price is deliberate over-cut, about one invisible device px of clean edge content per side on
+fractional scales (issue #129 tracks the residual); deriving the paint origin from the live box at
+runtime would remove the need for the spare. The scale is normalised before the integer test and the
+`ceil` so the two cannot disagree: a hypothetical 1.0005 reads as integer yet ceils to 2, which once
+yielded a ~2px cover on the integer branch.
 
 ## Five rules this work generalised
 

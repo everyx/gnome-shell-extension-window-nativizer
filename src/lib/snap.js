@@ -16,7 +16,6 @@ export {SNAP_EPSILON, SnapDirection} from '../platform/numeric.js';
 /**
  * Composite 32-bit snap rules, matching GTK's GSK_RECT_SNAP_* macros.
  * Encodes 4 edges: [left (8 bits) | bottom (8 bits) | right (8 bits) | top (8 bits)].
- * @enum {number}
  */
 export const SnapRule = Object.freeze({
     GROW: 0x01020201,   // top: FLOOR, right: CEIL, bottom: CEIL, left: FLOOR
@@ -27,10 +26,9 @@ export const SnapRule = Object.freeze({
  * Snap a logical 1D coordinate to the physical device pixel grid.
  * Matches gsk_rect_snap_to_grid scalar projection (the ROUND edge carries snapDirection's
  * deliberate origin-odd deviation from GSK).
- * @param {number} value - Logical coordinate
- * @param {number} scale - Physical scale factor (e.g. 1.0, 1.25, 1.5, 2.0)
- * @param {number} [direction=SnapDirection.ROUND]
- * @returns {number} Snapped logical coordinate
+ * @param value - Logical coordinate
+ * @param scale - Physical scale factor (e.g. 1.0, 1.25, 1.5, 2.0)
+ * @returns Snapped logical coordinate
  */
 export function snapCoordToGrid(value, scale, direction = SnapDirection.ROUND) {
     if (!(scale > 0) || !Number.isFinite(scale))
@@ -42,9 +40,9 @@ export function snapCoordToGrid(value, scale, direction = SnapDirection.ROUND) {
  * Query a specific side's direction from a SnapRule bitmask.
  * Matches gsk_rect_snap_get_direction (gskrectsnapprivate.h).
  * Sides: 0: TOP, 1: RIGHT, 2: BOTTOM, 3: LEFT.
- * @param {number} rule - SnapRule bitmask
- * @param {number} side - 0..3
- * @returns {number} SnapDirection
+ * @param rule - SnapRule bitmask
+ * @param side - 0..3
+ * @returns SnapDirection
  */
 function snapRuleGetDirection(rule, side) {
     return (rule >> (8 * side)) & 0xFF;
@@ -54,10 +52,8 @@ function snapRuleGetDirection(rule, side) {
  * Snap a rectangle to the physical pixel grid.
  * Matches gsk_rect_snap_to_grid in gskrectprivate.h except for the documented ROUND deviation
  * in snapDirection.
- * @param {{x: number, y: number, width: number, height: number}} rect
- * @param {number} scale - Device scale factor
- * @param {number} [rule=SnapRule.ROUND] - Composite snapping rule
- * @returns {{x: number, y: number, width: number, height: number}}
+ * @param scale - Device scale factor
+ * @param [rule=SnapRule.ROUND] - Composite snapping rule
  */
 export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
     if (!(scale > 0) || !Number.isFinite(scale))
@@ -84,10 +80,9 @@ export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
 /**
  * Snaps a buffer actor's body frame to the physical device grid by symmetrically
  * snapping outer insets margins per side, preventing fractional parity drift.
- * @param {{width: number, height: number}} bufferSize - Buffer size in logical px
- * @param {import('./frame.js').Insets|null} [insets] - Ring margins per side
- * @param {number} scale - Physical device scale
- * @returns {{x: number, y: number, width: number, height: number}}
+ * @param bufferSize - Buffer size in logical px
+ * @param [insets] - Ring margins per side
+ * @param scale - Physical device scale
  */
 export function snapActorBodyFrame(bufferSize, insets, scale) {
     if (!(scale > 0) || !Number.isFinite(scale)) {
@@ -133,20 +128,12 @@ export function snapActorBodyFrame(bufferSize, insets, scale) {
     };
 }
 
-/** The body already sits on its buffer's phase; no subpixel correction applies. */
 export const ZERO_PHASE = Object.freeze({x: 0, y: 0});
 
 /**
- * The clip's body frame: `snapActorBodyFrame` folded onto the phase its buffer is drawn at.
- *
- * The clip's cut and the shadow's cutout are the same body edge and must land on the same
- * physical phase, so the phase is a required input, not a correction a caller may leave unsaid.
- *
- * @param {{width: number, height: number}} actorSize - Actor size in logical px
- * @param {import('./frame.js').Insets|null} [insets] - Ring margins per side
- * @param {number} scale - Physical device scale
- * @param {{x: number, y: number}} phase - Buffer's subpixel phase, logical px
- * @returns {{x: number, y: number, width: number, height: number}}
+ * The clip's body frame: `snapActorBodyFrame` folded onto the phase its buffer is drawn at. The cut
+ * and the shadow's cutout are the same edge and must land on one physical phase, so the phase is a
+ * required input, not a correction a caller may leave unsaid.
  */
 export function clipFrameFor(actorSize, insets, scale, phase) {
     const frame = snapActorBodyFrame(actorSize, insets, scale);
@@ -164,11 +151,6 @@ export function clipFrameFor(actorSize, insets, scale, phase) {
  * back to `set_origin`/`set_size` with sizes clamped to zero. A box offering neither
  * is left untouched, so callers must pass a real actor box.
  *
- * @param {object} box
- * @param {number} x1
- * @param {number} y1
- * @param {number} x2
- * @param {number} y2
  */
 export function setActorBox(box, x1, y1, x2, y2) {
     if (typeof box.init === 'function') {
@@ -180,22 +162,10 @@ export function setActorBox(box, x1, y1, x2, y2) {
 }
 
 /**
- * Snaps the eight slice quads to the physical grid as plain rects.
- *
- * The arithmetic lives here rather than next to its box-writing caller so a spec can read the
- * coordinates as data; `snapSliceBoxesInto` is the Clutter-shaped wrapper over it. The monotonic
- * clamp is part of the contract: rounding on a cast narrower than two corners can otherwise invert
- * an edge, and Mutter's float composition would leave a seam.
- *
- * Position snaps to the grid; the span does not get re-derived from two independently snapped
- * cutlines. `shadowSlices` fixes the sampled UV span to `cornerPx / buffer` (in bake px), so the
- * destination span must be exactly `cornerPx` or the corner/edge texture is rescaled - up to
- * ~0.6% at 1.25x, 1.5x and 1.75x - instead of mapped 1:1.
- *
- * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
- * @param {number} corner - Corner reach in px (Math.min(corner, width/2, height/2))
- * @param {number} scale - Physical device scale
- * @returns {Array<{x1:number,y1:number,x2:number,y2:number}>} The eight rects, in slice order
+ * Snaps the eight slice quads to the physical grid as plain rects, so a spec can read the arithmetic
+ * as data. The monotonic clamp is part of the contract: rounding a cast narrower than two corners can
+ * invert an edge and leave a seam. Position snaps; the span stays exactly `cornerPx`, or the corner
+ * texture is rescaled.
  */
 export function snapSliceRects(cast, corner, scale) {
     const width = Math.max(0, cast.width);
@@ -238,20 +208,9 @@ export function snapSliceRects(cast, corner, scale) {
 }
 
 /**
- * Mutates an existing array of 8 Clutter.ActorBox instances in-place to avoid
- * hot-path GC allocations during window paint or resize.
- *
- * Slices are arranged as:
- *   0: top-left corner     1: top-right corner
- *   2: bottom-left corner  3: bottom-right corner
- *   4: top edge            5: bottom edge
- *   6: left edge           7: right edge
- *
- * @param {Array<object>} boxes - Pre-allocated array of 8 Clutter.ActorBox objects
- * @param {{x: number, y: number, width: number, height: number}} cast - Shadow cast bounding rect
- * @param {number} corner - Corner reach in px (Math.min(corner, width/2, height/2))
- * @param {number} scale - Physical device scale
- * @returns {Array<object>} The mutated boxes
+ * Mutates a pre-allocated array of 8 Clutter.ActorBox instances in place, avoiding hot-path GC
+ * allocations during paint or resize. Slice order: 0-3 the four corners (TL, TR, BL, BR), 4-5 top
+ * and bottom edges, 6-7 left and right.
  */
 export function snapSliceBoxesInto(boxes, cast, corner, scale) {
     const rects = snapSliceRects(cast, corner, scale);

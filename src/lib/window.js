@@ -42,18 +42,11 @@ import {
 
 export {getPhysicalMonitorScale, resolveMonitorBounds, getWindowFromActor, findMetaWindow};
 
-function listWindowActors() {
-    return getWindowActors();
-}
-
 /**
  * Executes a getter safely, returning a fallback value if the call throws
  * (e.g. during Mutter window teardown or C-boundary marshalling errors).
  *
  * @template T
- * @param {() => T} getter
- * @param {T} fallback
- * @returns {T}
  */
 export function safeRead(getter, fallback) {
     try {
@@ -68,8 +61,8 @@ export function safeRead(getter, fallback) {
  * may set any bytes as its class, and one unreadable name must not cost the
  * window its decision.
  *
- * @param {Function} getter - Reads the window field; the throw is inside the call
- * @returns {string} The field, or '' when unreadable
+ * @param getter - Reads the window field; the throw is inside the call
+ * @returns The field, or '' when unreadable
  */
 export function readWindowString(getter) {
     return safeRead(getter, '');
@@ -79,8 +72,7 @@ export function readWindowString(getter) {
  * Declared identity, first non-blank source wins. A whitespace-only field (an XWayland client may
  * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
  * become a rule key.
- * @param {object} win
- * @returns {string} declared identity or ''
+ * @returns declared identity or ''
  */
 export function readDeclaredIdentity(win) {
     for (const read of [
@@ -101,7 +93,6 @@ export function readDeclaredIdentity(win) {
 // Weak cache for resolved fallback identities; declared identities bypass cache.
 const fallbackIdentities = new WeakMap();
 
-/** @param {object} win @returns {string} stable identity or '' */
 export function resolveWindowIdentity(win) {
     if (!win)
         return '';
@@ -117,7 +108,7 @@ export function resolveWindowIdentity(win) {
     const pid = getWindowPid(win);
     let peer = '';
     if (pid > 0) {
-        for (const actor of listWindowActors()) {
+        for (const actor of getWindowActors()) {
             const candidate = getWindowFromActor(actor);
             if (!candidate || candidate === win)
                 continue;
@@ -142,48 +133,12 @@ export function resolveWindowIdentity(win) {
     return identity;
 }
 
-/**
- * @typedef {object} WindowReading
- * @property {object|null} bufferRect - {x, y, width, height} or null
- * @property {object|null} frameRect - {x, y, width, height} or null
- * @property {number} bufferWidth
- * @property {number} bufferHeight
- * @property {number} frameWidth
- * @property {number} frameHeight
- * @property {boolean} hasValidGeometry
- * @property {object|null} insets - {left, top, right, bottom} or null
- * @property {boolean} hasRing
- * @property {number|null} monitorScale - Physical monitor scale, or null while it cannot be read
- * @property {boolean} isMaximized
- * @property {boolean} maximizedHorizontally
- * @property {boolean} maximizedVertically
- * @property {boolean} isFullscreen
- * @property {boolean} hasSsd
- * @property {boolean} isX11
- * @property {string} clientTypeToken
- * @property {boolean|null} nativeLikeCorners - Whether process draws native-like decorations, or null while pending
- * @property {boolean|null} hasGtk4Client - Whether client is GTK4, or null while pending
- * @property {number} windowType
- * @property {boolean} hasParent
- * @property {boolean} isAttachedDialog
- * @property {boolean} allowsResize
- * @property {boolean} hasTileMatch
- * @property {string} declaredWmClass
- * @property {string} wmClass
- * @property {boolean} appearsFocused
- * @property {boolean} tiled
- * @property {number} pid
- */
 
 /**
  * Reads a comprehensive, safe snapshot of a Meta.Window.
  * Absorbs all C-boundary exceptions during window teardown and returns null if the window is inaccessible.
  *
- * @param {object|null} win - Meta.Window
- * @param {object} [options]
- * @param {string|null} [options.wmClassOverride=null]
- * @param {import('./nativeLikeCorners.js').ProcessClassifier|null} [options.classifier=null]
- * @returns {WindowReading|null}
+ * @param win - Meta.Window
  */
 export function readWindow(win, {wmClassOverride = null, classifier = null} = {}) {
     if (!win)
@@ -279,8 +234,6 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
 /**
  * Checks whether an object matches the minimal shape of a resolved WindowReading snapshot
  * (has a string clientTypeToken and frameRect property) as distinguished from a raw Meta.Window.
- * @param {unknown} value
- * @returns {boolean}
  */
 export function isWindowReading(value) {
     return Boolean(
@@ -293,26 +246,16 @@ export function isWindowReading(value) {
 
 /**
  * Whether process classification is still in flight.
- * @param {{nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}} reading
- * @returns {boolean}
  */
 export function isClassificationPending(reading) {
     return reading?.nativeLikeCorners === null || reading?.hasGtk4Client === null;
 }
 
 /**
- * What a reconcile should do with a window, read from the reading alone: keep the display while
- * the reading could not be taken or the process classification is still in flight, drop the
- * decoration when the rects were read but have no extent, and apply otherwise. Named here so the
- * branch can be a table in a spec instead of a chain the end-to-end run has to reach; the manager
- * only routes on the answer.
- *
- * A null reading is "the buffer/frame rect could not be read this pass", not "the window is gone":
- * the manager tears a decoration down through the actor's `unmanaging`/`destroy` path, so a
- * reconcile must not destroy a display that is already correct for an unknown geometry.
- *
- * @param {{hasValidGeometry: boolean, nativeLikeCorners: boolean|null, hasGtk4Client: boolean|null}|null} reading
- * @returns {'undecorate'|'defer'|'apply'}
+ * What a reconcile should do, read from the reading alone: keep the display while the reading could
+ * not be taken or classification is in flight, drop it when the rects were read but have no extent,
+ * apply otherwise. A null reading is "could not read this pass", not "window gone" - the manager
+ * tears down through `unmanaging`/`destroy`.
  */
 export function reconcileOutcome(reading) {
     if (!reading)

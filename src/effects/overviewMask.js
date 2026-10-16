@@ -15,14 +15,11 @@ import Cogl from 'gi://Cogl';
 
 import {roundedMaskBytes} from './overviewMaskBytes.js';
 
-/** One reusable 1x1 opaque mask per Cogl context. */
 const opaqueMasks = new WeakMap();
 
 /**
  * A 1x1 fully opaque mask. MetaShapedTexture rejects a null mask, so this is how
  * an overview mask is retired: alpha 1 leaves every pixel unchanged.
- * @param {Cogl.Context} context
- * @returns {Cogl.Texture}
  */
 export function opaqueMask(context) {
     let mask = opaqueMasks.get(context);
@@ -41,9 +38,7 @@ export function opaqueMask(context) {
  * The bytes (body fill, four corner coverage discs) are pure and live in
  * overviewMaskBytes.js; this only uploads them as a Cogl texture.
  *
- * @param {Cogl.Context} context
- * @param {object} geometry - See `roundedMaskBytes`
- * @returns {Cogl.Texture|null}
+ * @param geometry - See `roundedMaskBytes`
  */
 export function buildRoundedMask(context, geometry) {
     const mask = roundedMaskBytes(geometry);

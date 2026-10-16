@@ -14,6 +14,9 @@ importers:
       eslint-config-gnome:
         specifier: git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git
         version: git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git#c479d059e8d9ea99c3b53c2ea43abf7fdb05eb51(eslint@9.39.5)
+      eslint-plugin-slop:
+        specifier: ^0.1.3
+        version: 0.1.3(eslint@9.39.5)
 
 packages:
 
@@ -161,6 +164,10 @@ packages:
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
 
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
+    engines: {node: '>=0.3.1'}
+
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
 
@@ -177,6 +184,11 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       eslint: ^7.0.0 || ^8.0.0 || ^9.0.0
+
+  eslint-plugin-slop@0.1.3:
+    resolution: {integrity: sha512-BktDwEdrqqy+THOMvSBXsrzcb6hZp2pPfLeEYXU66cP809UroTpzeQK0lFLa1u9XlC12GCSq95NB9xEZxyr89w==}
+    peerDependencies:
+      eslint: ^10.0.0
 
   eslint-scope@8.4.0:
     resolution: {integrity: sha512-sNXOfKCn74rt8RICKMvJS7XKV/Xk9kA7DyJr8mJik3S7Cwgy3qlkkmyS2uQB3jiJg6VNdZd/pDBJu0nvG2NlTg==}
@@ -555,6 +567,8 @@ snapshots:
 
   deep-is@0.1.4: {}
 
+  diff@9.0.0: {}
+
   es-module-lexer@1.7.0: {}
 
   escape-string-regexp@4.0.0: {}
@@ -584,6 +598,11 @@ snapshots:
       synckit: 0.9.3
     transitivePeerDependencies:
       - supports-color
+
+  eslint-plugin-slop@0.1.3(eslint@9.39.5):
+    dependencies:
+      diff: 9.0.0
+      eslint: 9.39.5
 
   eslint-scope@8.4.0:
     dependencies:

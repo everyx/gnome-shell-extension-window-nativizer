@@ -63,7 +63,6 @@ Anything here that stops being true is an upstream compatibility break, not an i
 | `effect.set_uniform_float() [Shell.GLSLEffect]` | 50 / 51 absent | [why](shell-api.md#shell_glsl_set_uniform_float) |
 | `backend.get_sprite()` | 50–51 stable | [why](shell-api.md#backend_get_sprite) |
 | `backend.get_pointer_sprite()` | 50–51 stable | [why](shell-api.md#backend_get_pointer_sprite) |
-| `backend.get_default_seat()` | 50–51 stable | [why](shell-api.md#backend_get_default_seat) |
 | `Meta-<api> / Shell-<api> typelibs` | 50 / 51 | [why](shell-api.md#mutter_api_version) |
 | `Shell.GLSLEffect` | 50 / 51 absent | [why](shell-api.md#shell_glsl_effect_h) |
 | `Shell.WindowTracker.get_default()` | 50–51 stable | [why](shell-api.md#window_tracker_get_default) |

@@ -18,7 +18,6 @@ export const CursorShape = Object.freeze({
     NORTH_WEST: 'nw',
 });
 
-/** What each shape means, in the compositor enum's own spelling. */
 const ENUM_MEMBER = Object.freeze({
     [CursorShape.DEFAULT]: 'DEFAULT',
     [CursorShape.CROSSHAIR]: 'CROSSHAIR',
@@ -32,7 +31,6 @@ const ENUM_MEMBER = Object.freeze({
     [CursorShape.NORTH_WEST]: 'NW_RESIZE',
 });
 
-/** @returns {object|null} The Clutter namespace, or null outside a shell */
 function clutterNamespace() {
     try {
         return globalThis.imports?.gi?.Clutter ?? null;
@@ -44,9 +42,6 @@ function clutterNamespace() {
 /**
  * A shape this module does not know is a programming error, not a line that cannot do it: the two are
  * told apart by where they end up - this throws, an absent enum returns null.
- * @param {string} shape - One of the CursorShape values
- * @param {object|null} [types] - The enum, for tests; defaults to this line's `Clutter.CursorType`
- * @returns {number|null} The cursor type, or null where this line has no such enum
  */
 export function cursorTypeFor(shape, types = clutterNamespace()?.CursorType ?? null) {
     const member = ENUM_MEMBER[shape];
@@ -60,10 +55,6 @@ export function cursorTypeFor(shape, types = clutterNamespace()?.CursorType ?? n
 /**
  * Sets an actor's pointer cursor. A line with no per-actor cursor leaves the pointer alone rather
  * than throwing: the band still resizes, it just does not say so with the cursor.
- * @param {object|null} actor - Clutter.Actor
- * @param {string} shape - One of the CursorShape values
- * @param {object|null} [types] - The enum, for tests; defaults to this line's `Clutter.CursorType`
- * @returns {boolean} Whether a cursor was set
  */
 export function setActorCursor(actor, shape, types = undefined) {
     const cursorType = cursorTypeFor(shape, types);

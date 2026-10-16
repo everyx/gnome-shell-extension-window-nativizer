@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 20:16+0800\n"
+"POT-Creation-Date: 2026-10-16 15:34+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -17,314 +17,314 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #. Translators: One of the three rule axes: rounded window corners.
-#: src/lib/rulePresenter.js:59
+#: src/lib/rulePresenter.js:50
 msgid "Corners"
 msgstr "圆角"
 
 #. Translators: One of the three rule axes: the window shadow.
-#: src/lib/rulePresenter.js:61
+#: src/lib/rulePresenter.js:52
 msgid "Shadow"
 msgstr "阴影"
 
 #. Translators: One of the three rule axes: the resize band around the window.
-#: src/lib/rulePresenter.js:63
+#: src/lib/rulePresenter.js:54
 msgid "Resize"
 msgstr "调整大小"
 
-#: src/lib/rulePresenter.js:96
+#: src/lib/rulePresenter.js:82
 msgid "Windows of this kind are never decorated"
 msgstr "此类窗口不做装饰"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:112
+#: src/lib/rulePresenter.js:96
 msgid "The window frame can already be resized"
 msgstr "窗口边框本身已可调整大小"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:115
+#: src/lib/rulePresenter.js:99
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的窗口没有可调整大小的边缘"
 
-#: src/lib/rulePresenter.js:132 src/prefs/conflictDialog.js:156
-#: src/prefs/conflictDialog.js:161
+#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:152
+#: src/prefs/conflictDialog.js:157
 msgid "Automatic"
 msgstr "自动"
 
 #. Translators: A dialog window.
-#: src/lib/rulePresenter.js:138
+#: src/lib/rulePresenter.js:121
 msgid "dialog"
 msgstr "对话框"
 
 #. Translators: A dialog that blocks its parent window.
-#: src/lib/rulePresenter.js:140
+#: src/lib/rulePresenter.js:123
 msgid "modal dialog"
 msgstr "模态对话框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/lib/rulePresenter.js:142
+#: src/lib/rulePresenter.js:125
 msgid "utility window"
 msgstr "工具窗口"
 
 #. Translators: A normal, top-level window.
-#: src/lib/rulePresenter.js:147
+#: src/lib/rulePresenter.js:130
 msgid "window"
 msgstr "窗口"
 
-#: src/lib/rulePresenter.js:159
+#: src/lib/rulePresenter.js:140
 msgid "XWayland"
 msgstr "XWayland"
 
-#: src/lib/rulePresenter.js:159
+#: src/lib/rulePresenter.js:140
 msgid "Wayland"
 msgstr "Wayland"
 
 #. Translators: %s is the client type and the window type, e.g. "Wayland window". If your
 #. language puts the type first, use the placeholders as %2$s %1$s.
-#: src/lib/rulePresenter.js:162
+#: src/lib/rulePresenter.js:143
 #, javascript-format
 msgid "%s %s"
 msgstr "%s %s"
 
 #. Translators: The window has no parent window.
-#: src/lib/rulePresenter.js:165
+#: src/lib/rulePresenter.js:146
 msgid "with no parent"
 msgstr "无父窗口"
 
 #. Translators: The window is attached to its parent window.
-#: src/lib/rulePresenter.js:167
+#: src/lib/rulePresenter.js:148
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/lib/rulePresenter.js:169
+#: src/lib/rulePresenter.js:150
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/lib/rulePresenter.js:184
+#: src/lib/rulePresenter.js:165
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/lib/rulePresenter.js:187
+#: src/lib/rulePresenter.js:168
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/lib/rulePresenter.js:191
+#: src/lib/rulePresenter.js:172
 msgid "resizable"
 msgstr "可调整大小"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/lib/rulePresenter.js:199
+#: src/lib/rulePresenter.js:180
 msgid "frame drawn by the system"
 msgstr "由系统绘制边框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/lib/rulePresenter.js:202
+#: src/lib/rulePresenter.js:183
 msgid "no shadow margins"
 msgstr "无阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/lib/rulePresenter.js:207
+#: src/lib/rulePresenter.js:188
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/lib/rulePresenter.js:211
+#: src/lib/rulePresenter.js:192
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
-#: src/prefs/conflictDialog.js:22
+#: src/prefs/conflictDialog.js:18
 msgid "Resolve Import Conflicts"
 msgstr "解决导入冲突"
 
-#: src/prefs/conflictDialog.js:40
+#: src/prefs/conflictDialog.js:36
 msgid "Cancel"
 msgstr "取消"
 
-#: src/prefs/conflictDialog.js:46
+#: src/prefs/conflictDialog.js:42
 msgid "Apply"
 msgstr "应用"
 
-#: src/prefs/conflictDialog.js:57
+#: src/prefs/conflictDialog.js:53
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] "%d 条规则存在冲突："
 
-#: src/prefs/conflictDialog.js:73
+#: src/prefs/conflictDialog.js:69
 msgid "Keep"
 msgstr "保留"
 
-#: src/prefs/conflictDialog.js:74
+#: src/prefs/conflictDialog.js:70
 msgid "Keep existing rules for all conflicts"
 msgstr "所有冲突均保留现有规则"
 
-#: src/prefs/conflictDialog.js:79
+#: src/prefs/conflictDialog.js:75
 msgid "Replace"
 msgstr "替换"
 
-#: src/prefs/conflictDialog.js:80
+#: src/prefs/conflictDialog.js:76
 msgid "Replace existing rules with imported rules for all conflicts"
 msgstr "所有冲突均替换为导入规则"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:121
+#: src/prefs/ruleUi.js:107
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "开启后修正此类窗口的自动判断"
 
-#: src/prefs/ruleUi.js:160
+#: src/prefs/ruleUi.js:139
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "选取自窗口“%s”"
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:82
+#: src/prefs.js:81
 msgid "Close"
 msgstr "关闭"
 
-#: src/prefs.js:162
+#: src/prefs.js:145
 msgid "Revert to the automatic decision"
 msgstr "还原为自动判断"
 
-#: src/prefs.js:256
+#: src/prefs.js:239
 msgid "Window Pick Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:258
+#: src/prefs.js:241
 msgid "A window is already being picked"
 msgstr "窗口选取正在进行"
 
-#: src/prefs.js:259
+#: src/prefs.js:242
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
 
-#: src/prefs.js:271
+#: src/prefs.js:254
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:292
+#: src/prefs.js:275
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有响应——请重启会话后重新选取"
 
-#: src/prefs.js:300
+#: src/prefs.js:283
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
-#: src/prefs.js:318
+#: src/prefs.js:301
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:330
+#: src/prefs.js:313
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:331
+#: src/prefs.js:314
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:341
+#: src/prefs.js:324
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"
 
-#: src/prefs.js:354
+#: src/prefs.js:337
 msgid "No corrections to export"
 msgstr "没有可导出的修正规则"
 
-#: src/prefs.js:366
+#: src/prefs.js:349
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已将 %d 条修正规则导出到剪贴板"
 
-#: src/prefs.js:392
+#: src/prefs.js:375
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪贴板为空或不包含文本"
 
-#: src/prefs.js:428 src/prefs.js:450
+#: src/prefs.js:411 src/prefs.js:433
 msgid "All rules in clipboard are already up to date"
 msgstr "剪贴板中的所有规则已是最新"
 
-#: src/prefs.js:437 src/prefs.js:460
+#: src/prefs.js:420 src/prefs.js:443
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功导入 %d 条规则"
 
-#: src/prefs.js:467
+#: src/prefs.js:450
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "导入失败：%s"
 
-#: src/prefs.js:479
+#: src/prefs.js:462
 msgid "Pick window…"
 msgstr "选取窗口…"
 
-#: src/prefs.js:482
+#: src/prefs.js:465
 msgid "The correction applies to every window of its kind"
 msgstr "这条修正对此类所有窗口生效"
 
-#: src/prefs.js:487
+#: src/prefs.js:470
 msgid "Import from Clipboard"
 msgstr "从剪贴板导入"
 
-#: src/prefs.js:488
+#: src/prefs.js:471
 msgid "Export to Clipboard"
 msgstr "导出到剪贴板"
 
-#: src/prefs.js:494 src/prefs.js:497
+#: src/prefs.js:477 src/prefs.js:480
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs.js:509
+#: src/prefs.js:492
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs.js:510
+#: src/prefs.js:493
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
 
-#: src/prefs.js:546
+#: src/prefs.js:529
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "点击上方按钮，选取装饰不正确的窗口"
 
-#: src/prefs.js:616
+#: src/prefs.js:599
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:622
+#: src/prefs.js:605
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:623
+#: src/prefs.js:606
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制窗口在不同显示器缩放下的装饰方式"
 
-#: src/prefs.js:628
+#: src/prefs.js:611
 msgid "Prioritize crisp text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:629
+#: src/prefs.js:612
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr "在分数缩放的显示器上跳过圆角，以保持文字清晰（阴影不受影响）"
 
-#: src/prefs.js:635
+#: src/prefs.js:618
 msgid "Force overview corners on every window"
 msgstr "强制所有窗口显示概览圆角"
 
-#: src/prefs.js:636
+#: src/prefs.js:619
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"

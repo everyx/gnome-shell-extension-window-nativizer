@@ -5,7 +5,6 @@ import Gtk from 'gi://Gtk';
 import {RuleAxis, RULE_AXES} from '../lib/rules.js';
 import {axisName, asMarkup, windowKindSentence, _} from '../lib/rulePresenter.js';
 
-// Bundled symbolic icons per axis with fallback stock icons.
 export const AXIS_ICONS = {
     [RuleAxis.CORNERS]: {bundled: 'winnativizer-corners-symbolic', fallback: 'window-restore-symbolic'},
     [RuleAxis.SHADOW]: {bundled: 'winnativizer-shadow-symbolic', fallback: 'edit-copy-symbolic'},
@@ -44,7 +43,6 @@ export function ensureCustomStyles() {
 
 /**
  * Adds the bundled icons directory to the GTK IconTheme search path.
- * @param {Gtk.IconTheme} iconTheme
  */
 export function registerIconThemePath(iconTheme) {
     try {
@@ -57,9 +55,6 @@ export function registerIconThemePath(iconTheme) {
 
 /**
  * Creates a Gtk.Image displaying the symbolic icon for the specified axis.
- * @param {string} axis
- * @param {Gtk.IconTheme} iconTheme
- * @returns {Gtk.Image}
  */
 export function createAxisImage(axis, iconTheme) {
     const {bundled, fallback} = AXIS_ICONS[axis];
@@ -72,11 +67,6 @@ export function createAxisImage(axis, iconTheme) {
 
 /**
  * Populates a Gtk.Box with axis icons or a fallback label with clean tooltips.
- * @param {Gtk.Box} box
- * @param {Set<string>} correctedAxes
- * @param {Record<string, boolean>} caps
- * @param {Gtk.IconTheme} iconTheme
- * @param {string|null} [fallbackLabel=null]
  */
 export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackLabel = null) {
     let child = box.get_first_child();
@@ -110,10 +100,6 @@ export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackL
 
 /**
  * Builds an Adw.SwitchRow for configuring an individual rule axis.
- * @param {string} axis
- * @param {Set<string>} corrected
- * @param {(axis: string, active: boolean) => void} onChange
- * @returns {Adw.SwitchRow}
  */
 export function buildAxisSwitch(axis, corrected, onChange) {
     const name = axisName(axis);
@@ -134,13 +120,6 @@ export function buildAxisSwitch(axis, corrected, onChange) {
 /**
  * Configures the standard header presentation (title, subtitle, icon, tooltip, accessibility)
  * for a rule row, shared across the main preferences list and the conflict dialog.
- * @param {Adw.PreferencesRow} row
- * @param {{
- *   name: string,
- *   sampleTitle?: string|null,
- *   properties: object,
- *   appInfo?: object|null,
- * }} options
  */
 export function setupRuleRowHeader(row, options) {
     const {name, sampleTitle, properties, appInfo} = options;

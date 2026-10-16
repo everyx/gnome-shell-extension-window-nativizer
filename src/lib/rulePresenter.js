@@ -13,8 +13,6 @@ const DOMAIN = 'window-nativizer';
 
 /**
  * Translates a message using gettext for the window-nativizer domain.
- * @param {string} msgid
- * @returns {string}
  */
 export function _(msgid) {
     return Gettext.dgettext(DOMAIN, msgid);
@@ -22,10 +20,6 @@ export function _(msgid) {
 
 /**
  * Translates a plural message using dngettext for the window-nativizer domain.
- * @param {string} msgid
- * @param {string} msgidPlural
- * @param {number} n
- * @returns {string}
  */
 export function ngettext(msgid, msgidPlural, n) {
     return Gettext.dngettext(DOMAIN, msgid, msgidPlural, n);
@@ -34,9 +28,6 @@ export function ngettext(msgid, msgidPlural, n) {
 /**
  * Formats a string template using String.prototype.format if available (GNOME Shell environment),
  * or falls back to a regex-based positional substitution (headless unit testing).
- * @param {string} template
- * @param {...any} args
- * @returns {string}
  */
 export function formatString(template, ...args) {
     if (typeof template.format === 'function')
@@ -70,8 +61,6 @@ export function axisName(axis) {
 /**
  * Whether the window kind can be decorated at all - the fact the axis capabilities
  * and the unavailable reason both turn on.
- * @param {{window_type:number}|null} properties
- * @returns {boolean}
  */
 export function isDecoratableKind(properties) {
     return !!properties &&
@@ -80,8 +69,6 @@ export function isDecoratableKind(properties) {
 
 /**
  * The shared capability answer, adapted from a rule key's own field names.
- * @param {{window_type:number,allows_resize:boolean,has_ssd:boolean}|null} properties
- * @returns {Record<string, boolean>}
  */
 export function keyAxisCapabilities(properties) {
     return ruleAxisCapabilities({
@@ -91,16 +78,13 @@ export function keyAxisCapabilities(properties) {
     });
 }
 
-// Translators: Shown where no rule axis applies at all.
 export function neverDecorated() {
     return _('Windows of this kind are never decorated');
 }
 
 /**
- * @param {string} axis
- * @param {boolean} decoratable - Whether the kind can be decorated at all
- * @param {{allows_resize:boolean,has_ssd:boolean}|null} properties
- * @returns {string} Why the axis cannot be configured here
+ * @param decoratable - Whether the kind can be decorated at all
+ * @returns Why the axis cannot be configured here
  */
 export function axisUnavailableReason(axis, decoratable = true, properties = null) {
     // A non-decoratable kind (menus, tooltips) is never about fixed size or a
@@ -119,8 +103,7 @@ export function axisUnavailableReason(axis, decoratable = true, properties = nul
 
 /**
  * The axes a state corrects, for toasts, e.g. "Corners, Shadow".
- * @param {string} state Canonical stored state
- * @returns {string}
+ * @param state Canonical stored state
  */
 export function ruleSummaryText(state) {
     const corrected = parseRuleState(state);
@@ -149,8 +132,6 @@ export function windowTypeNoun(windowType) {
 
 /**
  * Formats window key properties into a human-readable descriptive sentence.
- * @param {{client_type:string,window_type:number,has_parent:boolean,allows_resize:boolean,attached_dialog:boolean,has_ring?:boolean,has_ssd?:boolean,size?:string}|null} properties
- * @returns {string}
  */
 export function windowKindSentence(properties) {
     if (!properties)
@@ -214,8 +195,6 @@ export function windowKindSentence(properties) {
 /**
  * Escape for the Adw properties that parse Pango markup (rows and preference groups); Toast,
  * AlertDialog and a bare Gtk.Label take plain text.
- * @param {string} text
- * @returns {string}
  */
 export function asMarkup(text) {
     return GLib.markup_escape_text(String(text), -1);

@@ -6,13 +6,10 @@
 
 import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
 
-/** GTK-compatible handle width (input region grown around CSD window). */
 export const RESIZE_BAND = RESIZE_HANDLE_SIZE;
 
-/** GTK-compatible corner reach. */
 export const RESIZE_CORNER = RESIZE_HANDLE_CORNER_SIZE;
 
-/** Thinnest window that gets a band (2 * RESIZE_BAND). */
 export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
 
 /**
@@ -23,18 +20,11 @@ export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
  */
 export const RESIZE_BAND_REGIONS = ['top', 'right', 'bottom', 'left'];
 
-/**
- * @typedef {{x: number, y: number, width: number, height: number}} Rect
- */
 
 /**
  * Which of a window's four edges Mutter holds fixed: `maximized_vertically` fixes the top and
  * bottom, `maximized_horizontally` the left and right, and both together are all four.
- * @param {object} [params={}]
- * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null] - Edges already known
- * @param {boolean} [params.maximizedHorizontally=false]
- * @param {boolean} [params.maximizedVertically=false]
- * @returns {{top: boolean, right: boolean, bottom: boolean, left: boolean}}
+ * @param [params.constrainedEdges=null] - Edges already known
  */
 export function normalizeConstrainedEdges({
     constrainedEdges = null,
@@ -53,14 +43,7 @@ export function normalizeConstrainedEdges({
  * Maps pointer coordinate to resize direction.
  * Points inside window body resolve to null (handled by client).
  * Constrained edges resolve to null, and adjacent corners resolve to unconstrained edge.
- * @param {Rect} frame - Window body, in the same space as `x`/`y`
- * @param {number} x
- * @param {number} y
- * @param {object} [options={}]
- * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [options.constrainedEdges=null]
- * @param {boolean} [options.maximizedHorizontally=false]
- * @param {boolean} [options.maximizedVertically=false]
- * @returns {'n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw'|null}
+ * @param frame - Window body, in the same space as `x`/`y`
  */
 export function edgeForPoint(frame, x, y, {
     constrainedEdges = null,
@@ -147,7 +130,6 @@ export function edgeForPoint(frame, x, y, {
 
 /**
  * Clears one region in place, reporting whether it held a band.
- * @returns {boolean}
  */
 function clearBand(bands, region) {
     if (!bands[region])
@@ -160,7 +142,6 @@ function clearBand(bands, region) {
  * Writes one region of the ring into `bands` in place, reusing the region's own rect object
  * when it already has one, and returns whether the written value differs from what was there.
  * A `constrained` edge is held fixed and gets no strip.
- * @returns {boolean}
  */
 function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
     if (constrained || !(rw > 0) || !(rh > 0))
@@ -193,7 +174,7 @@ function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
 }
 
 /**
- * @returns {Record<string, Rect|null>} Every surface present, all null
+ * @returns Every surface present, all null
  */
 export function emptyBands() {
     const bands = {};
@@ -203,20 +184,10 @@ export function emptyBands() {
 }
 
 /**
- * Writes the four disjoint outer ring rectangles into `bands` in place, clipped to `bounds`.
- * Reuses existing rect objects in `bands` to avoid GC allocation on hot path.
- * Direction is resolved separately via `edgeForPoint()`.
- *
- * `bounds = null` means "do not clip to a monitor" (the actor's no-surface-clip case).
- * `boundsUnknown = true` is a different state: the monitor rect could not be read, so the
- * strips are dropped rather than written at full extent, where a window flush against an edge
- * would grow a reactive strip onto the neighbouring monitor. The degradation keeps a correct
- * display alone instead of adding a surface we cannot place.
- *
- * @param {Record<string, Rect|null>} bands - mutated in place
- * @param {object} params - see `computeResizeBands`
- * @param {boolean} [params.boundsUnknown=false] - Bounds could not be read; drop every strip
- * @returns {boolean} Whether `bands` differs from what it held
+ * Writes the four outer ring rectangles into `bands`, clipped to `bounds`. `bounds = null` means "do
+ * not clip to a monitor"; `boundsUnknown = true` means the monitor rect could not be read, so every
+ * strip is dropped rather than written at full extent, where a flush window would grow a strip onto
+ * the neighbouring monitor.
  */
 export function computeResizeBandsInto(bands, {
     frame,
@@ -263,8 +234,8 @@ export function computeResizeBandsInto(bands, {
 }
 
 /**
- * @param {object} params - see `computeResizeBandsInto`
- * @returns {Record<string, Rect|null>} One rect per side, null where it is empty
+ * @param params - see `computeResizeBandsInto`
+ * @returns One rect per side, null where it is empty
  */
 export function computeResizeBands(params) {
     const bands = emptyBands();
@@ -273,21 +244,10 @@ export function computeResizeBands(params) {
 }
 
 /**
- * Writes the container allocation mapping into `out` in place, reusing `out.frame` and
- * `out.bounds`.
- *
- * The band container is the window actor grown by RESIZE_BAND per side, so the body starts
- * RESIZE_BAND + the declared inset in from the container origin. `bounds` is a monitor rect
- * in stage coordinates and is translated into container coordinates so the clip and the
- * frame share one space. This runs every resize frame, so the actor keeps a scratch record
- * and the pure mapping fills it rather than allocating a frame and bounds per pass.
- *
- * @param {{frame:Rect|null, bounds:Rect|null, scale:number}} out - Mutated in place
- * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox - Clutter.ActorBox, read as data
- * @param {import('./frame.js').Insets} insets - Ring between actor and body
- * @param {Rect|null} bounds - Monitor rect in stage coordinates, or null for no clip
- * @param {number} scale - Monitor scale the frame was read at
- * @returns {object} `out`, for chaining
+ * Writes the container mapping into `out` in place, reusing `out.frame` and `out.bounds`. The band
+ * container is the window actor grown by RESIZE_BAND per side, so the body starts RESIZE_BAND + the
+ * declared inset in. `bounds` is a monitor rect in stage coordinates, translated into container
+ * coordinates so clip and frame share one space.
  */
 export function bandParamsInto(out, containerBox, insets, bounds, scale) {
     const containerWidth = containerBox.x2 - containerBox.x1;
@@ -316,11 +276,6 @@ export function bandParamsInto(out, containerBox, insets, bounds, scale) {
 /**
  * Allocating wrapper over `bandParamsInto`, for callers that do not keep a scratch record
  * (the spec helper `bandBoxes` and the specs themselves).
- * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox
- * @param {import('./frame.js').Insets} insets
- * @param {Rect|null} bounds
- * @param {number} scale
- * @returns {{frame:Rect, bounds:Rect|null, scale:number}}
  */
 export function bandParams(containerBox, insets, bounds, scale) {
     return bandParamsInto({frame: null, bounds: null, scale: 1}, containerBox, insets, bounds, scale);
@@ -333,12 +288,6 @@ export function bandParams(containerBox, insets, bounds, scale) {
  * scale conventions of the live allocation are spec-covered. A constrained or empty side
  * stays null; the actor writes it as a 0x0 child box.
  *
- * @param {{x1:number,y1:number,x2:number,y2:number}} containerBox
- * @param {import('./frame.js').Insets} insets
- * @param {Rect|null} bounds
- * @param {number} scale
- * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [constrainedEdges=null]
- * @returns {{params:object, boxes:Record<string, Rect|null>}}
  */
 export function bandBoxes(containerBox, insets, bounds, scale, constrainedEdges = null) {
     const params = bandParams(containerBox, insets, bounds, scale);

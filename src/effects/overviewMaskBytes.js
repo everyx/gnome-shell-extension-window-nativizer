@@ -7,12 +7,10 @@
  * oracle. It lives here now: this module returns the bytes, overviewMask.js uploads them.
  */
 
-/** @param {number} value @param {number} low @param {number} high @returns {number} */
 function clamp(value, low, high) {
     return Math.max(low, Math.min(high, value));
 }
 
-/** @param {Uint8Array} data @param {number} width @param {number} height */
 function fillRect(data, width, height, x, y, w, h, value) {
     const x0 = clamp(Math.round(x), 0, width);
     const y0 = clamp(Math.round(y), 0, height);
@@ -43,23 +41,9 @@ function writeCorner(data, width, height, squareX, squareY, cx, cy, r) {
 }
 
 /**
- * Builds a rounded-corner A_8 mask matching the desktop clip's body geometry.
- *
- * Alpha is 255 over the body, the four corners carry the rounded coverage, and
- * outside the body it is 255 unless `erase` asks for the ring to be erased
- * (flat windows, whose clip has no client ring to preserve).
- *
- * @param {object} geometry
- * @param {number} geometry.width - Mask width in texture pixels
- * @param {number} geometry.height - Mask height in texture pixels
- * @param {number} geometry.frameX - Body left, texture pixels
- * @param {number} geometry.frameY - Body top, texture pixels
- * @param {number} geometry.frameW - Body width, texture pixels
- * @param {number} geometry.frameH - Body height, texture pixels
- * @param {number} geometry.radius - Corner radius, texture pixels
- * @param {boolean} geometry.erase - Erase everything outside the body
- * @returns {{data: Uint8Array, width: number, height: number}|null} A_8 alpha bytes,
- *   row-major, with the rounded size the texture must use, or null for a degenerate body
+ * Builds a rounded-corner A_8 mask matching the desktop clip's body geometry. Alpha is 255 over the
+ * body, the four corner squares carry the rounded coverage, and outside it stays 255 unless `erase`
+ * asks for the ring to be erased (flat windows). Null for a degenerate body.
  */
 export function roundedMaskBytes({
     width, height, frameX, frameY, frameW, frameH, radius, erase,

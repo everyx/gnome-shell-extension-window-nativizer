@@ -18,6 +18,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # The slop rules compare a file's text with HEAD~5, so the history has to be there;
+          # without it they fall back to whole-file inspection and report the legacy prose.
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6

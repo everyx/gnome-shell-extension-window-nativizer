@@ -1,8 +1,7 @@
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
- * @param {object} winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark
- * @returns {{radius: number, shadows: Array<object>, animate: boolean, outline: object|null, border?: boolean}}
+ * @param winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark
  */
 export function styleForWindow(winState) {
     const {window} = ADWAITA_STYLE;
@@ -41,9 +40,9 @@ export function styleForWindow(winState) {
 }
 
 /**
- * @param {number} base - Base style transition weight (0..1)
- * @param {number} paintOpacity - Normalized actor paint opacity (0..1)
- * @returns {number} Modulated pipeline opacity in [0, 1]
+ * @param base - Base style transition weight (0..1)
+ * @param paintOpacity - Normalized actor paint opacity (0..1)
+ * @returns Modulated pipeline opacity in [0, 1]
  */
 export function pipelineOpacityFor(base, paintOpacity) {
     if (paintOpacity <= 0)

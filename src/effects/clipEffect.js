@@ -86,8 +86,6 @@ export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
  * A live actor's extent, or null when the actor is gone or its read throws. The window actor is an
  * actor we do not own, so a torn-down read is "unknown" and the settle falls back rather than
  * aborting the paint.
- * @param {{width:number,height:number}|null} actor
- * @returns {{width:number,height:number}|null}
  */
 function readActorExtent(actor) {
     if (!actor)
@@ -103,8 +101,6 @@ function readActorExtent(actor) {
  * The window's own size, read live at paint: its frame rect, else its buffer rect. This is the
  * read that separates a resize from a body that moved on its own, so it is taken on the frame
  * clock; only its previous value lives in the pass plan.
- * @param {object|null} win
- * @returns {{width:number,height:number}|null}
  */
 function readWindowSize(win) {
     const frame = getWindowFrameRect(win);
@@ -129,7 +125,7 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * @param {object|null} [St] - The St namespace the decoration resolved the clip target with,
+     * @param [St] - The St namespace the decoration resolved the clip target with,
      *        handed to the fallback phase read so it identifies the surface container by the
      *        clip's own rule rather than a global
      */
@@ -172,10 +168,8 @@ export const RoundedClipEffect = GObject.registerClass({
         // start - there is no earlier correct display to preserve on the first paint.
         this._lastPhase = ZERO_PHASE;
         // The pass plan the next paint settles from: the reference points the hold compares against
-        // and the window's own size as of the previous pass. It carries no resolved body - the
-        // paint reads the two actors and the window's own size live and evaluates the settle there,
-        // so the cut is what the compositor is drawing that frame. Null until the first pass, when
-        // the live target size is used as before.
+        // and the window's own size as of the previous pass. It carries no resolved body; the paint
+        // reads the live actors and evaluates the settle on the frame clock. Null until the first pass.
         this._bodyPlan = null;
 
         this._sizeVec = [0, 0];
@@ -188,13 +182,9 @@ export const RoundedClipEffect = GObject.registerClass({
 
     /**
      * Store the decisions. Geometry is not here: it is read from the actor every paint.
-     * @param {object} params
-     * @param {import('../lib/frame.js').Insets} params.insets - Ring between actor and body
-     * @param {number} params.radius - Corner radius in px
-     * @param {{color:number[],alpha:number}|null} params.outline
-     * @param {boolean} [params.erase=false]
-     * @param {boolean} [params.clearStroke=false]
-     * @param {number} [params.scale=1.0] - Monitor fractional/integer scale
+     * @param params.insets - Ring between actor and body
+     * @param params.radius - Corner radius in px
+     * @param [params.scale=1.0] - Monitor fractional/integer scale
      */
     setParams({insets, radius, outline, erase = false, clearStroke = false, scale = 1.0}) {
         const changes = clipParamChanges({
@@ -247,7 +237,7 @@ export const RoundedClipEffect = GObject.registerClass({
     /**
      * Selects the phase strategy for the resolved clip target. Invalidates the cached frame when
      * it flips, so the next paint recomputes uFrame from the new phase.
-     * @param {boolean} phaseInTransform - True when the target's own transform carries the phase
+     * @param phaseInTransform - True when the target's own transform carries the phase
      */
     setPhaseInTransform(phaseInTransform) {
         const next = Boolean(phaseInTransform);
@@ -259,13 +249,10 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * Sets the pass plan the next paint settles its body from. WindowDecoration decides no body:
-     * it hands the reference points the hold compares against, and the paint reads the target
-     * actor, the window actor and the window's own size live so the frame tracks what the
-     * compositor draws. The shadow is handed the same plan, so both cuts derive one body by
-     * construction.
-     * @param {{previousBody:object|null, previousAuthority:object|null,
-     *   previousWindowSize:object|null}|null} plan
+     * Sets the pass plan the next paint settles its body from. WindowDecoration decides no body: it
+     * hands the reference points the hold compares against, and the paint reads the actors and the
+     * window's own size live so the frame tracks what the compositor draws. The shadow gets the same
+     * plan, so both cuts derive one body.
      */
     setBodyPlan(plan) {
         const next = plan ?? null;
@@ -280,20 +267,14 @@ export const RoundedClipEffect = GObject.registerClass({
 
     /**
      * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
-     * @param {object} node
-     * @param {object} paintContext
      */
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
         const targetSize = {width: actor?.width ?? 0, height: actor?.height ?? 0};
-        // Both body reads are taken live at paint. The window actor is the authority for whether
-        // the window has a body: a Wayland surface container's own allocation can read 0 while its
-        // surface child still paints at full size (a client swapping its buffer while opening, a
-        // layout that has not settled), so a non-positive target read falls back to the window
-        // actor instead of suspending. The pair also feeds the settle below, so the window actor is
-        // read even when the target is usable; only when neither has an extent is the target
-        // genuinely degenerate, and then the clip suspends rather than compositing nothing while
-        // the sibling shadow actor keeps drawing.
+        // Both body reads are taken live at paint. The window actor is the authority for whether the
+        // window has a body: a surface container's allocation can read 0 while its child still
+        // paints, so a non-positive target read falls back to the window actor rather than
+        // suspending. The pair also feeds the settle below.
         const win = findMetaWindow(actor);
         const windowActorSize = readActorExtent(getWindowActor(win));
         const size = isPaintableFrame(targetSize)
@@ -306,17 +287,10 @@ export const RoundedClipEffect = GObject.registerClass({
         this._suspended = false;
 
         const scale = this._scale ?? 1.0;
-        // The frame's phase comes from the resolved target (see resolveClipTarget). A Wayland
-        // surface container carries the buffer's subpixel phase in its own transform, so the
-        // offscreen FBO paints container-local content and the body edge is the plain snapped
-        // body - that is what keeps the phase out of the FBO's box rounding, where clipping the
-        // window actor used to leave the hard straight-edge cut a physical pixel inside the frame
-        // at 1.25x. On the fallback the phase lives in a child transform the FBO cannot keep, so
-        // the clip folds the window's subpixel offset into its geometry, exactly where the shadow
-        // actor carries the same offset as a translation. Both paths derive from clipFrameFor, so
-        // the clip's cut and the shadow's cutout still land on one physical line.
-        // The container path needs no window lookup for its phase: it is already in the target's
-        // own transform. Only the fallback folds the window's subpixel offset into its geometry.
+        // The phase comes from the resolved target. A Wayland surface container carries it in its own
+        // transform, so the phase stays out of the FBO's box rounding. On the fallback it lives in a
+        // child transform, so the clip folds the window's subpixel offset into its geometry, matching
+        // the shadow's translation. Both derive from `clipFrameFor`.
         const phaseWin = this._phaseInTransform ? null : win;
         // An unknown fallback phase (unreadable monitor geometry) keeps the last good frame; the
         // shadow takes the same last good phase, so the two cuts keep agreeing.
@@ -324,9 +298,9 @@ export const RoundedClipEffect = GObject.registerClass({
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
         // The frame edge is the body this paint settles from the live reads and the pass plan; the
-        // actor size above still drives uSize. A null plan (before the first pass) uses the live
-        // size, so this is a no-op in health. This is the frame clock: between the manager's
-        // debounced passes the cut follows the actor the compositor is drawing now.
+        // actor size above drives uSize. A null plan (before the first pass) uses the live size,
+        // a no-op in health. This is the frame clock: between the manager's debounced passes the cut
+        // follows the actor the compositor is drawing now.
         const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
             this._bodyPlan).body ?? size;
         const frame = clipFrameForTarget(bodySize, this._insets, scale,

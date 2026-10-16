@@ -36,22 +36,12 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // larger than the window actor by that much, or the regions would be clipped out of it.
 const OUTER = RESIZE_BAND;
 
-/**
- * @param {{x:number,y:number,width:number,height:number}|null} a
- * @param {{x:number,y:number,width:number,height:number}|null} b
- * @returns {boolean}
- */
 function sameBounds(a, b) {
     if (!a || !b)
         return a === b;
     return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
-/**
- * @param {{top:boolean,right:boolean,bottom:boolean,left:boolean}|null} a
- * @param {{top:boolean,right:boolean,bottom:boolean,left:boolean}|null} b
- * @returns {boolean}
- */
 function sameConstrainedEdges(a, b) {
     if (!a && !b)
         return true;
@@ -64,8 +54,7 @@ export const ResizeBand = GObject.registerClass({
     GTypeName: RESIZE_BAND_G_TYPE,
 }, class ResizeBand extends St.Widget {
     /**
-     * @param {Clutter.Actor} windowActor
-     * @param {Clutter.Actor} container - windowGroup; band inserted above windowActor
+     * @param container - windowGroup; band inserted above windowActor
      */
     _init(windowActor, container) {
         // clip_to_allocation keeps picking inside the band bounding box: nothing of ours
@@ -133,12 +122,10 @@ export const ResizeBand = GObject.registerClass({
     /**
      * Store the decisions the geometry is derived from. The regions themselves are placed
      * in vfunc_allocate() from the actor's live size, so this does not carry absolute px.
-     * @param {object} params
-     * @param {import('./frame.js').Insets|null} params.insets - Ring between actor and body
-     * @param {{x:number,y:number,width:number,height:number}|null} [params.bounds=null] - Monitor rect
-     * @param {boolean} [params.boundsUnknown=false] - Whether `bounds` could not be read
-     * @param {number} [params.scale=1] - Monitor scale the frame was read at
-     * @param {{top?: boolean, right?: boolean, bottom?: boolean, left?: boolean}|null} [params.constrainedEdges=null]
+     * @param params.insets - Ring between actor and body
+     * @param [params.bounds=null] - Monitor rect
+     * @param [params.boundsUnknown=false] - Whether `bounds` could not be read
+     * @param [params.scale=1] - Monitor scale the frame was read at
      */
     setGeometry({insets, bounds = null, boundsUnknown = false, scale = 1, constrainedEdges = null}) {
         const nextInsets = insets ?? ZERO_INSETS;
@@ -168,7 +155,6 @@ export const ResizeBand = GObject.registerClass({
      * Allocate the four strips from the container's own allocation plus the stored insets.
      * Called after the BindConstraints have sized the container for this frame, so the
      * strips are always placed against the size being painted.
-     * @param {Clutter.ActorBox} box
      */
     vfunc_allocate(box) {
         // Bypass St.Widget layout manager to preserve direct child allocations.
@@ -217,12 +203,10 @@ export const ResizeBand = GObject.registerClass({
             this.resetCursor();
     }
 
-    /** Re-pin above the window actor; window_group's stacking is rebuilt on 'restacked'. */
     restack() {
         setActorAboveSibling(this, this._windowActor, this._container);
     }
 
-    /** Back to the default arrow, e.g. after a grab op or when the window moved. */
     resetCursor() {
         this._hover = null;
         for (const child of this._regions.values())
@@ -260,8 +244,6 @@ export const ResizeBand = GObject.registerClass({
     /**
      * The direction under a pointer event, resolved by GTK's own order. The strip is only
      * the surface that delivered the event; the frame carries the geometry.
-     * @param {Clutter.Event} event
-     * @returns {'n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw'|null}
      */
     _directionForEvent(event) {
         if (!this._frame)
@@ -274,9 +256,7 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * @param {string} region
-     * @param {Clutter.Event} event
-     * @returns {boolean} Clutter.EVENT_PROPAGATE
+     * @returns Clutter.EVENT_PROPAGATE
      */
     _applyCursor(region, event) {
         const direction = this._directionForEvent(event);
@@ -288,8 +268,7 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * @param {string} region
-     * @returns {boolean} Clutter.EVENT_PROPAGATE
+     * @returns Clutter.EVENT_PROPAGATE
      */
     _clearCursor(region) {
         if (this._hover?.region === region) {
@@ -300,8 +279,7 @@ export const ResizeBand = GObject.registerClass({
     }
 
     /**
-     * @param {Clutter.Event} event
-     * @returns {boolean} EVENT_STOP when the grab was handed to Mutter
+     * @returns EVENT_STOP when the grab was handed to Mutter
      */
     _onButtonPress(event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)

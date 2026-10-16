@@ -170,9 +170,10 @@ are Graphene's, not Mutter's, and are deliberately not recorded in `tools/shell-
 ## bind_constraint_new
 
 `new Clutter.BindConstraint()` - binds the resize band to the window actor's position and size, so
-its geometry follows a resize without a JS tick. The shadow binds only its size: its position has
-to account for the actor's scale and pivot, which a fixed offset cannot (see
-`shadowLayoutPosition` in `effects/shadowGeometry.js`).
+its geometry follows a resize without a JS tick. The shadow binds all four coordinates, X and Y at
+`-SHADOW_PAD` and width and height at twice it, and its position on top of that base has to account
+for the actor's scale and pivot, which a fixed offset cannot (see `shadowLayoutPosition` in
+`effects/shadowGeometry.js`).
 
 ## actor_meta_set_enabled
 
@@ -186,7 +187,9 @@ the call sites are in `windowDecoration.js`.
 
 `Clutter.ActorMeta:enabled` - the property behind that method. `clutter-effect.c` points the vfunc
 `clutter_effect_set_enabled` at its setter, which is the symbol an earlier version of this table
-cited as if it were the API. The extension calls the method and never reads the property.
+cited as if it were the API. The extension calls the method, and reads the property back in the
+diagnostics view (`clipEnabled`), where it is the clip's live state rather than what we last asked
+for.
 
 ## actor_meta_get_actor
 
@@ -235,11 +238,6 @@ event via `backend.get_sprite(stage, event)`.
 
 `backend.get_pointer_sprite()` - fallback method on GNOME 50+ when `get_sprite` is unavailable,
 called via `backend.get_pointer_sprite(stage)`.
-
-## backend_get_default_seat
-
-`backend.get_default_seat()` - the 50-51 seat resolution, available for the pointer chain the grab
-op uses.
 
 ## shell_glsl_effect_h
 

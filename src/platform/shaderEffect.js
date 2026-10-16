@@ -10,9 +10,11 @@ import GObject from 'gi://GObject';
 
 import {resolveUniformLocation} from './uniformLocation.js';
 
-// Shell.GLSLEffect was dropped in GNOME 51 (gi://Shell namespace import remains valid,
-// but Shell.GLSLEffect evaluates to undefined). When undefined, we take the modern
-// Clutter.ShaderEffect branch.
+/**
+ * Shell.GLSLEffect was dropped in GNOME 51 (gi://Shell namespace import remains valid,
+ * but Shell.GLSLEffect evaluates to undefined). When undefined, we take the modern
+ * Clutter.ShaderEffect branch.
+ */
 export const ShaderEffect = Shell?.GLSLEffect
     ? GObject.registerClass({
         GTypeName: 'WindowNativizerShaderEffectCompat',
@@ -38,9 +40,6 @@ export const ShaderEffect = Shell?.GLSLEffect
         /**
          * Sets float uniform using variable name, caching location on GNOME 50.
          * Targets modern GNOME 51 3-argument signature: (name, n_components, value).
-         * @param {string} name
-         * @param {number} n_components
-         * @param {number|number[]} value
          */
         set_uniform_float(name, n_components, value) {
             // The map is created in _init; build_pipeline() may run before that, so treat

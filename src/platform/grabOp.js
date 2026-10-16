@@ -9,8 +9,8 @@ function resolveBackend() {
 
 /**
  * Resolves the compositor pointer sprite for an event.
- * @param {object|null} event - Clutter.Event
- * @returns {object|null} Pointer sprite or null
+ * @param event - Clutter.Event
+ * @returns Pointer sprite or null
  */
 export function getPointerSprite(event) {
     const stage = globalThis.global?.stage;
@@ -21,12 +21,12 @@ export function getPointerSprite(event) {
 
 /**
  * Initiates a window resize grab operation using modern sprite signature (GNOME 50+).
- * @param {object} win - Meta.Window instance
- * @param {number} op - Meta.GrabOp
- * @param {object|null} sprite - Pointer sprite
- * @param {number} time - Event timestamp
- * @param {object} posHint - Graphene.Point or coordinate object
- * @returns {boolean} True if Mutter accepted the grab
+ * @param win - Meta.Window instance
+ * @param op - Meta.GrabOp
+ * @param sprite - Pointer sprite
+ * @param time - Event timestamp
+ * @param posHint - Graphene.Point or coordinate object
+ * @returns True if Mutter accepted the grab
  */
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (typeof win?.begin_grab_op !== 'function' || !sprite || op === null || op === undefined)
@@ -49,9 +49,9 @@ function metaNamespace() {
 
 /**
  * Resolves the compositor Meta.GrabOp for a directional resize.
- * @param {string} direction - 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'
- * @param {object|null} [meta] - Optional Meta namespace for testing
- * @returns {number|null} Meta.GrabOp resize op or null
+ * @param direction - 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'
+ * @param [meta] - Optional Meta namespace for testing
+ * @returns Meta.GrabOp resize op or null
  */
 export function getResizeGrabOp(direction, meta = metaNamespace()) {
     const grabOp = meta?.GrabOp;

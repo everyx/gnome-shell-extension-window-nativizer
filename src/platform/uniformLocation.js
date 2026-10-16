@@ -6,10 +6,8 @@
  */
 
 /**
- * @param {Map<string, number>} cache - name -> location; only non-negative hits
- * @param {string} name
- * @param {(name: string) => number} getLocation
- * @returns {number} a valid location, or -1 when the uniform is still unresolved
+ * @param cache - name -> location; only non-negative hits
+ * @returns a valid location, or -1 when the uniform is still unresolved
  */
 export function resolveUniformLocation(cache, name, getLocation) {
     let loc = cache.get(name);

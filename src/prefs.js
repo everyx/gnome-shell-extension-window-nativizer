@@ -48,12 +48,11 @@ import {
 } from './prefs/ruleUi.js';
 
 /**
- * @param {Function} callback
- * @param {Gio.Cancellable} [cancellable] - Cancelled when the preferences window closes.
+ * @param [cancellable] - Cancelled when the preferences window closes.
  */
 function inspectWindow(callback, cancellable = null) {
     // The method now takes a debug boolean; `false` is the quiet interactive pick. The extension
-    // owns the field rules (docs/development.md), so prefs sends nothing else.
+    // owns the field rules, so prefs sends nothing else.
     Gio.DBus.session.call(
         INSPECTOR_DBUS_NAME,
         INSPECTOR_DBUS_PATH,
@@ -85,24 +84,8 @@ function showError(parentWindow, heading, body) {
 
 /**
  * Immutable ambient preferences context passed across UI builders.
- * @typedef {object} PrefsContext
- * @property {Adw.PreferencesWindow} window - Host preferences window
- * @property {Gio.Settings} settings - Extension GSettings instance
- * @property {Array<object>} installedApps - Installed desktop apps list
- * @property {Gtk.IconTheme} iconTheme - Active display icon theme
- * @property {Gio.Cancellable} pickCancellable - Cancellable tied to window destruction
- * @property {() => boolean} isWindowAlive - Guard checking if preferences window is alive
  */
 
-/**
- * @typedef {object} DisplayRuleRow
- * @property {string} key - Canonical rule key
- * @property {string} state - Active axis state
- * @property {string} title - Picked window's sample title, shown dimmed beside the app name
- * @property {boolean} isRecentlyImported - Whether imported in current session
- * @property {string} appName - Resolved application display name
- * @property {object|null} appInfo - Cached Gio.AppInfo descriptor
- */
 
 function _prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
     const rows = [];
@@ -260,7 +243,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
                 return;
             }
 
-            // Empty = cancelled pick or extension disabling — not an error.
+            // Empty = cancelled pick or extension disabling - not an error.
             if (!props || Object.keys(props).length === 0)
                 return;
 
@@ -594,7 +577,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         registerIconThemePath(iconTheme);
 
-        // Picker hides prefs window; reply may arrive after prefs closed — guard UI touches, and
+        // Picker hides prefs window; reply may arrive after prefs closed - guard UI touches, and
         // cancel the call itself so its closure stops holding this window's widgets.
         let windowAlive = true;
         const pickCancellable = new Gio.Cancellable();

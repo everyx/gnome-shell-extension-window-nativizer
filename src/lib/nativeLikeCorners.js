@@ -15,7 +15,6 @@ const ADWAITA_PROVIDERS = [
     'libhandy-1.so', // GTK3 predecessor (window.csd.unified)
 ];
 
-/** What a process maps, for the two questions asked of it. */
 const NO_PROVIDER = Object.freeze({adwaitaLook: false, gtk4: false});
 
 /**
@@ -28,9 +27,6 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000];
 /**
  * Reads /proc/<pid>/maps off the main loop: GIO runs a local file's async read in a worker thread,
  * and the synchronous API is what EGO-X-004 flags.
- * @param {number} pid
- * @param {(mapsText: string|null, error?: Error) => void} done
- * @param {Gio.Cancellable} cancellable
  */
 function readMaps(pid, done, cancellable) {
     Gio.File.new_for_path(`/proc/${pid}/maps`).load_contents_async(cancellable, (file, res) => {
@@ -43,17 +39,13 @@ function readMaps(pid, done, cancellable) {
     });
 }
 
-/**
- * @param {*} pid
- * @returns {boolean}
- */
 function isValidPid(pid) {
     return typeof pid === 'number' && Number.isInteger(pid) && pid > 0;
 }
 
 /**
- * @param {string} mapsText - Contents of /proc/pid/maps
- * @returns {{adwaitaLook: boolean, gtk4: boolean}} Whether the process maps an Adwaita provider,
+ * @param mapsText - Contents of /proc/pid/maps
+ * @returns Whether the process maps an Adwaita provider,
  *          and whether that provider is the GTK4 one
  */
 export function classifyProcess(mapsText) {
@@ -71,21 +63,14 @@ export function classifyProcess(mapsText) {
  */
 export class ProcessClassifier {
     /**
-     * @param {object} [options]
-     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [options.readMaps]
-     * @param {(delayMs: number, cb: () => void) => number} [options.timeoutAdd] - Timer seam for tests
-     * @param {(id: number) => void} [options.timeoutRemove] - Timer seam for tests
+     * @param [options.timeoutAdd] - Timer seam for tests
+     * @param [options.timeoutRemove] - Timer seam for tests
      */
     constructor(options = {}) {
-        /** @type {Map<number, {adwaitaLook: boolean, gtk4: boolean}>} */
         this._processCache = new Map();
-        /** @type {Map<number, {cancellable: Gio.Cancellable}>} */
         this._inFlight = new Map();
-        /** @type {Map<number, {id: number, reader: Function}>} */
         this._pendingRetries = new Map();
-        /** @type {Map<number, number>} */
         this._retryCounts = new Map();
-        /** @type {((pid: number) => void)|null} */
         this._onProcessKnown = null;
         this._destroyed = false;
         this._readMaps = options.readMaps ?? readMaps;
@@ -97,16 +82,12 @@ export class ProcessClassifier {
         this._timeoutRemove = options.timeoutRemove ?? (id => GLib.Source.remove(id));
     }
 
-    /** @returns {boolean} */
     get isDestroyed() {
         return this._destroyed;
     }
 
     /**
      * Initiates an async read of /proc/<pid>/maps if not already cached, in flight, or destroyed.
-     * @param {number} pid
-     * @param {object} [deps]
-     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} [deps.readMaps]
      */
     probeAdwaitaLook(pid, deps = {}) {
         if (this._destroyed || !isValidPid(pid))
@@ -118,10 +99,6 @@ export class ProcessClassifier {
         this._startRead(pid, deps.readMaps ?? this._readMaps);
     }
 
-    /**
-     * @param {number} pid
-     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} reader
-     */
     _startRead(pid, reader) {
         const entry = {cancellable: new Gio.Cancellable()};
         this._inFlight.set(pid, entry);
@@ -129,13 +106,10 @@ export class ProcessClassifier {
             if (this._inFlight.get(pid) !== entry)
                 return;
             this._inFlight.delete(pid);
-            // A failed read is "unknown", not a verdict. Caching NO_PROVIDER here answered a
-            // transient failure as "definitively not libadwaita, not GTK4" for the process's
-            // lifetime, so a GTK4/libadwaita window that recovered wore our clip and a 12px band
-            // over its native handle. Leave the cache empty and schedule a bounded retry: a
-            // window that becomes stable during the failure is still classified without waiting
-            // for another window event. The callback is not fired either - it announces a landed
-            // answer to re-decide the windows left alone, and a failure gives nothing to re-decide.
+            // A failed read is "unknown", not a verdict: caching it as definitely not libadwaita
+            // would last the process's lifetime, so a window that recovered would wear our clip and
+            // band. Leave the cache empty, schedule a bounded retry, and do not fire the callback -
+            // a failure gives nothing to re-decide.
             if (error || typeof mapsText !== 'string') {
                 this._scheduleRetry(pid, reader);
                 return;
@@ -161,8 +135,6 @@ export class ProcessClassifier {
      * that failed and stops after RETRY_DELAYS_MS.length attempts; an explicit probe starts a new
      * episode. forgetProcess() and destroy() cancel a pending retry so it cannot touch a forgotten
      * pid or a torn-down window.
-     * @param {number} pid
-     * @param {(pid: number, done: (mapsText: string|null, error?: Error) => void, cancellable: Gio.Cancellable) => void} reader
      */
     _scheduleRetry(pid, reader) {
         if (this._destroyed)
@@ -182,8 +154,6 @@ export class ProcessClassifier {
 
     /**
      * Returns true for Adwaita providers, false for non-Adwaita, or null while read is in flight.
-     * @param {number} pid
-     * @returns {boolean|null}
      */
     adwaitaLook(pid) {
         if (!isValidPid(pid))
@@ -196,8 +166,6 @@ export class ProcessClassifier {
      * Whether a process is a GTK4 client, i.e. whether it maps libadwaita. Same tri-state as
      * `adwaitaLook()`: null until the read lands, because only a landed answer may take a band
      * away from a window.
-     * @param {number} pid
-     * @returns {boolean|null}
      */
     hasGtk4Client(pid) {
         if (!isValidPid(pid))
@@ -208,7 +176,6 @@ export class ProcessClassifier {
 
     /**
      * Forgets a process from the cache and cancels any read in flight or retry pending.
-     * @param {number} pid
      */
     forgetProcess(pid) {
         const entry = this._inFlight.get(pid);
@@ -225,7 +192,6 @@ export class ProcessClassifier {
     /**
      * Registers the callback that fires when a process's answer lands, so the caller can re-decide
      * the windows it left alone. `null` unregisters; `destroy()` clears it.
-     * @param {((pid: number) => void)|null} cb
      */
     setOnProcessKnown(cb) {
         this._onProcessKnown = cb;

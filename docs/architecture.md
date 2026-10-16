@@ -82,6 +82,18 @@ the decoration hooks itself - is in `decoration-model.md`.
 The guard is set before the manager starts, so a failure after that point would otherwise wedge
 every later enable; the catch rolls the half-enabled state back through the normal teardown.
 
+A reconcile routes on one pure answer (`reconcileOutcome`, `lib/window.js`): keep the display while
+the reading could not be taken or the process classification is in flight, drop it when the rects
+were read but have no extent, apply otherwise. A null reading is "could not read this pass", not
+"window gone" - a window is torn down through the actor's `unmanaging`/`destroy` path, so a
+reconcile must never destroy a correct display over an unknown geometry.
+
+The inspector's D-Bus service is torn down explicitly. `Gio.DBusExportedObject.wrapJSObject`
+connects three handlers whose closures capture the service, forming a reference cycle GJS cannot
+collect: `unexport()` alone leaves the implementation, the service and the manager alive one set
+per enable/disable cycle, so teardown calls `GObject.signal_handlers_destroy` on the implementation
+to break it.
+
 ### Lifecycle ownership and invariants
 
 Lifecycles strictly govern session boundaries and per-window teardown:
