@@ -1,5 +1,126 @@
 # Changelog
 
+## [0.11.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.10.0...v0.11.0) (2026-10-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **inspector:** PickWindow now requires a boolean `debug` argument. D-Bus has no default arguments, so existing callers must pass `false` for the quiet interactive pick; a call with no argument is refused with InvalidArgs. There is no non-interactive diagnostics path any more.
+
+### Features
+
+* **inspector:** keep diagnostics behind the interactive PickWindow gesture ([b3855d1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b3855d1fb4ce878df2aa517970d71cc43eed889d))
+* **overview:** keep preview cards sharp while rounding and shadowing them ([86d2ba7](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/86d2ba7488f9f152e25dd47aa738a4c2f7f9414c))
+* **pick:** show the applied subpixel phase beside the mirrored one ([095ede7](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/095ede727e77dd817a9b840db69e943735c7f1e4))
+* **prefs:** add rules import and export via clipboard ([#5](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/5)) ([f5e833e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f5e833e0492c3d4b140636c8a1f65caf5f6ecaa0))
+* **prefs:** force corners on every window in the overview ([f3d2705](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f3d27052234789e0a74cb6a0c7acd986c9977240))
+
+
+### Bug Fixes
+
+* **classifier:** learn a window's pid when it arrives after tracking ([d85e6f5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d85e6f53b700dd0edd45568cf9d9a253966df0d6))
+* **classifier:** remember a window's pid instead of re-reading it at teardown ([64d1d2b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/64d1d2bc204c64978f948b1cab7afee373cfcf22))
+* **classifier:** retry a failed /proc read on a bounded backoff ([55ea58b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/55ea58b8bde8017177a9c9f854ba93b75cdf2ae7))
+* **classifier:** treat a failed maps read as unknown, not a verdict ([b1f83e1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b1f83e1c3ca76bcc13fda51bf85175178b9f36fd))
+* **clip:** compare the settle's pair as the one buffer box they are ([671e490](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/671e490f2a079db05fd389a54b7c1af230cb7d68))
+* **clip:** derive the flat cover from device pixels ([57cee81](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/57cee8102b265c52cd2106db4102e785120676d0)), closes [#129](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/129)
+* **clip:** re-pin from the effect's actor, not the target field ([a7389d7](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a7389d79d147dd63b5d44568a85985b75350112a))
+* **clip:** refuse a surface container whose box cannot be verified ([706d9dc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/706d9dc2f82122aa5593bf994e9e5d865bdad592))
+* **clip:** resolve a persistent body disagreement instead of holding forever ([40cae5c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/40cae5c9120265d13932becd402d7bd52aba0ba1))
+* **clip:** resolve the cut's body on the paint clock, not the pass clock ([85dc87f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/85dc87f022a675349f360007e2913980f34b7756))
+* **clip:** take the ring from the buffer that made it, not from a held value ([2936d03](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2936d034e5a4f3409af25434cbba3ffff1c652de))
+* **compat:** ask for a cursor by shape, only where the line has one ([7ac4c0d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7ac4c0d40105882fcaa913b00830c36dc668854c))
+* **compat:** give 46 a way to a Cogl context ([5f9472d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5f9472de4a418f5000dcd3b0025cab9bb4092640))
+* **decoration:** do not persist a substituted scale as the last good one ([e554cee](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e554cee0af23329788d82b03ca11c29ee3735b20))
+* **decoration:** guard the ring hold's reads ([3f28f3e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3f28f3ed403d19ee4a71722407d1d82e8936d414))
+* **decoration:** keep the corner state current on passes that draw nothing ([cd5b7d3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cd5b7d3f05cc1226d616bf72eaaa68011d823bed))
+* **display:** give an unreadable monitor scale its own unknown state ([621f85c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/621f85cb8dedd6bb30b208c6c9aff4add95bbbd3))
+* **effects:** align shadow shader cutout with GTK4 analytical box shadow ([baa0699](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/baa0699e22610ab24d6135ffe725d3fc5bbc8f92))
+* **effects:** cast the shadow by the body the clip draws ([4eb43ac](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4eb43acc77396c357b24bfd211ff8e603605c93c))
+* **effects:** compensate Mutter Wayland subpixel grid translation to eliminate edge gaps ([4cc166d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4cc166dcef2ed79ee87cb9c3d15f511ac290e493))
+* **effects:** crop a narrow window's shadow instead of scaling it ([9602c32](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9602c320fe37d5f8ef280f16e8eaed7844ca4047))
+* **effects:** cut the clip and the shadow on one subpixel phase ([6d17475](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6d1747533b9bc963543b5213d2fdb39391cd8c57)), closes [#117](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/117)
+* **effects:** cut the clip on the surface container, outside the FBO ([9373af9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9373af95b3575869034afc54ec84d827f50b2143)), closes [#117](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/117)
+* **effects:** decouple straight edge clipping from corner AA to prevent dragging blur ([0021992](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/00219926de8853a543ccfcdea0aef1b33287687e))
+* **effects:** derive the phase strategy and the shadow's phase from the clip target ([a0ffc1c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a0ffc1c48e8c568cd96d7f795d724285ce6cad7c)), closes [#117](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/117) [#119](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/119)
+* **effects:** eliminate overview edge aliasing and preserve mipmap LOD derivatives ([b1d28d3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b1d28d3904aba0096d713e0361eddfa08c5a2ced))
+* **effects:** excise flat window client borders with safe insets to prevent corner seams ([c826e35](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c826e35bbccb66909fddda74476576568db9d463))
+* **effects:** extend corner slice to cover Gaussian optical decay ([428676d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/428676d0023fd05fc06e530130f8dd8af08dfc7c))
+* **effects:** extract Gaussian constant SQRT1_2 from upstream common.glsl ([9cddd7c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9cddd7c009e34211ee15bb6bd01920785292564c))
+* **effects:** isolate CSD stroke normal sampling push to prevent ringless edge flicker ([126f636](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/126f636be06ca05e9fc64012f2cb2c99036947a5))
+* **effects:** land the shadow cutout on the scaled window's visual box ([20ba273](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/20ba273589b0eec6a8f04a74ede5405acf7e3c64))
+* **effects:** probe the mask by capability and never re-probe a masked window ([13009cc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/13009cccfa526edb139731631a775be8d9c629ec))
+* **effects:** push texture sampling inward along boundary normal to eliminate fractional scaling dark seams ([83b880a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/83b880aa69155f5b6d848897efe7b30f755e83b4))
+* **effects:** report a repeated shadow-bake failure once per episode ([e2f5a50](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e2f5a50e49a8084024ff2a09f2e3ff5d9183af13))
+* **effects:** snap buffer body margins symmetrically across device grid and align body edge ([dc2d19c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dc2d19c8520f115bdfa57058d68100ec9fec8c86))
+* **effects:** stop rewriting the shadow's translation when it did not move ([bd58700](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bd58700dc10b4ef4927e4f7b92feeb0034d641f1))
+* **effects:** suspend the clip on a degenerate target instead of painting nothing ([989c200](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/989c200fb54a7b4f76cddb2f9a357a010a9e548f))
+* **effects:** take the window actor as the body authority ([f26bc73](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f26bc73e476e4e53f6cfe766582e732b3955c38a)), closes [#121](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/121)
+* **hooks:** run the performance check on push, and fix the band guard it exposed ([8acb3e5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8acb3e5e344167d585c53d2fa0a287df8f2a4a94))
+* **lib:** choose the clip target by one verified rule ([bb23925](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bb23925f8f9e41bc8fc05071f5fe501423d7dffb)), closes [#119](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/119)
+* **lib:** derive the shadow slice span from its UV span ([48a7c3e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/48a7c3eac4146a80249d81ef55f4ec6c571c7b7b)), closes [#119](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/119)
+* **lib:** read the declared ring one way ([c1d8b69](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c1d8b69f99e22db8d16d5e8274da7abfa4f2ca02))
+* **overview:** do not let an unreadable frame rect escape the shadow build ([891631b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/891631bd99c60dff416254fb36fe24ce79fc8b2d))
+* **overview:** hold the corner and shadow work on the window, not a card ([de82fe4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/de82fe4764395711a7707accb0405fb72d1deacf)), closes [#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)
+* **overview:** keep the mask verdict across drop() ([137e630](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/137e63075a19fcc86b6700dd877a44849669f5ce))
+* **overview:** key the bypass and the shadow clones on their actor ([51008ca](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/51008caaa9aa28baedae655288011fe11f1fec35))
+* **overview:** mask every Wayland window in the overview ([8962245](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/89622455524f2e2d79b0433c9f8bf27472f6c206))
+* **overview:** never re-probe a mask the overview has already moved ([cbfc125](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cbfc125553fb356a50f3a157adbd3e0b6d2900d7))
+* **overview:** never round a window outside the overview ([afd131b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/afd131b947c41e06c350fd2bbd04b166b651088e))
+* **overview:** re-probe when the mask readback cannot tell, and back it by the audit ([7e1f065](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7e1f065d2a86e0603f657ab67411543f4f822f11))
+* **overview:** refuse an unreadable client type instead of masking it ([2193d78](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2193d78d7164d97195f9127e0ee82244c12423f0))
+* **overview:** settle the overview mode once and keep the clip in step ([0d827b5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0d827b539cf744b5b553cdb4b58d2008c7dd1729))
+* **overview:** withhold the mask verdict until the draw target is allocated ([e1c5bef](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e1c5bef57b223ab33e09bf545ff2527c7bd70253)), closes [#121](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/121)
+* **phase:** answer null, not a zero offset, when the read fails ([7bbe680](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7bbe680e5f9a6498e01087690d9b5c7ce159b3a0))
+* **phase:** find the surface container past Mutter's fullscreen backing ([f9dc5ae](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f9dc5aec872400918157ce838b31c463a0dbbf7c))
+* **phase:** resolve the surface container with the clip's St ([9f84d31](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9f84d317d236a25891188aca449e67c04ffaeb3b))
+* **platform:** honor the compositor grab result and boolean allows_resize ([1340356](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1340356aed63531ba189fe1941647dce06f40d2e))
+* **platform:** state the ROUND snap deviation instead of claiming GSK parity ([f842afc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f842afc67eb4e4267d8dc6a8f30edbbba0d5f2cc))
+* **prefs:** say which windows the overview corners option is about ([0da8c63](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0da8c6320eb90927a69a40290f0527e0f620022d))
+* **prefs:** show a failed import apply instead of closing over it ([2fe9ed9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2fe9ed90002a3aba2162d95e906b921c0ce179ac))
+* **reconcile:** keep the decoration while the geometry cannot be read ([0312dee](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0312deeccbf7665a3daf43807d1d7b8647724185))
+* **resize-band:** drop the band when the monitor bounds are unknown ([cf36cb3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cf36cb3bf3b7a9f913c22364eb8c8be68a405991))
+* **shadow:** derive the body from the clip's authority ([d9fc7dd](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d9fc7dd690677811ce51c025cd7d4b44605efab9))
+* **shadow:** relayout when the clip target's read changes in place ([deea5ef](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/deea5ef9ce751658522e838f03bfb566e41d9101)), closes [#126](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/126)
+* **tools:** stop the nested session by pid, not the shared display name ([26e4f65](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/26e4f6563b0f2990c95cea4d744ebf52021edec9))
+* **window:** distinguish an unreadable monitor from a non-overlapping one ([9f98fd5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9f98fd517ac1356d1ea61ff0bd20ff3ba85ffa20))
+* **window:** surface an unreadable monitor count or scale as unknown ([47efd19](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/47efd199bdd66d6dfb208cc2050f539ae1d85e03))
+
+
+### Performance
+
+* **decoration:** resolve the MetaWindow once per actor ([714a428](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/714a428dee521e5d6354a03cdfefdb1faf10cbed))
+* **phase:** stop re-scanning the monitors on every paint ([cf02cfe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cf02cfe1b83caaa23935a99829f3783b76a079aa))
+* **shadow:** stop rebuilding the slice table when only the cast moved ([62a7a72](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/62a7a7267f028dd10444b9f9d5ee9f1b7ebda837))
+* **tools:** budget the resize CPU delta against its own baseline ([84c49e8](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/84c49e890a654eae53588cc3cab94aa59c320ff1))
+* **tools:** take the stress ratio per round, then the median ([12a56b0](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/12a56b0f80485be15cd8d1b8612ef624a3370065))
+
+
+### Documentation
+
+* align documentation and comments with the code ([0faea4d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0faea4d96656fb61f7ea431851079d4560d289d0))
+* align documentation with symmetric physical margin snapping ([2a6bc32](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2a6bc3296eb1eb77b4d42a6e56a8d0b57d4b3bbe))
+* call the X11 clients XWayland, and name the overview corners capability ([437912e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/437912e9e82c1f32ccd8dfb029fd4851466c56e9))
+* **clip:** record why an unreadable window size releases the hold ([cba7539](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/cba7539d0c2e92ed86e7b6bd8b102ec470ed1f01))
+* **decoration:** record the principles the decisions are made under ([db19548](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/db19548d924c542720b1c6fc327de6208d18e432))
+* **decoration:** record the two clocks, the five rules, and who owns a reading ([9ef2cbc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9ef2cbc2ab6418e7b08d4939f133010af23640fc))
+* **development:** document the session queue and its timeout ([3ca0069](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3ca00691770f94aff3f398b8270c4f2af777046e))
+* **development:** record who a log line is for ([bf231e3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bf231e3eaf80d51f9c436175e48a3390359d0b47))
+* document straight edge AA decoupling and safe inset alignment ([90867c9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/90867c9249133620085b4314c9dbaca4463b3202))
+* eliminate circular doc pointers and greeter comments ([62c7138](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/62c7138bc337de90a8ec281da718da57ab56186d))
+* generalise the clip/shadow edge rules into one section ([76e3dae](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/76e3dae7c22af75b6f555754410e2f4888880bff)), closes [#117](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/117) [#119](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/119)
+* give each fact one home, and fix the drift the code left behind ([d173e58](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d173e5845584742816ab978d9a7ee7ef7234c11c))
+* guard the phase-freshness ordering assumption instead of changing it ([fdf8972](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fdf897201c32df7e25c8fff7a93a0d546ff59597))
+* introduce patched mutter package in Going Further ([a6b4482](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a6b4482fc8c2eefe4130f395e4abb66bbd602b1c))
+* **preview:** update the comparison asset, and store it losslessly ([4bc5039](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4bc5039875f10d0eacb3b8434affba8ffd1ffdf3))
+* prune implementation detail from the design documents ([a927b46](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a927b46862e3daa5340b62db34a903b9ff1f1070))
+* record one body authority and the container identification rule ([8b63f59](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8b63f5991d148f34ccf4d494dc74266dfc6d1ab8))
+* record the overview probe's NULL causes and the rules they earned ([fbfba2a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fbfba2af557c2681a481bbb656592a243255acfe))
+* **rule-model:** the resize axis carries the tiled ring ([7167abe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7167abeb28aa521a76e46d590652e3d518407187))
+* say what a window capture of a clipped window contains ([22eb7de](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/22eb7de9f74e359cbea454c152683059c6d214e2))
+* state the straight-edge guarantee and give the alignment fact one home ([5dfd8c5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5dfd8c55fe8a7d51352893772c013e04cb0e74e3))
+* synchronize documentation and toolchains with codebase reality ([8642bfa](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8642bfa8cf3092b9122aaf53e496f5867a1cad35))
+
 ## [0.10.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.9.0...v0.10.0) (2026-10-03)
 
 
