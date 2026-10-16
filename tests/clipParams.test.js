@@ -226,8 +226,9 @@ describe('settleClipBody (do not act on an unsettled target/actor pair)', () => 
         expect(settled.unsettled).toBeFalse();
         expect(settled.body).toEqual(buffer);
 
-        // A stale half - one reader not yet written - still holds, ringed or not.
-        const held = settleClipBody(buffer, frame, buffer, buffer, frame, frame);
+        // A stale half - one reader not yet written to the new buffer - still holds: the stale
+        // buffer read and the frame both differ from the window's own frame, so neither is confirmed.
+        const held = settleClipBody(buffer, {width: 848, height: 648}, buffer, buffer, frame, frame);
         expect(held.unsettled).toBeTrue();
         expect(held.body).toEqual(buffer);
     });
@@ -272,16 +273,33 @@ describe('settleClipBody (do not act on an unsettled target/actor pair)', () => 
         expect(resized.body).toEqual({width: 800, height: 600});
     });
 
-    it('keeps the container authority in steady state when the window did not resize', () => {
-        // The same 2px disagreement with the window's own size standing still is the focus
-        // hand-off: there is no fresh read to trust, so the authority stays the container and the
-        // body is held rather than following the window actor. The new branch must not leak here.
+    it('resolves a persistent pair disagreement to the read the window own size confirms', () => {
+        // First pass: the window's own size is unknown, so nothing confirms either read and the
+        // previous body is held.
         const held = settleClipBody({width: 798, height: 600}, {width: 800, height: 600},
-            {width: 798, height: 600}, {width: 798, height: 600},
-            {width: 800, height: 600}, {width: 800, height: 600});
+            {width: 798, height: 600});
         expect(held.unsettled).toBeTrue();
-        expect(held.authority).toEqual({width: 798, height: 600});
+        expect(held.pairDisagreementStrikes).toBe(1);
+        // The window's own size is now readable and matches the actor: that is the read it
+        // confirms, so the actor is acted on instead of holding the stale container again.
+        const settled = settleClipBody({width: 798, height: 600}, {width: 800, height: 600},
+            held.body, held.authority, {width: 800, height: 600}, {width: 800, height: 600},
+            BODY_SETTLE_TOLERANCE, held.pairDisagreementStrikes);
+        expect(settled.unsettled).toBeFalse();
+        expect(settled.body).toEqual({width: 800, height: 600});
+    });
+
+    it('bounds the pair hold: an unknown window size prefers the actor after the strike count', () => {
+        // Neither read can be confirmed because the window's own size is unreadable, so the first
+        // pass holds. The second counts the second consecutive disagreement and falls back to the
+        // window actor rather than holding forever.
+        const held = settleClipBody({width: 798, height: 600}, {width: 800, height: 600});
+        expect(held.unsettled).toBeTrue();
         expect(held.body).toEqual({width: 798, height: 600});
+        const settled = settleClipBody({width: 798, height: 600}, {width: 800, height: 600},
+            held.body, held.authority, null, null, BODY_SETTLE_TOLERANCE, held.pairDisagreementStrikes);
+        expect(settled.unsettled).toBeFalse();
+        expect(settled.body).toEqual({width: 800, height: 600});
     });
 
     it('does not hold a body change below the tolerance', () => {
@@ -356,11 +374,11 @@ describe('resolvePaintBody (the paint clock)', () => {
         expect(settled.unsettled).toBeFalse();
     });
 
-    it('holds the previous body on an unsettled pair while the window size stands still', () => {
+    it('resolves an unsettled pair to the read the window own size confirms', () => {
         const settled = resolvePaintBody(size(798), size(800), size(800), plan());
         expect(settled.authority).toEqual(size(798));
         expect(settled.body).toEqual(size(800));
-        expect(settled.unsettled).toBeTrue();
+        expect(settled.unsettled).toBeFalse();
     });
 
     it('holds the previous body when it moves between passes with the window size unchanged', () => {
