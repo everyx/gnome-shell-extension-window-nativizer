@@ -32,6 +32,19 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     });
     toolbarView.add_top_bar(headerBar);
 
+    const statusLabel = new Gtk.Label({
+        label: '',
+        css_classes: ['error'],
+        wrap: true,
+        xalign: 0,
+        visible: false,
+        margin_top: 8,
+        margin_bottom: 8,
+        margin_start: 12,
+        margin_end: 12,
+    });
+    toolbarView.add_bottom_bar(statusLabel);
+
     const cancelButton = new Gtk.Button({
         label: _('Cancel'),
     });
@@ -211,12 +224,16 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
         const resolutions = {};
         for (const ctrl of rowControllers)
             resolutions[ctrl.key] = ctrl.getChoice();
-        dialog.close();
+        // Apply before closing: a rejected apply must leave the dialog open with the error showing.
         try {
             onApply(resolutions);
         } catch (err) {
+            statusLabel.set_label(_('Could not apply the changes. Review your selections and try again.'));
+            statusLabel.set_visible(true);
             console.error('Failed to apply conflict resolutions:', err);
+            return;
         }
+        dialog.close();
     });
 
     dialog.present();
