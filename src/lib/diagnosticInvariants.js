@@ -126,6 +126,15 @@ export function overviewMaskRefusalWarning(reason, label = windowIdentityLabel()
     return `${PREFIX} Overview mask not installed for ${label} although the window was ready: ${reason}`;
 }
 
+/**
+ * Builds the WARNING text for a shadow bake whose framebuffer could not be allocated. The bake
+ * retries on the next paint, so a persistent shortage is one line per episode rather than one per
+ * frame.
+ */
+export function shadowBakeFailureWarning(buffer) {
+    return `${PREFIX} Could not allocate a ${buffer}x${buffer} shadow buffer`;
+}
+
 function positiveRect(rect) {
     return Boolean(rect) &&
         Number.isFinite(rect.width) && Number.isFinite(rect.height) &&
