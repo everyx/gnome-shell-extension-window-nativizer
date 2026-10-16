@@ -34,7 +34,8 @@ import {
     findMetaWindow,
     getSurfaceContainer,
     getWindowSubpixelOffset,
-    getAppliedSubpixelPhase
+    getAppliedSubpixelPhase,
+    invalidateMonitorCache
 } from '../src/platform/window.js';
 import {
     getDisplay,
@@ -1138,6 +1139,85 @@ describe('platform', () => {
                 y: 0,
             };
             expect(getWindowSubpixelOffset(waylandWin(throwingActor))).toBeNull();
+        });
+
+        describe('monitor resolution cache', () => {
+            beforeEach(() => invalidateMonitorCache());
+            afterEach(() => invalidateMonitorCache());
+
+            const countingDisplay = monitors => {
+                const reads = {count: 0, geometry: 0, scale: 0};
+                const display = {
+                    get_n_monitors: () => { reads.count++; return monitors.length; },
+                    get_monitor_geometry: i => { reads.geometry++; return monitors[i].geometry; },
+                    get_monitor_scale: i => { reads.scale++; return monitors[i].scale; },
+                };
+                return {reads, display};
+            };
+
+            it('does not re-read the monitor list while the topology and frame hold', () => {
+                const {reads, display} = countingDisplay([
+                    {scale: 1.25, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+                ]);
+                globalThis.global = {display};
+                const win = waylandWin({x: 241, y: 200});
+                const first = getWindowSubpixelOffset(win);
+                const afterFirst = {...reads};
+                const second = getWindowSubpixelOffset(win);
+                expect(second).toEqual(first);
+                expect(reads).toEqual(afterFirst);
+            });
+
+            it('reuses the resolved index while the frame stays on the same monitor', () => {
+                const {reads, display} = countingDisplay([
+                    {scale: 1.25, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+                ]);
+                globalThis.global = {display};
+                let frame = {x: 0, y: 0, width: 800, height: 600};
+                const win = {
+                    get_client_type: () => 0,
+                    get_compositor_private: () => ({x: 241, y: 200}),
+                    get_frame_rect: () => frame,
+                };
+                getWindowSubpixelOffset(win);
+                const afterFirst = {...reads};
+                frame = {x: 20, y: 30, width: 800, height: 600};
+                expect(getWindowSubpixelOffset(win).x).toBeCloseTo(-0.2, 6);
+                expect(reads).toEqual(afterFirst);
+            });
+
+            it('re-resolves when the frame leaves the resolved monitor', () => {
+                const {reads, display} = countingDisplay([
+                    {scale: 1.0, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+                    {scale: 1.5, geometry: {x: 1920, y: 0, width: 1920, height: 1080}},
+                ]);
+                globalThis.global = {display};
+                let frame = {x: 100, y: 100, width: 800, height: 600};
+                const win = {
+                    get_client_type: () => 0,
+                    get_compositor_private: () => ({x: 1921, y: 0}),
+                    get_frame_rect: () => frame,
+                };
+                expect(getWindowSubpixelOffset(win)).toEqual({x: 0, y: 0});
+                const afterFirst = {...reads};
+                frame = {x: 1900, y: 0, width: 200, height: 100};
+                expect(getWindowSubpixelOffset(win).x).toBeCloseTo(1 / 3, 6);
+                expect(reads).toEqual(afterFirst);
+            });
+
+            it('re-reads the monitor list after the topology signal', () => {
+                const {reads, display} = countingDisplay([
+                    {scale: 1.25, geometry: {x: 0, y: 0, width: 1920, height: 1080}},
+                ]);
+                globalThis.global = {display};
+                const win = waylandWin({x: 241, y: 200});
+                getWindowSubpixelOffset(win);
+                const afterFirst = {...reads};
+                invalidateMonitorCache();
+                getWindowSubpixelOffset(win);
+                expect(reads.geometry).toBeGreaterThan(afterFirst.geometry);
+                expect(reads.count).toBeGreaterThan(afterFirst.count);
+            });
         });
     });
 

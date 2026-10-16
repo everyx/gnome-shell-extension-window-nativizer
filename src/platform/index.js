@@ -28,7 +28,8 @@ export {
     getWindowFromActor,
     findMetaWindow,
     getWindowSubpixelOffset,
-    getAppliedSubpixelPhase
+    getAppliedSubpixelPhase,
+    invalidateMonitorCache
 } from './window.js';
 
 export {
