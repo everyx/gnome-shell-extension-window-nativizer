@@ -273,7 +273,9 @@ export class WindowDecoration {
             buffer.x !== this._lastBuffer.x || buffer.y !== this._lastBuffer.y ||
             buffer.width !== this._lastBuffer.width || buffer.height !== this._lastBuffer.height;
         let ringNow = rawInsets;
-        if (!bufferMoved && this._lastRing) {
+        // A null ring is the frame-not-inside-buffer case, not a moved ring: it cannot be compared,
+        // so the hold is skipped and the previous ring is not resurrected from an unreadable pass.
+        if (!bufferMoved && this._lastRing && rawInsets) {
             const drifted = Math.abs((this._lastRing.left ?? 0) - (rawInsets.left ?? 0)) >= 1 ||
                 Math.abs((this._lastRing.top ?? 0) - (rawInsets.top ?? 0)) >= 1 ||
                 Math.abs((this._lastRing.right ?? 0) - (rawInsets.right ?? 0)) >= 1 ||
