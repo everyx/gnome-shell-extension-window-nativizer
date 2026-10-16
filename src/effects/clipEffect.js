@@ -139,10 +139,6 @@ export const RoundedClipEffect = GObject.registerClass({
         // next reconcile re-enables the effect (WindowDecoration.setOverviewMode); a valid frame
         // clears this again.
         this._suspended = false;
-        // True while a deferred disable is queued. Disabling a Clutter.ActorMeta during its
-        // actor's own paint trips Clutter's `!CLUTTER_ACTOR_IN_PAINT` check, so the suspend lands
-        // on the idle that follows the paint.
-        this._suspendPending = false;
         // The target's phase strategy: the Wayland surface container carries the phase in its
         // own transform (the default), every fallback target does not. setPhaseInTransform()
         // flips it for the fallback; see resolveClipTarget in lib/clipTarget.js.
@@ -365,9 +361,9 @@ export const RoundedClipEffect = GObject.registerClass({
         if (this._suspended)
             return;
         this._suspended = true;
-        this._suspendPending = true;
+        // Disabling a Clutter.ActorMeta during its actor's own paint trips Clutter's
+        // `!CLUTTER_ACTOR_IN_PAINT` check, so the suspend lands on the idle that follows it.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._suspendPending = false;
             // A valid frame can have landed between the paint that queued this and the idle; only
             // disable while the target is still degenerate.
             if (this._suspended)
