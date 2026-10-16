@@ -12,7 +12,7 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
-import {findMetaWindow, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
+import {findMetaWindowCached, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
 
@@ -271,7 +271,7 @@ export const RoundedClipEffect = GObject.registerClass({
         // window has a body: a surface container's allocation can read 0 while its child still
         // paints, so a non-positive target read falls back to the window actor rather than
         // suspending. The pair also feeds the settle below.
-        const win = findMetaWindow(actor);
+        const win = findMetaWindowCached(actor);
         const windowActorSize = readActorExtent(getWindowActor(win));
         const size = isPaintableFrame(targetSize)
             ? targetSize
