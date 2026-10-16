@@ -10,7 +10,7 @@ import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
 import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
-import {setActorBox, snapSliceRects} from '../lib/snap.js';
+import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
 import {findMetaWindow, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
@@ -366,11 +366,7 @@ export const ShadowActor = GObject.registerClass({
         // allocates nothing.
         if (slicesChanged || entry.cast !== style.cast) {
             // Snap in actor-local space to keep cutlines invariant during window drag.
-            const rects = snapSliceRects(style.cast, style.corner, scale);
-            for (let i = 0; i < entry.boxes.length; i++) {
-                const rect = rects[i];
-                setActorBox(entry.boxes[i], rect.x1, rect.y1, rect.x2, rect.y2);
-            }
+            snapSliceBoxesInto(entry.boxes, style.cast, style.corner, scale);
             entry.cast = style.cast;
         }
 

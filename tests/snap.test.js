@@ -9,6 +9,7 @@ import {
     snapCoordToGrid,
     snapRectToGrid,
     snapSliceBoxesInto,
+    snapSliceRects,
 } from '../src/lib/snap.js';
 import {
     findMetaWindow,
@@ -274,6 +275,29 @@ describe('snapSliceBoxes', () => {
         // The span is the corner reach itself, so the corner texture is not rescaled: 30 at
         // every scale. Snapping the inner cutline on its own used to yield 29.6 here.
         expect(existingBoxes[0].width).toBeCloseTo(30.0, 4);
+    });
+
+    it('writes the same coordinates as snapSliceRects across the input matrix', () => {
+        // The box writer computes straight into the actor boxes; this pins it value-for-value to the
+        // rect form so the two cannot drift while one is the hot path and one is the readable form.
+        const casts = [
+            {x: 10, y: 20, width: 500, height: 300},
+            {x: 12.3, y: 18.7, width: 456.7, height: 289.4},
+            {x: 1000.333, y: 0, width: 26.19, height: 100},
+            {x: -300, y: -300, width: -50, height: 0},
+        ];
+        for (const cast of casts) {
+            for (const scale of [1.0, 1.25, 4 / 3, 1.75, 2.0]) {
+                const boxes = snapSliceBoxes(cast, 45, scale);
+                const rects = snapSliceRects(cast, 45, scale);
+                for (let i = 0; i < rects.length; i++) {
+                    expect(boxes[i].x1).toBe(rects[i].x1);
+                    expect(boxes[i].y1).toBe(rects[i].y1);
+                    expect(boxes[i].x2).toBe(rects[i].x2);
+                    expect(boxes[i].y2).toBe(rects[i].y2);
+                }
+            }
+        }
     });
 
     it('prefers box.init when available to eliminate 32-bit float rounding seams', () => {

@@ -326,6 +326,26 @@ describe('shadowLayout', () => {
         expect(second.slices).toEqual(shadowSlices(shadowGeometry(12), second.cast.width, second.cast.height));
     });
 
+    it('reuses the slice table when only the cast origin moves', () => {
+        // The origin slides without a resize: both insets keep the same body width, so the slice
+        // texture and corner are still correct and only the snapped positions change.
+        const style = {radius: 12};
+        const actor = actorFor(400, 300);
+        const rightRing = {left: 0, top: 0, right: 10, bottom: 0};
+        const leftRing = {left: 10, top: 0, right: 0, bottom: 0};
+        const first = shadowLayout(style, actor, rightRing, 1);
+        style.cast = Object.freeze(first.cast);
+        style.slices = first.slices;
+        style.corner = first.corner;
+
+        const second = shadowLayout(style, actor, leftRing, 1);
+        expect(second.castChanged).toBe(true);
+        expect(second.cast.width).toBe(first.cast.width);
+        expect(second.cast.x).not.toBe(first.cast.x);
+        expect(second.slices).toBe(first.slices);
+        expect(second.corner).toBe(first.corner);
+    });
+
 });
 
 describe('shadow body authority (one body for the clip and the shadow)', () => {
