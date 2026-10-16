@@ -107,10 +107,10 @@ vendored, so the check cannot assert it; `meta_window_find_highest_scale_monitor
 
 When bumping Mutter, re-read both functions and confirm the scan in
 `resolveHighestScaleMonitorIndex` still matches: the same positive-area intersection test, the same
-"highest scale wins" pick (a tie keeps the earlier index), and -1 when no monitor intersects or the
-frame is unreadable. The rule is not machine-guarded because that file is not vendored, so this is a
-manual step by necessity; `docs/decoration-model.md` records the same re-check at the phase mirror's
-reopen condition.
+"highest scale wins" pick (a tie keeps the earlier index), and -1 when a readable frame intersects
+no monitor, with null when the frame itself cannot be read. The rule is not machine-guarded because
+that file is not vendored, so this is a manual step by necessity; `docs/decoration-model.md` records
+the same re-check at the phase mirror's reopen condition.
 
 The pick reply makes the gap observable: on a mixed-DPI multi-monitor machine with the extension
 enabled, pick a decorated Wayland window interactively with `debug` true (`PickWindow`;

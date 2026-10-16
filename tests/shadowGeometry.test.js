@@ -139,6 +139,9 @@ describe('clip cut and shadow cutout share one physical edge', () => {
             get_client_type: () => 0, // WAYLAND
             get_monitor: () => 0,
             get_compositor_private: () => actor,
+            // A readable frame, so the scan answers a phase instead of treating the frame as
+            // unreadable. Without it the walk only ever saw the mirror's unknown answer.
+            get_frame_rect: () => ({x: 0, y: 0, width: 1920, height: 1080}),
         };
         globalThis.global = {
             display: {

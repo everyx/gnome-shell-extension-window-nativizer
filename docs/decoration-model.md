@@ -705,10 +705,11 @@ also re-checked by hand on a Mutter bump: re-read
 `meta_window_find_highest_scale_monitor_from_frame_rect` (`window.c`) and that manager function and
 confirm the scan still matches, as `docs/shell-compatibility.md` records.
 
-**What the mirror's monitor scan answers, and why.** `resolveHighestScaleMonitorIndex` returns `-1`
-for a degenerate frame - unreadable, or a width or height that is not positive - which the caller
-maps to a zero offset; a readable frame that overlaps no monitor was already `-1` for the same
-reason. It used to return `win.get_monitor()`, the main monitor, as a third rule on top of upstream's
+**What the mirror's monitor scan answers, and why.** `resolveHighestScaleMonitorIndex` answers null
+for a degenerate frame - unreadable, or a width or height that is not positive - so the caller keeps
+its last good phase instead of reading a fabricated zero. A readable frame that overlaps no monitor
+is the one decided `-1`, which the caller maps to a zero offset. It used to return
+`win.get_monitor()`, the main monitor, as a third rule on top of upstream's
 two, but Mutter's own two writers of the cached pointer disagree: `meta_window_constructed` stores
 the current logical monitor (`window.c:1250-1260`) while `meta_window_update_monitor` stores
 `window->monitor`, the last resolved main monitor (`window.c:4195-4199`).
