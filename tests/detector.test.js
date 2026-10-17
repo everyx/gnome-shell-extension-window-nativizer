@@ -6,7 +6,7 @@
 import {WindowType} from '../src/lib/mutterRules.generated.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {
-    HIGHLIGHT_BORDER_WIDTH,
+    HIGHLIGHT_BORDER_WIDTH, VISUAL_MIN_DECORABLE_SIZE,
     computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
     isWindowTiled, isDecoratableWindowType, checkDecorationEligibility, inferDecorationBaseline,
     evaluateWindowActions, suggestedRuleState, suggestedRuleWouldChange,
@@ -96,8 +96,8 @@ describe('isDecoratableWindowType', () => {
 });
 
 describe('checkDecorationEligibility', () => {
-    // These are the structural gates: facts about the window that a user rule
-    // must never be able to override.
+    // The structural gates and the geometric floor are the facts a user rule must never be
+    // able to override; the visual floor below is a reading, and carries the rule exit.
     const base = {
         windowType: WindowType.NORMAL,
         isMaximized: false,
@@ -135,6 +135,50 @@ describe('checkDecorationEligibility', () => {
         const r = checkDecorationEligibility({...base, frameWidth: 1, frameHeight: 1});
         expect(r.eligible).toBeFalse();
         expect(r.reason).toBe('too-small(1x1)');
+    });
+
+    it('the visual floor reads the latched initial size: 38 is rejected, 39 is not', () => {
+        // The two sizes are separate sources: the window was first decided at 38 and is 38
+        // now, so both floors read 38 here. VISUAL_MIN_DECORABLE_SIZE is 38.
+        expect(VISUAL_MIN_DECORABLE_SIZE).toBe(38);
+        expect(checkDecorationEligibility({
+            ...base, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 38, initialFrameHeight: 38,
+        })).toEqual({eligible: false, reason: 'too-small-for-corners(38x38)', reversible: true});
+        expect(checkDecorationEligibility({
+            ...base, frameWidth: 39, frameHeight: 39,
+            initialFrameWidth: 39, initialFrameHeight: 39,
+        })).toEqual({eligible: true, reason: ''});
+    });
+
+    it('an unlatched initial size is not a size: the visual floor abstains', () => {
+        // Null is "not read yet" and 0 is degenerate; neither is judged, so both passes are
+        // eligible on the geometric floor alone and the caller keeps the latch open.
+        expect(checkDecorationEligibility({...base, frameWidth: 38, frameHeight: 38}).eligible).toBeTrue();
+        expect(checkDecorationEligibility({
+            ...base, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 0, initialFrameHeight: 0,
+        }).eligible).toBeTrue();
+        expect(checkDecorationEligibility({
+            ...base, frameWidth: 800, frameHeight: 600,
+            initialFrameWidth: Number.NaN, initialFrameHeight: Number.NaN,
+        }).eligible).toBeTrue();
+    });
+
+    it('the geometric floor is a capability reading the current size, not the initial one', () => {
+        // The initial size is comfortable, but the frame is 29 right now: no rounded rect fits
+        // at that size, and no rule reaches a capability.
+        const r = checkDecorationEligibility({
+            ...base, frameWidth: 29, frameHeight: 29,
+            initialFrameWidth: 800, initialFrameHeight: 600,
+        });
+        expect(r).toEqual({eligible: false, reason: 'too-small(29x29)'});
+    });
+
+    it('the visual floor is derived from the style, not written down', () => {
+        const reach = Math.max(...ADWAITA_STYLE.window.shadows.map(({blur, spread}) => blur + spread));
+        expect(VISUAL_MIN_DECORABLE_SIZE)
+            .toBe(Math.max(2.5 * ADWAITA_STYLE.window.radius, 2 * reach));
     });
 
     it('non-normal window type -> ineligible and names the offending type', () => {
@@ -375,9 +419,9 @@ describe('evaluateWindowActions', () => {
     });
 
     it('a window too small for corners keeps its band: the axes are independent', () => {
-        // 25px sits below MIN_DECORABLE_SIZE (30) but above MIN_BAND_WINDOW (24), so
-        // decoration is off while the band still fits - the resize axis must not inherit
-        // the decoration gate.
+        // 25px sits below the geometric floor MIN_DECORABLE_SIZE (30) but above
+        // MIN_BAND_WINDOW (24), so decoration is off while the band still fits - the resize
+        // axis must not inherit the decoration gate, and no latch was read here either.
         const res = evaluateWindowActions({
             ...baseWin,
             bufferWidth: 25, bufferHeight: 300, frameWidth: 25, frameHeight: 300,
@@ -386,6 +430,74 @@ describe('evaluateWindowActions', () => {
         expect(res.drawClip).toBeFalse();
         expect(res.drawResize).toBeTrue();
         expect(res.reason).toBe('too-small(25x300)');
+    });
+
+    it('the visual floor reads the initial size, the geometric floor the size right now', () => {
+        // The pair this design turns on. First decided at 40, then dragged to 38: still above
+        // the geometric floor, and the visual judgment was made on a size the user never chose,
+        // so the decoration stays through the whole drag.
+        const dragged = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 38, bufferHeight: 38, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 40, initialFrameHeight: 40,
+        });
+        expect(dragged.drawClip).toBeTrue();
+        expect(dragged.drawShadow).toBeTrue();
+
+        // Dragged one more pixel past the geometric floor: no rounded rect fits at 29, and that
+        // is a fact about the frame right now, so the decoration goes for as long as it is there.
+        const under = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 29, bufferHeight: 29, frameWidth: 29, frameHeight: 29,
+            initialFrameWidth: 40, initialFrameHeight: 40,
+        });
+        expect(under.drawClip).toBeFalse();
+        expect(under.reason).toBe('too-small(29x29)');
+
+        // And the floor no longer asks whether the user may resize the window: a resizable one
+        // first decided at 38 is abstained from exactly like a fixed-size one.
+        const resizable = evaluateWindowActions({
+            ...baseWin, allowsResize: true,
+            bufferWidth: 38, bufferHeight: 38, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 38, initialFrameHeight: 38,
+        });
+        expect(resizable.drawClip).toBeFalse();
+        expect(resizable.reason).toBe('too-small-for-corners(38x38)');
+    });
+
+    it('a corners rule recovers a window the visual floor abstained from', () => {
+        // The floor is a reading of the decoration, not a capability, so it is the corner axis's
+        // automatic answer (off) and naming that axis reverses it. The shadow is not named, so it
+        // follows the same floor: a bare 38px window gets corners without the shadow.
+        const res = evaluateWindowActions({
+            ...baseWin, wmClass: 'tiny-tool',
+            bufferWidth: 38, bufferHeight: 38, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 38, initialFrameHeight: 38,
+            rules: {[buildRuleKey('tiny-tool')]: 'corners'},
+        });
+        expect(res.drawClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.reason).toBe('rule-applied(tiny-tool:corners)');
+
+        // The same window the other way: the shadow alone, with the corners left off.
+        const shadow = evaluateWindowActions({
+            ...baseWin, wmClass: 'tiny-tool',
+            bufferWidth: 38, bufferHeight: 38, frameWidth: 38, frameHeight: 38,
+            initialFrameWidth: 38, initialFrameHeight: 38,
+            rules: {[buildRuleKey('tiny-tool')]: 'shadow'},
+        });
+        expect(shadow.drawShadow).toBeTrue();
+        expect(shadow.drawClip).toBeFalse();
+    });
+
+    it('the visual floor is a logical ratio: the monitor scale does not enter it', () => {
+        const fixed = (side, monitorScale) => evaluateWindowActions({
+            ...baseWin, monitorScale,
+            bufferWidth: side, bufferHeight: side, frameWidth: side, frameHeight: side,
+            initialFrameWidth: side, initialFrameHeight: side,
+        });
+        for (const side of [38, 39])
+            expect(fixed(side, 1.3333)).toEqual(fixed(side, 1.0));
     });
 
     it('a kind that is never decorated gets no band either', () => {
@@ -1276,6 +1388,18 @@ describe('the pick heuristic', () => {
         it('returns null when the window declares no identity', () => {
             const anonymous = {...plainWindow, wmClass: ''};
             expect(suggestedRuleWouldChange(propertiesFor(anonymous), anonymous, 'corners,shadow')).toBeNull();
+        });
+
+        it('reports an effect on a window the visual floor abstained from', () => {
+            // The floor is a reading, so naming an axis is a real correction - which is what makes
+            // the known boundary (a window mapped tiny) recoverable by a pick.
+            const floored = {
+                ...plainWindow, wmClass: 'tiny-tool',
+                bufferWidth: 38, bufferHeight: 38, frameWidth: 38, frameHeight: 38,
+                initialFrameWidth: 38, initialFrameHeight: 38,
+            };
+            expect(suggestedRuleWouldChange(propertiesFor(floored), floored, 'corners')).toBeTrue();
+            expect(suggestedRuleWouldChange(propertiesFor(floored), floored, 'shadow')).toBeTrue();
         });
 
         it('keys the rule the way the runtime looks it up', () => {

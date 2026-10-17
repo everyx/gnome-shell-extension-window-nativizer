@@ -9,6 +9,7 @@
  */
 
 import {resolveClipTarget} from './clipTarget.js';
+import {MIN_DECORABLE_SIZE} from './detector.js';
 import {BODY_SETTLE_TOLERANCE, settleClipBody} from '../effects/clipParams.js';
 import {
     bufferAllocationWarning,
@@ -119,6 +120,11 @@ export class WindowDecoration {
         this._lastAuthority = null;
         this._lastWindowSize = null;
         this._pairDisagreementStrikes = 0;
+        // The size the window was first decided at, latched once and never moved: the visual floor
+        // reads it so a drag cannot flip the decoration. Null while unreadable - 0, NaN or a frame
+        // below the geometric floor is not a size. One decoration per Meta.Window, so a rebuilt
+        // window judges its own size afresh.
+        this._initialFrameSize = null;
         // The ring hold's witness. The declared ring is `buffer - frame`, so only a buffer that
         // moved can make a new ring real; see the ring plan below for why the window's own size
         // cannot answer that.
@@ -147,6 +153,29 @@ export class WindowDecoration {
 
     get hasResizeBand() {
         return Boolean(this.resizeBand);
+    }
+
+    /**
+     * The frame size this decoration first decided the window at, or null while the latch is open.
+     */
+    get initialFrameSize() {
+        return this._initialFrameSize ? {...this._initialFrameSize} : null;
+    }
+
+    /**
+     * Closes the initial-size latch from one pass's frame size, and returns the size it holds either
+     * way. A frame that is 0, NaN, infinite or below the geometric floor is unreadable rather than
+     * small: the latch stays open and the pass is judged without the visual floor.
+     */
+    latchInitialFrameSize({frameWidth, frameHeight} = {}) {
+        // An apply pass only proves the rect is readable and non-zero, so a placeholder 1x1 or 20x20
+        // frame reaches here. A frame too small to hold a rounded rect is not a picture to read a
+        // size from, the same way 0 or NaN is not - and 30 is exactly enough, hence `>=`.
+        if (!this._initialFrameSize && frameWidth >= MIN_DECORABLE_SIZE &&
+            frameHeight >= MIN_DECORABLE_SIZE &&
+            Number.isFinite(frameWidth) && Number.isFinite(frameHeight))
+            this._initialFrameSize = {width: frameWidth, height: frameHeight};
+        return this.initialFrameSize;
     }
 
     /**
