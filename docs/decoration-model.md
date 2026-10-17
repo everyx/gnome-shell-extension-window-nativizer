@@ -91,6 +91,53 @@ A rule overrides layer 2 and nothing else: it exists to correct a wrong reading 
 inference, not to overrule a structural fact (layer 1) or a policy (layer 4). See
 [rule-model.md](rule-model.md) for the three axes and what reversing each one does to the ring.
 
+## What the edge has to carry
+
+`checkDecorationEligibility()` holds two floors, and they read two different sizes. Layer 1 is not
+only window type and window state: an edge that cannot hold the decoration is disqualified whatever
+the window is.
+
+The geometric floor is `2 * radius` (`MIN_DECORABLE_SIZE`, `detector.js`), the size at which the
+two corner arcs of a side would meet: below it no rounded rectangle fits inside the window, so
+there is nothing to draw. It is a physical fact about the frame as it is *right now*, and it holds
+for every window: dragging a window under it drops the decoration, and dragging it back restores
+it, because at that size the shape genuinely stops existing. No rule reaches it - it is a
+capability, like the window type.
+
+The visual floor is `max(2.5 * radius, 2 * shadowReach)`, where `shadowReach` is the farthest a
+shadow layer reaches (`blur + spread`): at or below it the 15px corners read as a pill and the
+shadow dominates the body it is meant to sit behind. It is judged on the **initial stable size** -
+the frame size the window had on the first pass its classification had landed on (the manager
+closes a per-window latch there, and a pass that still defers or read no extent leaves the latch
+open). That is a size the user never chose, so a drag cannot flip the judgment, and a window that
+lives most of its life at 1200x800 is not re-judged because the pointer is at 300x200 on the way
+there. Unreadable is not a size: `0`, `NaN` and infinity leave the latch open and the pass is
+judged without the visual floor, per the no-fabricated-value rule above. Neither does a frame
+below the geometric floor close it, because an apply pass only proves the rect is readable and
+non-zero: a 1x1 or 20x20 placeholder is not a picture a size can be read from, and latching it
+would let the visual floor suppress the decoration of a window that is perfectly large.
+
+The two rejections carry distinct reasons (`too-small(...)` geometric, `too-small-for-corners(...)`
+visual). Unlike the geometric floor, the visual one is a *reading* of the decoration rather than a
+capability, so it enters as the corner and shadow axes' automatic answer (off) and a rule naming an
+axis reverses it, exactly like the readings in layer 2. Its known boundary is the mirror of why it
+reads a latch: an application that maps a window at or just above the geometric floor - a 32x32
+splash, a collapsed panel - and grows it afterwards is judged on that tiny frame, and loses the
+decoration it should have had. The exit is a rule on that window kind, which is why the floor is
+reversible.
+
+The shadow can be the reason to abstain too, and there a *reading* decides. Where a bare X11
+window's buffer cannot be read, the compositor's own shadow and ours cannot be told apart, and a
+second shadow is worse than none, so both axes abstain (`x11-shadow-unknown`). Where the same
+read says the shadow is ours (`x11-rgba-shadow-ours`), the ring is drawn, because a shadow known
+to be ours is one we can take over.
+
+Both floors are derived from the generated style rather than written down, so a change to the
+radius or the shadows moves them. Neither carries the monitor scale. The radius is logical all the
+way to the shader, which is where the device conversion happens (`d * uScale`), so the visual floor
+is a ratio of the radius and not a device-pixel size; the fractional-scale cases that would need a
+scale-aware decision are the crisp-text clip gate's, not this one's.
+
 ## When a window's corners already look like ours
 
 `nativeLikeCorners.js` answers this, and both the corner axis and the resize band's
@@ -670,8 +717,9 @@ bake px, not the same ones scaled down, or the cutout stops landing on the frame
 pulls away from the window - measured on a 60x180 window (cast 116x236, corner 58 against a
 corner of 71), the cutout came out 5px inside the frame, leaving a white gap where the shadow
 should have met the window. That stays exact for every decorated window because the two limits
-are one inequality: a window starts being decorated at `2 * radius` (`MIN_DECORABLE_SIZE`,
-`detector.js`), which puts the cast at `2 * radius + 2 * SHADOW_PAD` = `2 * (SHADOW_PAD +
+are one inequality: every decoration we draw has a frame of at least `2 * radius`
+(`MIN_DECORABLE_SIZE`, `detector.js`; the visual floor is judged on the initial size, so it never
+lowers that current-size bound), which puts the cast at `2 * radius + 2 * SHADOW_PAD` = `2 * (SHADOW_PAD +
 radius)` - and `SHADOW_PAD + radius` is exactly how far the arc reaches in from the cast edge,
 so the corner the crop keeps always covers it. The straight-edge cut, the margin snapping and the inward sampling are alignment mechanisms; their
 decisions and measurements live in `decoration-alignment.md`.

@@ -2284,3 +2284,61 @@ describe('OverviewDecoration.canApplyMask (client-type eligibility)', () => {
         expect(deco.canApplyMask({drawClip: true, hasStyle: false})).toBeFalse();
     });
 });
+
+describe('WindowDecoration.initialFrameSize (the visual-floor latch)', () => {
+    // The latch lives with the other per-window latches, one per Meta.Window: the visual floor
+    // judges the size a window was first decided at, not the size a drag leaves it in. The manager
+    // closes it on the first pass the classification landed on; these specs drive it directly.
+    const makeDeco = () => new WindowDecoration(null, {container: {}, display: {}});
+
+    it('stays open while the first size is unreadable: 0 and NaN are not values', () => {
+        const deco = makeDeco();
+        expect(deco.initialFrameSize).toBeNull();
+        expect(deco.latchInitialFrameSize({frameWidth: 0, frameHeight: 600})).toBeNull();
+        expect(deco.latchInitialFrameSize({frameWidth: Number.NaN, frameHeight: 600})).toBeNull();
+        expect(deco.latchInitialFrameSize({frameWidth: Number.POSITIVE_INFINITY, frameHeight: 600})).toBeNull();
+        expect(deco.initialFrameSize).toBeNull();
+    });
+
+    it('closes on the first readable size and never moves after it', () => {
+        const deco = makeDeco();
+        expect(deco.latchInitialFrameSize({frameWidth: 800, frameHeight: 600}))
+            .toEqual({width: 800, height: 600});
+        // A later pass is a drag: the latch answers with the size it kept, not the one it is handed.
+        expect(deco.latchInitialFrameSize({frameWidth: 38, frameHeight: 38}))
+            .toEqual({width: 800, height: 600});
+        expect(deco.initialFrameSize).toEqual({width: 800, height: 600});
+    });
+
+    it('an unreadable first size then 800x600: the latch is 800x600 and the window is decorated', () => {
+        const deco = makeDeco();
+        expect(deco.latchInitialFrameSize({frameWidth: 0, frameHeight: 0})).toBeNull();
+        const latched = deco.latchInitialFrameSize({frameWidth: 800, frameHeight: 600});
+        expect(latched).toEqual({width: 800, height: 600});
+        // What the manager hands `evaluateWindowActions`: the pass's own frame plus the latch.
+        const actions = evaluateWindowActions({
+            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            initialFrameWidth: latched.width, initialFrameHeight: latched.height,
+            wmClass: 'test-app',
+        });
+        expect(actions.drawClip).toBeTrue();
+        expect(actions.drawShadow).toBeTrue();
+    });
+
+    it('a placeholder frame does not close the latch, the real size that follows does', () => {
+        // An apply pass only proves the rect is readable and non-zero, so a 1x1 or 20x20
+        // placeholder reaches the latch and must not be judged as the window's size.
+        const deco = makeDeco();
+        expect(deco.latchInitialFrameSize({frameWidth: 1, frameHeight: 1})).toBeNull();
+        expect(deco.latchInitialFrameSize({frameWidth: 20, frameHeight: 20})).toBeNull();
+        expect(deco.initialFrameSize).toBeNull();
+        expect(deco.latchInitialFrameSize({frameWidth: 800, frameHeight: 600}))
+            .toEqual({width: 800, height: 600});
+    });
+
+    it('closes at exactly the geometric floor, 30x30: the bound is inclusive', () => {
+        const deco = makeDeco();
+        expect(deco.latchInitialFrameSize({frameWidth: 30, frameHeight: 30}))
+            .toEqual({width: 30, height: 30});
+    });
+});

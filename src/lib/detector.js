@@ -17,7 +17,17 @@ import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 
 // 2× the libadwaita radius: below it the two corner arcs overlap, so no rounded rect fits (helper surface, e.g. wl-clipboard 1×1).
-const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
+export const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
+
+// How far the farthest shadow layer reaches out: blur plus spread, the layer's own extent.
+const SHADOW_REACH = Math.max(...ADWAITA_STYLE.window.shadows.map(({blur, spread}) => blur + spread));
+
+/**
+ * Visual floor, in logical px: at or below 2.5× the radius the corners read as a pill, at or below
+ * 2× the shadow reach the shadow dominates the body it sits behind. It is judged on the size a
+ * window was first decided at, never on the size it is in now.
+ */
+export const VISUAL_MIN_DECORABLE_SIZE = Math.max(2.5 * ADWAITA_STYLE.window.radius, 2 * SHADOW_REACH);
 
 /**
  * @returns Two-sided totals, each >= 0
@@ -42,14 +52,17 @@ export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
 }
 
 /**
- * @param [params.frameWidth=Infinity] - Logical px
- * @param [params.frameHeight=Infinity] - Logical px
+ * @param [params.frameWidth=Infinity] - Current frame width, logical px
+ * @param [params.frameHeight=Infinity] - Current frame height, logical px
+ * @param [params.initialFrameWidth=null] - Frame width the window was first decided at, logical px
+ * @param [params.initialFrameHeight=null] - Frame height the window was first decided at, logical px
  */
 export function checkDecorationEligibility({
     windowType = WindowType.NORMAL,
     isMaximized = false, isFullscreen = false,
     frameWidth = Number.POSITIVE_INFINITY,
     frameHeight = Number.POSITIVE_INFINITY,
+    initialFrameWidth = null, initialFrameHeight = null,
 } = {}) {
     if (!isDecoratableWindowType(windowType))
         return {eligible: false, reason: `window-type=${windowType}`};
@@ -58,9 +71,22 @@ export function checkDecorationEligibility({
     if (isMaximized || isFullscreen)
         return {eligible: false, reason: 'maximized/fullscreen'};
 
-    // 1×1 helper (e.g. wl-clipboard) would get a shadow over nothing.
+    // Two floors in one place, reading two sizes. This one is geometric and reads the frame as it
+    // is right now: below 2*radius the two arcs have met, so no rounded rect fits and a 1×1 helper
+    // (wl-clipboard) would get a shadow over nothing. A drag under it drops the decoration.
     if (frameWidth < MIN_DECORABLE_SIZE || frameHeight < MIN_DECORABLE_SIZE)
         return {eligible: false, reason: `too-small(${frameWidth}x${frameHeight})`};
+
+    // The visual floor reads the size the window was FIRST decided at, which the user never chose,
+    // so no drag can flip it. 0, NaN and Infinity are unreadable rather than small: they abstain,
+    // and the caller's latch stays open for a pass that can read one.
+    const initialSize = Number.isFinite(initialFrameWidth) && initialFrameWidth > 0 &&
+        Number.isFinite(initialFrameHeight) && initialFrameHeight > 0
+        ? {width: initialFrameWidth, height: initialFrameHeight} : null;
+    // `reversible` is the rule exit: the gates above are capabilities, this floor a reading.
+    if (initialSize &&
+        (initialSize.width <= VISUAL_MIN_DECORABLE_SIZE || initialSize.height <= VISUAL_MIN_DECORABLE_SIZE))
+        return {eligible: false, reason: `too-small-for-corners(${initialSize.width}x${initialSize.height})`, reversible: true};
 
     return {eligible: true, reason: ''};
 }
@@ -247,6 +273,7 @@ function resolveAxisValue(reversedAxes, axis, baseline) {
 
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
+    initialFrameWidth = null, initialFrameHeight = null,
     insets = null,
     monitorScale = 1,
     isMaximized = false, isFullscreen = false,
@@ -271,15 +298,24 @@ export function evaluateWindowActions({
 }) {
     const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast, animationsEnabled, dark});
 
-    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
+    const eligibility = checkDecorationEligibility({
+        windowType, isMaximized, isFullscreen,
+        frameWidth, frameHeight,
+        initialFrameWidth, initialFrameHeight,
+    });
 
     // The shadow axis asks whether either side of an axis declares a ring, so it reads
     // the widest margin per axis (`declaringSides`).
     const {declaringSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const {sideW, sideH} = declaringSides;
-    const baseline = inferDecorationBaseline({
-        isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners,
-    });
+
+    // The visual floor is a reading of how the decoration carries at a size the user never chose,
+    // not a capability: it answers both axes off, and a rule naming an axis reverses it there like
+    // any other reading. The geometric floor and the structural gates return below, out of reach.
+    const visuallyFloored = eligibility.reversible === true;
+    const baseline = visuallyFloored
+        ? {corners: false, shadow: false, reason: eligibility.reason}
+        : inferDecorationBaseline({isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners});
 
     // Semantics vs strategy: `clientDeclaredRing` answers "did the client declare a ring?" (an SSD
     // frame's ring is frame-drawn, so no). The strategy "the SSD ring is ours to clear when we
@@ -358,7 +394,7 @@ export function evaluateWindowActions({
     // Decoration stops at a structural disqualifier, but the band keeps its own physics
     // gates: a window too small for corners can still be grabbable. A kind that is ours on
     // no axis (dock, desktop) gets neither.
-    if (!eligibility.eligible) {
+    if (!eligibility.eligible && !visuallyFloored) {
         return {
             drawShadow: false, drawClip: false, drawRing: false,
             drawResize: isDecoratableWindowType(windowType) && drawResize,

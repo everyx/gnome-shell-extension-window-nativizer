@@ -526,8 +526,19 @@ export class Manager {
         if (!reading)
             return null;
 
+        // The visual floor judges the size the window was first decided at, so the latch closes on
+        // the first pass the classification landed on: a pass that still defers, or that read no
+        // extent, is not a frame to judge and must not close it. The picker's own reading comes
+        // through here too, so one answer serves both.
+        const deco = this._windows.get(win)?.deco ?? null;
+        if (reconcileOutcome(reading) === 'apply')
+            deco?.latchInitialFrameSize(reading);
+        const initial = deco?.initialFrameSize ?? null;
+
         return {
             ...reading,
+            initialFrameWidth: initial?.width ?? null,
+            initialFrameHeight: initial?.height ?? null,
             focused: reading.appearsFocused,
             highContrast: this._highContrast,
             animationsEnabled: this._animationsEnabled,

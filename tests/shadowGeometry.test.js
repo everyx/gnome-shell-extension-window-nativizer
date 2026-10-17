@@ -276,6 +276,8 @@ describe('shadowSlices', () => {
         const {corner, buffer} = shadowGeometry(radius);
         const arcReach = SHADOW_PAD + radius;
         let floor = 1;
+        // No latched initial size, so the floor read here is the geometric one the cast is built
+        // on: the visual floor only ever raises the size a window carries its decoration at.
         while (!checkDecorationEligibility({frameWidth: floor, frameHeight: floor}).eligible)
             floor++;
 
