@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.0...v0.11.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **decoration:** judge the visual floor on the window's initial stable size ([b844936](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b8449362aa2a97dd4f137999f06b60a33b25861b))
+* **decoration:** read a bare X11 shadow's owner from the buffer's alpha channel ([a166c5c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a166c5c8325aee1d745f57830eaec1d0bd5f59ef))
+
 ## [0.11.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.10.0...v0.11.0) (2026-10-16)
 
 
