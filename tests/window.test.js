@@ -227,6 +227,49 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeTrue();
     });
 
+    it('reads the buffer alpha only for a bare X11 window, and carries null elsewhere', () => {
+        const read = (clientType, {decorated = false, hasRing = null} = {}) => {
+            let calls = 0;
+            const win = {
+                get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+                get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+                get_client_type: () => clientType,
+                decorated,
+                get_compositor_private: () => ({
+                    get_texture: () => ({
+                        get_texture: () => ({
+                            get_plane: () => ({
+                                get_components: () => {
+                                    calls++;
+                                    return 4;
+                                },
+                            }),
+                        }),
+                    }),
+                }),
+            };
+            if (hasRing !== null)
+                win.hasRing = hasRing;
+            return {reading: readWindow(win), calls};
+        };
+
+        // The one case the reading is about, and it lands.
+        expect(read(WindowClientType.X11).reading.bufferAlpha).toBeTrue();
+        expect(read(WindowClientType.X11).calls).toBe(1);
+
+        // Wayland has no client intent behind `decorated`, so the number would not mean anything.
+        expect(read(WindowClientType.WAYLAND).reading.bufferAlpha).toBeNull();
+        expect(read(WindowClientType.WAYLAND).calls).toBe(0);
+
+        // An SSD frame's texture is the frame client's, so it would answer for the client inside.
+        expect(read(WindowClientType.X11, {decorated: true}).reading.bufferAlpha).toBeNull();
+        expect(read(WindowClientType.X11, {decorated: true}).calls).toBe(0);
+
+        // A declared ring already made Mutter drop its shadow; there is nothing to decide.
+        expect(read(WindowClientType.X11, {hasRing: true}).reading.bufferAlpha).toBeNull();
+        expect(read(WindowClientType.X11, {hasRing: true}).calls).toBe(0);
+    });
+
     it('passes an unclassified process through as null, not as a default', () => {
         const mockWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),

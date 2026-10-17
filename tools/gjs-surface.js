@@ -104,6 +104,9 @@ const SURFACE = [
     {ns: 'Cogl', cls: 'Pipeline', member: 'set_uniform_float', arity: [3, 4]},
     // The overview mask's A_8 layout, and the single-channel mask slot Mutter expects.
     {ns: 'Cogl', cls: 'PixelFormat', enum: true, members: ['A_8']},
+    // platform/window.js reads the window buffer's format through this to decide who paints a bare
+    // X11 shadow. The shaped texture above it is private, so only this link is assertable by name.
+    {ns: 'Cogl', cls: 'Texture', member: 'get_components', arity: 0},
     // gnome-shell, only reachable from inside the shell
     // platform/shaderEffect.js picks the base class: Shell.GLSLEffect through 50, the native
     // Clutter.ShaderEffect in 51. The uniform upload is the seam's, so no shape is pinned here -

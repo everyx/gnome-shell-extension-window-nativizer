@@ -19,6 +19,7 @@ import {
     isWindowAttachedDialog,
     isWindowAllowsResize,
     isWindowDecorated,
+    getWindowBufferAlpha,
     isWindowMaximizedHorizontally,
     isWindowMaximizedVertically,
     isWindowAppearsFocused,
@@ -159,6 +160,13 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         return false;
     }, false);
 
+    // The buffer's alpha channel decides who paints a bare X11 window's shadow, and only there:
+    // Mutter's has_shadow() abstains for a non-opaque (ARGB32) window. An SSD frame's texture is
+    // the frame client's, so it would answer for the client inside it; the read is skipped there.
+    let bufferAlpha = null;
+    if (!hasSsd && isX11 && !hasRing)
+        bufferAlpha = safeRead(() => getWindowBufferAlpha(win), null);
+
     const isMaximized = safeRead(() => isWindowMaximized(win), false);
     const hasTileMatch = safeRead(() => Boolean(getWindowTileMatch(win)), false);
     const isFullscreen = safeRead(() => isWindowFullscreen(win), false);
@@ -202,6 +210,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         isFullscreen,
         hasSsd,
         isX11,
+        bufferAlpha,
         clientTypeToken: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         nativeLikeCorners,
         hasGtk4Client: hasGtk4,

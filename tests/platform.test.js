@@ -13,6 +13,7 @@ import {
     isWindowTiled,
     isWindowMinimized,
     isWindowDecorated,
+    getWindowBufferAlpha,
     isWindowMaximizedHorizontally,
     isWindowMaximizedVertically,
     isWindowAppearsFocused,
@@ -879,6 +880,60 @@ describe('platform', () => {
             const background = {x: 0, y: 0, width: 800, height: 600};
             const container = {x: 3, y: 0, width: 800, height: 600};
             expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBeNull();
+        });
+    });
+
+    describe('getWindowBufferAlpha', () => {
+        // The read walks actor -> shaped texture -> plane 0 and asks Cogl what that texture stores.
+        // The numbers are Cogl's COGL_TEXTURE_COMPONENTS_RGB/RGBA (cogl-texture.h); the environment
+        // here has no Cogl typelib, so the stub stands for the type's own declaration.
+        const actorWithComponents = (components, counter = null) => ({
+            get_texture: () => ({
+                get_texture: () => ({
+                    get_plane: () => ({
+                        get_components: () => {
+                            if (counter)
+                                counter.calls++;
+                            return components;
+                        },
+                    }),
+                }),
+            }),
+        });
+        const winWithActor = actor => ({get_compositor_private: () => actor});
+
+        it('reads RGB (3) as no alpha and RGBA (4) as alpha', () => {
+            expect(getWindowBufferAlpha(winWithActor(actorWithComponents(3)))).toBeFalse();
+            expect(getWindowBufferAlpha(winWithActor(actorWithComponents(4)))).toBeTrue();
+        });
+
+        it('answers null for a format this read does not name, never a default', () => {
+            for (const components of [1, 2, 5, 0, undefined, null])
+                expect(getWindowBufferAlpha(winWithActor(actorWithComponents(components)))).toBeNull();
+            expect(getWindowBufferAlpha(winWithActor({get_texture: () => null}))).toBeNull();
+            expect(getWindowBufferAlpha(winWithActor(null))).toBeNull();
+            expect(getWindowBufferAlpha(null)).toBeNull();
+        });
+
+        it('reads each actor once: the format is fixed by the client depth', () => {
+            const counter = {calls: 0};
+            const win = winWithActor(actorWithComponents(4, counter));
+            expect(getWindowBufferAlpha(win)).toBeTrue();
+            expect(getWindowBufferAlpha(win)).toBeTrue();
+            expect(counter.calls).toBe(1);
+        });
+
+        it('does not cache an unread buffer, so a buffer that arrives later is read', () => {
+            let components = null;
+            const actor = {
+                get_texture: () => ({
+                    get_texture: () => ({get_plane: () => ({get_components: () => components})}),
+                }),
+            };
+            const win = winWithActor(actor);
+            expect(getWindowBufferAlpha(win)).toBeNull();
+            components = 3;
+            expect(getWindowBufferAlpha(win)).toBeFalse();
         });
     });
 

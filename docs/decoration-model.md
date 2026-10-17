@@ -58,7 +58,8 @@ rounding them?             the client's own ring is cleared exactly when the rin
    - **Shadows** are a *reading*, not an observation: the window declares a margin
      (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
      and Mutter paints the shadow of a bare XWayland window unless one of `has_shadow()`'s
-     gates excludes it (*Where we deliberately differ from Mutter*). A declared margin
+     gates excludes it — for a bare window the gate this reading consults is the buffer's own
+     alpha channel (*Where we deliberately differ from Mutter*). A declared margin
      is read the way Mutter reads it, as the boolean `has_custom_frame_extents`: **any**
      declared margin is a ring, on one axis or both, 1px as much as 40px. That is why
      the reading is a pure positivity check — any declared margin on either axis, no SSD
@@ -238,9 +239,32 @@ reaches it (`rule-model.md`).
   first child `1920×1051` — actor and child are equal to the frame, no ring to clear, so
   no fallback assumption is made (the surface is the frame). Such windows are also
   structurally ineligible (`maximized/fullscreen`). For a bare XWayland window (no SSD, no
-  extents), Mutter paints its native shadow strictly outside the window square into the
-  beneath-region; that shadow is out of reach, so a bare window without a rule retains
-  Mutter's native shadow.
+  extents), who paints the shadow is the next bullet.
+- **Who paints a bare X11 window's shadow.** Mutter paints shadows on the X11 side only, and
+  `has_shadow()` (`src/compositor/meta-window-actor-x11.c:373-428`) declines in six cases:
+  maximized or fullscreen, a tile match, an SSD frame (`meta_window_x11_get_frame`), a non-opaque
+  (ARGB32) window, declared `_GTK_FRAME_EXTENTS`, or an X shape. Where it does paint, the shadow
+  lands outside the window square in the beneath-region, where the window's own actor cannot cover
+  it. The one switch that used to turn it off, `actor.shadow_mode`, was removed upstream in 2024
+  (mutter commit `0104fbe`), so a native X11 shadow is permanent once Mutter decides to draw one:
+  the choice is never "remove it", only "add ours or not". Five of the six gates have a reading
+  here: maximized/fullscreen, the tile match and the SSD frame are window state,
+  `has_custom_frame_extents` is the declared ring, and the non-opaque test shows as the
+  compositing buffer's own format — four components is RGBA, three is RGB
+  (`getWindowBufferAlpha` in `src/platform/window.js`). Only the X shape is out of reach.
+  A **bare** X11 window (no SSD frame, no declared ring) is therefore split by that reading, and
+  the buffer is read only there: a depth-24 client wrapped in a depth-32 SSD frame reports the
+  frame's alpha, not its own. RGB means Mutter's shadow is already on the window, so ours stays off
+  (adding one would double it); RGBA means Mutter abstained, so the shadow is ours; an unreadable
+  buffer is undecided, and both of our axes abstain rather than risk a second shadow or a clip with
+  nothing under it.
+- **Whoever paints the shadow paints the shape it was cast for.** Rounding a window's body
+  abandons the shape its shadow was cast by, so the two change owner together: an RGBA bare X11
+  window gets our shadow and our corners, an unreadable one gets neither, and a window whose own
+  declared ring we take over gets both by the takeover rule. The one case that cannot be made
+  consistent is the opaque RGB window: Mutter's square shadow cannot be cleared, our corners can
+  still be drawn, and the mismatch is a known boundary (below) rather than a reason to drop the
+  corners for every window that has one.
 - **A snap-tiled window loses the shadow it would get from us** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct the
   neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on
@@ -474,14 +498,27 @@ windows to begin with - they come from Qt, Electron or GTK3, which never used th
 guess would trade a visible risk for an invisible gain. A dialog of a real libadwaita application is
 not affected either way: the Adwaita-look probe exempts the process.
 
-**Mutter's X11 shadow.** A bare XWayland window - undecorated, no declared margin - keeps the shadow
-Mutter paints for it, which is what happens to a client that draws its own frame without declaring
+**Mutter's X11 shadow.** A bare XWayland window whose buffer is opaque (RGB) keeps the shadow Mutter
+paints for it, which is what happens to a client that draws its own frame without declaring
 `_GTK_FRAME_EXTENTS` (Electron under XWayland). That shadow is out of our reach: the compositor draws it
 outside the window square, GJS cannot clear it, and adding ours would put two where there is one.
 Its visible cost is the focus transition: Mutter holds a focused and an unfocused shadow and swaps
 the two objects without easing, so such a window drops its halo in a single step where every window
-we decorate fades. A rule cannot fix it either: the automatic decision here is already not to draw
-one, so reversing the axis only adds ours on top of Mutter's.
+we decorate fades. This is one of the three readings of a bare X11 window (*Where we deliberately
+differ from Mutter*): the other two are an RGBA buffer, where Mutter abstained and the shadow is
+ours, and an unreadable one, where neither axis is drawn. A rule still corrects the RGB case per
+window by reversing the shadow axis, which draws ours on top - a double shadow, and what a user who
+wants the focus fade is asking for. The corners remain ours in that case: a square shadow beside a
+rounded body is the mismatch this entry records.
+
+**An ARGB32 window that declares its whole surface opaque.** `_NET_WM_OPAQUE_REGION` is not readable
+from GJS, so the buffer's alpha channel is as close as the reading gets: a window can carry alpha and
+still declare every pixel opaque, and Mutter then passes its non-opaque gate and paints a shadow for
+a window we have already given ours. The double shadow is narrow (the two differ only outside the
+body), and the state is correctable - the reading says RGBA, so reversing the shadow axis retracts
+ours and leaves Mutter's - which is what *Cover what a rule can correct* is for. The X shape is the
+same kind of gap with no reading at all: a shaped window can pass every gate we can see and still
+get a shadow from Mutter for pixels it does not own.
 
 **Solid CSD.** `window.solid-csd` gets an inset border rather than a shadow, and the reason is
 stronger than "the class belongs to the client": the class is not reachable in this session at all.
@@ -825,11 +862,22 @@ style for the whole session; what runs per frame is eight textured rectangles.
 
 ## What is not introspectable at all
 
-`has_shadow()` also gates on ARGB32 windows, shaped windows, and
-`has_custom_frame_extents`, none of which GJS can see. Those are the windows where
-something else is painting and the reading layer 2 makes cannot say so: reimplementing
-the gate partially would add a second shadow rather than skip one, so they are left to
-a reversed shadow axis - the one-sided error above, with the remedy that fits it.
+`has_shadow()` also gates on ARGB32 windows, shaped windows, and `has_custom_frame_extents`. Two of
+the three are read here in their own terms: `has_custom_frame_extents` is the declared ring
+(*Rounding a window takes its shadow over*), and ARGB32 shows as the compositing buffer's alpha
+channel (*Where we deliberately differ from Mutter*), which is what splits a bare X11 window's
+shadow between Mutter and us. What stays unreachable is the opaque region that can make an ARGB32
+window opaque again, and the X shape, a window that is not the rectangle it appears to be; both are
+recorded under *Known boundaries*.
+
+`_KDE_NET_WM_WINDOW_TYPE_OVERRIDE` is the same kind of gap on the type axis. A KDE client uses it to
+ask for a popup that is still a managed toplevel, and the shell never sees it: Mutter's X11 property
+reader keeps only the **first atom it recognises** from `_NET_WM_WINDOW_TYPE`
+(`src/x11/window-props.c:285`) and the KDE atom is not on that list, so a window carrying it beside
+`_NET_WM_WINDOW_TYPE_NORMAL` arrives as `NORMAL` (`recalc_window_type`, `src/x11/window-x11.c`).
+Supporting it would mean exposing the raw atom list; mapping the one atom onto
+`META_WINDOW_OVERRIDE_OTHER` is not, because that would hide the other atoms and hand every window
+that names it a type it did not ask for.
 
 ## Overview downscaling and offscreen effects
 

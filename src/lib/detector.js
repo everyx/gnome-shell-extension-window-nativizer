@@ -75,12 +75,17 @@ export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
 }
 
 /**
- * Whether the window keeps a Mutter X11 shadow we could never clear: a bare XWayland window,
- * with no declared ring and no compositor frame. The remedy is a rule, not our shadow.
- * @param [params.hasRing=false] - Whether the window declared a margin ring
+ * Who paints a bare X11 window's shadow, read from the buffer's alpha channel. Mutter's has_shadow()
+ * abstains for a non-opaque (ARGB32) window and paints one for an opaque one, so a buffer with
+ * alpha leaves the shadow to us while an RGB one is what Mutter already paints. A null read
+ * abstains from both.
  */
-function hasUnclearableShadow({hasSsd = false, isX11 = false, hasRing = false} = {}) {
-    return !hasSsd && isX11 && !hasRing;
+function bareX11ShadowOwner(bufferAlpha) {
+    if (bufferAlpha === true)
+        return 'ours';
+    if (bufferAlpha === false)
+        return 'mutter';
+    return 'unknown';
 }
 
 /**
@@ -91,16 +96,32 @@ export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
     hasSsd = false,
+    bufferAlpha = null,
     nativeLikeCorners = false,
 }) {
     const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
     let shadow = true;
+    let corners = true;
     let reason = `no-csd(${insets})`;
 
-    if (hasUnclearableShadow({hasSsd, isX11, hasRing: sideW > 0 || sideH > 0})) {
-        shadow = false;
-        reason = 'x11-mutter-native-shadow';
+    if (!hasSsd && isX11 && !(sideW > 0 || sideH > 0)) {
+        // The alpha read is meaningful only for a bare X11 window: a depth-24 client wrapped in a
+        // depth-32 SSD frame reports the frame's alpha, so hasSsd must be false for the number to
+        // be the client's own.
+        const owner = bareX11ShadowOwner(bufferAlpha);
+        if (owner === 'mutter') {
+            shadow = false;
+            reason = 'x11-mutter-native-shadow';
+        } else if (owner === 'ours') {
+            reason = 'x11-rgba-shadow-ours';
+        } else {
+            // Unknown: no shadow of ours, so it can never be a second one, and no corners either,
+            // since a clip with nothing under it would cut a body we did not round for.
+            shadow = false;
+            corners = false;
+            reason = 'x11-shadow-unknown';
+        }
     } else if (hasSsd) {
         shadow = false;
         reason = 'has-ssd-frame';
@@ -112,7 +133,7 @@ export function inferDecorationBaseline({
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
 
-    return {shadow, corners: true, reason};
+    return {shadow, corners, reason};
 }
 
 /**
@@ -231,6 +252,7 @@ export function evaluateWindowActions({
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
     isX11 = false,
+    bufferAlpha = null,
     nativeLikeCorners = false,
     hasGtk4Client = false,
     windowType = WindowType.NORMAL,
@@ -256,7 +278,7 @@ export function evaluateWindowActions({
     const {declaringSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const {sideW, sideH} = declaringSides;
     const baseline = inferDecorationBaseline({
-        isX11, sideW, sideH, hasSsd, nativeLikeCorners,
+        isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners,
     });
 
     // Semantics vs strategy: `clientDeclaredRing` answers "did the client declare a ring?" (an SSD

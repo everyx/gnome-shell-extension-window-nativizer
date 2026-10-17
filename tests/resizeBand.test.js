@@ -638,7 +638,7 @@ describe('decideResizeBand', () => {
         // it (a fixed-ratio video popup) reverses the resize axis.
         const actions = evaluateWindowActions({
             bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
-            isX11: true, wmClass: 'wps',
+            isX11: true, bufferAlpha: false, wmClass: 'wps',
         });
         expect(actions.drawClip).toBeTrue();
         expect(actions.drawResize).toBeTrue();
@@ -742,7 +742,7 @@ describe('decideResizeBand', () => {
     it('a bare window is grabbable by default; a reversed axis retracts only the band', () => {
         const base = {
             bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
-            isX11: true, wmClass: 'wps',
+            isX11: true, bufferAlpha: false, wmClass: 'wps',
         };
         const bare = evaluateWindowActions(base);
         expect([bare.drawShadow, bare.drawClip, bare.drawResize])
