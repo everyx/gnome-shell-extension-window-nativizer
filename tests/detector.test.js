@@ -181,10 +181,31 @@ describe('inferDecorationBaseline', () => {
     });
 
     it('XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
-        const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(800, 600, 800, 600)});
+        const r = inferDecorationBaseline({isX11: true, bufferAlpha: false, ...marginsFromRects(800, 600, 800, 600)});
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
         expect(r.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('bare XWayland with an RGB buffer -> Mutter paints that shadow, so ours stays off', () => {
+        const r = inferDecorationBaseline({isX11: true, bufferAlpha: false, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeTrue();
+        expect(r.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('bare XWayland with an RGBA buffer -> Mutter abstains, so the shadow is ours', () => {
+        const r = inferDecorationBaseline({isX11: true, bufferAlpha: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
+        expect(r.reason).toBe('x11-rgba-shadow-ours');
+    });
+
+    it('bare XWayland with an unreadable buffer -> abstain from both axes, never stacking or cutting', () => {
+        const r = inferDecorationBaseline({isX11: true, bufferAlpha: null, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeFalse();
+        expect(r.reason).toBe('x11-shadow-unknown');
     });
 
     it('server-side decorations (SSD, traditional XWayland app with system titlebar) -> retains native shadow, clips corners', () => {
@@ -401,11 +422,59 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
+            bufferAlpha: false,
             wmClass: 'wps',
         });
         expect(res.drawShadow).toBeFalse();
         expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('bare XWayland with an RGBA buffer: our shadow and our corners together', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            bufferAlpha: true,
+            wmClass: 'wps',
+        });
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
+        expect(res.reason).toBe('x11-rgba-shadow-ours');
+    });
+
+    it('bare XWayland with no readable buffer: neither axis, so nothing of ours is drawn', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            bufferAlpha: null,
+            wmClass: 'wps',
+        });
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
+        expect(res.drawRing).toBeFalse();
+        expect(res.reason).toBe('x11-shadow-unknown');
+    });
+
+    it('the buffer alpha decides a bare X11 window only: Wayland reads the same either way', () => {
+        const rgba = evaluateWindowActions({...baseWin, bufferAlpha: true});
+        const rgb = evaluateWindowActions({...baseWin, bufferAlpha: false});
+        expect([rgba.drawShadow, rgba.drawClip, rgba.reason])
+            .toEqual([rgb.drawShadow, rgb.drawClip, rgb.reason]);
+        expect(rgba.drawShadow).toBeTrue();
+        expect(rgba.drawClip).toBeTrue();
+    });
+
+    it('a declared ring keeps the client\'s shadow label whatever the buffer alpha says', () => {
+        const ringed = alpha => evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            bufferAlpha: alpha,
+            wmClass: 'wechat',
+            bufferWidth: 1156, bufferHeight: 852,
+            frameWidth: 1148, frameHeight: 844,
+        });
+        expect(ringed(true).reason).toBe('ring-cleared(has-csd(4.0x4.0))');
+        expect(ringed(true)).toEqual(ringed(false));
     });
 
     it('SSD window: retains native shadow and clips corners', () => {
@@ -474,7 +543,7 @@ describe('evaluateWindowActions', () => {
     it('a bare window (no declared extents) is still not client-decorated: zero is not a ring', () => {
         // A `>= 0` reading would make every bare window "declared", and on XWayland that
         // would put our shadow on top of Mutter's native one.
-        const x11 = evaluateWindowActions({...baseWin, isX11: true, wmClass: 'wps'});
+        const x11 = evaluateWindowActions({...baseWin, isX11: true, bufferAlpha: false, wmClass: 'wps'});
         expect(x11.ring.clear).toBeFalse();
         expect(x11.drawShadow).toBeFalse();
         expect(x11.reason).toBe('x11-mutter-native-shadow');
@@ -634,6 +703,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
+            bufferAlpha: false,
             wmClass: 'wps',
             rules: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow'},
         });

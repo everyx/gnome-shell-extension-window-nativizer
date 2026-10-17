@@ -373,6 +373,52 @@ export function isWindowDecorated(win) {
     }
 }
 
+// Cogl's texture component counts (cogl-texture.h: COGL_TEXTURE_COMPONENTS_RGB/RGBA). They stay
+// here because the detector must not read a Cogl value itself.
+const COMPONENTS_RGB = 3;
+const COMPONENTS_RGBA = 4;
+
+/**
+ * The alpha answer already read for an actor. The buffer format is fixed by the client's X11 depth
+ * for the actor's life, so one read is enough and a rebuilt actor is a new key. A null read is not
+ * stored, so a buffer that has not arrived yet is read again on the next pass.
+ */
+const actorBufferAlphaCache = new WeakMap();
+
+/**
+ * Whether the window's compositing buffer carries an alpha channel: true for RGBA, false for RGB
+ * and therefore opaque. Null when the buffer or its texture is not there yet, or the format is one
+ * this read does not name - a fabricated answer would decide who paints the shadow.
+ */
+export function getWindowBufferAlpha(win) {
+    const actor = getWindowActor(win);
+    if (!actor)
+        return null;
+
+    const cached = actorBufferAlphaCache.get(actor);
+    if (cached !== undefined)
+        return cached;
+
+    const alpha = readBufferAlpha(actor);
+    if (alpha !== null)
+        actorBufferAlphaCache.set(actor, alpha);
+    return alpha;
+}
+
+/** The shaped texture's first plane, which is the window buffer itself. */
+function readBufferAlpha(actor) {
+    try {
+        const components = actor?.get_texture?.()?.get_texture?.()?.get_plane?.(0)?.get_components?.() ?? null;
+        if (components === COMPONENTS_RGBA)
+            return true;
+        if (components === COMPONENTS_RGB)
+            return false;
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Checks whether the window is horizontally maximized.
  * @param win - Meta.Window
