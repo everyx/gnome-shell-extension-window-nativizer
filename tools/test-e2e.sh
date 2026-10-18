@@ -2921,6 +2921,16 @@ if exempted_mutter_ping:
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
+# The clip is evaluated in the offscreen FBO's coordinate space, so its frame is only on the body
+# when the box it is handed is the FBO divided by the monitor scale. This reads both back from
+# pixels: the FBO the compositor made, and every straight edge and corner-arc tangent against the
+# body frame the clip reports. It runs last because it opens its own windows, after the log audit.
+if ! python3 "$ROOT/tools/check-clip-tangent.py" --check; then
+    echo "!! The clip's frame disagrees with its offscreen box at scale $SCALE"
+    exit 1
+fi
+summary "Clip Frame vs Offscreen Box: PASSED (1 shader unit = 1 logical px; every edge and corner tangent on the body frame)"
+
 echo ">> Lifecycle Summary:"
 summary "GJS Surface: PASSED (every member we call is callable, and the platform seams resolved; signatures above)"
 summary "Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"

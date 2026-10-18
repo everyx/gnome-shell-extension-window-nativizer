@@ -200,9 +200,10 @@ describe('clipTarget', () => {
             });
 
             it('falls back to the window actor when the container box is not integer-aligned', () => {
-                // Clutter's offscreen origin/size only equal the shader's FBO_OFFSET/FBO_EXTRA when the
-                // actor box is integer-aligned; a fractional container width can move the origin by a
-                // logical pixel, which the shader cannot express, so the clip must not attach to it.
+                // Clutter derives the offscreen box from the container's place in its parent, and
+                // the shader's box is derived from an actor-local [0, length]; a fractional
+                // container width can move that origin by a logical pixel, so the clip must not
+                // attach to it.
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND, buffer: {width: 500, height: 400}});
                 const fractional = new MockSurfaceActor('MetaSurfaceContainerActorWayland', {x: 0, y: 0, width: 500.4, height: 400});
                 const actor = createMockActor({children: [fractional]});

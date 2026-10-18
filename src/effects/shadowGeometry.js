@@ -6,7 +6,7 @@
  */
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
-import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
+import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
@@ -20,9 +20,9 @@ export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
  */
 export const SHADOW_BODY_TOLERANCE = BODY_SETTLE_TOLERANCE;
 
-// Offscreen padding matching Mutter clutter-actor-box conventions (2px origin, 3px extra).
-const BAKE_ORIGIN = EFFECT_PADDING_ORIGIN;
-const BAKE_EXTRA = EFFECT_PADDING_EXTRA;
+// The bake's own near-side margin and total extra; see lib/shadowBake.js.
+const BAKE_ORIGIN = SHADOW_BAKE_ORIGIN;
+const BAKE_EXTRA = SHADOW_BAKE_EXTRA;
 
 /**
  * Canonical square 2*(pad+radius) with middle 2*pad (settled strip).

@@ -182,12 +182,20 @@ gdbus call --dest org.gnome.Shell --object-path /org/gnome/Shell \
 - A `ClutterOffscreenEffect`'s offscreen is not the actor's box: Clutter enlarges it to a
   stable size, `_clutter_actor_box_enlarge_for_effects` (`clutter-actor-box.c:505`) gives
   three pixels per axis split around the actor — two on the left/top and one on the
-  right/bottom for an integer position — and the whole box is then multiplied by
-  `ceilf(resource_scale)`, which is **2** for a 1.3333 monitor, not 1.3333.
+  right/bottom for an integer position — and then scales that box by the **real** resource
+  scale and rounds each edge onto the device grid (`clutter-offscreen-effect.c`; the
+  `mutter-everyx` patchset carries upstream MR !5179, which is what makes it the real scale —
+  before it the box was multiplied by `ceilf (resource_scale)`, i.e. **2** on a 1.3333 monitor).
+  Measured with `Clutter.OffscreenEffect.get_target_size()` for a 441x281 body: 444x284 device px
+  at 1.0, 556x356 at 1.25 and 593x379 at 4/3. One shader unit is therefore one logical pixel
+  only when the quad is derived per paint from that box (`lib/offscreenBox.js`); a constant
+  cannot express it, and the constants that stood in for it read 1.2522 device px per unit at 1.25.
 - `clutter_offscreen_effect_paint_texture` applies `1/resource_scale` and the `fbo_offset`
   in one matrix. Read the order in Graphene rather than assuming it.
-- Measured live values for a 440x280 window: `w=440.0000 h=280.0000`, `pad=2.0000,2.0000`,
-  `target=[true, 886, 566]` (= (440+3)x(280+3) at 2x).
+- Measured live values for a 440x280 window at 4/3: `uFrame=[2.25,2.25,436.5,276.75]`,
+  `uQuadSize=[444.75,284.25]`, `uFboOffset=[2.25,2.25]`, `target=[true, 593, 379]`. A Mutter built
+  without MR !5179 would report `(440+3)x(280+3)` at `ceilf (4/3) = 2`, i.e. `886x566`, for the same
+  window - not measured here, but that is the rule the old constants encoded.
 - `move_resize_frame` to the work area, never `maximize()`: a maximize animation in a nested
   session never finishes.
 - ES modules are not hot-reloaded: every change needs a fresh shell.
@@ -291,16 +299,14 @@ To solve this at the root:
    part at the one phase where the FBO rounds across it. The straight-edge claim in `README.md`
    therefore describes the container path.
 
-   The box check is a precondition, not a fix. Clutter's offscreen origin only equals the shader's
-   `EFFECT_PADDING_ORIGIN` constant on an integer-aligned actor box (`clutterEffectPadding.generated.js`
-   warns this and `tools/gen-clutter.mjs` derives the constant from the upstream rule); a fractional
-   box can move the origin by a logical pixel, which no constant could express. Deriving the origin
-   from the box at runtime is deferred, because no reachable path produces a fractional box today:
-   the surface width Mutter stores is an `int` (`meta_wayland_surface_get_width`; `MetaShapedTexture`'s
-   `update_size` truncates a viewport source and divides the buffer by an integer scale), and the
-   container is sized from it. Measured in the nested session at 1.25x: a GTK4 Wayland window's
-   container is 440x340 (buffer 550x425) and an XWayland window's is 220x170, both integer. The
-   guard therefore only keeps the clip off a box the shader cannot express, on the safe fallback.
+   The box check is a precondition, not a fix. `lib/offscreenBox.js` derives the offscreen box - the
+   FBO extent and the actor origin inside it - per paint from the actor size and the real resource
+   scale, so a fractional box is expressible; the guard remains because Clutter enlarges the box
+   from the container's place in its parent while `offscreenQuad` derives it from an actor-local
+   `[0, length]`, and the two only agree on the boxes it admits. What the constants could not
+   express was the *scale*: they scaled the box by an integer, so at 1.25x one shader unit was
+   1.2522 device px, the corner arc drifted up to half a physical pixel off the pixel-snapped
+   straight edge, and at 4/3 a float32 fencepost cut the bottom edge a device pixel short.
 3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes

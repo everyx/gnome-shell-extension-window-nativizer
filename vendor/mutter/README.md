@@ -6,11 +6,12 @@ Authoritative source for window management and shadow decorations, vendored from
 - COMMIT: See the COMMIT file in this directory (currently `cat COMMIT`)
 - Purpose:
   - `tools/gen-mutter.mjs` validates the `default_shadow_classes` tuple shape in `meta-shadow-factory.c` (nothing is emitted from it) and generates `MetaWindowType`/`MetaWindowClientType` from `window.h` into `src/lib/mutterRules.generated.js` (do not edit the generated file directly).
-  - `tools/gen-clutter.mjs` parses `clutter/clutter/clutter-actor-box.c` --
-    `_clutter_actor_box_enlarge_for_effects` -- generating
-    `src/lib/clutterEffectPadding.generated.js` (the 3px offscreen padding literal and the
-    derived 2px top/left origin; do not edit the generated file directly). The file lives
-    under `clutter/` upstream but is vendored flat here, like the others.
+  - `clutter/clutter/clutter-actor-box.c` -- `_clutter_actor_box_enlarge_for_effects` -- is what
+    `src/lib/offscreenBox.js` mirrors at runtime: the offscreen box a shader effect gets has to be
+    derived per paint, because `clutter-offscreen-effect.c` scales it by the *real* resource scale
+    and rounds each edge onto the device grid (mutter 51.1 plus upstream MR !5179, the same patch
+    the `mutter-everyx` package applies). `tools/check-upstream-mirrors.mjs` asserts the enlarge
+    expression here.
   - `meta-window-actor-x11.c` preserves `has_shadow` decision logic as the basis for window decoration detection.
   - `meta-window-actor-wayland.c` (src/compositor) preserves `surface_container_apply_transform`, the
     Wayland subpixel phase, as the basis for `getWindowSubpixelOffset` in `src/platform/window.js`.
@@ -20,5 +21,5 @@ Authoritative source for window management and shadow decorations, vendored from
   committed source of truth, at the COMMIT above.
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
-  2. Run `node tools/gen-mutter.mjs` and `node tools/gen-clutter.mjs` (or `pnpm run gen:code`)
+  2. Run `node tools/gen-mutter.mjs` (or `pnpm run gen:code`)
   3. Verify that the generated diff matches expectations

@@ -135,6 +135,40 @@ export function shadowBakeFailureWarning(buffer) {
     return `${PREFIX} Could not allocate a ${buffer}x${buffer} shadow buffer`;
 }
 
+/**
+ * How far the derived offscreen box's device extent and the FBO Clutter allocated may differ. The
+ * derivation is phase-free while the FBO's edges carry the source framebuffer's subpixel phase, so
+ * one edge may move one device pixel without the derivation being wrong; two or more is a defect.
+ * The effect reads only the extent.
+ */
+export const OFFSCREEN_BOX_TOLERANCE = 1;
+
+/**
+ * Builds the WARNING text for a paint whose derived offscreen box does not span the FBO Clutter
+ * allocated, both extents in device px. Null when either extent is unknown or they agree within
+ * `OFFSCREEN_BOX_TOLERANCE`.
+ */
+export function offscreenBoxWarning(derived, target) {
+    if (!finiteExtent(derived) || !finiteExtent(target))
+        return null;
+    // Whole device pixels on both sides: rounding keeps float residue from reading as a part, and
+    // the tolerance is the subpixel phase an edge may carry.
+    const dx = Math.abs(Math.round(derived.width) - Math.round(target.width));
+    const dy = Math.abs(Math.round(derived.height) - Math.round(target.height));
+    if (dx <= OFFSCREEN_BOX_TOLERANCE && dy <= OFFSCREEN_BOX_TOLERANCE)
+        return null;
+    return `${PREFIX} Offscreen box ${extentSummary(derived)} device px disagrees with the ` +
+        `${extentSummary(target)} FBO Clutter allocated beyond ${OFFSCREEN_BOX_TOLERANCE}px`;
+}
+
+function finiteExtent(extent) {
+    return Boolean(extent) && Number.isFinite(extent.width) && Number.isFinite(extent.height);
+}
+
+function extentSummary(extent) {
+    return `${fmt2(extent.width)}x${fmt2(extent.height)}`;
+}
+
 function positiveRect(rect) {
     return Boolean(rect) &&
         Number.isFinite(rect.width) && Number.isFinite(rect.height) &&

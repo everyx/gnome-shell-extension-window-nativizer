@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA } from '../src/lib/clutterEffectPadding.generated.js';
+import { SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA } from '../src/lib/shadowBake.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GTK_VENDOR = path.join(ROOT, 'vendor', 'gtk');
@@ -109,10 +109,10 @@ uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes 
 const float PI = ${pi};
 const float SQRT1_2 = ${sqrt1_2};
 
-// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
-// Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
-const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
-const vec2 FBO_EXTRA  = vec2(${EFFECT_PADDING_EXTRA.toFixed(1)}, ${EFFECT_PADDING_EXTRA.toFixed(1)});
+// Shadow bake layout (src/lib/shadowBake.js): the bake is our own offscreen, so these are the
+// texture's margins - ${SHADOW_BAKE_ORIGIN}px before the cast - not Mutter's.
+const vec2 FBO_OFFSET = vec2(${SHADOW_BAKE_ORIGIN.toFixed(1)}, ${SHADOW_BAKE_ORIGIN.toFixed(1)});
+const vec2 FBO_EXTRA  = vec2(${SHADOW_BAKE_EXTRA.toFixed(1)}, ${SHADOW_BAKE_EXTRA.toFixed(1)});
 
 // --- GTK4 native 2D analytic Gaussian convolution kernel ---
 

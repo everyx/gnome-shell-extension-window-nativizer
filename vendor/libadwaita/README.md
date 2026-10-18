@@ -11,5 +11,5 @@ Authoritative source of decoration styles (CSD window decorations), vendored fro
   from every generated shadow layer.
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
-  2. Run `pnpm run gen:code` (or `node tools/gen-style.mjs` after `gen-clutter`)
+  2. Run `pnpm run gen:code` (or `node tools/gen-style.mjs`)
   3. Verify that the generated diff in `adwaitaStyle.generated.js` matches expectations

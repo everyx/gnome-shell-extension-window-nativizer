@@ -14,20 +14,18 @@ import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
 import {findMetaWindowCached, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
-import {EFFECT_PADDING_ORIGIN, EFFECT_PADDING_EXTRA} from '../lib/clutterEffectPadding.generated.js';
+import {evaluateInvariant, freshInvariantState, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
+import {offscreenExtent, offscreenQuad} from '../lib/offscreenBox.js';
 
 const DECLARATIONS = `
-uniform vec2 uSize;       // Actor size in px
+uniform vec2 uQuadSize;   // Offscreen FBO extent in logical px: what cogl_tex_coord0_in spans
+uniform vec2 uFboOffset;  // Actor origin inside that extent, in logical px
 uniform vec4 uFrame;      // Body rect in actor coords: x, y, w, h (px)
 uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
 uniform float uScale;       // Physical device scale factor
-
-// Clutter effect padding: 2px top-left offset, 3px total enlargement
-const vec2 FBO_OFFSET = vec2(${EFFECT_PADDING_ORIGIN.toFixed(1)}, ${EFFECT_PADDING_ORIGIN.toFixed(1)});
-const vec2 FBO_EXTRA  = vec2(${EFFECT_PADDING_EXTRA.toFixed(1)}, ${EFFECT_PADDING_EXTRA.toFixed(1)});
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -36,10 +34,10 @@ float sdRoundedBox(vec2 p, vec2 b, float r) {
 `;
 
 const CODE = `
-    vec2 quadSize = uSize + FBO_EXTRA;
+    vec2 quadSize = uQuadSize;
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
 
-    vec2 frameCenter = uFrame.xy + uFrame.zw * 0.5 + FBO_OFFSET;
+    vec2 frameCenter = uFrame.xy + uFrame.zw * 0.5 + uFboOffset;
     vec2 frameHalf = uFrame.zw * 0.5;
     vec2 fromCenter = p - frameCenter;
 
@@ -168,7 +166,12 @@ export const RoundedClipEffect = GObject.registerClass({
         // reads the live actors and evaluates the settle on the frame clock. Null until the first pass.
         this._bodyPlan = null;
 
-        this._sizeVec = [0, 0];
+        // The offscreen-box reconciliation latch: the derived box and the FBO Clutter allocated are
+        // two readings of one extent, and a part between them speaks once per episode.
+        this._boxLatch = freshInvariantState();
+
+        this._quadVec = [0, 0];
+        this._offsetVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
         this._scaleVec = [1.0];
         this._radiusVec = [0];
@@ -293,10 +296,10 @@ export const RoundedClipEffect = GObject.registerClass({
         const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin, this._St);
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
-        // The frame edge is the body this paint settles from the live reads and the pass plan; the
-        // actor size above drives uSize. A null plan (before the first pass) uses the live size,
-        // a no-op in health. This is the frame clock: between the manager's debounced passes the cut
-        // follows the actor the compositor is drawing now.
+        // The frame edge is the body this paint settles from the live reads and the pass plan. A
+        // null plan (before the first pass) uses the live size, a no-op in health. This is the frame
+        // clock: between the manager's debounced passes the cut follows the actor the compositor
+        // is drawing now.
         const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
             this._bodyPlan).body ?? size;
         const frame = clipFrameForTarget(bodySize, this._insets, scale,
@@ -315,10 +318,28 @@ export const RoundedClipEffect = GObject.registerClass({
             this._paint.scale = changes.scale;
         }
 
+        // Derived from the actor size at the live scale, so it moves with either, and never
+        // cached: it is what makes one shader unit one logical pixel, and a stale box is what
+        // drew the corner arc off the snapped edge.
+        const quad = offscreenQuad(size, scale);
+        // The FBO Clutter allocated outranks the derived box for the extent the shader spans, since
+        // the texture coordinates cover exactly it. Only the extent is readable, so the derived
+        // origin still rides on the box, and the phase moves it with the window's position: the
+        // pair is compared every paint, not only on a size or scale move.
+        const target = this._readTargetSize();
+        this._checkOffscreenBox({width: quad.width * scale, height: quad.height * scale}, target);
+        const extent = offscreenExtent(quad, target, scale);
+        if (changes.size !== undefined || changes.scale !== undefined ||
+            this._quadVec[0] !== extent.width || this._quadVec[1] !== extent.height) {
+            this._quadVec[0] = extent.width;
+            this._quadVec[1] = extent.height;
+            this.set_uniform_float('uQuadSize', 2, this._quadVec);
+            this._offsetVec[0] = quad.offsetX;
+            this._offsetVec[1] = quad.offsetY;
+            this.set_uniform_float('uFboOffset', 2, this._offsetVec);
+        }
+
         if (changes.size !== undefined) {
-            this._sizeVec[0] = changes.size[0];
-            this._sizeVec[1] = changes.size[1];
-            this.set_uniform_float('uSize', 2, this._sizeVec);
             this._paint.width = changes.size[0];
             this._paint.height = changes.size[1];
         }
@@ -336,6 +357,37 @@ export const RoundedClipEffect = GObject.registerClass({
         }
 
         super.vfunc_paint_target(node, paintContext);
+    }
+
+    /**
+     * The size of the offscreen FBO Clutter allocated, in device px, or null when the read is
+     * unavailable or not positive. `get_target_size` is defined for `ClutterOffscreenEffect`
+     * implementations inside `paint_target`, which is where the clip asks it; `Shell.GLSLEffect`
+     * is one of those on GNOME 50.
+     */
+    _readTargetSize() {
+        const read = this.get_target_size?.();
+        if (!read?.[0])
+            return null;
+        const width = read[1];
+        const height = read[2];
+        if (!(width > 0) || !(height > 0))
+            return null;
+        return {width, height};
+    }
+
+    /**
+     * One paint's offscreen-box reconciliation: the derived box and the FBO Clutter allocated are
+     * two readings of one extent, and the predicate allows the one device pixel a subpixel phase
+     * may move an edge. One violation speaks, because the box is a pure function of this paint's
+     * own size and scale.
+     */
+    _checkOffscreenBox(derived, target) {
+        const {state, message} = evaluateInvariant(this._boxLatch,
+            offscreenBoxWarning(derived, target), 1);
+        this._boxLatch = state;
+        if (message)
+            console.warn(message);
     }
 
     /**
