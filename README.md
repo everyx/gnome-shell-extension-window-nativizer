@@ -24,7 +24,7 @@ Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard re
 
 > [!IMPORTANT]
 > This is an LLM-assisted (vibe coding) project, personally tested and verified in real-world daily
-> use, and strictly backed by automated upstream parity tests.
+> use, and backed by strict automated upstream parity tests.
 
 ---
 
@@ -48,21 +48,21 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### ⚡ Smooth GPU Shaders
 - **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
 - **Decoupled straight-edge AA**: Anti-aliasing stays on the corner arcs, so straight edges stay solid and sharp while dragging at fractional scales
-- **Direct pipeline hook**: Corners stay locked to the window during live resize without lag
+- **Corners that track the window**: They stay locked to the frame during a live resize, without lag
 - **Transitions that follow focus**: The shadow fades to the backdrop set when focus leaves and snaps back when it returns, the way upstream declares it; the same opacity tracks GNOME Shell's close animation
 - **Follows the animation setting**: With animations off the fade snaps as well
-- **Low resource footprint**: Lightweight GPU execution with minimal memory usage and zero-overdraw culling
+- **Low resource footprint**: The GPU draws the corners and shadow in one pass, adding almost nothing to CPU and memory
 
 ### 🛡️ Smart & Non-Invasive
-- **Leaves native apps alone**: Automatically skips the rounded corners of apps that map Libadwaita or Libhandy (read from `/proc/<pid>/maps`); the resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
-- **No double shadows**: Identifies existing compositor shadows, clears a declared ring only when the ring we draw is ours, and otherwise supplements only what is missing
-- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail; every Wayland window gets the rounded mask, while XWayland windows — whose shape shares Mutter's mask slot and would deform if we overwrote it — stay square and sharp unless you force their corners on through the legacy clip
+- **Leaves native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
+- **No stacked shadows**: Where a shadow already exists — Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours — we leave it alone instead of adding ours
+- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail. Every Wayland window is rounded by a mask on the window itself, while XWayland windows stay square and sharp there. **Force overview corners on every window** (Preferences › Display & Rendering) rounds those square previews anyway, at the cost of a blurrier thumbnail
+- **Sharp overview previews**: The rounding comes from the window's own surface, not from an extra offscreen pass
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
 ### 🔍 Crisp Text Protection
 Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
-- **Prioritize crisp text**: An optional toggle that bypasses corner clipping on scaled displays to keep text sharp
-- **Tracking upstream Mutter**: Preparing for direct rendering that keeps both the corners and the sharp text, once upstream Mutter [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) lands
+- **Prioritize crisp text**: The switch of that name (Preferences › Display & Rendering) drops the corners on a fractional-scale monitor to keep text sharp; the shadow is unaffected
 
 ---
 
@@ -74,7 +74,7 @@ Fractional display scaling (125%, 150%) often causes font blurriness in traditio
 | **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates non-native windows only; leaves native apps untouched |
 | **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Authentic curvature matching official Libadwaita |
 | **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Adds GTK-standard grab margins outside the window, with 8-way directional cursors |
-| **Shadow Pipeline** | St.Bin CSS layout tree | GPU-baked texture mesh |
+| **Shadow Pipeline** | Corners cut by a CSS node the Shell re-lays-out | Shadow and corners baked once into a GPU texture |
 
 ---
 
@@ -93,20 +93,29 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 
 To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
 
+- **Stored per window kind**: the app plus Wayland or XWayland, window type, size, shadow margins — a fixed-size kind may add a size suffix. The **Corrections** row shows that kind and the title the window was picked from
+- **Moving corrections between machines**: the menu beside **Pick window…** — **Export to Clipboard** copies them, **Import from Clipboard** merges them back
+- **Resolving import conflicts**: **Resolve Import Conflicts** handles each conflict, defaulting to **Replace**, or **Keep**/**Replace** for all at once
+- **From a script**: `PickWindow(b debug)` on `org.gnome.Shell.Extensions.WindowNativizer` raises the same picker; since 0.11.0 the boolean is required, so pass `false` for the ordinary pick ([development.md](docs/development.md) has the `gdbus` line)
+
 [Learn more about the rule model →](docs/rule-model.md)
 
 ---
 
 ## What a correction cannot fix
 
-Corrections cover the decisions the reading gets wrong. These three are not decisions:
+Each correction reverses the judgement for one window kind. Two things are not judgements at all:
 
-- **Mutter's shadow on a bare XWayland window**: an Electron client under XWayland keeps one, and loses it in a single step where every window we decorate fades. The compositor draws that shadow outside the window square and GJS cannot clear it, so ours would only be a second one
-- **What a client paints inside its own surface**: a custom titlebar, an in-surface border, its own grips. The compositor sees geometry, not paint
-- **The lighter shadow libadwaita gives a message dialog**: it is a style class inside the client, and the window type is all the compositor sees. Guessing from the type would hit the dialogs that are not message dialogs
+- **What a client paints inside its own surface**: a custom titlebar, an in-surface border, its own grips. The compositor sees geometry, not paint; only a margin the client declares tells us a decoration is there
+- **The lighter shadow libadwaita gives a message dialog**: a style class inside the client, while the compositor sees only the window type; guessing from the type would hit the dialogs that are not message dialogs
 
-Each is recorded with its reasoning in [decoration-model.md](docs/decoration-model.md) § Known
-boundaries.
+Shadow ownership and the small-window floor are judgements, so a **Shadow** or **Corners** correction reverses them.
+
+- **The small-window floor**: a window whose shorter edge is at or under ~38 logical pixels — read on its first stable size — gets no decoration at all, because at that size the corners read as a pill and the shadow swallows the window body. A **Corners** correction on that kind brings it back
+- **Mutter's shadow outside an opaque bare X11 window**: no correction clears it. **Shadow** only stacks ours on top — two shadows, which is what you want during the focus fade — and **Corners** alone leaves the square shadow beside our rounded body
+- **An alpha buffer that declares every pixel opaque**: it can leave Mutter's shadow beside ours too; the **Shadow** axis retracts ours and leaves Mutter's
+
+[rule-model.md](docs/rule-model.md) is the full model; [decoration-model.md](docs/decoration-model.md) § Known boundaries has the reasoning.
 
 ---
 
