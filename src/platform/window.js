@@ -590,6 +590,48 @@ export function getSurfaceContainer(actor, win, St = null) {
 }
 
 /**
+ * How many of a surface container's children cover the container's own box. Its children are the
+ * window's surface actors, and the mask only rounds the main surface's shaped texture, so a second
+ * actor over that box paints corners the mask cannot reach. The sibling textures are unreachable, so
+ * the boxes are the reading; an unreadable container answers 0.
+ */
+export function countSurfaceActorsCoveringBox(container, St = null) {
+    try {
+        const box = actorBox(container);
+        if (!box)
+            return 0;
+        let covering = 0;
+        for (const child of container.get_children?.() ?? []) {
+            if (!isForeignWidget(child, St) && coversBox(actorBox(child), box))
+                covering++;
+        }
+        return covering;
+    } catch {
+        // A half-destroyed actor tree: no reading this pass.
+        return 0;
+    }
+}
+
+/** An actor's allocation as a box, or null when it carries no positive size. */
+function actorBox(actor) {
+    const {x = 0, y = 0, width = 0, height = 0} = actor ?? {};
+    if (!(width > 0) || !(height > 0))
+        return null;
+    return {x, y, width, height};
+}
+
+/** Whether a child's box contains `box` on all four sides. */
+function coversBox(candidate, box) {
+    if (!candidate)
+        return false;
+    const EPSILON = 1e-6;
+    return candidate.x <= box.x + EPSILON &&
+        candidate.y <= box.y + EPSILON &&
+        candidate.x + candidate.width >= box.x + box.width - EPSILON &&
+        candidate.y + candidate.height >= box.y + box.height - EPSILON;
+}
+
+/**
  * Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`.
  */
 function rectanglesOverlap(a, b) {

@@ -306,8 +306,10 @@ then hand every decoration its overview state: every Wayland window suspends the
 takes the shaped-texture mask, while XWayland windows show square previews (the mask slot is
 Mutter's shape slot), keeping the clip only when the force-corners preference is on. Taking the
 mask is not the same as rounding: the slot lives on one shaped texture, so a window whose visible
-corners another surface of the same window paints keeps square previews (the second admitted
-square, in `decoration-model.md`). The preview reads are the window's own actors, not a card. The
+corners another surface of the same window paints keeps square previews while that preference is
+off, and the preference is what routes it to the clip (`countSurfaceActorsCoveringBox`, the second
+admitted square in `decoration-model.md`). The preview reads are the window's own actors, not a
+card. The
 opacity bypass rides the window actor's surface container (`getWindowSurfaceContainer`) so one
 actor covers every clone, and the shadow clone finds its previews by walking the stage for actors
 carrying `metaWindow === win && window_container` (`getOverviewPreviews`), because
