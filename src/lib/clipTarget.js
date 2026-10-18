@@ -69,10 +69,10 @@ export function resolveClipTarget(win, actor, St = null) {
 }
 
 /**
- * Whether a surface container's local box is integer-aligned, so Clutter's derived offscreen origin
- * and size hold. Clutter's `_clutter_actor_box_enlarge_for_effects` yields the shader's constant
- * origin only on an integer box; a fractional one can move it a logical pixel, which no constant
- * could express. Refused, the clip falls back to the window actor, as for a geometry mismatch.
+ * Whether a surface container's local box is integer-aligned. Refused, the clip falls back to the
+ * window actor. Clutter enlarges the box from the container's place in its parent while
+ * `offscreenQuad` derives it from an actor-local `[0, length]`, so the two agree only on the boxes
+ * this admits.
  */
 export function isIntegerAlignedSurfaceBox(candidate) {
     if (!candidate)

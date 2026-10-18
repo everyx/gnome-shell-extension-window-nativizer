@@ -6,11 +6,13 @@
 
 import {
     BUFFER_ACTOR_TOLERANCE,
+    OFFSCREEN_BOX_TOLERANCE,
     PHASE_ALIGNMENT_TOLERANCE,
     PHASE_MAGNITUDE_BOUND,
     bufferAllocationWarning,
     evaluateInvariant,
     freshInvariantState,
+    offscreenBoxWarning,
     overviewMaskRefusalWarning,
     phaseAlignmentWarning,
     shadowBakeFailureWarning,
@@ -166,6 +168,34 @@ describe('overviewMaskRefusalWarning (the square-in-the-overview class)', () => 
         const warning = overviewMaskRefusalWarning('no preview container', '"firefox"');
         expect(warning).toContain('no preview container');
         expect(warning).toContain('"firefox"');
+    });
+});
+
+describe('offscreenBoxWarning (the derived box must span the FBO Clutter allocated)', () => {
+    const derived = {width: 556, height: 356};
+
+    it('stays silent when the derived device extent is the FBO extent', () => {
+        expect(offscreenBoxWarning(derived, {...derived})).toBeNull();
+        // Float residue from divide-then-multiply is agreement, not a part.
+        expect(offscreenBoxWarning(derived, {width: 556.0000001, height: 356})).toBeNull();
+    });
+
+    it('stays silent for the one device pixel a framebuffer phase may move an edge', () => {
+        expect(offscreenBoxWarning(derived, {width: 557, height: 356})).toBeNull();
+        expect(offscreenBoxWarning(derived, {width: 555, height: 357})).toBeNull();
+    });
+
+    it('names both extents when they part beyond the phase an edge may carry', () => {
+        const warning = offscreenBoxWarning(derived, {width: 558, height: 356});
+        expect(warning).toContain('556.00x356.00');
+        expect(warning).toContain('558.00x356.00');
+        expect(warning).toContain(String(OFFSCREEN_BOX_TOLERANCE));
+    });
+
+    it('stays silent when either extent is unknown, rather than fabricate one', () => {
+        expect(offscreenBoxWarning(null, derived)).toBeNull();
+        expect(offscreenBoxWarning(derived, null)).toBeNull();
+        expect(offscreenBoxWarning(derived, {width: Number.NaN, height: 356})).toBeNull();
     });
 });
 

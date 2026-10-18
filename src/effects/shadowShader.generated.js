@@ -19,8 +19,8 @@ uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes 
 const float PI = 3.1415926535897932384626433832795;
 const float SQRT1_2 = 1.4142135623730951;
 
-// ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects, gen-clutter.mjs)
-// Offsets 2px top-left to avoid subpixel jitter, adds 3px in total size
+// Shadow bake layout (src/lib/shadowBake.js): the bake is our own offscreen, so these are the
+// texture's margins - 2px before the cast - not Mutter's.
 const vec2 FBO_OFFSET = vec2(2.0, 2.0);
 const vec2 FBO_EXTRA  = vec2(3.0, 3.0);
 

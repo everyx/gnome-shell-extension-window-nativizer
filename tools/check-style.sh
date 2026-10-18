@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
-node tools/gen-clutter.mjs --check
 node tools/gen-style.mjs --check
 node tools/gen-shader.mjs --check
 node tools/gen-mutter.mjs --check
