@@ -15,6 +15,12 @@ WL_DISPLAY="wayland-window-nativizer"
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 
+# The extension's compiled schema is not in the system schema directories. GSETTINGS_SCHEMA_DIR is
+# additive, so naming it keeps the system schemas visible too. This is what an Eval snippet's
+# `Gio.Settings.new('org.gnome.shell.extensions.window-nativizer')` needs: Eval runs inside the
+# shell process, and without the schema the lookup fails there instead of reading the settings.
+export GSETTINGS_SCHEMA_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID/schemas"
+
 # Note: this script runs inside dbus-run-session bash (see dev.sh)
 export G_MESSAGES_DEBUG='GNOME Shell'
 export WINDOW_NATIVIZER_UUID="$UUID"
@@ -33,7 +39,7 @@ if [[ "$SCALE" != "1.0" && "$SCALE" != "1" ]]; then
 fi
 
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
-    --virtual-monitor 1920x1080 --unsafe-mode &
+    --virtual-monitor 1920x1080 --unsafe-mode 9>&- &
 echo $! > "$PIDFILE"
 sleep 4
 
@@ -132,5 +138,12 @@ PYEOF
 fi
 
 touch "$STATE_DIR/ready"
+
+# The session is the shared resource; the lock only serializes starting it. A direct start (this
+# script run without dev.sh) holds the lock itself, so drop the copy this shell inherited now that
+# the session is up, or every later `dev.sh app` would queue behind a session that drives nothing.
+if { true >&9; } 2>/dev/null; then
+    exec 9>&-
+fi
 
 wait

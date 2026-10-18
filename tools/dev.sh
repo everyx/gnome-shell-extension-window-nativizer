@@ -19,12 +19,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under tools/)
 # The nested session is one shared resource; queue behind anyone already driving it. Re-entrant
 # within this tree, so a holder that calls back into dev.sh (test-e2e.sh does this) does not
-# deadlock. `log` only reads the log file and never touches the session, so it never queues.
-if [ -z "${WN_SESSION_LOCK_HELD:-}" ] && [ "${1:-}" != "log" ]; then
-    exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/dev.sh" "$@"
-fi
+# deadlock. `log` only reads the log file and never touches the session, and `stop` is the teardown
+# for a session that may *be* the current lock holder, so neither queues: a contended or wedged
+# session can always be observed and always be taken down.
+case "${1:-}" in
+    log|stop) ;;
+    *)
+        if [ -z "${WN_SESSION_LOCK_HELD:-}" ]; then
+            exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/dev.sh" "$@"
+        fi
+        ;;
+esac
 # Sets SRC_DIR, UUID, EXT_DIR and deploy_ext().
 source "$ROOT/tools/deploy-ext.sh"
+# The extension's own compiled schema lives in its install directory, not in the system schema
+# directories. GSETTINGS_SCHEMA_DIR is additive, so naming it here keeps every schema - system and
+# extension - visible to the nested session and to every client this script starts. Without it a
+# `Gio.Settings.new('org.gnome.shell.extensions.window-nativizer')` in an Eval snippet (which runs
+# inside the shell process) has no such schema and takes the shell down with it.
+export GSETTINGS_SCHEMA_DIR="$EXT_DIR/schemas"
 WL_DISPLAY="wayland-window-nativizer"
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
@@ -46,7 +59,20 @@ cmd_shell() {
     local scale="${1:-${WINDOW_NATIVIZER_SCALE:-1.0}}"
     echo ">> Starting headless nested shell (background, log: $LOG, scale: $scale)"
     chmod +x "$ROOT/tools/dev-shell.sh"
-    WINDOW_NATIVIZER_UUID="$UUID" WINDOW_NATIVIZER_SCALE="$scale" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
+    # The marker is set explicitly, not merely inherited: everything the session spawns runs under
+    # a lock its own tree already holds, and a tool started from inside the session (a client, an
+    # Eval-driven helper, a terminal opened on the nested display) must run straight through
+    # instead of queueing behind the session it belongs to.
+    #
+    # fd 9 is the session lock this script holds. The session outlives this script, so it must not
+    # inherit that fd: an inherited fd keeps the flock held for as long as the nested shell lives,
+    # which makes the lock look permanently held and turns every later `dev.sh app` - and `stop` -
+    # into a wait on a session that is not driving anything. Closed here, the lock is held for the
+    # startup (so two `dev.sh shell` runs still serialize) and released when this script exits.
+    WN_SESSION_LOCK_HELD=1 WINDOW_NATIVIZER_UUID="$UUID" WINDOW_NATIVIZER_SCALE="$scale" \
+        XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+        setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" \
+        9>&- > "$LOG" 2>&1 < /dev/null &
     local session_pid=$!
     disown
     # Wait until ready
@@ -142,24 +168,50 @@ cmd_dconf() {
     fi
 }
 
-cmd_stop() {
+# The nested gnome-shell pids. The pidfile is trusted only while it still names this harness's
+# shell, so a reused pid cannot become a target; otherwise the session's own command line is
+# matched. The pattern is bracketed so it cannot match the pgrep invocation itself, and it pins
+# --headless plus the fixed Wayland display, which is this harness's session shape: the desktop
+# shell or a devkit session does not match it.
+session_pids() {
     local pid cmd
     if [[ -f "$PIDFILE" ]]; then
         pid="$(cat "$PIDFILE")"
-        echo ">> Stopping nested shell (PID $pid)"
-        # Signal the exact process this harness recorded, never the shared display name. `pkill -f`
-        # on the display name is a substring match against every command line, and the display name
-        # is fixed, so one leg's teardown also killed the shell the next leg - or the developer -
-        # had just started. The recorded pid is the nested gnome-shell; dbus-run-session reaps the
-        # rest of the session when it exits, so signalling that one pid stops the session. The
-        # pidfile is trusted only while it still names this harness's shell, so a stale pidfile
-        # cannot make a reused pid a target.
-        cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
-        if [[ "$cmd" == *gnome-shell*"wayland-display=$WL_DISPLAY"* ]]; then
-            kill "$pid" 2>/dev/null || true
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            cmd="$( { tr '\0' ' ' < "/proc/$pid/cmdline"; } 2>/dev/null || true)"
+            if [[ "$cmd" == *gnome-shell*"wayland-display=$WL_DISPLAY"* ]]; then
+                printf '%s\n' "$pid"
+                return
+            fi
         fi
-        rm -rf "$PIDFILE" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"
     fi
+    pgrep -f "gnome-shel[l] --headless --wayland --wayland-display=$WL_DISPLAY" 2>/dev/null || true
+}
+
+# Teardown, safe to run at any time and any number of times: it never takes the session lock (it
+# may well be held by the session it is here to stop, or by a tool driving it), it accepts a
+# missing or stale pidfile, and it always leaves the state directory ready for a fresh start.
+cmd_stop() {
+    local pids pid waited
+    pids="$(session_pids)"
+    if [[ -n "$pids" ]]; then
+        for pid in $pids; do
+            echo ">> Stopping nested shell (PID $pid)"
+            # The exact process this harness identified, never the shared display name: `pkill -f`
+            # on the display name is a substring match against every command line, so one leg's
+            # teardown also killed the shell the next leg - or the developer - had just started.
+            # dbus-run-session reaps the rest of the session when the shell exits.
+            kill "$pid" 2>/dev/null || true
+        done
+        # Wait for the session to actually be gone, so the wayland display and the pidfile are
+        # free before the next `dev.sh shell` runs.
+        for waited in $(seq 1 50); do
+            pids="$(session_pids)"
+            [[ -z "$pids" ]] && break
+            sleep 0.1
+        done
+    fi
+    rm -rf "$PIDFILE" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"
     echo ">> Cleaned up"
 }
 
