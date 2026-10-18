@@ -130,6 +130,12 @@ Window Nativizer 对绝大多数应用能自动识别，但也支持按窗口种
 gnome-extensions install --force window-nativizer@everyx.github.io.shell-extension.zip
 ```
 
+### Arch Linux（AUR）
+```sh
+paru -S gnome-shell-extension-window-nativizer
+```
+`yay` 等其它 AUR 助手同理。该包从源码构建，会自动拉取构建依赖。
+
 ### 从源码安装
 ```sh
 git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git

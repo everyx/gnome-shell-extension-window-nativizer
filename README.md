@@ -131,6 +131,12 @@ Download `window-nativizer@everyx.github.io.shell-extension.zip` from [GitHub Re
 gnome-extensions install --force window-nativizer@everyx.github.io.shell-extension.zip
 ```
 
+### Arch Linux (AUR)
+```sh
+paru -S gnome-shell-extension-window-nativizer
+```
+`yay` and other AUR helpers work the same. The package builds from source and pulls in its build dependencies.
+
 ### From Source
 ```sh
 git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
