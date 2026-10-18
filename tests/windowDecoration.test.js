@@ -186,6 +186,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
      * @param {boolean} [options.drawShadow=false]
      * @param {boolean} [options.buildRoundedMaskReturnsNull=false]
      * @param {boolean} [options.forceOverviewCorners=false]
+     * @param {object[]} [options.surfaceActors] - Boxes for the window's surface actors, the main
+     *   surface first: the first is also the container's own box, as Mutter builds it. Omitted, the
+     *   container fake carries no box and no children.
      * @param {boolean} [options.allWorkspaces=false] - Whether the window is shown on every workspace
      * @param {number} [options.workspaceCount=1] - Workspaces the preview set is sized against
      * @param {boolean} [options.ringClear=false]
@@ -200,6 +203,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         insets = {left: 0, top: 0, right: 0, bottom: 0},
         buildRoundedMaskReturnsNull = false,
         forceOverviewCorners = false,
+        surfaceActors = null,
         allWorkspaces = false,
         workspaceCount = 1,
         warn = jasmine.createSpy('warn'),
@@ -252,8 +256,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         };
         mockActor.get_texture = () => surface;
 
-        const makeContainer = () => ({
+        // The window's surface container: its children are the window's surface actors, and its own
+        // box is the main surface's - the toplevel surface actor sits at the buffer origin at the
+        // container's size (measured in a nested session). `surfaceActors` hands a spec the window's
+        // surface tree, so it can say "another surface paints this box" without a real client.
+        const makeContainer = (box = null, children = []) => ({
             opacity: 255,
+            ...(box ?? {}),
+            get_children: () => children,
             get_opacity() {
                 return this.opacity;
             },
@@ -263,7 +273,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             connect: () => 1,
             disconnect: () => {},
         });
-        const container = makeContainer();
+        const surfaceBoxes = [...(surfaceActors ?? [])];
+        const container = makeContainer(surfaceBoxes[0] ?? null, surfaceBoxes);
 
         // The mask bypass hangs on the window's surface container - the window actor's child every
         // preview clone paints through - not on a preview card. The old `_delegate` wiring put it
@@ -357,6 +368,13 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             setBuffer: (width, height) => {
                 bufferWidth = width;
                 bufferHeight = height;
+            },
+            // The window's surface tree is live: a client that destroys a surface changes what a
+            // later reconcile reads, without any window signal naming the change.
+            setSurfaceActors: boxes => {
+                surfaceBoxes.length = 0;
+                surfaceBoxes.push(...boxes);
+                Object.assign(container, boxes[0] ?? {x: 0, y: 0, width: 0, height: 0});
             },
             deco,
         };
@@ -2016,6 +2034,70 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         forced.deco.setOverviewMode(true);
         expect(forced.deco.clip.enabled).toBeTrue();
         expect(forced.surface.mask).toBeNull();
+    });
+
+    it('hands a window whose second surface paints its box to the forced legacy clip', () => {
+        // Firefox's Picture-in-Picture holds two buffer-sized surfaces at the origin: the mask
+        // lands on the main surface's shaped texture while the other surface paints the corners,
+        // so the preview stays square however sharp the mask is. Forcing corners is the user
+        // asking for the legacy clip in exactly this case.
+        const box = {x: 0, y: 0, width: 800, height: 600};
+        const harness = setupMaskHarness({
+            forceOverviewCorners: true,
+            surfaceActors: [box, {...box}],
+        });
+
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.surface.mask).toBeNull();
+        expect(harness.deco.clip.enabled).toBeTrue();
+    });
+
+    it('keeps the mask when the second surface covers no corner', () => {
+        // A small subsurface - a video overlay, a client's own widget surface - leaves the corners
+        // to the main surface, which is what the mask rounds. The forced clip is not spent on it.
+        const harness = setupMaskHarness({
+            forceOverviewCorners: true,
+            surfaceActors: [
+                {x: 0, y: 0, width: 800, height: 600},
+                {x: 20, y: 20, width: 100, height: 100},
+            ],
+        });
+
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.surface.mask).toBe(harness.mask);
+        expect(harness.deco.clip.enabled).toBeFalse();
+    });
+
+    it('masks a multi-surface window while the setting is off', () => {
+        // The admitted square is XWayland's too: without the preference the mask stays the path for
+        // every Wayland window, so the surface tree is never read and nothing changes.
+        const box = {x: 0, y: 0, width: 800, height: 600};
+        const harness = setupMaskHarness({surfaceActors: [box, {...box}]});
+
+        harness.deco.setOverviewMode(true);
+
+        expect(harness.surface.mask).toBe(harness.mask);
+        expect(harness.deco.clip.enabled).toBeFalse();
+    });
+
+    it('re-reads the surface tree on a rebuild: a window that drops its second surface gets the mask', () => {
+        const box = {x: 0, y: 0, width: 800, height: 600};
+        const harness = setupMaskHarness({forceOverviewCorners: true, surfaceActors: [box, {...box}]});
+        const {surface, deco, setSurfaceActors} = harness;
+
+        deco.setOverviewMode(true);
+        expect(surface.mask).toBeNull();
+        expect(deco.clip.enabled).toBeTrue();
+
+        // The client destroys the surface that painted the corners. The size-changed reconcile
+        // re-reads the tree, and the sharp mask is reachable again.
+        setSurfaceActors([box]);
+        harness.windowSignals.find(s => s.signal === 'size-changed').cb();
+
+        expect(surface.mask).toBe(harness.mask);
+        expect(deco.clip.enabled).toBeFalse();
     });
 
     it('masks a Wayland window whose shaped texture is directly readable', () => {

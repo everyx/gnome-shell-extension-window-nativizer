@@ -1020,13 +1020,18 @@ every subsurface - children of the surface container the clone paints. A window 
 corners another surface of the same window paints therefore keeps square previews although the
 mask installs and the container drops to 254. Measured on Firefox's Picture-in-Picture window,
 which holds two live `560x315` surfaces at `(0,0)`: the mask installed, the container dropped to
-254, and re-installing the mask changed nothing. The extension cannot even detect it in 51 - the
-other surfaces' textures are unreachable from GJS (`MetaSurfaceActor.content` is a private
-`MetaSurfaceContent`, and `Meta.SurfaceActor.get_texture()` and `Meta.WindowActor.get_image()`
-are not in the introspection data). This is the same kind of admitted square as XWayland's, so it
-keeps the same policy: display quality first, the sharp mask as the primary path, and the legacy
-offscreen clip only behind the `force-overview-corners` setting. It is tracked upstream in issue
-#27 (`Track upstream limits on overview corner fidelity: offscreen-effect blur and
+254, and re-installing the mask changed nothing. The other surfaces' *textures* are unreachable
+from GJS (`MetaSurfaceActor.content` is a private `MetaSurfaceContent`, and
+`Meta.SurfaceActor.get_texture()` and `Meta.WindowActor.get_image()` are not in the introspection
+data), but the surface actors are not: `meta_window_actor_wayland_rebuild_surface_tree()` hangs
+them on the container, and `countSurfaceActorsCoveringBox` (`src/platform/window.js`) counts the
+ones whose box covers the container's own. Two covering actors is the reading that the corners are
+not the mask's to round - the criterion behind the `force-overview-corners` routing below. Measured
+in a nested session: a single-surface window reads 1, a small subsurface reads 1, a full-box
+subsurface reads 2. With the setting off this is the same kind of admitted square as XWayland's,
+and it keeps the same policy: display quality first, the sharp mask as the primary path, and the
+legacy offscreen clip only behind the `force-overview-corners` setting. It is tracked upstream in
+issue #27 (`Track upstream limits on overview corner fidelity: offscreen-effect blur and
 per-shaped-texture masks`), whose body records this analysis and a third re-enable criterion.
 
 **Not ready yet is not a refusal.** A window whose preview is built before the client's first

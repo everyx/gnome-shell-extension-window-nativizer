@@ -15,6 +15,7 @@ import {WindowClientType} from './mutterRules.generated.js';
 import {isPaintableFrame} from '../effects/clipParams.js';
 import {getWorkspaceCount} from '../platform/display.js';
 import {
+    countSurfaceActorsCoveringBox,
     getWindowActor,
     getWindowDisplayTitle,
     getWindowFrameRect,
@@ -130,6 +131,16 @@ export class OverviewDecoration {
     }
 
     /**
+     * Whether the mask can round the window's visible corners. It lives on one shaped texture - the main
+     * surface's - while every surface of the window's tree hangs on the same container, so a second
+     * surface actor over the container's box paints corners the mask cannot reach. The sibling textures
+     * are unreachable from GJS, so the boxes are the reading.
+     */
+    _maskReachesCorners() {
+        return countSurfaceActorsCoveringBox(getWindowSurfaceContainer(this._win)) < 2;
+    }
+
+    /**
      * Applies the overview visuals for the readings already stored and returns the outcome now in
      * force. Both the entry path (`setMode`) and a card rebuild (`_refresh`) settle here, so the
      * mode they hand back is always the one that actually installed - not the one that was merely
@@ -142,11 +153,12 @@ export class OverviewDecoration {
             return 'square';
         }
 
-        // Three ways a window can be shown: rounded and sharp from the shaped-texture mask, which every
-        // Wayland window takes; rounded and blurry from the legacy offscreen clip, kept when the user forces
-        // corners; or square. A mask can only round the surface it is set on, so a window whose visible
-        // corners another surface paints keeps square previews.
-        const maskable = this._canMask && this._maskReady();
+        // Three ways a window can be shown: sharp from the mask, blurry from the legacy offscreen clip the
+        // user forced, or square. The mask only rounds the surface it is set on, so forcing corners also
+        // hands the clip a window whose box a second surface paints; with the setting off nothing here
+        // reads that.
+        const forcedToClip = this._forceOverviewCorners && !this._maskReachesCorners();
+        const maskable = this._canMask && this._maskReady() && !forcedToClip;
         this._syncHooks();
         // A mask is only one of the ways to round the preview; whether it actually landed decides
         // the mode, so a builder that declined still lets the forced legacy clip take over.

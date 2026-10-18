@@ -35,6 +35,7 @@ import {
     findMetaWindow,
     findMetaWindowCached,
     getSurfaceContainer,
+    countSurfaceActorsCoveringBox,
     getWindowSubpixelOffset,
     getAppliedSubpixelPhase,
     invalidateMonitorCache
@@ -880,6 +881,63 @@ describe('platform', () => {
             const background = {x: 0, y: 0, width: 800, height: 600};
             const container = {x: 3, y: 0, width: 800, height: 600};
             expect(getSurfaceContainer({get_children: () => [background, container]}, bufferWin(800, 600), St)).toBeNull();
+        });
+    });
+
+    describe('countSurfaceActorsCoveringBox', () => {
+        const St = {Widget: class {}};
+        const actor = (x, y, width, height) => ({x, y, width, height});
+
+        it('counts the container\'s own surface actor as the one covering child', () => {
+            // The measured single-surface shape: the toplevel surface actor sits at the buffer
+            // origin at the container's own size.
+            const container = {...actor(0, 0, 560, 315), get_children: () => [actor(0, 0, 560, 315)]};
+            expect(countSurfaceActorsCoveringBox(container, St)).toBe(1);
+        });
+
+        it('counts a second full-box surface actor, the shape the mask cannot round', () => {
+            // Firefox's Picture-in-Picture: two live 560x315 surfaces at (0,0). The mask lands on
+            // the main surface's shaped texture while the other surface paints the corners.
+            const container = {
+                ...actor(0, 0, 560, 315),
+                get_children: () => [actor(0, 0, 560, 315), actor(0, 0, 560, 315)],
+            };
+            expect(countSurfaceActorsCoveringBox(container, St)).toBe(2);
+        });
+
+        it('leaves a smaller or offset sibling out of the count', () => {
+            const container = {
+                ...actor(0, 0, 560, 315),
+                get_children: () => [actor(0, 0, 560, 315), actor(20, 20, 100, 100)],
+            };
+            expect(countSurfaceActorsCoveringBox(container, St)).toBe(1);
+        });
+
+        it('counts a sibling larger than the container: it covers the corners too', () => {
+            const container = {
+                ...actor(0, 0, 560, 315),
+                get_children: () => [actor(0, 0, 560, 315), actor(-4, -4, 568, 323)],
+            };
+            expect(countSurfaceActorsCoveringBox(container, St)).toBe(2);
+        });
+
+        it('ignores an injected foreign widget and an unallocated actor', () => {
+            const container = {
+                ...actor(0, 0, 560, 315),
+                get_children: () => [new St.Widget(), actor(0, 0, 0, 0), actor(0, 0, 560, 315)],
+            };
+            expect(countSurfaceActorsCoveringBox(container, St)).toBe(1);
+        });
+
+        it('answers 0 for an unallocated container or an unreadable tree', () => {
+            // Nothing to compare against: the caller reads this as "the mask's own reach is not
+            // what is in question", so a container without a box must not look like a full box.
+            expect(countSurfaceActorsCoveringBox(actor(0, 0, 0, 0), St)).toBe(0);
+            expect(countSurfaceActorsCoveringBox(null, St)).toBe(0);
+            expect(countSurfaceActorsCoveringBox({x: 0, y: 0, width: 560, height: 315,
+                get_children: () => {
+                    throw new Error('actor destroyed');
+                }}, St)).toBe(0);
         });
     });
 
