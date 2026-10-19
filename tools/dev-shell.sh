@@ -38,8 +38,22 @@ if [[ "$SCALE" != "1.0" && "$SCALE" != "1" ]]; then
     gsettings set org.gnome.mutter experimental-features "['scale-monitor-framebuffer']" 2>/dev/null || true
 fi
 
+# Virtual monitors are only creatable at shell start, so a test that needs a second one asks for
+# it here. The id (`Meta-0`, `Meta-1`) follows the order, and each monitor exposes one mode.
+VIRTUAL_MONITORS=(--virtual-monitor 1920x1080)
+if [[ -n "${WINDOW_NATIVIZER_SECOND_MONITOR:-}" ]]; then
+    VIRTUAL_MONITORS+=(--virtual-monitor "$WINDOW_NATIVIZER_SECOND_MONITOR")
+fi
+
+# Xwayland is the mainline default; a Wayland-only check can ask for none, which also sidesteps
+# a mutter startup crash in the Xwayland path on some headless rigs.
+X11_ARGS=()
+if [[ -n "${WINDOW_NATIVIZER_NO_X11:-}" ]]; then
+    X11_ARGS+=(--no-x11)
+fi
+
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
-    --virtual-monitor 1920x1080 --unsafe-mode 9>&- &
+    "${VIRTUAL_MONITORS[@]}" "${X11_ARGS[@]}" --unsafe-mode 9>&- &
 echo $! > "$PIDFILE"
 sleep 4
 

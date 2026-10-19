@@ -2486,13 +2486,20 @@ print(json.dumps(json.loads(match.group(0))) if match else '{}')
 PYEOF
 }
 
-STRESS_WINDOWS=6
+# The stress mix includes X11 windows only when this session has Xwayland. A Wayland-only session
+# stresses the same Wayland path, and the X11 case is already reported as CANNOT RUN above; without
+# this a session that legitimately has no Xwayland can never pass the round.
+if [[ "$X11_AVAILABLE" -eq 1 ]]; then
+    STRESS_WINDOWS=6
+else
+    STRESS_WINDOWS=4
+fi
 STRESS_ROUNDS=3
 AWAIT_TRIES=150   # more windows map and reconcile than one; give the poll room
 for round in $(seq 1 "$STRESS_ROUNDS"); do
     PIDS=()
     for i in $(seq 1 "$STRESS_WINDOWS"); do
-        if (( i % 3 == 0 )); then
+        if (( X11_AVAILABLE == 1 && i % 3 == 0 )); then
             "$DEV" xapp gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
         else
             "$DEV" app gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
@@ -2930,6 +2937,20 @@ if ! python3 "$ROOT/tools/check-clip-tangent.py" --check; then
     exit 1
 fi
 summary "Clip Frame vs Offscreen Box: PASSED (1 shader unit = 1 logical px; every edge and corner tangent on the body frame)"
+
+# A decorated window dragged across a seam between monitors of different scales is sized by the
+# engine at the highest scale it touches. This starts its own two-monitor session, so it runs once,
+# after the log audit (restarting the session wipes the audited log) and the per-scale tangent check.
+if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
+    if python3 "$ROOT/tools/check-cross-monitor.py" --check; then
+        summary "Two-Monitor Mixed-Scale Straddle: PASSED (the clip takes the highest scale the frame intersects; the body spans its frame and every edge and corner tangent sits on it)"
+    else
+        echo "!! The decorated window did not span its frame across the monitor seam at scale $SCALE"
+        exit 1
+    fi
+else
+    cannot_run "the two-monitor straddle runs its own session once, at scale 1.0 (this leg is $SCALE)"
+fi
 
 echo ">> Lifecycle Summary:"
 summary "GJS Surface: PASSED (every member we call is callable, and the platform seams resolved; signatures above)"
