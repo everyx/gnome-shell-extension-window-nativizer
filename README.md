@@ -56,13 +56,21 @@ Visual rounding is only half the story — non-native windows often have paper-t
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
 - **No stacked shadows**: Where a shadow already exists — Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours — we leave it alone instead of adding ours
-- **Overview-aware**: Keeps corners and shadows in overview previews without blurring the thumbnail. Every Wayland window is rounded by a mask on the window itself, while XWayland windows stay square and sharp there. **Force overview corners on every window** (Preferences › Display & Rendering) rounds those square previews anyway, at the cost of a blurrier thumbnail
-- **Sharp overview previews**: The rounding comes from the window's own surface, not from an extra offscreen pass
+- **Round and sharp overview previews**: Rounded and sharp at once, because the corners come from the window's own surface rather than an extra offscreen pass (see [**Display & Rendering**](#display--rendering) below)
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
-### 🔍 Crisp Text Protection
-Fractional display scaling (125%, 150%) often causes font blurriness in traditional corner extensions due to offscreen framebuffer limitations.
-- **Prioritize crisp text**: The switch of that name (Preferences › Display & Rendering) drops the corners on a fractional-scale monitor to keep text sharp; the shadow is unaffected
+---
+
+## Display & Rendering
+
+Sharpness gives way to picture quality wherever the decoration would cost it. A loss that is certain is not the default; a loss that is only possible leaves the decoration on.
+
+Windows that paint their own rounded surface need no offscreen pass, so nothing softens: the overview preview takes its corners from that surface directly, and stays as sharp as the window.
+
+- **Certain loss — the overview**: XWayland windows, and the few Wayland windows whose corners another surface paints, keep a square, sharp preview. **Force overview corners on every window** (Preferences › Display & Rendering, off by default) rounds them too, at the price of a blurrier thumbnail. Overview only
+- **Possible loss — fractional scaling**: on a 125% or 150% monitor the rounded pass resamples the whole window, so text may read a little soft. **Prioritize crisp text** (Preferences › Display & Rendering, off by default) keeps that monitor square instead, and the shadow is unaffected. Per monitor
+
+Both switches are off by default, but their default behaviour pulls opposite ways on purpose: a square preview costs less than a smeared one, and a monitor that may soften text still keeps its corners.
 
 ---
 
