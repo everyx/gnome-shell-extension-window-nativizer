@@ -182,12 +182,16 @@ gdbus call --dest org.gnome.Shell --object-path /org/gnome/Shell \
 - A `ClutterOffscreenEffect`'s offscreen is not the actor's box: Clutter enlarges it to a
   stable size, `_clutter_actor_box_enlarge_for_effects` (`clutter-actor-box.c:505`) gives
   three pixels per axis split around the actor — two on the left/top and one on the
-  right/bottom for an integer position — and then scales that box by the **real** resource
-  scale and rounds each edge onto the device grid (`clutter-offscreen-effect.c`; the
-  `mutter-everyx` patchset carries upstream MR !5179, which is what makes it the real scale —
-  before it the box was multiplied by `ceilf (resource_scale)`, i.e. **2** on a 1.3333 monitor).
-  Measured with `Clutter.OffscreenEffect.get_target_size()` for a 441x281 body: 444x284 device px
-  at 1.0, 556x356 at 1.25 and 593x379 at 4/3. One shader unit is therefore one logical pixel
+  right/bottom for an integer position — and then scales that box by a resource scale and
+  rounds each edge onto the device grid (`clutter-offscreen-effect.c`). Two callers exist, and
+  this extension targets a plain GNOME Shell: the unpatched upstream caller of 50.4/51.1
+  multiplies by `ceilf (resource_scale)` — **2** on a 1.3333 monitor — while upstream MR !5179,
+  which is **unmerged** and only carried by the optional `mutter-everyx` package, multiplies by
+  the real resource scale. `lib/offscreenBox.js` resolves which caller produced a given FBO from
+  the FBO's own extent, so the cut holds under either.
+  Measured with `Clutter.OffscreenEffect.get_target_size()` on `mutter-everyx` for a 441x281 body:
+  444x284 device px at 1.0, 556x356 at 1.25 and 593x379 at 4/3 — the real-scale rule, against the
+  888x568 the `ceil` rule would allocate at 4/3. One shader unit is therefore one logical pixel
   only when the quad is derived per paint from that box (`lib/offscreenBox.js`); a constant
   cannot express it, and the constants that stood in for it read 1.2522 device px per unit at 1.25.
 - `clutter_offscreen_effect_paint_texture` applies `1/resource_scale` and the `fbo_offset`
