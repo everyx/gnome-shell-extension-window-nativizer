@@ -8,9 +8,13 @@ Authoritative source for window management and shadow decorations, vendored from
   - `tools/gen-mutter.mjs` validates the `default_shadow_classes` tuple shape in `meta-shadow-factory.c` (nothing is emitted from it) and generates `MetaWindowType`/`MetaWindowClientType` from `window.h` into `src/lib/mutterRules.generated.js` (do not edit the generated file directly).
   - `clutter/clutter/clutter-actor-box.c` -- `_clutter_actor_box_enlarge_for_effects` -- is what
     `src/lib/offscreenBox.js` mirrors at runtime: the offscreen box a shader effect gets has to be
-    derived per paint, because `clutter-offscreen-effect.c` scales it by the *real* resource scale
-    and rounds each edge onto the device grid (mutter 51.1 plus upstream MR !5179, the same patch
-    the `mutter-everyx` package applies). `tools/check-upstream-mirrors.mjs` asserts the enlarge
+    derived per paint, because `clutter-offscreen-effect.c` scales it by a resource scale and rounds
+    each edge onto the device grid. Two callers exist: the unpatched upstream one multiplies by
+    `ceilf (resource_scale)`, while upstream MR !5179, which is unmerged and only carried by the
+    optional `mutter-everyx` package, uses the real resource scale. The checkout this snapshot is
+    taken from (`research/mutter`, HEAD `8fe247a2` / 50.4) still has the `ceilf` caller and no
+    `!5179` commit, so `src/lib/offscreenBox.js` resolves which caller produced a given FBO from the
+    FBO's own extent rather than assuming one. `tools/check-upstream-mirrors.mjs` asserts the enlarge
     expression here.
   - `meta-window-actor-x11.c` preserves `has_shadow` decision logic as the basis for window decoration detection.
   - `meta-window-actor-wayland.c` (src/compositor) preserves `surface_container_apply_transform`, the
