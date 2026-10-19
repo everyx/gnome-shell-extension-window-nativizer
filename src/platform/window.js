@@ -755,6 +755,47 @@ function monitorScaleAt(index) {
     return entries?.[index]?.scale ?? null;
 }
 
+/**
+ * The scale of the highest-scale logical monitor a window's frame intersects, which is what the
+ * engine's `clutter_actor_get_real_resource_scale` answers for a straddling actor, and so the scale
+ * every offscreen FBO for that window is allocated at. Null when the frame or a monitor read is
+ * unavailable or there is no overlap - never a scale a caller may act on.
+ */
+export function resolveWindowMonitorScale(win) {
+    const index = resolveHighestScaleMonitorIndex(win);
+    if (index === null || index < 0)
+        return null;
+    return monitorScaleAt(index);
+}
+
+/**
+ * The scales of every monitor the window's frame intersects, or null when that list cannot be
+ * completed: an unreadable frame, monitor geometry, or an intersecting monitor's scale. A partial
+ * list names a set the engine may not have allocated from, so it is withdrawn, not completed by
+ * guessing. `ceil` variants belong to the caller that decides the FBO scale.
+ */
+export function resolveWindowScaleCandidates(win) {
+    const frame = getWindowFrameRect(win);
+    if (!frame || !(frame.width > 0) || !(frame.height > 0))
+        return null;
+
+    const entries = readMonitorList();
+    if (entries === null)
+        return null;
+
+    const scales = [];
+    for (const {geometry, scale} of entries) {
+        if (!geometry)
+            return null;
+        if (!rectanglesOverlap(geometry, frame))
+            continue;
+        if (scale === null)
+            return null;
+        scales.push(scale);
+    }
+    return scales.length ? scales : null;
+}
+
 /** The resolved monitor's geometry, read from the cached list so a paint takes no display call. */
 function monitorGeometryAt(index) {
     const entries = readMonitorList();

@@ -1,4 +1,4 @@
-import {findMetaWindow} from './window.js';
+import {findMetaWindow, resolveWindowMonitorScale, resolveWindowScaleCandidates} from './window.js';
 
 /**
  * Returns the active Meta.Display instance, or null.
@@ -92,37 +92,31 @@ export function getMonitorGeometry(monitorIndex) {
 }
 
 /**
- * Resolves the true physical monitor scale for a window actor or Meta.Window, or null when it cannot
- * be read - no actor, no window, a stale index, a throwing display. It drives the clip cut, the
- * shadow cutout, the resize band and the crisp-text decision, so a wrong integer would move an
- * already-correct display; each consumer degrades on null.
+ * The physical monitor scale that sizes a window's offscreen rendering, for a window actor or
+ * Meta.Window, or null when unreadable. It is the highest-scale monitor the window's *frame*
+ * intersects, the rule Mutter's `real_resource_scale` applies to a straddling actor, not the main
+ * monitor `get_monitor()` reports. It drives every scale consumer, so another monitor's scale cuts
+ * the window short.
  */
 export function getPhysicalMonitorScale(actorOrWin) {
     if (!actorOrWin)
         return null;
 
     const win = findMetaWindow(actorOrWin);
-    let monitor = -1;
-    if (win) {
-        try {
-            monitor = typeof win.get_monitor === 'function' ? win.get_monitor() : -1;
-        } catch {
-            // Deallocated mid-read.
-        }
-    }
+    return win ? resolveWindowMonitorScale(win) : null;
+}
 
-    const display = getDisplay();
-    try {
-        const nMonitors = typeof display?.get_n_monitors === 'function' ? display.get_n_monitors() : Infinity;
-        if (monitor >= 0 && monitor < nMonitors && typeof display?.get_monitor_scale === 'function') {
-            const scale = display.get_monitor_scale(monitor);
-            if (scale > 0 && Number.isFinite(scale))
-                return scale;
-        }
-    } catch {
-        // Rapid topology change.
-    }
-    return null;
+/**
+ * The scales of every monitor a window's frame intersects, or null when that read cannot be
+ * completed. The reconcile pass hands this to the clip so the FBO's scale can be picked from the
+ * monitors the engine may have sized it by, rather than by re-reading the display per paint.
+ */
+export function getWindowScaleCandidates(actorOrWin) {
+    if (!actorOrWin)
+        return null;
+
+    const win = findMetaWindow(actorOrWin);
+    return win ? resolveWindowScaleCandidates(win) : null;
 }
 
 /**

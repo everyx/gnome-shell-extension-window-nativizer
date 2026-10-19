@@ -113,6 +113,9 @@ export class WindowDecoration {
         // Not 1.0: an unread scale is *unknown*, and `apply()` refuses to act on it. A decoration
         // rebuilt while the previous one kept its visuals must not read that as "scale = 1".
         this._scale = null;
+        // The monitors' scales this pass's frame touches, with their `ceil` variants: the candidate
+        // set the clip picks the FBO's scale from. Null is "incomplete", which abstains.
+        this._scaleCandidates = null;
         // The settle reference points, advanced once per pass: the last settled body, its authority,
         // the window's own size then, and the pair-disagreement count that bounds the hold. The geometry
         // path decides no body from them, and they advance only when a pass acts on the fresh body.
@@ -280,6 +283,10 @@ export class WindowDecoration {
         // stays guarded by settleClipBody.
         const readableScale = this._resolveScale(inputs);
         const scale = readableScale ?? 1.0;
+        // The reconcile pass's candidate set, read from the same monitors the scale came from: it
+        // is what the clip picks the FBO's scale from, so a paint re-reads no display. Null here
+        // is "incomplete", and the clip abstains on it instead of picking from a partial set.
+        this._scaleCandidates = inputs?.monitorScaleCandidates ?? null;
 
         // Hand the geometry path the plan, not a resolved body: the actors and the window's own size are
         // read live at paint, so the cut and the cast settle from them there and track the frame being drawn.
@@ -588,6 +595,7 @@ export class WindowDecoration {
                 erase: Boolean(this.ring?.erase),
                 clearStroke: !this.overview.inOverview && Boolean(this.ring?.clear),
                 scale: this._scale,
+                scaleCandidates: this._scaleCandidates,
             });
         }
     }

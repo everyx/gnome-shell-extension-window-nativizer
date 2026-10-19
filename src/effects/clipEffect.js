@@ -15,7 +15,7 @@ import {ZERO_PHASE} from '../lib/snap.js';
 import {findMetaWindowCached, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {evaluateInvariant, freshInvariantState, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
-import {offscreenExtent, offscreenQuad} from '../lib/offscreenBox.js';
+import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
 
 const DECLARATIONS = `
 uniform vec2 uQuadSize;   // Offscreen FBO extent in logical px: what cogl_tex_coord0_in spans
@@ -25,7 +25,11 @@ uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
-uniform float uScale;       // Physical device scale factor
+uniform float uScale;       // Screen px per shader unit, not FBO px
+// The FBO's oversampling is averaged on the blit into the monitor-sized allocation, so the outline
+// ring, the clear-stroke inset and the AA ramp convert with the monitor scale. The FBO's scale
+// instead draws a 1px outline at 1/scale units: 0.5 logical px, 0.625 screen px, where unpatched
+// mutter allocates ceilf (1.25) = 2.
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -156,6 +160,9 @@ export const RoundedClipEffect = GObject.registerClass({
             frame: {x: -1, y: -1, width: -1, height: -1},
         };
         this._scale = 1.0;
+        // The reconcile pass's candidate scales for this window's FBO, with their `ceil` variants,
+        // or null when that set is incomplete. Paint only predicts and compares with it.
+        this._scaleCandidates = null;
         // The last phase a fallback pass folded into the frame. While the monitor scan cannot
         // complete, the clip keeps this rather than jumping to zero; the shadow keeps the same
         // phase as its translation, so the two cuts stay on one line. ZERO_PHASE is only the
@@ -184,8 +191,10 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param params.insets - Ring between actor and body
      * @param params.radius - Corner radius in px
      * @param [params.scale=1.0] - Monitor fractional/integer scale
+     * @param [params.scaleCandidates=null] - Scales the FBO may have been allocated at,
+     *        computed once per reconcile pass; null abstains
      */
-    setParams({insets, radius, outline, erase = false, clearStroke = false, scale = 1.0}) {
+    setParams({insets, radius, outline, erase = false, clearStroke = false, scale = 1.0, scaleCandidates = null}) {
         const changes = clipParamChanges({
             insets: this._insets,
             radius: this._radius,
@@ -193,7 +202,8 @@ export const RoundedClipEffect = GObject.registerClass({
             erase: this._erase,
             clearStroke: this._clearStroke,
             scale: this._scale,
-        }, {insets, radius, outline, erase, clearStroke, scale});
+            candidates: this._scaleCandidates,
+        }, {insets, radius, outline, erase, clearStroke, scale, candidates: scaleCandidates});
         if (!changes.changed)
             return;
 
@@ -204,6 +214,8 @@ export const RoundedClipEffect = GObject.registerClass({
         this._clearStroke = Boolean(clearStroke);
         if (changes.scale !== undefined)
             this._scale = changes.scale;
+        if (changes.candidates !== undefined)
+            this._scaleCandidates = changes.candidates;
 
         if (changes.radius !== undefined) {
             this._radiusVec[0] = changes.radius;
@@ -321,21 +333,24 @@ export const RoundedClipEffect = GObject.registerClass({
         // Derived from the actor size at the live scale, so it moves with either, and never
         // cached: it is what makes one shader unit one logical pixel, and a stale box is what
         // drew the corner arc off the snapped edge.
-        const quad = offscreenQuad(size, scale);
-        // The FBO Clutter allocated outranks the derived box for the extent the shader spans, since
-        // the texture coordinates cover exactly it. Only the extent is readable, so the derived
-        // origin still rides on the box, and the phase moves it with the window's position: the
-        // pair is compared every paint, not only on a size or scale move.
         const target = this._readTargetSize();
-        this._checkOffscreenBox({width: quad.width * scale, height: quad.height * scale}, target);
-        const extent = offscreenExtent(quad, target, scale);
+        // The extent and the origin are one position inside the FBO and share its scale: the extent
+        // is the size Clutter allocated (it wins over the derivation), the origin is derived on
+        // that grid. The scale is the candidate the reconcile pass's read picked, since unpatched
+        // mutter allocates by `ceilf (resource_scale)`.
+        const box = offscreenPaintBox(size, scale, target, this._scaleCandidates);
+
+        this._checkOffscreenBox(box.predicted, target);
+        const extent = box.extent;
+        // The last written pair, not the actor size alone: an FBO reallocated at another scale
+        // moves the origin while the read extent stays put, and only the pair sees that.
         if (changes.size !== undefined || changes.scale !== undefined ||
-            this._quadVec[0] !== extent.width || this._quadVec[1] !== extent.height) {
+            offscreenUniformsStale(this._quadVec, this._offsetVec, box)) {
             this._quadVec[0] = extent.width;
             this._quadVec[1] = extent.height;
             this.set_uniform_float('uQuadSize', 2, this._quadVec);
-            this._offsetVec[0] = quad.offsetX;
-            this._offsetVec[1] = quad.offsetY;
+            this._offsetVec[0] = box.offsetX;
+            this._offsetVec[1] = box.offsetY;
             this.set_uniform_float('uFboOffset', 2, this._offsetVec);
         }
 
