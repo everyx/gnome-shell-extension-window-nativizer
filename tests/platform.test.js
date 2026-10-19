@@ -720,6 +720,7 @@ describe('platform', () => {
             };
             const mockWin = {
                 get_monitor: () => 0,
+                get_frame_rect: () => ({x: 100, y: 120, width: 100, height: 200}),
             };
             const bounds = resolveMonitorBounds(mockDisplay, mockWin);
             expect(bounds).toEqual({x: 10, y: 20, width: 100, height: 200});

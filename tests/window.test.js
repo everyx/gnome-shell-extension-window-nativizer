@@ -128,20 +128,66 @@ describe('window inspection (readWindow)', () => {
         };
         const hadGlobal = 'global' in globalThis;
         const oldGlobal = globalThis.global;
+        const monitor = scale => ({
+            get_n_monitors: () => 1,
+            get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+            get_monitor_scale: scale,
+        });
         try {
+            // A fresh display object each read: the monitor list is cached by display identity, the
+            // way a topology signal rebuilds it in the session.
             globalThis.global = {
-                display: {
-                    get_n_monitors: () => 1,
-                    get_monitor_scale: () => {
-                        throw new Error('monitor scale went away');
-                    },
-                },
+                display: monitor(() => {
+                    throw new Error('monitor scale went away');
+                }),
             };
             expect(readWindow(mockWin).monitorScale).toBeNull();
 
             // The real read is unchanged: a readable fractional scale is what the reading carries.
-            globalThis.global.display.get_monitor_scale = () => 1.25;
+            globalThis.global = {display: monitor(() => 1.25)};
             expect(readWindow(mockWin).monitorScale).toBe(1.25);
+        } finally {
+            if (hadGlobal)
+                globalThis.global = oldGlobal;
+            else
+                delete globalThis.global;
+        }
+    });
+
+    it('carries the frame\'s monitor scales as the clip\'s candidate set, ceil variants included', () => {
+        // The clip picks the FBO's scale from this set, so it is read here once per reconcile pass
+        // and carried with the rest of the reading - a paint re-reads no display. The `ceil` of each
+        // scale is in it because unpatched mutter allocates by `ceilf (resource_scale)`.
+        const mockWin = {
+            get_buffer_rect: () => ({x: 1900, y: 0, width: 200, height: 100}),
+            get_frame_rect: () => ({x: 1900, y: 0, width: 200, height: 100}),
+            get_monitor: () => 0,
+        };
+        const hadGlobal = 'global' in globalThis;
+        const oldGlobal = globalThis.global;
+        try {
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 2,
+                    get_monitor_geometry: mon => ({x: mon * 1920, y: 0, width: 1920, height: 1080}),
+                    get_monitor_scale: mon => (mon === 1 ? 1.25 : 1.0),
+                },
+            };
+            expect(readWindow(mockWin).monitorScaleCandidates).toEqual([1.0, 1.25, 2]);
+
+            // An incomplete set is null, the state the clip abstains on, not a partial list.
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => 2,
+                    get_monitor_geometry: mon => ({x: mon * 1920, y: 0, width: 1920, height: 1080}),
+                    get_monitor_scale: mon => {
+                        if (mon === 1)
+                            throw new Error('monitor scale went away');
+                        return 1.0;
+                    },
+                },
+            };
+            expect(readWindow(mockWin).monitorScaleCandidates).toBeNull();
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;

@@ -30,9 +30,11 @@ import {
 } from '../platform/window.js';
 import {
     getPhysicalMonitorScale,
+    getWindowScaleCandidates,
     resolveMonitorBounds,
     getWindowActors,
 } from '../platform/display.js';
+import {offscreenScaleCandidates} from './offscreenBox.js';
 
 export {getPhysicalMonitorScale, resolveMonitorBounds, getWindowFromActor, findMetaWindow};
 
@@ -203,6 +205,10 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         insets,
         hasRing,
         monitorScale: getPhysicalMonitorScale(win),
+        // The monitors the frame touches, with their `ceil` variants: what the clip picks the FBO's
+        // scale from. Computed here so a paint re-reads no display, and null when the scan is
+        // incomplete, which makes the clip abstain rather than pick from a partial set.
+        monitorScaleCandidates: offscreenScaleCandidates(getWindowScaleCandidates(win)),
 
         isMaximized,
         maximizedHorizontally,

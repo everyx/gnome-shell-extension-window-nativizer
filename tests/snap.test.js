@@ -16,6 +16,7 @@ import {
     getPhysicalMonitorScale,
     resolveMonitorBounds,
 } from '../src/lib/window.js';
+import {getWindowScaleCandidates} from '../src/platform/display.js';
 import {snapDirection, SNAP_EPSILON} from '../src/platform/numeric.js';
 
 function createMockBox() {
@@ -354,13 +355,17 @@ describe('scale edge cases and robustness', () => {
 });
 
 describe('getPhysicalMonitorScale', () => {
-    it('reads monitor scale from global.display when available', () => {
+    it('reads the highest-scale monitor the frame intersects, not the main monitor', () => {
+        // The engine sizes an offscreen FBO by the highest resource scale across the views an actor
+        // touches, so the scale the clip must take is the frame-intersecting monitor with the highest
+        // scale - not the main monitor `get_monitor()` reports, which holds the largest share.
         const fakeMetaWindow = {
-            get_monitor: () => 1,
+            get_monitor: () => 0,
+            get_frame_rect: () => ({x: 1900, y: 0, width: 200, height: 100}),
         };
         const fakeActor = {
             meta_window: fakeMetaWindow,
-            get_resource_scale: () => 2.0, // Ceil'd integer
+            get_resource_scale: () => 2.0, // Ceil'd integer: never what this returns
         };
 
         // The display is the source the code reads, so the expectation comes from it too, not from a
@@ -371,6 +376,10 @@ describe('getPhysicalMonitorScale', () => {
         try {
             globalThis.global = {
                 display: {
+                    get_n_monitors: () => 2,
+                    get_monitor_geometry: mon => (mon === 1
+                        ? {x: 1920, y: 0, width: 1920, height: 1080}
+                        : {x: 0, y: 0, width: 1920, height: 1080}),
                     get_monitor_scale: displayScale,
                 },
             };
@@ -403,7 +412,8 @@ describe('getPhysicalMonitorScale', () => {
 
     it('resolves monitor scale by climbing parent hierarchy from child surface actor', () => {
         const fakeMetaWindow = {
-            get_monitor: () => 2,
+            get_monitor: () => 0,
+            get_frame_rect: () => ({x: 3900, y: 0, width: 100, height: 100}),
         };
         const windowActor = {
             meta_window: fakeMetaWindow,
@@ -422,6 +432,8 @@ describe('getPhysicalMonitorScale', () => {
         try {
             globalThis.global = {
                 display: {
+                    get_n_monitors: () => 3,
+                    get_monitor_geometry: mon => ({x: mon * 1920, y: 0, width: 1920, height: 1080}),
                     get_monitor_scale: displayScale,
                 },
             };
@@ -441,6 +453,9 @@ describe('getPhysicalMonitorScale', () => {
             get_monitor: () => {
                 throw new Error('Object MetaWindow has been already deallocated');
             },
+            get_frame_rect: () => {
+                throw new Error('Object MetaWindow has been already deallocated');
+            },
         };
         const actorWithFreedWin = {
             meta_window: throwingWindow,
@@ -448,19 +463,24 @@ describe('getPhysicalMonitorScale', () => {
 
         expect(getPhysicalMonitorScale(actorWithFreedWin)).toBeNull();
 
-        // Display scale throwing error on stale monitor
+        // A frame intersecting a monitor whose scale cannot be read is unknown, not the integer 1.0.
         const hadGlobal = 'global' in globalThis;
         const oldGlobal = globalThis.global;
         try {
             globalThis.global = {
                 display: {
+                    get_n_monitors: () => 1,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
                     get_monitor_scale: () => {
                         throw new Error('Invalid monitor index');
                     },
                 },
             };
             const validWinActor = {
-                meta_window: {get_monitor: () => 5},
+                meta_window: {
+                    get_monitor: () => 0,
+                    get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
+                },
             };
             expect(getPhysicalMonitorScale(validWinActor)).toBeNull();
         } finally {
@@ -471,26 +491,26 @@ describe('getPhysicalMonitorScale', () => {
         }
     });
 
-    it('defends against out-of-bounds monitor index on display topology change', () => {
-        let called = false;
+    it('answers unknown when the frame overlaps no readable monitor', () => {
+        // A stale main-monitor index is no longer a term: the scan walks the frame against the
+        // monitor list, and a frame that overlaps none has no scale to report.
         const fakeActor = {
-            meta_window: {get_monitor: () => 2}, // Stale monitor index 2
+            meta_window: {
+                get_monitor: () => 2, // stale main-monitor index
+                get_frame_rect: () => ({x: 9000, y: 9000, width: 100, height: 100}),
+            },
         };
         const hadGlobal = 'global' in globalThis;
         const oldGlobal = globalThis.global;
         try {
             globalThis.global = {
                 display: {
-                    get_n_monitors: () => 2, // Only monitors 0 and 1 are valid
-                    get_monitor_scale: () => {
-                        called = true;
-                        return 2.0;
-                    },
+                    get_n_monitors: () => 2,
+                    get_monitor_geometry: () => ({x: 0, y: 0, width: 1920, height: 1080}),
+                    get_monitor_scale: () => 2.0,
                 },
             };
-            // Should not call get_monitor_scale with out-of-bounds index 2
             expect(getPhysicalMonitorScale(fakeActor)).toBeNull();
-            expect(called).toBe(false);
         } finally {
             if (hadGlobal)
                 globalThis.global = oldGlobal;
@@ -641,5 +661,99 @@ describe('snapActorBodyFrame', () => {
             .toEqual({x: 0, y: 0, width: 20, height: 100});
         expect(snapActorBodyFrame({width: 100, height: 20}, {left: 0, top: 12, right: 0, bottom: 12}, 1.0))
             .toEqual({x: 0, y: 0, width: 100, height: 20});
+    });
+});
+
+describe('getWindowScaleCandidates', () => {
+    /** Runs `read` with a display built from `monitors` ({geometry, scale}) as the session's. */
+    function withDisplay(monitors, read) {
+        const hadGlobal = 'global' in globalThis;
+        const oldGlobal = globalThis.global;
+        try {
+            globalThis.global = {
+                display: {
+                    get_n_monitors: () => monitors.length,
+                    get_monitor_geometry: mon => monitors[mon].geometry,
+                    get_monitor_scale: mon => {
+                        const {scale} = monitors[mon];
+                        if (typeof scale === 'function')
+                            return scale();
+                        if (scale instanceof Error)
+                            throw scale;
+                        return scale;
+                    },
+                },
+            };
+            return read();
+        } finally {
+            if (hadGlobal)
+                globalThis.global = oldGlobal;
+            else
+                delete globalThis.global;
+        }
+    }
+
+    const SIDE_BY_SIDE = (scales) => scales.map((scale, i) => ({
+        geometry: {x: i * 1920, y: 0, width: 1920, height: 1080},
+        scale,
+    }));
+
+    const winAt = rect => ({get_monitor: () => 0, get_frame_rect: () => rect});
+
+    it('lists every monitor scale the frame intersects, not only the main one', () => {
+        // The engine sizes the FBO from a resource scale across the views the avatar touches, so the
+        // candidate set has to name each one; `get_monitor()` names only the largest share.
+        const win = winAt({x: 1900, y: 0, width: 200, height: 100});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, 1.25]), () => getWindowScaleCandidates(win)))
+            .toEqual([1.0, 1.25]);
+    });
+
+    it('lists all three when the frame spans three monitors of different scales', () => {
+        const win = winAt({x: 100, y: 0, width: 5500, height: 900});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, 1.25, 4 / 3]), () => getWindowScaleCandidates(win)))
+            .toEqual([1.0, 1.25, 4 / 3]);
+    });
+
+    it('answers null when an intersecting monitor scale cannot be read', () => {
+        // A partial set is not completed by guessing: the engine may have allocated from the monitor
+        // that could not be read, so the whole set is withdrawn and the clip abstains.
+        const win = winAt({x: 1900, y: 0, width: 200, height: 100});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, new Error('Invalid monitor index')]),
+            () => getWindowScaleCandidates(win))).toBeNull();
+    });
+
+    it('keeps a readable set when the unreadable scale belongs to a monitor it does not touch', () => {
+        const win = winAt({x: 100, y: 0, width: 200, height: 100});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, new Error('Invalid monitor index')]),
+            () => getWindowScaleCandidates(win))).toEqual([1.0]);
+    });
+
+    it('answers null when the frame or the monitor list cannot be read', () => {
+        const throwing = {
+            get_monitor: () => 0,
+            get_frame_rect: () => {
+                throw new Error('Object MetaWindow has been already deallocated');
+            },
+        };
+        expect(withDisplay(SIDE_BY_SIDE([1.0]), () => getWindowScaleCandidates(throwing)))
+            .toBeNull();
+        expect(withDisplay(SIDE_BY_SIDE([1.0]),
+            () => getWindowScaleCandidates(winAt({x: 0, y: 0, width: 0, height: 0})))).toBeNull();
+        expect(withDisplay([{geometry: null, scale: 1.0}],
+            () => getWindowScaleCandidates(winAt({x: 100, y: 0, width: 200, height: 100}))))
+            .toBeNull();
+        expect(getWindowScaleCandidates(null)).toBeNull();
+    });
+
+    it('answers null when the frame overlaps no monitor at all', () => {
+        // Nothing to pick from is not the same as one candidate: the clip must abstain, not take a
+        // scale from a monitor the window is not on.
+        const win = winAt({x: 9000, y: 9000, width: 100, height: 100});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, 2.0]), () => getWindowScaleCandidates(win))).toBeNull();
+    });
+
+    it('lists one scale on a single integer monitor, the platform read behind the regression case', () => {
+        const win = winAt({x: 100, y: 100, width: 800, height: 600});
+        expect(withDisplay(SIDE_BY_SIDE([1.0]), () => getWindowScaleCandidates(win))).toEqual([1.0]);
     });
 });

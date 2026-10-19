@@ -186,6 +186,16 @@ function sameVector(a, b) {
 }
 
 /**
+ * Whether two candidate scale sets hold the same scales. An empty set and a null one are the same
+ * answer - no candidates - and a pass that changes only the set has to re-run the paint's pick.
+ */
+function sameCandidates(a, b) {
+    const left = a ?? [];
+    const right = b ?? [];
+    return left.length === right.length && left.every((value, i) => value === right[i]);
+}
+
+/**
  * Diffs the styling decisions `setParams()` stores and uploads. `prev` is the cached state, or null when
  * nothing is cached. A returned `frame: true` is not an upload: it invalidates the cached frame, because
  * the insets moved the body the next paint recomputes from.
@@ -193,6 +203,10 @@ function sameVector(a, b) {
 export function clipParamChanges(prev, next) {
     const scaleValid = typeof next.scale === 'number' && next.scale > 0 && Number.isFinite(next.scale);
     const scaleChanged = scaleValid && (!prev || prev.scale !== next.scale);
+
+    const nextCandidates = Array.isArray(next.candidates) && next.candidates.length
+        ? next.candidates : null;
+    const candidatesChanged = !prev || !sameCandidates(prev.candidates ?? null, nextCandidates);
 
     const insetsChanged = !prev || !sameInsets(prev.insets, next.insets);
     const radiusChanged = !prev || prev.radius !== next.radius;
@@ -206,11 +220,12 @@ export function clipParamChanges(prev, next) {
     const clearStrokeChanged = !prev || prev.clearStroke !== nextClearStroke;
 
     const changed = insetsChanged || radiusChanged || outlineChanged ||
-        eraseChanged || clearStrokeChanged || scaleChanged;
+        eraseChanged || clearStrokeChanged || scaleChanged || candidatesChanged;
 
     return {
         changed,
         scale: scaleChanged ? next.scale : undefined,
+        candidates: candidatesChanged ? nextCandidates : undefined,
         radius: radiusChanged ? next.radius : undefined,
         outline: outlineChanged ? nextOutline : undefined,
         erase: eraseChanged ? nextErase : undefined,
