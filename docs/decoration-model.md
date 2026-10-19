@@ -579,6 +579,14 @@ Wayland is always alpha and always composited, and on X11 Mutter itself owns tha
 alpha is a property of the display rather than of a window. The solid branch is dead code for every
 window this extension manages, so there is nothing to detect and nothing to approximate.
 
+**Flat windows lose their outermost pixel.** A window that declares no margin is clipped, and its
+shadow's cutout placed, one pixel inside every edge (`flatSafeInsets`). The clip and the shadow's
+cutout move together: insetting the clip alone would leave the shadow's hole a pixel wider than the
+body it frames, a transparent hairline around the window. The crop buys the 1px stroke a client may
+paint along its buffer edge, which would otherwise show outside our corners (issue #129), and costs
+the outer pixel of the window's own content - invisible at that magnitude on ordinary themes, and if
+it ever is not, the way out is a switch rather than a different default.
+
 
 What this model cannot do, stated rather than papered over. Most of these follow from
 the reading being one-sided; the last is simply not verified yet.
