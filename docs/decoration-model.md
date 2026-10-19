@@ -19,9 +19,11 @@ one wins.
    the unit suite. The wall-clock budget (`pnpm run check:perf`) is a whole-extension release check, run
    by hand: its ratio swings between sessions by more than most changes cost, so it is never attributed
    to a single change and never gates a commit or a push.
-2. **Display quality first.** When the choice is between a sharp path and a blurry one, take the sharp
-   one and record what it cannot do as a known boundary. A fallback that degrades the picture is opt-in
-   (`force-overview-corners`), never the answer to a case we cannot classify.
+2. **Display quality first.** A picture we know we would blur is not drawn that way. The path that
+   degrades it stays behind a switch whose description carries the cost (`force-overview-corners`,
+   `prefer-crisp-text`), never the answer to a case we cannot classify. Where the loss is only
+   conditional - the softening a fractional-scale monitor may cost text - the default keeps the
+   feature and records the risk as a known boundary.
 3. **Cover what a rule can correct.** On a decoration axis, apply the decoration when the reading is
    right in most cases, because the user corrects the rest with a rule. That license has two conditions:
    the axis must be one a rule can express (the four axes are the whole vocabulary, each with an exit),
