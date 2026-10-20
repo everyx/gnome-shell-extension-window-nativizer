@@ -2939,11 +2939,13 @@ fi
 summary "Clip Frame vs Offscreen Box: PASSED (1 shader unit = 1 logical px; every edge and corner tangent on the body frame)"
 
 # A decorated window dragged across a seam between monitors of different scales is sized by the
-# engine at the highest scale it touches. This starts its own two-monitor session, so it runs once,
-# after the log audit (restarting the session wipes the audited log) and the per-scale tangent check.
+# engine at the highest scale it touches - and from its buffer rect, so a client's reserved ring
+# reaches that monitor before its frame does. This starts its own two-monitor session and runs both
+# placements, once, after the log audit (restarting the session wipes the audited log) and the
+# per-scale tangent check.
 if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
     if python3 "$ROOT/tools/check-cross-monitor.py" --check; then
-        summary "Two-Monitor Mixed-Scale Straddle: PASSED (the clip takes the highest scale the frame intersects; the body spans its frame and every edge and corner tangent sits on it)"
+        summary "Two-Monitor Mixed-Scale Seam: PASSED (straddling and pre-seam; the candidate set names the buffer's monitors, the body spans its frame and every edge and corner tangent sits on it)"
     else
         echo "!! The decorated window did not span its frame across the monitor seam at scale $SCALE"
         exit 1

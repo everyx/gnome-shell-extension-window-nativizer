@@ -194,6 +194,19 @@ gdbus call --dest org.gnome.Shell --object-path /org/gnome/Shell \
   888x568 the `ceil` rule would allocate at 4/3. One shader unit is therefore one logical pixel
   only when the quad is derived per paint from that box (`lib/offscreenBox.js`); a constant
   cannot express it, and the constants that stood in for it read 1.2522 device px per unit at 1.25.
+- **The FBO's scale and the phase's scale are read from two different rects.** The offscreen FBO
+  is sized by `clutter_actor_get_real_resource_scale`, whose stage-view set comes from the actor's
+  own allocation (`update_stage_views` → `clutter_actor_get_transformed_extents`), and Mutter sizes
+  the window actor and its surface container at the **buffer** rect. Mutter's
+  `meta_window_get_highest_scale_monitor`, which `surface_container_apply_transform` snaps the
+  subpixel phase against, scans the **frame** rect. A client that reserved a shadow margin reaches
+  the next monitor a ring-width before its frame does: measured on a two-monitor session (1.0 left,
+  4/3 right, seam at logical x=1920) with a 652x549 buffer whose 600x497 frame was one pixel short
+  of the seam - `uScale` 1.0 and candidates `[1.0]`, while the FBO came back 874x737 device px. The
+  derived box was 655x552 and the read divided by 1.0 gave a 874-unit quad for a 600-unit body, so
+  the clip masked the right and bottom quarter while the shadow stayed whole. The candidate set is
+  now read from the buffer; the declared scale stays the frame's. A read no candidate explains
+  holds the derivation for that pass and lets the offscreen-box invariant speak.
 - `clutter_offscreen_effect_paint_texture` applies `1/resource_scale` and the `fbo_offset`
   in one matrix. Read the order in Graphene rather than assuming it.
 - Measured live values for a 440x280 window at 4/3: `uFrame=[2.25,2.25,436.5,276.75]`,

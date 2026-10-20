@@ -121,10 +121,17 @@ export function offscreenDeviceExtent(size, scale = 1.0) {
 }
 
 /**
- * The scales an engine may have allocated a window's FBO at: every monitor scale its frame touches,
- * plus each one's `ceil`, ascending and deduplicated. The `ceil` variant is unpatched mutter's
- * `ceilf (resource_scale)`; the real-scale caller uses the scale itself. Only the FBO's extent
- * tells the two apart, so both are offered.
+ * How far a scale's predicted device extent and the FBO Clutter allocated may differ. The derivation
+ * is phase-free while the FBO's edges carry the source framebuffer's subpixel phase: one edge may
+ * move one device pixel without the scale being wrong. Past that, no candidate explains the read.
+ */
+export const OFFSCREEN_BOX_TOLERANCE = 1;
+
+/**
+ * The scales an engine may have allocated a window's FBO at: every monitor scale the actor's box
+ * touches, plus each one's `ceil`, ascending and deduplicated. The `ceil` variant is unpatched
+ * mutter's `ceilf (resource_scale)`; the real-scale caller uses the scale itself. Only the FBO's
+ * extent tells the two apart, so both are offered.
  */
 export function offscreenScaleCandidates(scales) {
     if (!Array.isArray(scales))
@@ -141,55 +148,43 @@ export function offscreenScaleCandidates(scales) {
     return out.length ? out.sort((a, b) => a - b) : null;
 }
 
-/** The largest edge disagreement between two device extents: the distance the veto is measured in. */
+/** The largest edge disagreement between two device extents. */
 function extentDistance(a, b) {
     return Math.max(Math.abs(a.width - b.width), Math.abs(a.height - b.height));
 }
 
 /**
- * The scale the engine produced an FBO with: the candidate whose predicted device extent is closest
- * to the read one, else the declared scale. The veto is relative: predictions are hundreds of
- * device pixels apart, so only distinguishability matters. A read farther from the best than half
- * the two closest predictions' spacing names nothing.
+ * The scale the engine produced an FBO with, and whether any candidate explains the read: a
+ * candidate explains it when its predicted device extent lands within one device pixel, the subpixel
+ * phase. Nothing within that budget means the candidate set has not caught up with the engine, and
+ * the caller holds the derivation instead of dividing by the wrong scale.
  */
 export function resolveOffscreenScale(size, target, scale, candidates = null) {
     // Never `actor.get_resource_scale()` here: it answers `ceilf (real_resource_scale)`, so 1.25
     // and 4/3 both return 2 - the one bit this selection has to keep - and dividing the quad by it
     // draws the body at 62.5%. Mutter keeps the real value private, with no GIR read.
     const declared = usableScale(scale);
+    // An incomplete set still offers the declared scale: the read alone can then say whether the
+    // derivation spans it, which is all the caller's fallback needs.
+    const offers = Array.isArray(candidates) && candidates.length ? candidates : [declared];
     if (!Number.isFinite(target?.width) || !Number.isFinite(target?.height) ||
-        !(target.width > 0) || !(target.height > 0) || !Array.isArray(candidates))
-        return {scale: declared, resolved: false};
+        !(target.width > 0) || !(target.height > 0))
+        return {scale: declared, explained: true};
 
     let best = null;
-    let bestPredicted = null;
     let bestOffset = Infinity;
-    for (const candidate of candidates) {
+    for (const candidate of offers) {
         if (!Number.isFinite(candidate) || !(candidate > 0))
             continue;
-        const predicted = offscreenDeviceExtent(size, candidate);
-        const offset = extentDistance(predicted, target);
+        const offset = extentDistance(offscreenDeviceExtent(size, candidate), target);
         if (offset < bestOffset) {
             best = candidate;
-            bestPredicted = predicted;
             bestOffset = offset;
         }
     }
-    if (best === null)
-        return {scale: declared, resolved: false};
-
-    let nearest = Infinity;
-    for (const candidate of candidates) {
-        if (!Number.isFinite(candidate) || !(candidate > 0) || Math.abs(candidate - best) < 1e-9)
-            continue;
-        nearest = Math.min(nearest,
-            extentDistance(bestPredicted, offscreenDeviceExtent(size, candidate)));
-    }
-    if (bestOffset > nearest / 2)
-        return {scale: declared, resolved: false};
-    return Math.abs(best - declared) < 1e-9
-        ? {scale: declared, resolved: false}
-        : {scale: best, resolved: true};
+    if (best === null || bestOffset > OFFSCREEN_BOX_TOLERANCE)
+        return {scale: declared, explained: false};
+    return {scale: best, explained: true};
 }
 
 /**
@@ -218,14 +213,25 @@ export function offscreenUniformsStale(quad, offset, box) {
 
 /**
  * One paint's offscreen box: the extent the shader's coordinates span, the actor origin inside it,
- * and the derived device extent the reconciliation compares against the FBO. Extent and origin are
- * one position and share the picked scale, and `candidates` is the reconcile pass's set, or null
- * when it is incomplete.
+ * and the derived device extent the reconciliation compares against the FBO. Extent and origin
+ * share the picked scale; `candidates` is the reconcile pass's set, or null when incomplete.
+ *
+ * A read no candidate explains holds the derivation for the pass, so the body stays whole.
  */
 export function offscreenPaintBox(size, scale, target, candidates = null) {
     const s = usableScale(scale);
     const quad = offscreenQuad(size, s);
-    const fboScale = resolveOffscreenScale(size, target, s, candidates).scale;
+    const pick = resolveOffscreenScale(size, target, s, candidates);
+    if (!pick.explained) {
+        return {
+            scale: s,
+            extent: {width: quad.width, height: quad.height},
+            offsetX: quad.offsetX,
+            offsetY: quad.offsetY,
+            predicted: offscreenDeviceExtent(size, s),
+        };
+    }
+    const fboScale = pick.scale;
     // Bit-identical reuse when the declared scale already explains the FBO, so the common path does
     // not grow a second derivation; a mismatch re-derives both spans on the FBO's own grid.
     const fboQuad = fboScale === s ? quad : offscreenQuad(size, fboScale);
