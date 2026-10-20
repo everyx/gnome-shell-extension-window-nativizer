@@ -12,8 +12,9 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
-import {findMetaWindowCached, getWindowActor, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
+import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
+import {readActorSize, readWindowSize} from './bodyPlan.js';
 import {evaluateInvariant, freshInvariantState, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
 import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
 
@@ -83,36 +84,6 @@ const CODE = `
 `;
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
-
-/**
- * A live actor's extent, or null when the actor is gone or its read throws. The window actor is an
- * actor we do not own, so a torn-down read is "unknown" and the settle falls back rather than
- * aborting the paint.
- */
-function readActorExtent(actor) {
-    if (!actor)
-        return null;
-    try {
-        return {width: actor.width, height: actor.height};
-    } catch {
-        return null;
-    }
-}
-
-/**
- * The window's own size, read live at paint: its frame rect, else its buffer rect. This is the
- * read that separates a resize from a body that moved on its own, so it is taken on the frame
- * clock; only its previous value lives in the pass plan.
- */
-function readWindowSize(win) {
-    const frame = getWindowFrameRect(win);
-    if (isPaintableFrame(frame))
-        return {width: frame.width, height: frame.height};
-    const buffer = getWindowBufferRect(win);
-    if (isPaintableFrame(buffer))
-        return {width: buffer.width, height: buffer.height};
-    return null;
-}
 
 export const RoundedClipEffect = GObject.registerClass({
     GTypeName: ROUNDED_CLIP_G_TYPE,
@@ -287,7 +258,7 @@ export const RoundedClipEffect = GObject.registerClass({
         // paints, so a non-positive target read falls back to the window actor rather than
         // suspending. The pair also feeds the settle below.
         const win = findMetaWindowCached(actor);
-        const windowActorSize = readActorExtent(getWindowActor(win));
+        const windowActorSize = readActorSize(getWindowActor(win));
         const size = isPaintableFrame(targetSize)
             ? targetSize
             : resolveClipSize(targetSize, windowActorSize);
