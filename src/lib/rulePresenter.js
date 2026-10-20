@@ -7,7 +7,8 @@ import {
     RuleAxis,
     parseRuleState,
 } from './rules.js';
-import {isDecoratableWindowType, ruleAxisCapabilities} from './detector.js';
+import {isDecoratableWindowType} from './detector.js';
+import {ruleAxisCapabilities} from './pickSuggestion.js';
 
 const DOMAIN = 'window-nativizer';
 

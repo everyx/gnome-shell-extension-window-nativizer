@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-20 21:57+0800\n"
+"POT-Creation-Date: 2026-10-20 22:07+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -17,123 +17,123 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #. Translators: One of the three rule axes: rounded window corners.
-#: src/lib/rulePresenter.js:50
+#: src/lib/rulePresenter.js:51
 msgid "Corners"
 msgstr "圆角"
 
 #. Translators: One of the three rule axes: the window shadow.
-#: src/lib/rulePresenter.js:52
+#: src/lib/rulePresenter.js:53
 msgid "Shadow"
 msgstr "阴影"
 
 #. Translators: One of the three rule axes: the resize band around the window.
-#: src/lib/rulePresenter.js:54
+#: src/lib/rulePresenter.js:55
 msgid "Resize"
 msgstr "调整大小"
 
-#: src/lib/rulePresenter.js:82
+#: src/lib/rulePresenter.js:83
 msgid "Windows of this kind are never decorated"
 msgstr "此类窗口不做装饰"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:96
+#: src/lib/rulePresenter.js:97
 msgid "The window frame can already be resized"
 msgstr "窗口边框本身已可调整大小"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:99
+#: src/lib/rulePresenter.js:100
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的窗口没有可调整大小的边缘"
 
-#: src/lib/rulePresenter.js:115 src/prefs/conflictDialog.js:165
+#: src/lib/rulePresenter.js:116 src/prefs/conflictDialog.js:165
 #: src/prefs/conflictDialog.js:170
 msgid "Automatic"
 msgstr "自动"
 
 #. Translators: A dialog window.
-#: src/lib/rulePresenter.js:121
+#: src/lib/rulePresenter.js:122
 msgid "dialog"
 msgstr "对话框"
 
 #. Translators: A dialog that blocks its parent window.
-#: src/lib/rulePresenter.js:123
+#: src/lib/rulePresenter.js:124
 msgid "modal dialog"
 msgstr "模态对话框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/lib/rulePresenter.js:125
+#: src/lib/rulePresenter.js:126
 msgid "utility window"
 msgstr "工具窗口"
 
 #. Translators: A normal, top-level window.
-#: src/lib/rulePresenter.js:130
+#: src/lib/rulePresenter.js:131
 msgid "window"
 msgstr "窗口"
 
-#: src/lib/rulePresenter.js:140
+#: src/lib/rulePresenter.js:141
 msgid "XWayland"
 msgstr "XWayland"
 
-#: src/lib/rulePresenter.js:140
+#: src/lib/rulePresenter.js:141
 msgid "Wayland"
 msgstr "Wayland"
 
 #. Translators: %s is the client type and the window type, e.g. "Wayland window". If your
 #. language puts the type first, use the placeholders as %2$s %1$s.
-#: src/lib/rulePresenter.js:143
+#: src/lib/rulePresenter.js:144
 #, javascript-format
 msgid "%s %s"
 msgstr "%s %s"
 
 #. Translators: The window has no parent window.
-#: src/lib/rulePresenter.js:146
+#: src/lib/rulePresenter.js:147
 msgid "with no parent"
 msgstr "无父窗口"
 
 #. Translators: The window is attached to its parent window.
-#: src/lib/rulePresenter.js:148
+#: src/lib/rulePresenter.js:149
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/lib/rulePresenter.js:150
+#: src/lib/rulePresenter.js:151
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/lib/rulePresenter.js:165
+#: src/lib/rulePresenter.js:166
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/lib/rulePresenter.js:168
+#: src/lib/rulePresenter.js:169
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/lib/rulePresenter.js:172
+#: src/lib/rulePresenter.js:173
 msgid "resizable"
 msgstr "可调整大小"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/lib/rulePresenter.js:180
+#: src/lib/rulePresenter.js:181
 msgid "frame drawn by the system"
 msgstr "由系统绘制边框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/lib/rulePresenter.js:183
+#: src/lib/rulePresenter.js:184
 msgid "no shadow margins"
 msgstr "无阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/lib/rulePresenter.js:188
+#: src/lib/rulePresenter.js:189
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/lib/rulePresenter.js:192
+#: src/lib/rulePresenter.js:193
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"

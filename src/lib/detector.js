@@ -3,16 +3,12 @@ import {WindowType} from './mutterRules.generated.js';
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
     CLIENT_TYPE_TOKEN_X11,
-    RULE_AXES,
     RuleAxis,
-    buildRuleKeyFromProperties,
     buildRuleState,
     resolveRule,
-    withRule,
 } from './rules.js';
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
-import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 
@@ -404,118 +400,4 @@ export function evaluateWindowActions({
     }
 
     return {drawShadow: shadow, drawClip: clip, drawRing, drawResize, ring, style, reason};
-}
-
-function ruleWouldChangeActions(params, {key, state}) {
-    const before = evaluateWindowActions(params);
-    const after = evaluateWindowActions({
-        ...params,
-        rules: withRule(params.rules, key, state),
-    });
-
-    return before.drawShadow !== after.drawShadow ||
-        before.drawClip !== after.drawClip ||
-        before.drawResize !== after.drawResize;
-}
-
-function kindParams(params) {
-    return {
-        ...params,
-        isMaximized: false,
-        isFullscreen: false,
-        hasTileMatch: false,
-        tiled: false,
-    };
-}
-
-/**
- * Which axes a kind can be corrected on at all - the same answer the preferences window
- * uses to decide whether to offer a switch. Capability, not choice: an axis the runtime
- * cannot act on has no decision to reverse.
- * @returns Keyed by RuleAxis
- */
-export function ruleAxisCapabilities({
-    windowType = WindowType.NORMAL, allowsResize = true, hasSsd = false,
-} = {}) {
-    const decoratable = isDecoratableWindowType(windowType);
-    return {
-        [RuleAxis.CORNERS]: decoratable,
-        [RuleAxis.SHADOW]: decoratable,
-        [RuleAxis.RESIZE]: decoratable && allowsResize !== false && !hasSsd,
-    };
-}
-
-/**
- * Picker suggestion: correct every axis this kind can be corrected on. The user picked the window
- * because it looks wrong, so the pick is the whole correction, not the smallest one; an axis the kind
- * cannot be corrected on is left out, because naming it could not take effect.
- */
-export function suggestedRuleState(params) {
-    const caps = ruleAxisCapabilities(params);
-    return buildRuleState(RULE_AXES.filter(axis => caps[axis]));
-}
-
-/**
- * @returns Null when the window cannot be identified
- */
-export function suggestedRuleWouldChange(properties, params, state) {
-    const key = buildRuleKeyFromProperties(properties);
-    if (!key)
-        return null;
-
-    return ruleWouldChangeActions(kindParams(params), {key, state});
-}
-
-/**
- * Expected visual corner radius for an inspected window.
- * Maximized, tiled, fullscreen, and unclipped non-Adwaita/SSD windows have square (0px) corners.
- *
- * @returns Visual corner radius in pixels (0 for square corners)
- */
-export function expectedWindowRadius({
-    isFullscreen = false,
-    isMaximized = false,
-    isTiled = false,
-    isActivelyClipped = false,
-    hasNativeLikeCorners = false,
-    hasSsd = false,
-    baseRadius = ADWAITA_STYLE.window.radius,
-} = {}) {
-    if (isFullscreen || isMaximized || isTiled)
-        return 0;
-
-    if (isActivelyClipped)
-        return baseRadius;
-
-    if (!hasSsd && hasNativeLikeCorners)
-        return baseRadius;
-
-    return 0;
-}
-
-// Picker highlight metrics match upstream Looking Glass (2px border) and screenshot selector fill.
-export {HIGHLIGHT_BORDER_WIDTH};
-
-/**
- * Outset bounding box for the inspector highlight border around the window.
- * Outsetting prevents St CSS inward border drawing from eroding into the client window content.
- *
- */
-export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
-    if (!frame)
-        return {x: 0, y: 0, width: 0, height: 0};
-    return {
-        x: frame.x - borderWidth,
-        y: frame.y - borderWidth,
-        width: Math.max(0, frame.width + borderWidth * 2),
-        height: Math.max(0, frame.height + borderWidth * 2),
-    };
-}
-
-/**
- * Concentric outer arc for an outset border; square windows stay 0px.
- *
- */
-export function highlightOuterRadius(innerRadius, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
-    return innerRadius > 0 ? innerRadius + borderWidth : 0;
 }
