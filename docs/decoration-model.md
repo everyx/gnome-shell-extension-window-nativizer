@@ -1087,6 +1087,41 @@ polygonal below roughly 0.7 mask texels per screen pixel and is indistinguishabl
 full-resolution mask at 1.0, so 2560 keeps a 4K window's arc above that threshold and degrades
 it gradually beyond. No per-frame work, no offscreen pass, no mipmap regeneration.
 
+### Why the desktop keeps the offscreen clip
+
+One policy, two mechanisms. Drawing the radius the window would have natively, instead of a blurred
+approximation of it, is the same decision in both contexts (*The principles these decisions are made
+under*, rule 2). The mechanism each context can use is not, and the split is deliberate rather than
+an unfinished merge.
+
+On the desktop the radius is drawn by the offscreen effect: the shader cuts the body out of the
+window's FBO. That path costs two things, both known. It has to know which scale Mutter allocated
+that FBO for - the texture is not the actor's box - so the clip reverse-solves the allocation from
+the FBO's own extent and picks between candidate scales. And the window's content is resampled once
+through the offscreen target, which at fractional scales can soften text: the cost
+`prefer-crisp-text` names.
+
+In the overview the radius is drawn by the mask on the window's own shaped texture instead. There is
+no intermediate FBO and the mask is sampled by Mutter's own minification alongside the window
+colour, so the preview is rounded and exactly as sharp as an undecorated one, and the path needs no
+allocation scale to work.
+
+The desktop cannot be moved onto it whole, for three reasons: an XWayland window cannot reach the
+mask path at all; a window whose visible corners another surface paints - a picture-in-picture
+window, for instance - would need a mask per surface, while the mask is a per-shaped-texture slot
+and those surfaces do not share coordinates; and the 1px ring is drawn inside the offscreen shader,
+with no equivalent on the mask path. The offscreen path therefore stays for the visible future, and
+the scale inference bound to it stays with it.
+
+That is not a duplicated implementation. The desktop layer answers "should this window be decorated
+at all" - type, size floor, SSD ring, maximized, tiling - while the overview layer answers "can a
+mask reach this window's corners". Those are different questions, and folding them into one decision
+would be worse than the split: the eligibility layer would be answering a reachability question it
+has no evidence for.
+
+Revisit this if the mask path learns to cover XWayland and multi-surface windows, if the ring can be
+drawn equivalently under it, or if the two layers are caught fixing the same defect in two places.
+
 ### Overview shadows via a preview shadow clone
 
 The desktop shadow is a sibling of the window actor in `global.window_group`, so a preview's
