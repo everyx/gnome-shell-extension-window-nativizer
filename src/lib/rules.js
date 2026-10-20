@@ -92,63 +92,106 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
 
 const BOOL_FIELD = '(?:true|false)';
 
+/**
+ * The structural attributes that key a rule, in canonical order, and the only statement of the field
+ * set: `name` (specifier spelling), `key` (kind object), `reading` (window reading, where it differs),
+ * `fallback`, `pattern`, `text` (value to stored form) and `parse` (stored form to value).
+ */
 export const FINGERPRINT_FIELDS = [
     {
         name: 'client_type',
-        render: o => o.clientType,
+        key: 'clientType',
+        reading: 'clientTypeToken',
+        fallback: CLIENT_TYPE_TOKEN_WAYLAND,
+        pattern: `(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11})`,
+        text: value => value,
         parse: raw => raw,
     },
-    {name: 'window_type', render: o => o.windowType, parse: raw => Number(raw)},
-    {name: 'has_parent', render: o => boolString(o.hasParent), parse: raw => raw === 'true'},
-    {name: 'allows_resize', render: o => boolString(o.allowsResize), parse: raw => raw === 'true'},
-    {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), parse: raw => raw === 'true'},
-    {name: 'has_ring', render: o => boolString(o.hasRing), parse: raw => raw === 'true'},
-    {name: 'has_ssd', render: o => boolString(o.hasSsd), parse: raw => raw === 'true'},
+    {
+        name: 'window_type',
+        key: 'windowType',
+        fallback: WindowType.NORMAL,
+        pattern: '\\d+',
+        text: value => String(value),
+        parse: raw => Number(raw ?? WindowType.NORMAL),
+    },
+    boolField('has_parent', 'hasParent', false),
+    boolField('allows_resize', 'allowsResize', true),
+    boolField('attached_dialog', 'isAttachedDialog', false),
+    boolField('has_ring', 'hasRing', false),
+    boolField('has_ssd', 'hasSsd', false),
 ];
+
+/**
+ * @returns One boolean attribute's table entry: the grammar every boolean shares, its fallback and
+ * the two conversions, which are the same in both directions.
+ */
+function boolField(name, key, fallback) {
+    return {name, key, fallback, pattern: BOOL_FIELD, text: boolString, parse: raw => raw === 'true'};
+}
 
 const FINGERPRINT_MAP = Object.freeze(
     Object.fromEntries(FINGERPRINT_FIELDS.map(f => [f.name, f]))
 );
 
+/**
+ * Reads the seven structural attributes out of a caller's kind object, applying each field's fallback
+ * for an omitted one. A kind may carry more than these (`width`, `height`, `frameWidth`, ...); those
+ * are the key builder's own business.
+ *
+ * @returns Keyed by each field's `key`
+ */
+function readKind(kind = {}) {
+    const fields = {};
+    for (const field of FINGERPRINT_FIELDS) {
+        const value = kind?.[field.key];
+        fields[field.key] = value === undefined ? field.fallback : value;
+    }
+    return fields;
+}
+
 // Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
 // to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
 // The identity is opaque - it may hold ':' and spaces - so this pins only the specifier and
 // requires a nonempty identity ahead of the last ':'. The specifier has no ':' of its own.
+const SIZE_SUFFIX = ',size=\\d+x\\d+';
+
+/**
+ * One shape's specifier grammar, built from the table with the attributes that shape pins. The two
+ * shapes are the only structural rule the pattern adds to the table: a fixed-size key may carry a
+ * size, a resizable one may not.
+ */
+function specifierPattern(pinned) {
+    return FINGERPRINT_FIELDS
+        .map(field => `${field.name}=${pinned[field.name] ?? field.pattern}`)
+        .join(',');
+}
+
 const VALID_RULE_KEY_PATTERN = new RegExp(
     '^[\\s\\S]+:(?:' +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=false,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}(?:,size=\\d+x\\d+)?|` +
-    `client_type=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11}),window_type=\\d+,has_parent=${BOOL_FIELD},allows_resize=true,attached_dialog=${BOOL_FIELD},has_ring=${BOOL_FIELD},has_ssd=${BOOL_FIELD}` +
+    `${specifierPattern({allows_resize: 'false'})}(?:${SIZE_SUFFIX})?|` +
+    `${specifierPattern({allows_resize: 'true'})}` +
     ')$'
 );
 
 /**
- * @param [props.width=null] - Fixed logical width (only valid when allowsResize is false)
- * @param [props.height=null] - Fixed logical height (only valid when allowsResize is false)
+ * @param [kind.width=null] - Fixed logical width (only valid when allowsResize is false)
+ * @param [kind.height=null] - Fixed logical height (only valid when allowsResize is false)
  * @returns Canonical key or '' when wmClass is missing
  * @throws When the rendered specifier is not colon-free (a field the table cannot own)
  */
-export function buildRuleKey(wmClass, {
-    clientType = CLIENT_TYPE_TOKEN_WAYLAND,
-    windowType = WindowType.NORMAL,
-    hasParent = false,
-    allowsResize = true,
-    isAttachedDialog = false,
-    hasRing = false,
-    hasSsd = false,
-    width = null,
-    height = null,
-} = {}) {
+export function buildRuleKey(wmClass, kind = {}) {
     if (!wmClass?.trim())
         return '';
 
-    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd};
+    const fields = readKind(kind);
     let specifier = FINGERPRINT_FIELDS
-        .map(field => `${field.name}=${field.render(fields)}`)
+        .map(field => `${field.name}=${field.text(fields[field.key])}`)
         .join(',');
 
-    const w = Number(width);
-    const h = Number(height);
-    if (!allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
+    const w = Number(kind.width);
+    const h = Number(kind.height);
+    if (!fields.allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
         specifier += `,size=${Math.round(w)}x${Math.round(h)}`;
 
     // Nothing escapes the identity, so a ':' in the specifier would move the last-':' separator.
@@ -276,23 +319,14 @@ export function parseRuleKey(key) {
 /**
  * @returns The reversed axes, or null when no rule matched
  */
-export function resolveRule(wmClass, rules = {}, options = {}) {
+export function resolveRule(wmClass, rules = {}, kind = {}) {
     if (!wmClass)
         return null;
 
-    const {
-        clientType = CLIENT_TYPE_TOKEN_WAYLAND,
-        windowType = WindowType.NORMAL,
-        hasParent = false,
-        allowsResize = true,
-        isAttachedDialog = false,
-        hasRing = false,
-        hasSsd = false,
-        frameWidth = null,
-        frameHeight = null,
-    } = options;
+    const {frameWidth = null, frameHeight = null} = kind;
+    const fields = readKind(kind);
 
-    const isFixed = !allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0;
+    const isFixed = !fields.allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0;
 
     const has = key => Boolean(key && Object.prototype.hasOwnProperty.call(rules, key));
     const lookup = key => has(key)
@@ -301,36 +335,72 @@ export function resolveRule(wmClass, rules = {}, options = {}) {
 
     // 1. For fixed-size windows with known dimensions, prefer an exact-size rule.
     if (isFixed) {
-        const exactKey = buildRuleKey(wmClass, {
-            clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
-            width: frameWidth, height: frameHeight,
-        });
+        const exactKey = buildRuleKey(wmClass, {...fields, width: frameWidth, height: frameHeight});
         const matched = lookup(exactKey);
         if (matched)
             return matched;
     }
 
     // 2. Generic rule key as fallback for fixed-size, or primary for resizable.
-    const genericKey = buildRuleKey(wmClass, {
-        clientType, windowType, hasParent, allowsResize, isAttachedDialog, hasRing, hasSsd,
-    });
+    const genericKey = buildRuleKey(wmClass, fields);
 
     if (has(genericKey))
         return parseRuleState(rules[genericKey]);
     return null;
 }
 
+/**
+ * @returns The kind the picker's wire dictionary describes. Its values are strings, so each one goes
+ * through the field's own converter - the form both processes share.
+ */
+export function kindFromWire(properties = {}) {
+    const kind = {};
+    for (const field of FINGERPRINT_FIELDS)
+        kind[field.key] = field.parse(properties?.[field.key]);
+    return kind;
+}
+
+/**
+ * @returns The kind a parsed rule key describes. parseRuleKey has already given every field its typed
+ * value, so this only renames them, filling an omission with the field's fallback.
+ */
+export function kindFromSpecifier(specifier = {}) {
+    const kind = {};
+    for (const field of FINGERPRINT_FIELDS) {
+        const value = specifier?.[field.name];
+        kind[field.key] = value === undefined ? field.fallback : value;
+    }
+    return kind;
+}
+
+/**
+ * The picker's property dictionary for a window reading: the same seven attributes the rule key
+ * stores, rendered by the same table.
+ */
+export function fingerprintProperties(reading) {
+    const fields = kindFromReading(reading);
+    const properties = {};
+    for (const field of FINGERPRINT_FIELDS)
+        properties[field.key] = String(field.text(fields[field.key]));
+    return properties;
+}
+
+/**
+ * @returns The seven attributes read off a window reading, keyed by their kind-object names. Two
+ * reads sit under a different name on a reading (`clientTypeToken`), which the table records.
+ */
+function kindFromReading(reading) {
+    const kind = {};
+    for (const field of FINGERPRINT_FIELDS)
+        kind[field.key] = reading?.[field.reading ?? field.key];
+    return readKind(kind);
+}
+
 export function buildRuleKeyFromProperties(properties = {}) {
-    const allowsResize = properties.allowsResize === 'true';
+    const kind = kindFromWire(properties);
     return buildRuleKey(properties.wmClass, {
-        clientType: properties.clientType,
-        windowType: Number(properties.windowType ?? WindowType.NORMAL),
-        hasParent: properties.hasParent === 'true',
-        allowsResize,
-        isAttachedDialog: properties.isAttachedDialog === 'true',
-        hasRing: properties.hasRing === 'true',
-        hasSsd: properties.hasSsd === 'true',
-        width: !allowsResize && properties.width ? Number(properties.width) : null,
-        height: !allowsResize && properties.height ? Number(properties.height) : null,
+        ...kind,
+        width: !kind.allowsResize && properties.width ? Number(properties.width) : null,
+        height: !kind.allowsResize && properties.height ? Number(properties.height) : null,
     });
 }
