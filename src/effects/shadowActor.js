@@ -9,45 +9,16 @@ import GObject from 'gi://GObject';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
 import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {readBodySizes, readActorSize} from './bodyPlan.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {findMetaWindowCached, getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
+import {findMetaWindowCached} from '../platform/window.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y',
 ];
-
-/**
- * A live actor's size, or null when the actor is gone or its read throws. The body authority is
- * read from actors we do not own (the surface container can be replaced mid-flight), so a torn-down
- * read is "unknown" and falls through resolveClipSize rather than aborting the paint.
- */
-function readActorSize(actor) {
-    if (!actor)
-        return null;
-    try {
-        return {width: actor.width, height: actor.height};
-    } catch {
-        return null;
-    }
-}
-
-/**
- * The window's own size, read live at relayout: its frame rect, else its buffer rect. The cast
- * must see a resize on the frame it starts, so this is read here rather than taken from the
- * pass; only its previous value travels in the body plan.
- */
-function readWindowSize(win) {
-    const frame = getWindowFrameRect(win);
-    if (frame && frame.width > 0 && frame.height > 0)
-        return {width: frame.width, height: frame.height};
-    const buffer = getWindowBufferRect(win);
-    if (buffer && buffer.width > 0 && buffer.height > 0)
-        return {width: buffer.width, height: buffer.height};
-    return null;
-}
 
 export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
 
@@ -336,9 +307,8 @@ export const ShadowActor = GObject.registerClass({
     _relayout(style, scale) {
         const layout = shadowLayout(style, {width: this.width, height: this.height},
             this._insets ?? ZERO_INSETS, scale, {
-                targetSize: readActorSize(this._clipTarget),
-                windowActorSize: readActorSize(this._windowActor),
-                windowSize: readWindowSize(findMetaWindowCached(this._windowActor)),
+                ...readBodySizes(this._clipTarget, this._windowActor,
+                    findMetaWindowCached(this._windowActor)),
                 bodyPlan: this._bodyPlan,
             });
         this._warnOnBodyDisagreement(layout.authority);

@@ -10,7 +10,7 @@
 
 import {resolveClipTarget} from './clipTarget.js';
 import {MIN_DECORABLE_SIZE} from './detector.js';
-import {BODY_SETTLE_TOLERANCE, settleClipBody} from '../effects/clipParams.js';
+import {BodyPlan, readActorSize} from '../effects/bodyPlan.js';
 import {
     bufferAllocationWarning,
     evaluateInvariant,
@@ -34,21 +34,6 @@ function tagPhase(phase, actor) {
     if (!phase || !actor)
         return phase;
     return {...phase, actor};
-}
-
-/**
- * A live actor's extent, or null when the actor is gone or its read throws. The body the clip and
- * the shadow act on comes from actors we do not own, so a torn-down read is "unknown" and leaves
- * the settle to fall back rather than aborting the pass.
- */
-function readActorExtent(actor) {
-    if (!actor)
-        return null;
-    try {
-        return {width: actor.width, height: actor.height};
-    } catch {
-        return null;
-    }
 }
 
 /**
@@ -116,13 +101,10 @@ export class WindowDecoration {
         // The monitors' scales this pass's frame touches, with their `ceil` variants: the candidate
         // set the clip picks the FBO's scale from. Null is "incomplete", which abstains.
         this._scaleCandidates = null;
-        // The settle reference points, advanced once per pass: the last settled body, its authority,
-        // the window's own size then, and the pair-disagreement count that bounds the hold. The geometry
+        // The settle reference points, owned by the plan: the last settled body, its authority, the
+        // window's own size then, and the pair-disagreement count that bounds the hold. The geometry
         // path decides no body from them, and they advance only when a pass acts on the fresh body.
-        this._lastBody = null;
-        this._lastAuthority = null;
-        this._lastWindowSize = null;
-        this._pairDisagreementStrikes = 0;
+        this.bodyPlan = new BodyPlan();
         // The size the window was first decided at, latched once and never moved: the visual floor
         // reads it so a drag cannot flip the decoration. Null while unreadable - 0, NaN or a frame
         // below the geometric floor is not a size. One decoration per Meta.Window, so a rebuilt
@@ -132,8 +114,9 @@ export class WindowDecoration {
         // moved can make a new ring real; see the ring plan below for why the window's own size
         // cannot answer that.
         this._lastBuffer = null;
-        // The plan handed to the clip and the shadow for the paints after this pass.
-        this._bodyPlan = null;
+        // The plan handed to the clip and the shadow for the paints after this pass: the plan's state
+        // as this pass found it, taken before it advances.
+        this._passPlan = null;
         // The manager's "force corners" setting for this pass; handed to the overview, which
         // picks the legacy offscreen clip over the mask for XWayland and the fallback cases.
         this._forceOverviewCorners = false;
@@ -291,19 +274,12 @@ export class WindowDecoration {
         // Hand the geometry path the plan, not a resolved body: the actors and the window's own size are
         // read live at paint, so the cut and the cast settle from them there and track the frame being drawn.
         const windowSize = readWindowExtent(inputs);
-        this._bodyPlan = {
-            previousWindowSize: this._lastWindowSize,
-            previousBody: this._lastBody,
-            previousAuthority: this._lastAuthority,
-            pairDisagreementStrikes: this._pairDisagreementStrikes,
-        };
-        const passSettle = settleClipBody(readActorExtent(clipTarget), readActorExtent(winActor),
-            this._lastBody, this._lastAuthority, windowSize, this._lastWindowSize,
-            BODY_SETTLE_TOLERANCE, this._pairDisagreementStrikes);
-        this._lastBody = passSettle.body;
-        this._lastAuthority = passSettle.authority;
-        this._lastWindowSize = windowSize;
-        this._pairDisagreementStrikes = passSettle.pairDisagreementStrikes;
+        this._passPlan = this.bodyPlan.settle;
+        this.bodyPlan.next({
+            targetSize: readActorSize(clipTarget),
+            windowActorSize: readActorSize(winActor),
+            windowSize,
+        });
 
         // One plan per pass: the insets the body uses, and the meanings the clip shader gives the ring.
         // The ring hold covers a ring that moves while nothing else does; its witness is the BUFFER, since
@@ -509,7 +485,7 @@ export class WindowDecoration {
         this.drawClip = Boolean(this.clip && drawClip && style.radius > 0);
 
         this._syncClipParams();
-        this.clip?.setBodyPlan?.(this._bodyPlan);
+        this.clip?.setBodyPlan?.(this._passPlan);
         if (this.shadow) {
             // Both cuts read the same phase source: the shadow follows the clip's resolved target
             // strategy (see shadowPhaseOffset). Its body authority is that same target, so the two
@@ -517,7 +493,7 @@ export class WindowDecoration {
             // shrink the shadow's band while the clip's cut stays put.
             this.shadow.setPhaseInTransform?.(this.clipPhaseInTransform);
             this.shadow.setClipTarget?.(this.clipTarget);
-            this.shadow.setBodyPlan?.(this._bodyPlan);
+            this.shadow.setBodyPlan?.(this._passPlan);
             this.shadow.setScale?.(scale);
             this.shadow.setShadowInsets?.(insets);
             this.shadow.setShadowStyle?.({
