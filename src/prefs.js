@@ -28,8 +28,8 @@ import {
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
-    buildRuleKeyFromProperties,
 } from './lib/pick.js';
+import {PickRefusal, pickVerdict} from './lib/pickAnswer.js';
 import {
     setWindowRule,
     readEntries,
@@ -46,6 +46,32 @@ import {
     setupRuleRowHeader,
     ensureCustomStyles,
 } from './prefs/ruleUi.js';
+
+/**
+ * The sentence for a refused pick. The reasons themselves are in `lib/pickAnswer.js`; the words are
+ * here because this process is the one that binds the gettext domain, and as thunks because the
+ * module loads before that binding.
+ */
+const PICK_REFUSALS = {
+    [PickRefusal.UNIDENTIFIABLE]: () => _('No correction added: this window could not be identified'),
+    [PickRefusal.NEVER_DECORATED]: () => neverDecorated(),
+    // Written as an escape so the source carries no literal dash while the msgid stays byte-identical:
+    // that string is the key its translation is filed under, and rewriting it drops the translation.
+    [PickRefusal.NO_SUGGESTION]: () =>
+        _('No correction added: the extension did not answer \u2014 restart the session and pick again'),
+    [PickRefusal.NO_EFFECT]: () =>
+        _('No correction added: it would have no effect on a window of this kind'),
+};
+
+/**
+ * @param refusal - A `PickRefusal` code
+ * @returns The sentence to show, never empty
+ */
+function pickRefusalText(refusal) {
+    // A reason this build does not know is still a kind nothing acts on, which is what the fallback
+    // sentence says; inventing a new one would need a catalogue entry nobody can review.
+    return (PICK_REFUSALS[refusal] ?? neverDecorated)();
+}
 
 /**
  * @param [cancellable] - Cancelled when the preferences window closes.
@@ -247,45 +273,15 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             if (!props || Object.keys(props).length === 0)
                 return;
 
-            const ruleKey = buildRuleKeyFromProperties(props);
-
-            if (!ruleKey) {
-                window.add_toast(new Adw.Toast({
-                    title: _('No correction added: this window could not be identified'),
-                }));
+            // What this pick is worth is decided in one place: the rule it would store, or the reason
+            // it stores none. Only the words for each reason belong to this process.
+            const verdict = pickVerdict(props);
+            if (verdict.refusal) {
+                window.add_toast(new Adw.Toast({title: pickRefusalText(verdict.refusal)}));
                 return;
             }
 
-            // The inspector only offers decoratable windows, so this guards
-            // future callers - and names the reason instead of a generic refusal.
-            const {properties: pickedProperties} = parseRuleKey(ruleKey);
-            if (pickedProperties && !isDecoratableKind(pickedProperties)) {
-                window.add_toast(new Adw.Toast({title: neverDecorated()}));
-                return;
-            }
-
-            // The inspector sends the axes to correct. No answer means an extension
-            // too old to judge (a Shell that has not reloaded since an update): the
-            // pick is refused rather than guessed at.
-            const suggested = typeof props.suggestedState === 'string'
-                ? parseRuleState(props.suggestedState)
-                : null;
-            if (!suggested) {
-                window.add_toast(new Adw.Toast({
-                    title: _('No correction added: the extension did not answer — restart the session and pick again'),
-                }));
-                return;
-            }
-
-            // The picker's own pre-flight: a reversal of nothing stores no rule.
-            if (props.suggestedStateWouldChange === 'false') {
-                window.add_toast(new Adw.Toast({
-                    title: _('No correction added: it would have no effect on a window of this kind'),
-                }));
-                return;
-            }
-
-            const state = buildRuleState(suggested);
+            const {key: ruleKey, state} = verdict;
 
             const existingEntries = readEntries(settings);
             const isExisting = Object.prototype.hasOwnProperty.call(existingEntries, ruleKey);

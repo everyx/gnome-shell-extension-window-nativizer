@@ -376,7 +376,7 @@ export class Manager {
     }
 
     /**
-     * Inputs for evaluateWindowActions; shared with suggestedRuleWouldChange().
+     * Inputs for evaluateWindowActions; shared with pickAnswer().
      */
     _decorationInputs(win) {
         if (!win)
@@ -420,25 +420,28 @@ export class Manager {
     }
 
     /**
-     * @param win - Meta.Window
-     * @returns Whether storing ruleState would change decoration; null if unidentifiable.
+     * What picking a window means, from one reading: the property dictionary prefs reads, the rule
+     * state the pick would store, and whether that would change the decoration.
+     *
+     * @returns Null when the window cannot be read; the state is null when there is no geometry, which
+     *          is also when no rule can be suggested
      */
-    suggestedRuleWouldChange(win, ruleState) {
+    pickAnswer(win) {
         const inputs = this._decorationInputs(win);
-        // A rule suggestion needs a geometry to be about; the previous shape returned null for
-        // every invalid reading, so keep that here now the reconcile path sees them.
-        if (!inputs?.hasValidGeometry)
+        if (!inputs)
             return null;
-        return suggestedRuleWouldChange(extractWindowProperties(inputs, inputs.wmClass), inputs, ruleState);
-    }
 
-    /**
-     * @param win - Meta.Window
-     * @returns Suggested canonical rule state for pick, or null if unreadable.
-     */
-    suggestedRuleState(win) {
-        const inputs = this._decorationInputs(win);
-        return inputs?.hasValidGeometry ? suggestedRuleState(inputs) : null;
+        const properties = extractWindowProperties(inputs, inputs.wmClass);
+        if (!inputs.hasValidGeometry)
+            return {properties, suggestedState: null, suggestedStateWouldChange: null};
+
+        const state = suggestedRuleState(inputs);
+        const changes = suggestedRuleWouldChange(properties, inputs, state);
+        return {
+            properties,
+            suggestedState: state,
+            suggestedStateWouldChange: typeof changes === 'boolean' ? changes : null,
+        };
     }
 
     /**

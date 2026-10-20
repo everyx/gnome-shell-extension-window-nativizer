@@ -185,8 +185,12 @@ export class InspectorService {
      *
      */
     _buildReply(win, diagnostics) {
+        // One answer covers the dictionary and the rule state the pick would store. Without a manager
+        // - a spec, or a session whose manager is gone - the dictionary alone is still a truthful
+        // reply, and the preferences window refuses a pick it cannot judge rather than guessing.
+        const answer = this._manager?.pickAnswer?.(win) ?? null;
         const properties = {
-            ...extractWindowProperties(win, resolveWindowIdentity(win)),
+            ...answer?.properties ?? extractWindowProperties(win, resolveWindowIdentity(win)),
         };
 
         if (diagnostics) {
@@ -204,13 +208,10 @@ export class InspectorService {
         if (title)
             properties.windowTitle = title;
 
-        const state = this._manager?.suggestedRuleState?.(win);
-        if (typeof state === 'string') {
-            properties.suggestedState = state;
-            const changes = this._manager?.suggestedRuleWouldChange?.(win, state);
-            if (typeof changes === 'boolean')
-                properties.suggestedStateWouldChange = String(changes);
-        }
+        if (typeof answer?.suggestedState === 'string')
+            properties.suggestedState = answer.suggestedState;
+        if (typeof answer?.suggestedStateWouldChange === 'boolean')
+            properties.suggestedStateWouldChange = String(answer.suggestedStateWouldChange);
         return properties;
     }
 
