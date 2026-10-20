@@ -2421,7 +2421,7 @@ fi
 echo ">> $LEAK_CYCLES cycles: 0 signal handlers survived disable."
 
 # A window whose actor read throws must not take the teardown with it. Before the guard in
-# Manager.disable(), the exception skipped `_windows.clear()`, the global signal disconnect and the
+# Manager.disable(), the exception skipped the tracker clear, the global signal disconnect and the
 # manager drop, so the shell was told the extension was disabled while its Manager stayed wired -
 # and every later enable() hit the idempotency guard and did nothing. The fault goes into the live
 # manager, so this is the real disable() path and not a copy of it.
@@ -2431,9 +2431,9 @@ FAULT_STATE="$(shell_eval '
     const Main = await import("resource:///org/gnome/shell/ui/main.js");
     const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
     const manager = ext._manager;
-    manager._windows.set(
+    manager._tracking._windows.set(
         {get_compositor_private() { throw new Error("injected teardown fault"); }},
-        {signals: [], deco: {destroy() { throw new Error("injected teardown fault"); }}});
+        {signals: [], decoration: {destroy() { throw new Error("injected teardown fault"); }}});
     let threw = false;
     try {
         ext.disable();

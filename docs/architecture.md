@@ -23,6 +23,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
 | `lib/window.js` | reading `Meta.Window` properties, actor discovery, physical monitor scale, and geometry normalization |
 | `lib/windowDecoration.js` | single-window decoration lifecycle: the tri-axis actors, phased teardown, and the read-only state view |
+| `lib/windowTracking.js` | the windows a session drives: which signals wake a pass, how a burst coalesces into one, and the first-frame gate |
 | `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, decoration lifecycle, and the inspection surfaces |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
 | `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
@@ -73,9 +74,11 @@ tears both down. The manager field doubles as the idempotency guard - a second e
 early while it is set - and is dropped in a `finally`, so a teardown that throws midway still
 lets a later enable run rather than wedging on a stale manager.
 
-The manager connects only the shell signals a decoration input can change on, plus the
+The manager itself connects only the session signals a decoration input can change on, plus the
 overview's show/hide transitions (which hand every decoration its overview state), and
 deliberately no workspace signal at the manager: no decoration input depends on the workspace.
+Each window's own signals - which of them wake a pass, how a burst coalesces into one, and the
+first-frame gate - are `windowTracking.js`, so a pass reads and applies and nothing else.
 What a decoration does with that state - and the workspace move that rebuilds a preview, which
 the decoration hooks itself - is in `decoration-model.md`.
 

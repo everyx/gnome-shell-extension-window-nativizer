@@ -1,11 +1,9 @@
-import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
     evaluateWindowActions,
-    isDecoratableWindowType,
     suggestedRuleState,
     suggestedRuleWouldChange,
 } from './detector.js';
@@ -14,6 +12,7 @@ import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {reconcileOutcome, readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
 import {WindowDecoration} from './windowDecoration.js';
+import {WindowTracking} from './windowTracking.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
 import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
@@ -30,9 +29,6 @@ import {
 } from '../platform/display.js';
 import {
     getWindowActor,
-    getWindowType,
-    getWindowPid,
-    getSurfaceContainer,
     invalidateMonitorCache,
 } from '../platform/window.js';
 
@@ -41,29 +37,10 @@ function gtypeName(object) {
     return object?.constructor?.$gtype?.name;
 }
 
-/**
- * A window the manager tracks: the decoration it drives plus the bookkeeping the manager
- * keeps for it - the signals connected here, the debounce and the first-frame gate. These
- * belong to the manager's lifecycle, not the decoration's, so they live outside it.
- */
-class TrackedWindow {
-    constructor(deco) {
-        this.deco = deco;
-        this.signals = [];
-        this.reconcileTimeout = null;
-        this.idleId = null;
-        this.firstFrameDone = false;
-        this.actorWired = false;
-        // The surface container the clip targets, tracked so its allocation can be watched without
-        // re-connecting on every reconcile. Null until the child exists.
-        this.wiredContainer = null;
-    }
-}
-
 export class Manager {
     constructor(ext) {
         this._settings = ext.getSettings();
-        this._windows = new Map();  // Meta.Window -> TrackedWindow
+        this._tracking = null;      // WindowTracking: the windows this session drives
         this._signals = [];
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
@@ -84,6 +61,13 @@ export class Manager {
         shadowTexture.reset();
         this._classifier?.destroy();
         this._classifier = new ProcessClassifier();
+        // Created before anything can route a pass: a failure later in enable is rolled back through
+        // disable(), which tears the tracker down with everything else.
+        this._tracking = new WindowTracking({
+            onPassDue: win => this._reconcileWindow(win),
+            onGone: win => this._forgetWindow(win),
+            St,
+        });
 
         // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
         this._classifier.setOnProcessKnown(pid => this._onProcessKnown(pid));
@@ -113,9 +97,9 @@ export class Manager {
             const previous = this._lastFocusWindow;
             const focusWin = getFocusWindow(display);
             this._lastFocusWindow = focusWin;
-            if (previous && previous !== focusWin && this._windows.has(previous))
+            if (previous && previous !== focusWin && this._tracking?.has(previous))
                 this._reconcileWindow(previous);
-            if (focusWin && this._windows.has(focusWin))
+            if (focusWin && this._tracking?.has(focusWin))
                 this._reconcileWindow(focusWin);
         });
 
@@ -164,14 +148,14 @@ export class Manager {
 
         // Isolate per-window errors so a failure on one window never aborts teardown
         // of remaining windows or drops global signal and state disconnection.
-        for (const record of this._windows.values()) {
+        for (const [win] of this._tracking?.entries() ?? []) {
             try {
-                this._destroyWindow(record);
+                this._destroyWindow(win);
             } catch (e) {
                 logError(e, '[window-nativizer] Failed to tear down a window decoration');
             }
         }
-        this._windows.clear();
+        this._tracking = null;
         this._lastFocusWindow = null;
         this._disconnectSignals(this._signals);
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
@@ -252,7 +236,7 @@ export class Manager {
     }
 
     _trackWindow(win) {
-        if (!win || !isDecoratableWindowType(getWindowType(win)) || this._windows.has(win))
+        if (!this._tracking?.accepts(win))
             return;
 
         const deco = new WindowDecoration(win, {
@@ -265,120 +249,25 @@ export class Manager {
             OverviewShadow,
             St,
         });
-        const record = new TrackedWindow(deco);
-        // The pid is read once, here, and remembered. A later read - during teardown - can come back
-        // empty, which would leave the process classified with no owner to forget it by.
-        record.pid = getWindowPid(win);
-        this._windows.set(win, record);
-
-        const windowSignals = [
-            'position-changed', 'size-changed',
-            'notify::maximized-horizontally', 'notify::maximized-vertically',
-            'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
-        ];
-        for (const sig of windowSignals)
-            this._connect(record.signals, win, sig, () => this._reconcileWindowDebounced(win), true);
-
-        // Focus is not geometry, so it is not debounced: the shadow it selects is the animation
-        // the user is watching, and delaying its start by the debounce window is visible against
-        // the window's own backdrop change.
-        this._connect(record.signals, win, 'notify::appears-focused', () => this._reconcileWindow(win), true);
-
-        this._connect(record.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
-
-        const actor = getWindowActor(win);
-        this._wireActorSignals(win, record, actor);
-        if (actor && actor.width > 0 && actor.height > 0) {
-            record.firstFrameDone = true;
-            this._reconcileWindow(win);
-        } else {
-            this._reconcileWindowDebounced(win);
-        }
+        this._tracking.add(win, deco);
     }
 
     /**
-     * Connects the actor-driven signals once the window actor exists.
+     * Ends the manager's bookkeeping for a window, then tears down its decoration. The signals, the
+     * idle and the debounce belong to the tracking module, so releasing the window drops them; the
+     * decoration's own teardown is this method's.
+     *
+     * @returns The dropped record, for the caller that needs what it remembered
      */
-    _wireActorSignals(win, record, actor) {
-        if (!actor)
-            return;
-
-        if (!record.actorWired) {
-            record.actorWired = true;
-
-            this._connect(record.signals, actor, 'notify::allocation', () => {
-                if (!record.firstFrameDone && actor.width > 0 && actor.height > 0) {
-                    if (record.idleId)
-                        GLib.Source.remove(record.idleId);
-                    // Defer to idle: don't mutate actor tree during allocation.
-                    record.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        record.idleId = null;
-                        record.firstFrameDone = true;
-                        this._reconcileWindow(win);
-                        return GLib.SOURCE_REMOVE;
-                    });
-                } else {
-                    this._reconcileWindowDebounced(win);
-                }
-            }, true);
-            this._connect(record.signals, actor, 'child-added', () => this._reconcileWindowDebounced(win), true);
-            this._connect(record.signals, actor, 'child-removed', () => this._reconcileWindowDebounced(win), true);
-        }
-
-        // The clip attaches to the surface container, a child of the window actor, whose allocation
-        // can move (0 -> real, a buffer swap) without the actor's changing. Watching it re-runs the
-        // readings so the insets cannot go stale and re-verifies a target that was deferred while the
-        // container was unallocated.
-        const container = getSurfaceContainer(actor, win, St);
-        if (container && container !== record.wiredContainer) {
-            // The container can be replaced (XWayland swaps the surface child); drop the old
-            // connection before watching the new one so `signals` does not accumulate dead entries.
-            const previous = record.wiredContainer;
-            if (previous) {
-                const index = record.signals.findIndex(([obj]) => obj === previous);
-                if (index >= 0) {
-                    try {
-                        previous.disconnect(record.signals[index][1]);
-                    } catch {
-                        // The old container is already gone.
-                    }
-                    record.signals.splice(index, 1);
-                }
-            }
-            record.wiredContainer = container;
-            this._connect(record.signals, container, 'notify::allocation',
-                () => this._reconcileWindowDebounced(win), true);
-        }
-    }
-
-    _dropPendingWindowWork(record) {
-        if (record.idleId) {
-            GLib.Source.remove(record.idleId);
-            record.idleId = null;
-        }
-        if (record.reconcileTimeout) {
-            GLib.Source.remove(record.reconcileTimeout);
-            record.reconcileTimeout = null;
-        }
-    }
-
-    /**
-     * Ends the manager's bookkeeping for a window, then tears down its decoration. The
-     * signals, idle and debounce are the manager's, so this is where they go; the
-     * decoration's own teardown gets the options.
-     */
-    _destroyWindow(record, options = {}) {
-        this._dropPendingWindowWork(record);
-        this._disconnectSignals(record.signals);
-        record.deco.destroy(options);
+    _destroyWindow(win, options = {}) {
+        const record = this._tracking?.release(win) ?? null;
+        record?.decoration.destroy(options);
+        return record;
     }
 
     _forgetWindow(win) {
-        const record = this._windows.get(win);
-        if (record)
-            this._destroyWindow(record, {keepVisualsForClose: true});
+        const record = this._destroyWindow(win, {keepVisualsForClose: true});
 
-        this._windows.delete(win);
         if (this._lastFocusWindow === win)
             this._lastFocusWindow = null;
 
@@ -386,13 +275,8 @@ export class Manager {
         // come back empty, and an empty read must not decide whether a process still has windows.
         const pid = record?.pid ?? 0;
         if (pid > 0) {
-            let hasPeer = false;
-            for (const other of this._windows.keys()) {
-                if (this._windows.get(other)?.pid === pid) {
-                    hasPeer = true;
-                    break;
-                }
-            }
+            const hasPeer = this._tracking?.entries()
+                .some(([, other]) => other.pid === pid) ?? false;
             // Last window for pid gone -> drop process cache.
             if (!hasPeer)
                 this._classifier?.forgetProcess(pid);
@@ -403,40 +287,27 @@ export class Manager {
      * A process's answer landed after nothing could be decided for its windows: decide them now.
      */
     _onProcessKnown(pid) {
-        for (const win of this._windows.keys()) {
-            if (this._windows.get(win)?.pid === pid)
+        for (const [win, record] of this._tracking?.entries() ?? []) {
+            if (record.pid === pid)
                 this._reconcileWindow(win);
         }
     }
 
-    _reconcileWindowDebounced(win) {
-        const record = this._windows.get(win);
-        if (!record || record.reconcileTimeout)
-            return;
-        record.reconcileTimeout = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT, 50, () => {
-                record.reconcileTimeout = null;
-                this._reconcileWindow(win);
-                return GLib.SOURCE_REMOVE;
-            });
-    }
-
     _reconcileWindow(win) {
-        const record = this._windows.get(win);
+        const record = this._tracking?.get(win);
         if (!record)
             return;
 
         try {
             const actor = getWindowActor(win);
-            this._wireActorSignals(win, record, actor);
+            this._tracking.observe(win);
             if (!actor || actor.width === 0 || actor.height === 0)
                 return;
 
             // The remembered pid can still be unusable: tracking happens on `window-created`, and an
             // X11 client sets `_NET_WM_PID` only after the window exists. Learn it here and remember
             // it, so a late pid is still classified and teardown keeps a value.
-            if (!(record.pid > 0))
-                record.pid = getWindowPid(win);
+            this._tracking.learnPid(win);
             this._classifier?.probeAdwaitaLook(record.pid);
 
             const inputs = this._decorationInputs(win);
@@ -444,14 +315,14 @@ export class Manager {
             // no reading to undecorate, classification in flight to wait, otherwise apply.
             const outcome = reconcileOutcome(inputs);
             if (outcome === 'undecorate') {
-                record.deco.undecorate();
+                record.decoration.undecorate();
                 return;
             }
             if (outcome === 'defer')
                 return;
             const actions = evaluateWindowActions(inputs);
 
-            record.deco.apply({
+            record.decoration.apply({
                 actions,
                 inputs,
                 actor,
@@ -464,7 +335,7 @@ export class Manager {
     }
 
     _reconcile() {
-        for (const [win] of this._windows)
+        for (const [win] of this._tracking?.entries() ?? [])
             this._reconcileWindow(win);
     }
 
@@ -485,14 +356,14 @@ export class Manager {
     }
 
     _syncOverviewDecos() {
-        for (const record of this._windows.values())
-            record.deco.setOverviewMode(this._inOverview);
+        for (const [, record] of this._tracking?.entries() ?? [])
+            record.decoration.setOverviewMode(this._inOverview);
     }
 
     _restackActors() {
-        for (const [win, record] of this._windows) {
+        for (const [win, record] of this._tracking?.entries() ?? []) {
             try {
-                record.deco.restack(getWindowActor(win));
+                record.decoration.restack(getWindowActor(win));
             } catch {
                 // Window went away mid-restack; the next restack drops it.
             }
@@ -500,8 +371,8 @@ export class Manager {
     }
 
     _resetBandCursors() {
-        for (const record of this._windows.values())
-            record.deco.resetBandCursor();
+        for (const [, record] of this._tracking?.entries() ?? [])
+            record.decoration.resetBandCursor();
     }
 
     /**
@@ -530,7 +401,7 @@ export class Manager {
         // the first pass the classification landed on: a pass that still defers, or that read no
         // extent, is not a frame to judge and must not close it. The picker's own reading comes
         // through here too, so one answer serves both.
-        const deco = this._windows.get(win)?.deco ?? null;
+        const deco = this._tracking?.get(win)?.decoration ?? null;
         if (reconcileOutcome(reading) === 'apply')
             deco?.latchInitialFrameSize(reading);
         const initial = deco?.initialFrameSize ?? null;
@@ -575,15 +446,15 @@ export class Manager {
      * The introspection boundary for a tracked window's state in E2E tests and debugging.
      */
     stateView(win) {
-        const record = this._windows.get(win);
+        const record = this._tracking?.get(win);
         if (!record)
             return null;
         // firstFrameDone/isPendingReconcile are manager bookkeeping, so the manager adds them
         // to the decoration's own snapshot rather than the decoration reporting them.
         return {
-            ...record.deco.stateView,
+            ...record.decoration.stateView,
             firstFrameDone: record.firstFrameDone,
-            isPendingReconcile: Boolean(record.reconcileTimeout),
+            isPendingReconcile: record.isPendingReconcile,
         };
     }
 
@@ -593,25 +464,21 @@ export class Manager {
      * clip internals the diagnostic reply carries.
      */
     decorationFor(win) {
-        return this._windows.get(win)?.deco ?? null;
+        return this._tracking?.get(win)?.decoration ?? null;
     }
 
     /**
      * Number of windows currently tracked by the manager.
      */
     get trackedCount() {
-        return this._windows.size;
+        return this._tracking?.size ?? 0;
     }
 
     /**
      * Whether any tracked window has a pending debounce reconcile timer.
      */
     get hasPendingWindowReconcile() {
-        for (const record of this._windows.values()) {
-            if (record.reconcileTimeout)
-                return true;
-        }
-        return false;
+        return Boolean(this._tracking?.hasPending);
     }
 
     /**
@@ -619,6 +486,6 @@ export class Manager {
      * @param win - Meta.Window
      */
     isWindowActivelyClipped(win) {
-        return Boolean(this._windows.get(win)?.deco.isActivelyClipped);
+        return Boolean(this._tracking?.get(win)?.decoration.isActivelyClipped);
     }
 }
