@@ -11,6 +11,7 @@
 import {resolveClipTarget} from './clipTarget.js';
 import {MIN_DECORABLE_SIZE} from './detector.js';
 import {BodyPlan, readActorSize} from '../effects/bodyPlan.js';
+import {decorationPass} from '../effects/decorationPass.js';
 import {
     bufferAllocationWarning,
     evaluateInvariant,
@@ -117,6 +118,9 @@ export class WindowDecoration {
         // The plan handed to the clip and the shadow for the paints after this pass: the plan's state
         // as this pass found it, taken before it advances.
         this._passPlan = null;
+        // The pass value both cuts are handed, kept so an overview mode change can re-push the clip
+        // outside a pass. Null until the first pass resolves a style.
+        this._pass = null;
         // The manager's "force corners" setting for this pass; handed to the overview, which
         // picks the legacy offscreen clip over the mask for XWayland and the fallback cases.
         this._forceOverviewCorners = false;
@@ -318,7 +322,7 @@ export class WindowDecoration {
 
         // The style is this pass's own reading of the corner state; the overview re-reads it, so a
         // pass that draws nothing (maximized, fullscreen) must still clear the previous one's.
-        this._applyStyle(actions.style, this.ring.insets, actions.drawClip, scale, readableScale);
+        this._applyStyle(actions.style, actions.drawClip, scale, readableScale);
 
         this._checkDiagnosticInvariants(inputs, winActor);
 
@@ -362,6 +366,16 @@ export class WindowDecoration {
     }
 
     /**
+     * Re-hands the current pass to the clip. The overview suppresses the outline and the stroke it
+     * points at, so a mode change is the one thing outside a pass that has to re-state its parameters.
+     */
+    _pushPass() {
+        if (!this.clip || !this._pass)
+            return;
+        this.clip.applyPass?.(decorationPass({...this._pass, inOverview: this.overview.inOverview}));
+    }
+
+    /**
      * Keeps the desktop clip in step with the overview mode that actually installed. Called when
      * a pass enters or leaves the overview, and when the overview rebuilds its card under a
      * resize or workspace change - the two paths that can change the mode.
@@ -376,7 +390,7 @@ export class WindowDecoration {
         if (enabled)
             this.clip.resume?.();
         this.clip.set_enabled(enabled);
-        this._syncClipParams();
+        this._pushPass();
     }
 
     _syncClip(wantEffect, clipTarget = null, insets = null, inOverview = false) {
@@ -475,7 +489,7 @@ export class WindowDecoration {
         });
     }
 
-    _applyStyle(style, insets, drawClip, scale = 1.0, lastGoodScale = scale) {
+    _applyStyle(style, drawClip, scale = 1.0, lastGoodScale = scale) {
         this._style = style;
         // Only a readable reading becomes the last good one. The substituted 1.0 still lays this
         // pass out through `scale`, but storing it would hand 1.0 to every later unreadable pass.
@@ -484,22 +498,28 @@ export class WindowDecoration {
         // attach, so the overview must not later mask a corner the desktop never shows.
         this.drawClip = Boolean(this.clip && drawClip && style.radius > 0);
 
-        this._syncClipParams();
-        this.clip?.setBodyPlan?.(this._passPlan);
+        // One pass value, handed to both cuts. It is kept because the overview's mode changes re-push
+        // the clip outside a pass, and it is built here because this is where the pass's facts are:
+        // the ring it is worn with, the style it resolved, and the plan its paints settle against.
+        this._pass = decorationPass({
+            style,
+            ring: this.ring,
+            drawClip: this.drawClip,
+            scale,
+            readableScale: this._scale,
+            scaleCandidates: this._scaleCandidates,
+            bodyPlan: this._passPlan,
+            clipTarget: this.clipTarget,
+            phaseInTransform: this.clipPhaseInTransform,
+            inOverview: this.overview.inOverview,
+        });
+        this.clip?.applyPass?.(this._pass);
         if (this.shadow) {
             // Both cuts read the same phase source: the shadow follows the clip's resolved target
             // strategy (see shadowPhaseOffset). Its body authority is that same target, so the two
             // derive the body from one source and a transient container/actor disagreement cannot
             // shrink the shadow's band while the clip's cut stays put.
-            this.shadow.setPhaseInTransform?.(this.clipPhaseInTransform);
-            this.shadow.setClipTarget?.(this.clipTarget);
-            this.shadow.setBodyPlan?.(this._passPlan);
-            this.shadow.setScale?.(scale);
-            this.shadow.setShadowInsets?.(insets);
-            this.shadow.setShadowStyle?.({
-                ...style,
-                radius: this.clip && drawClip ? style.radius : 0,
-            });
+            this.shadow.applyPass?.(this._pass);
         }
     }
 
@@ -556,24 +576,6 @@ export class WindowDecoration {
         this[key] = state;
         if (message)
             this._warn(message);
-    }
-
-    /**
-     * Synchronizes clip parameters to shader, suppressing inner outline during overview.
-     */
-    _syncClipParams() {
-        if (this.clip && this.clipInsets && this._style) {
-            this.clip.setParams?.({
-                insets: this.clipInsets,
-                radius: this.drawClip ? this._style.radius : 0,
-                outline: this.drawClip && !this.overview.inOverview ? this._style.outline : null,
-
-                erase: Boolean(this.ring?.erase),
-                clearStroke: !this.overview.inOverview && Boolean(this.ring?.clear),
-                scale: this._scale,
-                scaleCandidates: this._scaleCandidates,
-            });
-        }
     }
 
     /**

@@ -10,6 +10,7 @@ import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
 import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {readBodySizes, readActorSize} from './bodyPlan.js';
+import {shadowStyleFrom} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -243,6 +244,21 @@ export const ShadowActor = GObject.registerClass({
         const nextStyle = {...style, key, pipeline: null};
         this._fade.setStyle(nextStyle, {animate});
         this.queue_redraw();
+    }
+
+    /**
+     * One handoff per decoration pass. The setters run in the order this actor's own invariants need:
+     * the phase strategy and the target decide which reads the cast settles from, then the plan and the
+     * scale it lays out at, and the style last, because a changed style starts its cross-fade from the
+     * scale and insets already in place.
+     */
+    applyPass(pass) {
+        this.setPhaseInTransform(pass.phaseInTransform);
+        this.setClipTarget(pass.clipTarget);
+        this.setBodyPlan(pass.bodyPlan);
+        this.setScale(pass.scale);
+        this.setShadowInsets(pass.ring?.insets ?? null);
+        this.setShadowStyle(shadowStyleFrom(pass));
     }
 
     vfunc_paint_node(node, paintContext) {
