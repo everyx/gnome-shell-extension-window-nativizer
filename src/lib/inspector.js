@@ -36,13 +36,13 @@ import {
 import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BG_TRANSPARENTIZE} from './inspectorStyle.generated.js';
+import {isDecoratableWindowType} from './detector.js';
 import {
     HIGHLIGHT_BORDER_WIDTH,
     expectedWindowRadius,
     highlightBoundingBox,
     highlightOuterRadius,
-    isDecoratableWindowType,
-} from './detector.js';
+} from './pickHighlight.js';
 import {
     getWindowFromActor,
     readWindow,

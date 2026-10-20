@@ -9,13 +9,15 @@ tested without a session; the processes only gather inputs and apply results.
 | Module | Responsibility |
 |---|---|
 | `lib/clipTarget.js` | clip target resolution: window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry |
-| `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
+| `lib/detector.js` | whether a window needs decoration, and what a pass draws on each axis (pure) |
 | `lib/frame.js` | body-inside-actor geometry (pure) |
 | `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
 | `lib/overviewDecoration.js` | the overview's own decoration: the shaped-texture corner mask, the preview opacity bypass, and the shadow clone |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
 | `lib/pick.js` | the picker's bus name/path and property dictionary |
 | `lib/pickTarget.js` | the picker's hit test as a pure function of candidate readings |
+| `lib/pickSuggestion.js` | what a pick should correct: the axes a kind can be corrected on, the suggestion, and whether it would change anything (pure) |
+| `lib/pickHighlight.js` | the picker highlight's geometry: the border's outset box, its concentric corner, and the radius the window is expected to show (pure) |
 | `lib/snap.js` | grid snapping math and the 8-slice geometry layout (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
 | `lib/settings.js` | GSettings IO adapter |
