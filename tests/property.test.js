@@ -26,7 +26,7 @@ import {
     edgeForPoint,
     normalizeConstrainedEdges,
 } from '../src/lib/resizeBand.js';
-import {buildRuleKey, parseRuleKey} from '../src/lib/rules.js';
+import {buildRuleKey, kindFromSpecifier, parseRuleKey} from '../src/lib/rules.js';
 
 const ITER = 400;
 const EPS = 1e-9;
@@ -402,22 +402,16 @@ describe('property: rules', () => {
             expect(key).not.toBe('');
 
             // parseRuleKey returns the verbatim identity, so the round-trip is: parse, then
-            // rebuild with buildRuleKey.
+            // rebuild with buildRuleKey. The properties go back through the table's own reader,
+            // which is what prefs does, so no field list is restated here either.
             const parsed = parseRuleKey(key);
             expect(parsed).not.toBeNull();
             expect(parsed.baseWmClass).toBe(wmClass.toLowerCase());
 
-            const p = parsed.properties;
             const rebuilt = buildRuleKey(parsed.baseWmClass, {
-                clientType: p.client_type,
-                windowType: p.window_type,
-                hasParent: p.has_parent,
-                allowsResize: p.allows_resize,
-                isAttachedDialog: p.attached_dialog,
-                hasRing: p.has_ring,
-                hasSsd: p.has_ssd,
-                width: p.width ?? null,
-                height: p.height ?? null,
+                ...kindFromSpecifier(parsed.properties),
+                width: parsed.properties.width ?? null,
+                height: parsed.properties.height ?? null,
             });
             expect(rebuilt).toBe(key);
         }

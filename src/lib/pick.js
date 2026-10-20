@@ -3,6 +3,7 @@ import {WindowClientType} from './mutterRules.generated.js';
 import {
     buildRuleKeyFromProperties,
     boolString,
+    fingerprintProperties,
 } from './rules.js';
 import {
     readWindowString,
@@ -64,13 +65,9 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
 
     const props = {
         wmClass: wmClassOverride || reading.declaredWmClass,
-        clientType: reading.clientTypeToken,
-        windowType: String(reading.windowType),
-        hasParent: boolString(reading.hasParent),
-        allowsResize: boolString(reading.allowsResize),
-        isAttachedDialog: boolString(reading.isAttachedDialog),
-        hasRing: boolString(reading.hasRing),
-        hasSsd: boolString(reading.hasSsd),
+        // The seven structural attributes come from the rule table, so the dictionary prefs turns back
+        // into a key and the key itself cannot disagree about what a window kind is.
+        ...fingerprintProperties(reading),
         isMaximized: boolString(reading.isMaximized),
         isFullscreen: boolString(reading.isFullscreen),
         hasTileMatch: boolString(reading.hasTileMatch),

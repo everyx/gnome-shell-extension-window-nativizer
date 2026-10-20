@@ -415,17 +415,14 @@ describe('rule key contract & round-trip', () => {
 
 describe('rule key invariant', () => {
     it('every value the field table renders is colon-free', () => {
-        const fields = {
-            clientType: 'wayland',
-            windowType: 0,
-            hasParent: false,
-            allowsResize: true,
-            isAttachedDialog: false,
-            hasRing: false,
-            hasSsd: false,
-        };
+        // The sample kind is read out of the table's own fallbacks, so a field added there is covered
+        // here without a second list of names to keep in step.
+        const kind = {};
         for (const field of FINGERPRINT_FIELDS)
-            expect(String(field.render(fields))).not.toContain(':');
+            kind[field.key] = field.parse(String(field.fallback));
+
+        for (const field of FINGERPRINT_FIELDS)
+            expect(String(field.text(kind[field.key]))).not.toContain(':');
     });
 
     it('refuses a specifier carrying a colon rather than mis-splitting it', () => {
