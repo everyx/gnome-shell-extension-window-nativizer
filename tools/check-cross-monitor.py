@@ -9,14 +9,26 @@ the clip declared the lower scale, `offscreenExtent` divided the larger FBO by i
 squeezed into the top-left of the shader's quad - the right and bottom ~25% never drawn.
 
 This starts a nested session with two virtual monitors, applies a layout with different scales (a
-1.0 monitor on the left, a 4/3 monitor on the right), puts a solid-coloured decorated window mostly
-on the 1.0 monitor with its right edge across the seam, and asserts two things against the clip's own
-body frame (`uFrame`) and the subpixel phase its surface container carries:
+1.0 monitor on the left, a 4/3 monitor on the right), and runs two placements:
+
+  * **straddle** - a solid-coloured decorated window mostly on the 1.0 monitor with its right edge
+    across the seam, so the engine takes 4/3 while `get_monitor()` names the 1.0 monitor.
+  * **pre-seam** - a client-decorated window whose frame is still a pixel short of the seam and
+    whose reserved shadow ring (buffer rect) has already crossed it. The engine sizes the actor's
+    FBO from the buffer, so the FBO is 4/3 a ring before the frame - and the declared display
+    scale - says so. With the candidate set read from the frame, that read could not be explained,
+    and the body was masked down to the declared scale's fraction of itself.
+
+For each placement it asserts, against the clip's own body frame (`uFrame`) and the subpixel phase
+its surface container carries:
 
   * the body's device extent spans that frame (the whole-body cut), and
   * each straight edge sits on the frame position and each corner arc meets its straight edge
     within a sub-pixel budget, read as coverage integrals so a mask floored onto the wrong device
     grid - which moves the body a fraction of a logical pixel, not a whole band - cannot hide.
+
+The pre-seam leg additionally asserts that the declared scale is still the frame monitor's and
+that the candidate set names the scale the buffer reaches.
 
 The FBO size is deliberately never asserted: it differs between unpatched mutter
 (`ceilf (resource_scale)`) and a real-scale mutter.
@@ -71,6 +83,11 @@ TOLERANCE = 4
 # unbiased through the upscale's bilinear blur, at a sub-pixel budget.
 EDGE_TOLERANCE = 0.2
 TANGENT_TOLERANCE = 0.2
+
+# The pre-seam band mixes two grids: the body is displayed on the 1.0 monitor while its FBO is at
+# 4/3, so the mask (snapped on the display scale) and the content (drawn on the FBO's) may part by
+# one capture pixel. A quarter-band defect is ~170 of them.
+PRESEAM_EDGE_TOLERANCE = 1.5
 
 
 def get_bus(pid=None):
@@ -144,6 +161,21 @@ def close_existing(env):
     time.sleep(0.5)
 
 
+def close_app(env, app_id):
+    """Closes every window of one application id, leaving the backdrop in place."""
+    eval_js(f"""
+    (() => {{
+        for (const a of global.get_window_actors()) {{
+            const m = a.meta_window;
+            if ((m?.get_gtk_application_id?.() ?? "") === "{app_id}")
+                m.delete(global.get_current_time());
+        }}
+        return "ok";
+    }})()
+    """, env)
+    time.sleep(0.5)
+
+
 def launch(env, name, extra_env):
     command = [os.path.join(ROOT, "tools", "dev.sh"), "app", "env",
                f"WINDOW_NATIVIZER_APP_ID=dev.windownativizer.{name}"]
@@ -151,17 +183,23 @@ def launch(env, name, extra_env):
     subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
 
 
-def place_and_read(env):
-    """Puts the subject down, waits for its decoration, and reads the numbers the check reports."""
+def place_and_read(env, app_id, place):
+    """Puts the subject down, waits for its decoration, and reads the numbers the check reports.
+
+    `place` is JavaScript run once the window exists, with `f0`/`b0` bound to its frame and buffer
+    rects, so a leg can place itself relative to its own measured geometry.
+    """
     js = f"""
     (() => {{
         const byId = id => global.get_window_actors().map(a => a.meta_window)
             .find(w => (w.get_gtk_application_id?.() ?? "") === id);
-        const m = byId("dev.windownativizer.subject");
-        if (m) m.move_resize_frame(false, {SUBJECT[0]}, {SUBJECT[1]}, {SUBJECT[2]}, {SUBJECT[3]});
+        const m = byId("{app_id}");
+        if (!m) return JSON.stringify({{wait: true}});
+        const f0 = m.get_frame_rect(), b0 = m.get_buffer_rect();
+        {place}
         const decorated = global.window_group.get_children().some(c =>
             c.name === "WindowNativizerShadowActor" && c._windowActor?.meta_window === m);
-        if (!m || !decorated) return JSON.stringify({{wait: true}});
+        if (!decorated) return JSON.stringify({{wait: true}});
         const wa = m.get_compositor_private();
         const walk = a => {{
             for (const e of (a.get_effects?.() || []))
@@ -178,6 +216,7 @@ def place_and_read(env):
         const e = hit.effect;
         const t = hit.actor;
         const f = m.get_frame_rect();
+        const b = m.get_buffer_rect();
         const size = e.get_target_size?.();
         // The container's own transform carries the subpixel phase on this path (the clip does not
         // fold it), so the body's stage position is the layout origin plus that translation. Read
@@ -192,9 +231,13 @@ def place_and_read(env):
         }}
         return JSON.stringify({{
             frame: [f.x, f.y, f.width, f.height],
+            buffer: [b.x, b.y, b.width, b.height],
+            ring: [b.x - f.x, b.y - f.y,
+                (b.x + b.width) - (f.x + f.width), (b.y + b.height) - (f.y + f.height)],
             mainMonitor: m.get_monitor(),
             mainScale: global.display.get_monitor_scale(m.get_monitor()),
             clipScale: e._scale ?? null,
+            candidates: e._scaleCandidates ? Array.from(e._scaleCandidates) : null,
             radius: e._radius ?? null,
             appliedPhase: applied,
             frameVec: e._frameVec ? Array.from(e._frameVec) : null,
@@ -210,8 +253,8 @@ def place_and_read(env):
         if match and '"wait"' not in match.group(0):
             geom = json.loads(match.group(0))
             # Settle on a decoration that has stopped moving: the first paint after the move can
-            # still carry the previous scale while the reconcile runs.
-            marker = (geom["clipScale"], geom["quadVec"], geom["frame"])
+            # still carry the previous scale and candidate set while the reconcile runs.
+            marker = (geom["clipScale"], geom["candidates"], geom["quadVec"], geom["frame"])
             if marker == previous and geom["frameVec"]:
                 return geom
             previous = marker
@@ -316,11 +359,92 @@ def measure_frame(coverage, body, radius):
     return straight, tangents
 
 
+def verify_body(env, geom, capture_scale, label, problems, skip_top=False,
+                edge_budget=EDGE_TOLERANCE, tangent_budget=TANGENT_TOLERANCE):
+    """Screenshots the subject and checks that its painted body spans its own clip frame.
+
+    The clip's body frame (`uFrame`) is the window frame less the flat-safe inset the clip uses to
+    erase a client-drawn stroke: it is what the texture must span, so it is the expected extent -
+    not the raw window frame, which would count that deliberate inset as a defect. The body's stage
+    position is the buffer origin (the actor's own origin) plus that phase plus the body frame.
+
+    `skip_top` is for a client-decorated subject: GTK paints its titlebar in the theme's colours,
+    so the body colour does not reach the top edge. The top edge and both top corners are then not
+    measured; the band this guards is the right and bottom one.
+    """
+    shoot(env)
+    bx, by, _, _ = geom["buffer"]
+    ux, uy, uw, uh = geom["frameVec"]
+    phase_x, phase_y = geom.get("appliedPhase") or (0.0, 0.0)
+    body_x, body_y = bx + phase_x, by + phase_y
+    expected_w, expected_h = round(uw * capture_scale), round(uh * capture_scale)
+    expected_x0 = round((body_x + ux) * capture_scale)
+    expected_y0 = round((body_y + uy) * capture_scale)
+    box = body_bbox(SHOT, (expected_x0, expected_y0, expected_w, expected_h))
+    if not box:
+        problems.append(f"{label}: no subject body pixels found in the screenshot")
+        return
+    x0, y0, x1, y1 = box
+    width, height = x1 - x0 + 1, y1 - y0 + 1
+    print(f">> [{label}] Body device extent {width}x{height} at ({x0},{y0}); expected "
+          f"{expected_w}x{expected_h} at ({expected_x0},{expected_y0}) (clip body frame {uw}x{uh} "
+          f"logical at capture scale {capture_scale:.6f})")
+
+    # The body colour reaches the left, right and bottom edges; `skip_top` drops the top one, which
+    # a client-decorated subject paints with its titlebar instead.
+    dw = abs(width - expected_w)
+    bottom_off = abs((y1 + 1) - (expected_y0 + expected_h))
+    healthy = dw <= TOLERANCE and abs(x0 - expected_x0) <= TOLERANCE \
+        and abs((x1 + 1) - (expected_x0 + expected_w)) <= TOLERANCE and bottom_off <= TOLERANCE
+    if not skip_top:
+        healthy = healthy and abs(y0 - expected_y0) <= TOLERANCE
+    print(f">> [{label}] Body vs frame: width off {dw}px, bottom off {bottom_off}px "
+          f"(tolerance {TOLERANCE}; top edge {'not measured' if skip_top else 'measured'})")
+    if not healthy:
+        problems.append(f"{label}: the body is {width}x{height} device px against a {expected_w}x"
+                        f"{expected_h} frame at ({expected_x0},{expected_y0}) - a missing band on "
+                        f"the right or bottom")
+
+    # The content check above cannot see a mask floored onto the wrong device grid, so the edges and
+    # corner tangents are measured again as coverage integrals against the same clip frame.
+    body = ((body_x + ux) * capture_scale, (body_y + uy) * capture_scale,
+            (body_x + ux + uw) * capture_scale, (body_y + uy + uh) * capture_scale)
+    radius_dev = (geom["radius"] or 0) * capture_scale
+    straight, tangents = measure_frame(red_coverage(SHOT), body, radius_dev)
+    nominal = {"left": body[0], "top": body[1], "right": body[2], "bottom": body[3]}
+    if skip_top:
+        straight.pop("top", None)
+    worst_edge = 0.0
+    for side, value in straight.items():
+        delta = value - nominal[side]
+        worst_edge = max(worst_edge, abs(delta))
+        print(f"   [{label}] straight {side:6s} measured {value:9.3f}  frame {nominal[side]:9.3f}  "
+              f"origin d={delta:+.3f}")
+        if abs(delta) > edge_budget:
+            problems.append(f"{label}: body {side} edge is {delta:+.3f} device px off its frame "
+                            f"(budget {edge_budget})")
+    worst_tangent = 0.0
+    if skip_top:
+        tangents = [entry for entry in tangents
+                    if not entry[0].startswith(("tl ", "tr "))]
+    for tangent_label, value, edge, curve in tangents:
+        delta = (value - edge) - curve
+        worst_tangent = max(worst_tangent, abs(delta))
+        print(f"   [{label}] tangent  {tangent_label:9s} measured {value:9.3f}  "
+              f"arc-vs-edge {value - edge:+.3f}  -curvature {curve:.3f}  d={delta:+.3f}")
+        if abs(delta) > tangent_budget:
+            problems.append(f"{label}: corner tangent {tangent_label} is {delta:+.3f} device px off "
+                            f"its frame line (budget {tangent_budget})")
+    print(f">> [{label}] Origin: worst straight-edge offset {worst_edge:.3f} device px; worst corner "
+          f"tangent {worst_tangent:.3f} device px (budgets {edge_budget} / {tangent_budget})")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true",
                         help=f"Exit 1 unless the body spans its frame and every edge and corner "
-                             f"tangent is within {EDGE_TOLERANCE} device px")
+                             f"tangent is within {EDGE_TOLERANCE} device px (the pre-seam band "
+                             f"{PRESEAM_EDGE_TOLERANCE})")
     args = parser.parse_args()
 
     env = start_session()
@@ -338,7 +462,9 @@ def main():
     time.sleep(1.0)
     launch(env, "subject", [f"WINDOW_NATIVIZER_BODY={BODY_COLOR}",
                             f"WINDOW_NATIVIZER_SIZE={SUBJECT[2]}x{SUBJECT[3]}"])
-    geom = place_and_read(env)
+    geom = place_and_read(env, "dev.windownativizer.subject",
+                          f"m.move_resize_frame(false, {SUBJECT[0]}, {SUBJECT[1]}, "
+                          f"{SUBJECT[2]}, {SUBJECT[3]});")
     if not geom:
         print("!! The decorated subject never settled")
         return 1
@@ -354,75 +480,60 @@ def main():
         return 1
     problems = []
     if geom["clipScale"] is None or abs(geom["clipScale"] - capture_scale) > 1e-3:
-        problems.append(f"the clip declared scale {geom['clipScale']}, not the engine's "
+        problems.append(f"straddle: the clip declared scale {geom['clipScale']}, not the engine's "
                         f"{capture_scale}")
 
-    shoot(env)
-    # The clip's own body frame (`uFrame`) is the window frame less the flat-safe inset the clip
-    # uses to erase a client-drawn stroke: it is what the texture must span, so it is the expected
-    # extent - not the raw window frame, which would count that deliberate inset as a defect. The
-    # surface container's transform carries the subpixel phase, so the body's stage position is the
-    # frame plus that phase plus the body frame.
-    fx, fy, _, _ = geom["frame"]
-    ux, uy, uw, uh = geom["frameVec"]
-    phase_x, phase_y = geom.get("appliedPhase") or (0.0, 0.0)
-    body_x, body_y = fx + phase_x, fy + phase_y
-    expected_w, expected_h = round(uw * capture_scale), round(uh * capture_scale)
-    expected_x0, expected_y0 = round((body_x + ux) * capture_scale), round((body_y + uy) * capture_scale)
-    box = body_bbox(SHOT, (expected_x0, expected_y0, expected_w, expected_h))
-    if not box:
-        print("!! No subject body pixels found in the screenshot")
+    verify_body(env, geom, capture_scale, "straddle", problems)
+
+    # The same seam, one frame earlier: a client that reserved a shadow margin (here a decorated
+    # GTK window, `WINDOW_NATIVIZER_DECORATED=1`) is allocated at its buffer rect, so the engine
+    # sizes the FBO by the higher-scale monitor as soon as that *ring* reaches the seam - before
+    # the frame, and so before the clip's declared display scale, does. The candidate set has to
+    # name the higher scale from the buffer, or the read cannot be explained and the body is masked
+    # down to the declared scale's fraction while the shadow stays whole.
+    close_app(env, "dev.windownativizer.subject")
+    launch(env, "preseam", ["WINDOW_NATIVIZER_DECORATED=1", f"WINDOW_NATIVIZER_BODY={BODY_COLOR}",
+                            "WINDOW_NATIVIZER_SIZE=700x500", "WINDOW_NATIVIZER_TITLE=WN-Preseam"])
+    preseam = place_and_read(env, "dev.windownativizer.preseam",
+                             f"if (f0.x + f0.width !== {SEAM - 1}) "
+                             f"m.move_resize_frame(false, {SEAM - 1} - f0.width, {SUBJECT[1]}, "
+                             f"f0.width, f0.height);")
+    if not preseam:
+        print("!! The pre-seam subject never settled")
         return 1
-    x0, y0, x1, y1 = box
-    width, height = x1 - x0 + 1, y1 - y0 + 1
-    print(f">> Body device extent {width}x{height} at ({x0},{y0}); expected {expected_w}x{expected_h} "
-          f"at ({expected_x0},{expected_y0}) (clip body frame {uw}x{uh} logical at capture scale "
-          f"{capture_scale:.6f})")
+    print(f">> Pre-seam: frame={preseam['frame']} buffer={preseam['buffer']} ring={preseam['ring']} "
+          f"clip scale={preseam['clipScale']} candidates={preseam['candidates']}")
 
-    dw, dh = abs(width - expected_w), abs(height - expected_h)
-    healthy = dw <= TOLERANCE and dh <= TOLERANCE and abs(x0 - expected_x0) <= TOLERANCE \
-        and abs(y0 - expected_y0) <= TOLERANCE
-    print(f">> Body vs frame: width off {dw}px, height off {dh}px (tolerance {TOLERANCE})")
-    if not healthy:
-        problems.append(f"the body is {width}x{height} device px against a {expected_w}x"
-                        f"{expected_h} frame at ({expected_x0},{expected_y0}) - a missing band on "
-                        f"the right or bottom")
+    ring_r = preseam["ring"][2]
+    if not (preseam["frame"][0] + preseam["frame"][2] == SEAM - 1 and ring_r >= 2):
+        print(f"!! The pre-seam subject did not land: frame right edge "
+              f"{preseam['frame'][0] + preseam['frame'][2]} (want {SEAM - 1}), ring {ring_r}px")
+        return 1
+    # The declared scale is the display scale of the body - the frame's monitor - and stays below
+    # the engine's. The candidate set, read from the buffer, must name the engine's scale.
+    if abs(preseam["clipScale"] - preseam["mainScale"]) > 1e-3:
+        problems.append(f"pre-seam: the clip declared {preseam['clipScale']}, not the body's "
+                        f"monitor scale {preseam['mainScale']}")
+    candidates = preseam["candidates"] or []
+    if not any(abs(c - capture_scale) <= 1e-3 for c in candidates):
+        problems.append(f"pre-seam: the candidate set {candidates} does not name the engine's "
+                        f"scale {capture_scale} the buffer reaches")
 
-    # The content check above cannot see a mask floored onto the wrong device grid, so the edges and
-    # corner tangents are measured again as coverage integrals against the same clip frame.
-    body = ((body_x + ux) * capture_scale, (body_y + uy) * capture_scale,
-            (body_x + ux + uw) * capture_scale, (body_y + uy + uh) * capture_scale)
-    radius_dev = (geom["radius"] or 0) * capture_scale
-    straight, tangents = measure_frame(red_coverage(SHOT), body, radius_dev)
-    nominal = {"left": body[0], "top": body[1], "right": body[2], "bottom": body[3]}
-    worst_edge = 0.0
-    for side, value in straight.items():
-        delta = value - nominal[side]
-        worst_edge = max(worst_edge, abs(delta))
-        print(f"   straight {side:6s} measured {value:9.3f}  frame {nominal[side]:9.3f}  "
-              f"origin d={delta:+.3f}")
-        if abs(delta) > EDGE_TOLERANCE:
-            problems.append(f"body {side} edge is {delta:+.3f} device px off its frame "
-                            f"(budget {EDGE_TOLERANCE})")
-    worst_tangent = 0.0
-    for label, value, edge, curve in tangents:
-        delta = (value - edge) - curve
-        worst_tangent = max(worst_tangent, abs(delta))
-        print(f"   tangent  {label:9s} measured {value:9.3f}  arc-vs-edge {value - edge:+.3f}  "
-              f"-curvature {curve:.3f}  d={delta:+.3f}")
-        if abs(delta) > TANGENT_TOLERANCE:
-            problems.append(f"corner tangent {label} is {delta:+.3f} device px off its frame line "
-                            f"(budget {TANGENT_TOLERANCE})")
-    print(f">> Origin: worst straight-edge offset {worst_edge:.3f} device px; worst corner tangent "
-          f"{worst_tangent:.3f} device px (budgets {EDGE_TOLERANCE} / {TANGENT_TOLERANCE})")
+    # In this band the body is displayed on the 1.0 monitor while its FBO is at 4/3, so the mask is
+    # snapped on the display's grid and the content was drawn on the FBO's: an edge may part by one
+    # capture pixel. That is the band's own residue, two orders of magnitude below the quarter-band
+    # the read/dividing defect removed, so this leg budgets a pixel rather than the straddle's fifth.
+    verify_body(env, preseam, capture_scale, "pre-seam", problems, skip_top=True,
+                edge_budget=PRESEAM_EDGE_TOLERANCE, tangent_budget=PRESEAM_EDGE_TOLERANCE)
 
     if args.check and problems:
         for problem in problems:
             print(f"!! {problem}")
         return 1
     if args.check:
-        print(f">> Body spans its frame and every edge and corner tangent is on it at {scales}: "
-              f"PASSED (origin <= {EDGE_TOLERANCE} device px, tangent <= {TANGENT_TOLERANCE})")
+        print(f">> Body spans its frame, and every edge and corner tangent is on it, in the "
+              f"straddle and the pre-seam band at {scales}: PASSED (straddle origin/tangent <= "
+              f"{EDGE_TOLERANCE} device px, pre-seam <= {PRESEAM_EDGE_TOLERANCE})")
     return 0
 
 

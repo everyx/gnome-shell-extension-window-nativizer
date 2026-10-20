@@ -213,7 +213,7 @@ describe('resolveOffscreenScale: the candidate that explains the FBO', () => {
         // scale predicts 444x284, so the 593x379 read is not its allocation.
         expect(offscreenDeviceExtent(BODY, 1.0)).toEqual({width: 444, height: 284});
         expect(resolveOffscreenScale(BODY, realScaleFbo, 1.0, twoMonitors))
-            .toEqual({scale: MONITOR_SCALE_4_3, resolved: true});
+            .toEqual({scale: MONITOR_SCALE_4_3, explained: true});
 
         const extent = offscreenExtent(offscreenQuad(BODY, 1.0), realScaleFbo, MONITOR_SCALE_4_3);
         const derived = offscreenQuad(BODY, MONITOR_SCALE_4_3);
@@ -222,12 +222,12 @@ describe('resolveOffscreenScale: the candidate that explains the FBO', () => {
     });
 
     it('picks the highest scale when three monitors of different scales meet', () => {
-        // 1.25 and 4/3 are 37 device px apart in prediction - the closest pair in this set - so the
-        // pick has to land on one of them rather than on the 1.0 or the 2.0 candidate.
+        // Each read lands on one prediction, the closest pair here (1.25 and 4/3) being 37 device px
+        // apart: the pick has to name it rather than fall back to the declared scale.
         expect(resolveOffscreenScale(BODY, {width: 556, height: 356}, 1.0, threeMonitors))
-            .toEqual({scale: 1.25, resolved: true});
+            .toEqual({scale: 1.25, explained: true});
         expect(resolveOffscreenScale(BODY, realScaleFbo, 1.0, threeMonitors))
-            .toEqual({scale: MONITOR_SCALE_4_3, resolved: true});
+            .toEqual({scale: MONITOR_SCALE_4_3, explained: true});
     });
 
     it('picks the ceil candidate when unpatched mutter allocated at ceilf (scale)', () => {
@@ -235,41 +235,32 @@ describe('resolveOffscreenScale: the candidate that explains the FBO', () => {
         // ceilf (4/3) = 2. Dividing the 888px FBO by 4/3 would stretch the texture 1.5x and cut the
         // body short, so the ceil candidate is what the extent names.
         expect(resolveOffscreenScale(BODY, ceilScaleFbo, MONITOR_SCALE_4_3,
-            offscreenScaleCandidates([MONITOR_SCALE_4_3]))).toEqual({scale: 2, resolved: true});
+            offscreenScaleCandidates([MONITOR_SCALE_4_3]))).toEqual({scale: 2, explained: true});
 
         const extent = offscreenExtent(offscreenQuad(BODY, MONITOR_SCALE_4_3), ceilScaleFbo, 2);
         expect(Math.abs(extent.width - offscreenQuad(BODY, MONITOR_SCALE_4_3).width)).toBeLessThan(1);
         expect(Math.abs(extent.height - offscreenQuad(BODY, MONITOR_SCALE_4_3).height)).toBeLessThan(1);
     });
 
-    it('vetoes a read no candidate explains within the set\'s own resolution', () => {
-        // 620x400 device px sits 27 past the 4/3 prediction, while the closest pair here (1.25 and
-        // 4/3) is only 37 apart: half of that is all this set can resolve, so the read names no
-        // candidate and the clip abstains instead of taking the nearest one.
+    it('names no candidate when the read is past every prediction, however far apart they are', () => {
+        // 620x400 sits 27 device px past the 4/3 prediction and stays unexplained whichever set
+        // offers it: the budget is one device pixel, the subpixel phase an edge may carry. A stale
+        // set must not be read as the nearest candidate and have the read divided by it.
         const drifted = {width: 620, height: 400};
         expect(resolveOffscreenScale(BODY, drifted, 1.0, threeMonitors))
-            .toEqual({scale: 1.0, resolved: false});
-        // Without the 1.25 monitor the same read resolves: that pair is 295 apart, so 27 is well
-        // inside what it tells apart. The threshold follows the set, and a wider window raises it.
+            .toEqual({scale: 1.0, explained: false});
         expect(resolveOffscreenScale(BODY, drifted, 1.0, twoMonitors))
-            .toEqual({scale: MONITOR_SCALE_4_3, resolved: true});
+            .toEqual({scale: 1.0, explained: false});
     });
 
-    it('vetoes a read too far from either of two candidates to be one of them', () => {
-        // One 1.25 monitor offers {1.25, 2}: predictions 332 apart, so half is 166. An FBO of
-        // 1100x700 is 212 from the nearest candidate - past the midpoint band - and is no allocation
-        // this set describes.
-        expect(resolveOffscreenScale(BODY, {width: 1100, height: 700}, 1.25,
-            offscreenScaleCandidates([1.25]))).toEqual({scale: 1.25, resolved: false});
-    });
-
-    it('abstains when the candidate set could not be completed', () => {
-        // An unreadable scale on any intersecting monitor withdraws the whole set: completing it by
-        // guessing - the ceil rule, say - would pick a scale the engine may not have had. The
-        // declared scale stays, so the box is wrong for this pass and the invariant reports it.
+    it('reads a set that could not be completed as the declared scale alone', () => {
+        // An unreadable scale on any intersecting monitor withdraws the whole set. The read still
+        // says whether the declared scale spans the FBO: a match is explained, a mismatch is not.
         for (const incomplete of [null, undefined, []]) {
+            expect(resolveOffscreenScale(BODY, {width: 556, height: 356}, 1.25, incomplete))
+                .toEqual({scale: 1.25, explained: true});
             expect(resolveOffscreenScale(BODY, realScaleFbo, 1.25, incomplete))
-                .toEqual({scale: 1.25, resolved: false});
+                .toEqual({scale: 1.25, explained: false});
         }
     });
 
@@ -279,16 +270,16 @@ describe('resolveOffscreenScale: the candidate that explains the FBO', () => {
         const single = offscreenScaleCandidates([1.0]);
         expect(single).toEqual([1.0]);
         expect(resolveOffscreenScale(BODY, {width: 444, height: 284}, 1.0, single))
-            .toEqual({scale: 1.0, resolved: false});
+            .toEqual({scale: 1.0, explained: true});
         expect(resolveOffscreenScale(BODY, {width: 445, height: 284}, 1.0, single))
-            .toEqual({scale: 1.0, resolved: false});
+            .toEqual({scale: 1.0, explained: true});
     });
 
     it('is total: a degenerate read, size or scale cannot name a candidate or divide by zero', () => {
         const candidates = offscreenScaleCandidates([1.0, 1.25]);
         for (const bad of [null, undefined, {width: 0, height: 0}, {width: Number.NaN, height: 1}]) {
             expect(resolveOffscreenScale(BODY, bad, 1.25, candidates))
-                .toEqual({scale: 1.25, resolved: false});
+                .toEqual({scale: 1.25, explained: true});
         }
         for (const scale of [0, -1, Number.NaN, undefined]) {
             const resolved = resolveOffscreenScale(BODY, realScaleFbo, scale, candidates);
@@ -344,19 +335,33 @@ describe('offscreenPaintBox: the extent and the origin share the FBO scale', () 
         expect(Math.abs(box.offsetX - offscreenQuad(BODY, 1.0).offsetX)).toBeGreaterThan(0.2);
     });
 
-    it('keeps the declared scale, and reports the drift, when the pick abstains', () => {
-        // Abstaining is not "draw nothing": the clip decorates on the declared scale as before, so
-        // the quad is the read FBO divided by it and the body is off - which is exactly what the
-        // box invariant is for. An accepted pick raises nothing.
+    it('holds the derivation, and reports the drift, when no candidate explains the read', () => {
+        // Holding the derivation is not "draw nothing": the quad stays the 444x284 box the body
+        // needs, so nothing is masked, and the read-vs-derived disagreement still raises the
+        // invariant. Dividing the 620px read by 1.0 was the old abstention, and it cost the body 176
+        // units of mask.
         const drifted = {width: 620, height: 400};
-        const abstained = offscreenPaintBox(BODY, 1.0, drifted, threeMonitors);
-        expect(abstained.scale).toBe(1.0);
-        expect(abstained.extent).toEqual({width: 620, height: 400});
-        expect(abstained.predicted).toEqual({width: 444, height: 284});
-        expect(offscreenBoxWarning(abstained.predicted, drifted)).not.toBeNull();
+        const held = offscreenPaintBox(BODY, 1.0, drifted, threeMonitors);
+        expect(held.scale).toBe(1.0);
+        expect(held.extent).toEqual({width: 444, height: 284});
+        expect(held.predicted).toEqual({width: 444, height: 284});
+        expect(offscreenBoxWarning(held.predicted, drifted)).not.toBeNull();
 
         const picked = offscreenPaintBox(BODY, 1.0, realScaleFbo, twoMonitors);
         expect(offscreenBoxWarning(picked.predicted, realScaleFbo)).toBeNull();
+    });
+
+    it('holds the derivation when a stale candidate set cannot explain the FBO', () => {
+        // The pre-seam defect: the client's reserved ring reaches the 4/3 monitor before the frame
+        // does, so the engine sizes the FBO at 4/3 while the reconcile pass still carries only the
+        // frame's scale. Dividing the 593x379 read by 1.0 made the quad 593 units for a 444-unit
+        // body, and the clip masked the body's right and bottom quarter down to its own fraction.
+        const stale = offscreenScaleCandidates([1.0]);
+        const box = offscreenPaintBox(BODY, 1.0, realScaleFbo, stale);
+        const quad = offscreenQuad(BODY, 1.0);
+        expect(box.extent).toEqual({width: quad.width, height: quad.height});
+        expect(box.predicted).toEqual(offscreenDeviceExtent(BODY, 1.0));
+        expect(offscreenExtent(quad, realScaleFbo, 1.0).width).toBe(593);
     });
 
     it('falls back to the derived box and origin when the FBO extent is unreadable', () => {

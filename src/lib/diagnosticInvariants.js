@@ -5,7 +5,16 @@
  * silence.
  */
 
+import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
+
 const PREFIX = '[window-nativizer]';
+
+/**
+ * How far the derived offscreen box's device extent and the FBO Clutter allocated may differ: one
+ * device pixel, the subpixel phase an edge may carry. The geometry module owns the number, because
+ * it is also what tells an FBO a candidate scale explains from one none does.
+ */
+export {OFFSCREEN_BOX_TOLERANCE};
 
 /**
  * Consecutive violating passes an invariant must see before it is allowed to speak: a geometry
@@ -134,14 +143,6 @@ export function overviewMaskRefusalWarning(reason, label = windowIdentityLabel()
 export function shadowBakeFailureWarning(buffer) {
     return `${PREFIX} Could not allocate a ${buffer}x${buffer} shadow buffer`;
 }
-
-/**
- * How far the derived offscreen box's device extent and the FBO Clutter allocated may differ. The
- * derivation is phase-free while the FBO's edges carry the source framebuffer's subpixel phase, so
- * one edge may move one device pixel without the derivation being wrong; two or more is a defect.
- * The effect reads only the extent.
- */
-export const OFFSCREEN_BOX_TOLERANCE = 1;
 
 /**
  * Builds the WARNING text for a paint whose derived offscreen box does not span the FBO Clutter

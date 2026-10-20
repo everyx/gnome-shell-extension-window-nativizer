@@ -123,10 +123,12 @@ geometry the actor has already left.
 To prevent fractional-scaling subpixel seams and blurring, both the shadow tiles and the clip
 boundary align to GTK 4.24's physical device-pixel grid:
 
-- **Physical scale resolution**: Mutter's actor resource scale is integer-ceil'd at the C level
-  and reports integer scales on fractional displays. The compositor hierarchy is climbed to the
-  toplevel window (even through child surface containers under XWayland or third-party extensions) to
-  query the true fractional monitor scale.
+- **Physical scale resolution**: two rects decide two scales, and the decoration reads both. The
+  engine sizes an actor's offscreen FBO by `clutter_actor_get_real_resource_scale`, which scans the
+  stage views over the actor's own *buffer* rect - the ring a client reserved for its own shadow
+  included - while Mutter scans the *frame* rect for the subpixel phase it applies to a surface
+  container. The clip's FBO-scale candidates therefore come from the buffer and its display scale
+  from the frame, so a ring that reaches the next monitor before the body cannot cut the body short.
 - **Actor-local snapping**: snapping is deliberately confined to the actor-local coordinate
   space. Cutlines stay geometrically invariant while the window moves, leaving stage translation
   entirely to the GPU transform. The trade-off is a subpixel phase offset on stage, in exchange

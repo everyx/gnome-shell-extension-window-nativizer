@@ -684,14 +684,12 @@ function readMonitorList() {
 }
 
 /**
- * The highest-scale logical monitor whose layout rect intersects the window's frame: -1 when a
- * readable frame overlaps none, null when the frame is degenerate or unreadable or the scan cannot
- * complete - an unreadable monitor count, geometry or scale, each of which a defaulting read would
- * fold into "no overlap". The index is reused while the frame stays on it.
+ * The highest-scale logical monitor whose layout rect intersects `rect`: -1 when a readable rect
+ * overlaps none, null when the rect is degenerate, unreadable, or the scan cannot complete. The
+ * index is reused while `rect` stays on it.
  */
-function resolveHighestScaleMonitorIndex(win) {
-    const frame = getWindowFrameRect(win);
-    if (!frame || !(frame.width > 0) || !(frame.height > 0))
+function resolveHighestScaleMonitorIndex(win, rect) {
+    if (!rect || !(rect.width > 0) || !(rect.height > 0))
         return null;
 
     const entries = readMonitorList();
@@ -699,7 +697,7 @@ function resolveHighestScaleMonitorIndex(win) {
         return null;
 
     const cached = resolvedMonitor.get(win);
-    if (cached && cached.entries === entries && cacheHoldsFrame(cached, frame))
+    if (cached && cached.entries === entries && cacheHoldsRect(cached, rect))
         return cached.index;
 
     let bestIndex = -1;
@@ -710,7 +708,7 @@ function resolveHighestScaleMonitorIndex(win) {
         // tell "no overlap" from "overlap unknown". Surface that instead of skipping it.
         if (!geometry)
             return null;
-        if (!rectanglesOverlap(geometry, frame))
+        if (!rectanglesOverlap(geometry, rect))
             continue;
         // A strict read: an unreadable scale is "unknown", not the integer 1.0. On a fractional
         // monitor the fallback would pick it as an integer and return a zero offset while Mutter
@@ -725,18 +723,28 @@ function resolveHighestScaleMonitorIndex(win) {
 
     resolvedMonitor.set(win, {
         entries,
-        frame,
+        rect,
         index: bestIndex,
         geometry: bestIndex >= 0 ? entries[bestIndex].geometry : null,
     });
     return bestIndex;
 }
 
-/** Whether the cached index still describes the new frame. */
-function cacheHoldsFrame(cached, frame) {
-    if (rectEquals(cached.frame, frame))
+/** Whether the cached index still describes the new rect. */
+function cacheHoldsRect(cached, rect) {
+    if (rectEquals(cached.rect, rect))
         return true;
-    return cached.index >= 0 && cached.geometry && rectContains(cached.geometry, frame);
+    return cached.index >= 0 && cached.geometry && rectContains(cached.geometry, rect);
+}
+
+/**
+ * The highest-scale monitor the window's frame intersects: the monitor its *body* is displayed on,
+ * so the one the clip's `uScale`, its snapped body and the shadow's cutouts convert with. It mirrors
+ * Mutter's `meta_window_get_highest_scale_monitor` (a frame-rect scan), not the engine's FBO scale,
+ * which follows the larger buffer rect - see `resolveWindowScaleCandidates`.
+ */
+function resolveFrameMonitorIndex(win) {
+    return resolveHighestScaleMonitorIndex(win, getWindowFrameRect(win));
 }
 
 function rectEquals(a, b) {
@@ -756,27 +764,27 @@ function monitorScaleAt(index) {
 }
 
 /**
- * The scale of the highest-scale logical monitor a window's frame intersects, which is what the
- * engine's `clutter_actor_get_real_resource_scale` answers for a straddling actor, and so the scale
- * every offscreen FBO for that window is allocated at. Null when the frame or a monitor read is
- * unavailable or there is no overlap - never a scale a caller may act on.
+ * The scale of the highest-scale monitor the window's frame intersects - the display scale its
+ * body, its snapping and the shadow's cutouts convert with - or null when that read is
+ * unavailable. Deliberately not the engine's FBO scale: the two differ while the client's ring
+ * crosses a seam first, which `resolveWindowScaleCandidates` covers.
  */
 export function resolveWindowMonitorScale(win) {
-    const index = resolveHighestScaleMonitorIndex(win);
+    const index = resolveFrameMonitorIndex(win);
     if (index === null || index < 0)
         return null;
     return monitorScaleAt(index);
 }
 
 /**
- * The scales of every monitor the window's frame intersects, or null when that list cannot be
- * completed: an unreadable frame, monitor geometry, or an intersecting monitor's scale. A partial
- * list names a set the engine may not have allocated from, so it is withdrawn, not completed by
- * guessing. `ceil` variants belong to the caller that decides the FBO scale.
+ * The scales of every monitor the window's buffer intersects - the set the engine may have sized
+ * the actor's FBO from - or null when that list cannot be completed. The buffer, not the frame: the
+ * actor is allocated there, ring included, so its ring crosses a seam the frame has not. `ceil`
+ * variants belong to the FBO-scale caller.
  */
 export function resolveWindowScaleCandidates(win) {
-    const frame = getWindowFrameRect(win);
-    if (!frame || !(frame.width > 0) || !(frame.height > 0))
+    const buffer = getWindowBufferRect(win);
+    if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
         return null;
 
     const entries = readMonitorList();
@@ -787,7 +795,7 @@ export function resolveWindowScaleCandidates(win) {
     for (const {geometry, scale} of entries) {
         if (!geometry)
             return null;
-        if (!rectanglesOverlap(geometry, frame))
+        if (!rectanglesOverlap(geometry, buffer))
             continue;
         if (scale === null)
             return null;
@@ -821,7 +829,7 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
         if (!actor)
             return {x: 0, y: 0};
 
-        const monitorIndex = resolveHighestScaleMonitorIndex(win);
+        const monitorIndex = resolveFrameMonitorIndex(win);
         // null is "the frame or a monitor reading could not be taken", distinct from -1's
         // "no overlap": surface it so the caller keeps its last good phase rather than collapse
         // to zero.

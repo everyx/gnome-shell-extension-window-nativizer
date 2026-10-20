@@ -154,12 +154,13 @@ describe('window inspection (readWindow)', () => {
         }
     });
 
-    it('carries the frame\'s monitor scales as the clip\'s candidate set, ceil variants included', () => {
+    it('carries the buffer\'s monitor scales as the clip\'s candidate set, ceil variants included', () => {
         // The clip picks the FBO's scale from this set, so it is read here once per reconcile pass
         // and carried with the rest of the reading - a paint re-reads no display. The `ceil` of each
-        // scale is in it because unpatched mutter allocates by `ceilf (resource_scale)`.
+        // scale is in it because unpatched mutter allocates by `ceilf (resource_scale)`. The buffer,
+        // not the frame: the actor is allocated there, so a client's ring can cross a seam first.
         const mockWin = {
-            get_buffer_rect: () => ({x: 1900, y: 0, width: 200, height: 100}),
+            get_buffer_rect: () => ({x: 1880, y: 0, width: 240, height: 100}),
             get_frame_rect: () => ({x: 1900, y: 0, width: 200, height: 100}),
             get_monitor: () => 0,
         };

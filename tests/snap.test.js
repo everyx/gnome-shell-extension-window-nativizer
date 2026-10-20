@@ -698,17 +698,21 @@ describe('getWindowScaleCandidates', () => {
         scale,
     }));
 
-    const winAt = rect => ({get_monitor: () => 0, get_frame_rect: () => rect});
+    const winAt = (frame, buffer = frame) => ({
+        get_monitor: () => 0,
+        get_frame_rect: () => frame,
+        get_buffer_rect: () => buffer,
+    });
 
-    it('lists every monitor scale the frame intersects, not only the main one', () => {
-        // The engine sizes the FBO from a resource scale across the views the avatar touches, so the
+    it('lists every monitor scale the buffer intersects, not only the main one', () => {
+        // The engine sizes the FBO from a resource scale across the views the actor touches, so the
         // candidate set has to name each one; `get_monitor()` names only the largest share.
         const win = winAt({x: 1900, y: 0, width: 200, height: 100});
         expect(withDisplay(SIDE_BY_SIDE([1.0, 1.25]), () => getWindowScaleCandidates(win)))
             .toEqual([1.0, 1.25]);
     });
 
-    it('lists all three when the frame spans three monitors of different scales', () => {
+    it('lists all three when the buffer spans three monitors of different scales', () => {
         const win = winAt({x: 100, y: 0, width: 5500, height: 900});
         expect(withDisplay(SIDE_BY_SIDE([1.0, 1.25, 4 / 3]), () => getWindowScaleCandidates(win)))
             .toEqual([1.0, 1.25, 4 / 3]);
@@ -728,10 +732,11 @@ describe('getWindowScaleCandidates', () => {
             () => getWindowScaleCandidates(win))).toEqual([1.0]);
     });
 
-    it('answers null when the frame or the monitor list cannot be read', () => {
+    it('answers null when the buffer or the monitor list cannot be read', () => {
         const throwing = {
             get_monitor: () => 0,
-            get_frame_rect: () => {
+            get_frame_rect: () => ({x: 100, y: 0, width: 200, height: 100}),
+            get_buffer_rect: () => {
                 throw new Error('Object MetaWindow has been already deallocated');
             },
         };
@@ -745,11 +750,38 @@ describe('getWindowScaleCandidates', () => {
         expect(getWindowScaleCandidates(null)).toBeNull();
     });
 
-    it('answers null when the frame overlaps no monitor at all', () => {
+    it('reads the candidates without the frame, which only the display scale needs', () => {
+        // The FBO's scale is the actor's question: a frame read that failed does not make the
+        // candidate set incomplete, and a clip that abstains there would mask the body.
+        const win = {
+            get_monitor: () => 0,
+            get_frame_rect: () => {
+                throw new Error('Object MetaWindow has been already deallocated');
+            },
+            get_buffer_rect: () => ({x: 100, y: 0, width: 200, height: 100}),
+        };
+        expect(withDisplay(SIDE_BY_SIDE([1.0]), () => getWindowScaleCandidates(win))).toEqual([1.0]);
+    });
+
+    it('answers null when the buffer overlaps no monitor at all', () => {
         // Nothing to pick from is not the same as one candidate: the clip must abstain, not take a
         // scale from a monitor the window is not on.
         const win = winAt({x: 9000, y: 9000, width: 100, height: 100});
         expect(withDisplay(SIDE_BY_SIDE([1.0, 2.0]), () => getWindowScaleCandidates(win))).toBeNull();
+    });
+
+    it('lists the buffer\'s monitors, which the client ring reaches before the frame', () => {
+        // The actor is allocated at the buffer rect, so the engine sizes the FBO by a monitor the
+        // frame has not reached yet. Read from the frame, the set named one scale, the FBO came back
+        // at 4/3, and the clip masked the body's right and bottom bands (851 vs 1135 device px).
+        const win = winAt({x: 1319, y: 300, width: 600, height: 497},
+            {x: 1293, y: 277, width: 652, height: 549});
+        expect(withDisplay(SIDE_BY_SIDE([1.0, 4 / 3]), () => getWindowScaleCandidates(win)))
+            .toEqual([1.0, 4 / 3]);
+        // The declared scale stays the frame's: that is the monitor the body is displayed on, and so
+        // the grid its snap, outline and the shadow's cutouts convert with.
+        expect(withDisplay(SIDE_BY_SIDE([1.0, 4 / 3]), () => getPhysicalMonitorScale(win)))
+            .toBe(1.0);
     });
 
     it('lists one scale on a single integer monitor, the platform read behind the regression case', () => {

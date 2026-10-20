@@ -105,12 +105,21 @@ the logical monitors whose layout rect intersects the window frame. That rule li
 vendored, so the check cannot assert it; `meta_window_find_highest_scale_monitor_from_frame_rect`
 (`window.c`) is the only path that reaches it from the window side.
 
-When bumping Mutter, re-read both functions and confirm the scan in
-`resolveHighestScaleMonitorIndex` still matches: the same positive-area intersection test, the same
-"highest scale wins" pick (a tie keeps the earlier index), and -1 when a readable frame intersects
-no monitor, with null when the frame itself cannot be read. The rule is not machine-guarded because
-that file is not vendored, so this is a manual step by necessity; `docs/decoration-model.md` records
-the same re-check at the phase mirror's reopen condition.
+The scan takes the rect it intersects, because two callers need two rects. The phase mirror passes
+the **frame** rect, matching `meta_window_get_highest_scale_monitor`. The clip's FBO-scale candidate
+set passes the **buffer** rect, because that is the actor's allocation and what
+`clutter_actor_get_real_resource_scale` scans: `update_stage_views` takes
+`clutter_actor_get_transformed_extents` of the actor's own box, and Mutter sizes the window actor
+and its surface container at the buffer rect. That second rule lives in `clutter-actor.c`, also not
+vendored.
+
+When bumping Mutter, re-read the functions and confirm the scan still matches: the same positive-area
+intersection test, the same "highest scale wins" pick (a tie keeps the earlier index), and -1 when
+a readable rect intersects no monitor, with null when the rect itself cannot be read. Re-read
+`update_stage_views` and `clutter_actor_get_transformed_extents` too, and confirm a window actor is
+still allocated at its buffer rect (`meta_window_actor_sync_actor_geometry`). Neither file is
+vendored, so this is a manual step by necessity; `docs/decoration-model.md` records the same
+re-check at the phase mirror's reopen condition.
 
 The pick reply makes the gap observable: on a mixed-DPI multi-monitor machine with the extension
 enabled, pick a decorated Wayland window interactively with `debug` true (`PickWindow`;

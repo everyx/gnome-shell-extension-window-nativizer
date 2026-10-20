@@ -205,9 +205,10 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         insets,
         hasRing,
         monitorScale: getPhysicalMonitorScale(win),
-        // The monitors the frame touches, with their `ceil` variants: what the clip picks the FBO's
-        // scale from. Computed here so a paint re-reads no display, and null when the scan is
-        // incomplete, which makes the clip abstain rather than pick from a partial set.
+        // The monitors the buffer touches, with their `ceil` variants: the actor's box is what the
+        // engine sized the FBO from, and the clip picks the scale out of this set. Computed here so
+        // a paint re-reads no display; null when the scan is incomplete, which leaves the clip
+        // holding the derivation instead of picking from a partial set.
         monitorScaleCandidates: offscreenScaleCandidates(getWindowScaleCandidates(win)),
 
         isMaximized,
