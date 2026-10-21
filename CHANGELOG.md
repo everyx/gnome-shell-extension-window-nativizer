@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.11.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.0...v0.11.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **decoration:** derive and reconcile the clip's offscreen box ([96e3ed5](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/96e3ed559db840bf191bcdb6c23d48ed064a428f))
+* **decoration:** drop the settle's reference points with the decoration episode ([bcea3ad](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/bcea3ad396a062d013bd6e3ea1657b13b77bd921))
+* **decoration:** hand the window whose second surface paints its box to the forced clip ([509450d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/509450de09e18fe71ad441a32739094443a859a9))
+* **decoration:** judge the visual floor on the window's initial stable size ([b844936](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b8449362aa2a97dd4f137999f06b60a33b25861b))
+* **decoration:** read a bare X11 shadow's owner from the buffer's alpha channel ([a166c5c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a166c5c8325aee1d745f57830eaec1d0bd5f59ef))
+* **decoration:** read the FBO's scale candidates from the actor's buffer rect ([fa08989](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/fa089890eb290dc03ef8ae3bad6ea2f42403b4e7))
+* **decoration:** size and cut a window by the monitor scale the engine used ([ddb575f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ddb575f48da2e0d0846696eb485517d4199ae7ec))
+* **e2e:** move and read one pinned window, and poll for the placement ([3beda8b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3beda8bebacb13a691b9236314184bfe72379ee0))
+* **effects:** report a body disagreement only while the settle is undecided ([c597566](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c597566faffe0d74bcd8515bbe083fc5e63e776d))
+* **hooks:** keep a failed check's log instead of deleting it ([d38d13a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d38d13abb876533599b31e76efb16b1032d3f181))
+* **manager:** guard only what can fail, so a firing guard is visible ([53487ed](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/53487ede7e547d83febf35955a8395f43603e55f))
+* **rules:** an absent wire field keeps the value the field table declares ([6542964](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6542964ab0f05798e3d73a673c8c87a8cc771b33))
+* **shadow:** do not report a settle that could not read the window at all ([6886201](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6886201906c8ebdcf1cd2f74b1df75e049faf2b4))
+
+
+### Documentation
+
+* **decoration:** target unpatched mutter, not the !5179 patchset ([97f9b6f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/97f9b6f7cd844c3d42c0dabbabf3dbeb18f648f0))
+* **model:** record the flat-window inset boundary ([5665b59](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5665b59262adedd62b040c22e6579ce7bdba7d03))
+* **model:** record why the desktop keeps the offscreen clip ([f99d9df](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f99d9df145cf735d7802166d69f39277b04514bc))
+* **readme:** add the Arch Linux AUR install path ([9f71b87](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9f71b87213f7c349cd8bab6e0c1117a29c5fe0f9))
+* **readme:** describe the decisions users see, not the code behind them ([2a3f04e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2a3f04e01d24f4d6049c6dd80acd08a79e370a53))
+* **readme:** merge the overview-corner and crisp-text notes into one section ([664a563](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/664a563971846bf3ffec0f26989217eac79c71f3))
+
 ## [0.11.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.10.0...v0.11.0) (2026-10-16)
 
 
