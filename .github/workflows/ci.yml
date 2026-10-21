@@ -114,6 +114,9 @@ jobs:
       - name: Run Jasmine unit tests
         run: pnpm test
 
+      - name: Run tool tests
+        run: pnpm run test:tools
+
   pack:
     name: Extension Package Build
     runs-on: ubuntu-latest
