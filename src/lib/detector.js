@@ -191,11 +191,6 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
 
 export {isWindowMaximized, isWindowTiled};
 
-
-/**
- * What `evaluateWindowActions` decides for one window, per axis plus the resolved style.
- */
-
 /**
  * The declared margin, read the two ways the questions need. `declaringSides` is the widest margin
  * per axis - "a ring on either side", the shadow question. `narrowestSides` is the smallest: the band
@@ -330,7 +325,6 @@ export function evaluateWindowActions({
         frameHeight,
     });
 
-    // A rule reverses the automatic decision on the axes it names.
     const corners = resolveAxisValue(rule, RuleAxis.CORNERS, baseline.corners);
 
     // Clip needs something to draw; radius 0 + no outline would be a wasted offscreen pass.

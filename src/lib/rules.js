@@ -48,9 +48,6 @@ export function buildRuleState(axes = null) {
     return RULE_AXES.filter(axis => reversed.has(axis)).join(',');
 }
 
-/**
- * @returns 'true' or 'false'
- */
 export function boolString(value) {
     return value ? 'true' : 'false';
 }

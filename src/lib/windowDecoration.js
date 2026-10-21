@@ -1,12 +1,5 @@
-/**
- * WindowDecoration: encapsulates the single-window decoration lifecycle and tri-axis actors.
- * Manages the synchronized lifecycle of:
- * - RoundedClipEffect (clip)
- * - ShadowActor (shadow & backdrop cross-fade)
- * - ResizeBand (grab handles)
- *
- * Designed with dependency injection for full unit-testability without GNOME Shell private typelibs.
- */
+// Single-window decoration lifecycle of the tri-axis actors: clip, shadow, resize band;
+// dependency injection keeps it unit-testable without GNOME Shell private typelibs.
 
 import {resolveClipTarget} from './clipTarget.js';
 import {MIN_DECORABLE_SIZE} from './detector.js';
@@ -174,10 +167,6 @@ export class WindowDecoration {
         return this.initialFrameSize;
     }
 
-    /**
-     * Returns a fresh snapshot copy of the current decoration state flags.
-     *
-     */
     get stateView() {
         return {
             hasClip: Boolean(this.clip),
