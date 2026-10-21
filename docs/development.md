@@ -127,6 +127,11 @@ A commit made with `--no-verify` therefore reaches CI unchecked; that is the tra
 the same checks twice on every push. Either hook can be skipped the same way when that is what you
 mean.
 
+A check's output goes to a file rather than straight to the terminal, so that the one that fails can
+be printed whole. A failure or an interrupt keeps that file and names its path, because a hook that
+deletes the output of its own failure costs a re-run to learn what it already knew; a green run's
+file is removed. The path is `<tmpdir>/window-nativizer-<hook>.<pid>.log`, one per run.
+
 ## Commit messages
 
 Conventional Commits, matching the history: `type(scope): verb …`, no trailing

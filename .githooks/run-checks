@@ -35,10 +35,14 @@ check_precondition() {
 run_checks() {
     hook=$1
     shift
-    log=$(mktemp)
+    # The log outlives the hook on purpose: a failure's whole value is the output, and the terminal
+    # scrollback is where it was going before. Named after the hook and pid so a second run does not
+    # overwrite the evidence of the first, and reused across legs because only a failure keeps it.
+    log="${TMPDIR:-/tmp}/window-nativizer-${hook}.$$.log"
+    : >"$log"
     # Original stderr: when TERM lands mid-leg the foreground command is
     # `pnpm ... >"$log" 2>&1`, so a plain >&2 inside the trap would write into
-    # $log (then deleted). Fd 3 keeps the pusher-facing stderr.
+    # $log. Fd 3 keeps the pusher-facing stderr.
     exec 3>&2
     current_check=""
     check_start=0
@@ -57,11 +61,16 @@ run_checks() {
         else
             printf '\n%s: interrupted before any check finished. The %s did NOT land; retrying is safe.\n' "$hook" "${hook#pre-}" >&3
         fi
-        rm -f "$log"
+        # Kept: an interrupted leg's log says how far it got, which is what the retry needs to know.
+        keep_log=1
+        printf '%s: log kept at %s\n' "$hook" "$log" >&3
         exit 130
     }
     trap on_term INT TERM
-    trap 'rm -f "$log"' EXIT
+    # A failure or an interrupt keeps the file. Success and an all-skipped run do not: nobody reads a
+    # green run's output twice, and leaving one behind per push would just fill the temp dir.
+    keep_log=""
+    trap '[ -n "$keep_log" ] || rm -f "$log"' EXIT
     for check in "$@"; do
         if ! check_precondition "$check"; then
             printf '[%s] %-12s skipped (this machine cannot run it)\n' "$(date +%H:%M:%S)" "$check"
@@ -82,8 +91,9 @@ run_checks() {
             now=$(date +%s)
             printf '[%s] %-12s FAILED after %ss\n\n' "$(date +%H:%M:%S)" "$check" "$((now - check_start))"
             cat "$log"
-            printf '\n%s: %s failed. Fix it, or %s with --no-verify.\n' \
-                "$hook" "$check" "${hook#pre-}"
+            printf '\n%s: %s failed. Full log kept at %s\n' "$hook" "$check" "$log"
+            printf '%s: fix it, or %s with --no-verify.\n' "$hook" "${hook#pre-}"
+            keep_log=1
             exit "$status"
         fi
         current_check=""
