@@ -622,6 +622,10 @@ export class WindowDecoration {
         // gone with it.
         this._lastBuffer = null;
         this._lastRing = null;
+        // The settle's reference points go with it, for the same reason and with a visible consequence: a
+        // hold that survived the gap would draw the clip and the cast at the body they had before it.
+        this.bodyPlan.reset();
+        this._passPlan = null;
         this.overview.drop();
         this._syncClip(false);
         this._syncShadow(false);

@@ -1395,10 +1395,17 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                     insets: {left: 24, top: 21, right: 24, bottom: 27}},
             ]);
             expect(deco._lastBuffer).not.toBeNull();
+            // The settle's reference points are the same kind of witness: a hold that outlived the gap
+            // would draw the clip and the cast at the body they had before it.
+            expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
 
             deco.undecorate();
             expect(deco._lastBuffer).toBeNull();
             expect(deco._lastRing).toBeNull();
+            expect(deco.bodyPlan.settle).toEqual(jasmine.objectContaining({
+                previousBody: null, previousAuthority: null, previousWindowSize: null,
+            }));
+            expect(deco._passPlan).toBeNull();
         });
 
         it('skips the hold and drops the witness when this pass cannot read a ring', () => {
