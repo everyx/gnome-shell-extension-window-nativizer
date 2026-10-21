@@ -1,22 +1,11 @@
-/**
- * Pure transition state machine and mathematics for window shadow cross-fades.
- * Decouples fade timing, cubic-bezier easing, and interruptible weight blending
- * from Clutter/GObject actor rendering.
- */
+/** Pure cross-fade state machine and math; no Clutter or GObject, so tests step a fake clock. */
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 
 export const DEFAULT_FADE_DURATION_MS = ADWAITA_STYLE.transition.durationMs;
 export const DEFAULT_FADE_EASING = ADWAITA_STYLE.transition.easing;
 
-/**
- * Solves cubic-bezier(x1, y1, x2, y2) for a given progress t in [0..1]
- * using Newton-Raphson iteration.
- *
- * @param t - Time progression [0..1]
- * @param curve - [x1, y1, x2, y2]
- * @returns Value in [0..1]
- */
+/** Solves cubic-bezier(x1, y1, x2, y2) at t by Newton-Raphson; CSS easing has no closed form. */
 export function solveCubicBezier(t, [x1, y1, x2, y2]) {
     const clampedT = Math.max(0, Math.min(1, t));
     const at = (u, p1, p2) => 3 * (1 - u) ** 2 * u * p1 + 3 * (1 - u) * u ** 2 * p2 + u ** 3;
@@ -30,12 +19,7 @@ export function solveCubicBezier(t, [x1, y1, x2, y2]) {
     return at(Math.max(0, Math.min(1, u)), y1, y2);
 }
 
-/**
- * Computes individual incoming and outgoing opacity weights from transition progress.
- *
- * @param progress - Progress in [0..1]
- * @param [outgoingWeight=1] - Inherited weight factor for outgoing style
- */
+/** Opacity weights for a progress; `outgoingWeight` carries a weight inherited mid-fade. */
 export function computeFadeWeights(progress, outgoingWeight = 1) {
     const p = Math.max(0, Math.min(1, progress));
     return {
@@ -56,14 +40,7 @@ export function createFadeState(options = {}) {
     };
 }
 
-/**
- * Pure state transition: computes new fade state when a style update arrives.
- *
- * @param state - Previous fade state
- * @param nextStyle - Newly requested style
- * @param [options.animate=false] - Whether to animate the transition
- * @param [options.nowMs=0] - Current clock timestamp in milliseconds
- */
+/** New fade state for an incoming style; without `animate` it snaps, dropping the outgoing one. */
 export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 0} = {}) {
     if (!state.style || !animate) {
         return {
@@ -75,8 +52,7 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
         };
     }
 
-    // Blend re-entry mid-transition: pick whichever side is currently more visible (progress >= 0.5)
-    // as outgoing and inherit its proportional weight to avoid opacity jumps on rapid interruption.
+    // Re-entry mid-fade keeps the more visible side, with its weight, so opacity never jumps.
     const keepStyle = state.progress >= 0.5;
     const kept = keepStyle ? state.style : state.outgoing?.style;
     let keptWeight = 0;
@@ -106,12 +82,7 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
     };
 }
 
-/**
- * Pure state advance: advances the transition clock to nowMs.
- *
- * @param state - Previous fade state
- * @param nowMs - Current clock timestamp in milliseconds
- */
+/** Advances the fade clock to `nowMs`; progress follows the eased curve and settles at 1. */
 export function advanceFadeState(state, nowMs) {
     if (state.fadeStart === 0 || !state.outgoing)
         return {state, running: false};
@@ -140,14 +111,9 @@ export function advanceFadeState(state, nowMs) {
     };
 }
 
-/**
- * Encapsulates the cross-fade state machine for ShadowActor.
- * Supports deterministic millisecond testing without Clutter or system timers.
- */
+/** Cross-fade state machine for ShadowActor, on an injectable clock so tests stay deterministic. */
 export class ShadowFadeStateMachine {
-    /**
-     * @param [options.now] - Clock function returning milliseconds
-     */
+    /** `options.now` is the clock, defaulting to `Date.now`, so tests can step time. */
     constructor(options = {}) {
         this._durationMs = options.durationMs ?? DEFAULT_FADE_DURATION_MS;
         this._easing = options.easing ?? DEFAULT_FADE_EASING;
@@ -189,9 +155,7 @@ export class ShadowFadeStateMachine {
         return (1 - this._state.progress) * this._state.outgoing.weight;
     }
 
-    /**
-     * @returns Whether a fade transition is running
-     */
+    /** Sets the target style and returns whether a fade is now running. */
     setStyle(nextStyle, options = {}) {
         const nowMs = typeof options.nowMs === 'number' ? options.nowMs : this._now();
         this._state = transitionFadeStyle(this._state, nextStyle, {
@@ -201,9 +165,7 @@ export class ShadowFadeStateMachine {
         return this.isFading;
     }
 
-    /**
-     * @returns Whether a fade transition is still running (requires another frame)
-     */
+    /** Advances the clock and returns whether another frame is still needed. */
     advance(nowMs = null) {
         const time = typeof nowMs === 'number' ? nowMs : this._now();
         const {state, running} = advanceFadeState(this._state, time);
@@ -211,9 +173,7 @@ export class ShadowFadeStateMachine {
         return running;
     }
 
-    /**
-     * Immediately finishes any running transition and snaps to the current target style.
-     */
+    /** Ends any running fade at once, snapping to the target style. */
     finish() {
         this._state = {
             ...this._state,
@@ -223,9 +183,7 @@ export class ShadowFadeStateMachine {
         };
     }
 
-    /**
-     * Resets the state machine to initial empty state.
-     */
+    /** Resets to the initial state, keeping the configured duration and easing. */
     reset() {
         this._state = createFadeState({durationMs: this._durationMs, easing: this._easing});
     }

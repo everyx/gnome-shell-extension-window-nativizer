@@ -1,8 +1,6 @@
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
-/**
- * @param winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark
- */
+/** @param winState - Focused/maximized/fullscreen/tiled/highContrast/animationsEnabled/dark */
 export function styleForWindow(winState) {
     const {window} = ADWAITA_STYLE;
     const outline = winState.highContrast
@@ -39,11 +37,7 @@ export function styleForWindow(winState) {
     return style;
 }
 
-/**
- * @param base - Base style transition weight (0..1)
- * @param paintOpacity - Normalized actor paint opacity (0..1)
- * @returns Modulated pipeline opacity in [0, 1]
- */
+/** Base transition weight times actor paint opacity, each clamped to [0, 1]. */
 export function pipelineOpacityFor(base, paintOpacity) {
     if (paintOpacity <= 0)
         return 0;

@@ -12,24 +12,15 @@ import {ruleAxisCapabilities} from './pickSuggestion.js';
 
 const DOMAIN = 'window-nativizer';
 
-/**
- * Translates a message using gettext for the window-nativizer domain.
- */
 export function _(msgid) {
     return Gettext.dgettext(DOMAIN, msgid);
 }
 
-/**
- * Translates a plural message using dngettext for the window-nativizer domain.
- */
 export function ngettext(msgid, msgidPlural, n) {
     return Gettext.dngettext(DOMAIN, msgid, msgidPlural, n);
 }
 
-/**
- * Formats a string template using String.prototype.format if available (GNOME Shell environment),
- * or falls back to a regex-based positional substitution (headless unit testing).
- */
+/** `String.prototype.format` when present, else a regex `%s` substitution for headless tests. */
 export function formatString(template, ...args) {
     if (typeof template.format === 'function')
         return template.format(...args);
@@ -59,18 +50,13 @@ export function axisName(axis) {
     return (AXIS_NAMES[axis] ?? (() => axis))();
 }
 
-/**
- * Whether the window kind can be decorated at all - the fact the axis capabilities
- * and the unavailable reason both turn on.
- */
+/** Whether the kind can be decorated at all; both the capabilities and the reason hinge on it. */
 export function isDecoratableKind(properties) {
     return !!properties &&
         isDecoratableWindowType(Number(properties.window_type ?? WindowType.NORMAL));
 }
 
-/**
- * The shared capability answer, adapted from a rule key's own field names.
- */
+/** The shared capability answer, read through a rule key's own field names. */
 export function keyAxisCapabilities(properties) {
     return ruleAxisCapabilities({
         windowType: Number(properties?.window_type ?? WindowType.NORMAL),
@@ -83,14 +69,9 @@ export function neverDecorated() {
     return _('Windows of this kind are never decorated');
 }
 
-/**
- * @param decoratable - Whether the kind can be decorated at all
- * @returns Why the axis cannot be configured here
- */
+/** Why the axis cannot be configured here; the fixed-size reasons need a decoratable kind. */
 export function axisUnavailableReason(axis, decoratable = true, properties = null) {
-    // A non-decoratable kind (menus, tooltips) is never about fixed size or a
-    // frame, even on the resize row: naming the wrong reason would send the user to
-    // fix the wrong thing.
+    // A non-decoratable kind (menus, tooltips) is never about size or frame, even on resize.
     if (decoratable && axis === RuleAxis.RESIZE) {
         if (properties?.has_ssd) {
             // Translators: Shown where a resize control would be, but cannot be used.
@@ -102,10 +83,7 @@ export function axisUnavailableReason(axis, decoratable = true, properties = nul
     return neverDecorated();
 }
 
-/**
- * The axes a state corrects, for toasts, e.g. "Corners, Shadow".
- * @param state Canonical stored state
- */
+/** Axes the state corrects, for toasts, e.g. "Corners, Shadow"; "Automatic" when none survive. */
 export function ruleSummaryText(state) {
     const corrected = parseRuleState(state);
     if (!corrected)
@@ -131,16 +109,12 @@ export function windowTypeNoun(windowType) {
     return (WINDOW_TYPE_NOUNS[windowType] ?? (() => _('window')))();
 }
 
-/**
- * Formats window key properties into a human-readable descriptive sentence.
- */
 export function windowKindSentence(properties) {
     if (!properties)
         return '';
 
     const server = properties.client_type === 'x11' ? _('XWayland') : _('Wayland');
-    // Translators: %s is the client type and the window type, e.g. "Wayland window". If your
-    // language puts the type first, use the placeholders as %2$s %1$s.
+    // Translators: %s is client type then window type ("Wayland window"); reorder with %2$s %1$s.
     const entity = formatString(_('%s %s'), server, windowTypeNoun(properties.window_type));
 
     // Translators: The window has no parent window.
@@ -173,8 +147,7 @@ export function windowKindSentence(properties) {
         size = _('resizable');
     }
 
-    // One frame clause carries both ring attributes: the key cannot describe a window
-    // that declares a ring and an SSD frame at once (the picker clears has_ring for it).
+    // One frame clause for both ring attributes: no key declares a ring and an SSD frame at once.
     let frame = null;
     if (properties.has_ssd) {
         // Translators: The compositor draws this window's frame, so it owns the resize handles.
@@ -193,10 +166,7 @@ export function windowKindSentence(properties) {
     return formatString(_('%s, %s, %s'), entity, parent, size);
 }
 
-/**
- * Escape for the Adw properties that parse Pango markup (rows and preference groups); Toast,
- * AlertDialog and a bare Gtk.Label take plain text.
- */
+/** Escape for Adw rows that parse Pango markup; Toast, AlertDialog and Gtk.Label take text. */
 export function asMarkup(text) {
     return GLib.markup_escape_text(String(text), -1);
 }

@@ -1,3 +1,5 @@
+// Adaptor over the platform window seam: safe reads, identity fallback, and the reading snapshot.
+
 import {WindowType, WindowClientType} from './mutterRules.generated.js';
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
@@ -38,12 +40,7 @@ import {offscreenScaleCandidates} from './offscreenBox.js';
 
 export {getPhysicalMonitorScale, resolveMonitorBounds, getWindowFromActor, findMetaWindow};
 
-/**
- * Executes a getter safely, returning a fallback value if the call throws
- * (e.g. during Mutter window teardown or C-boundary marshalling errors).
- *
- * @template T
- */
+/** Swallows the throw Mutter raises mid-teardown, so one dead window cannot abort a decision. */
 export function safeRead(getter, fallback) {
     try {
         return getter() ?? fallback;
@@ -52,24 +49,12 @@ export function safeRead(getter, fallback) {
     }
 }
 
-/**
- * Reads a window string, returning '' when GJS rejects non-UTF-8 C bytes: an app
- * may set any bytes as its class, and one unreadable name must not cost the
- * window its decision.
- *
- * @param getter - Reads the window field; the throw is inside the call
- * @returns The field, or '' when unreadable
- */
+/** '' on unreadable bytes: one non-UTF-8 class must not cost the window its decision. */
 export function readWindowString(getter) {
     return safeRead(getter, '');
 }
 
-/**
- * Declared identity, first non-blank source wins. A whitespace-only field (an XWayland client may
- * set any bytes as its class) is not an identity: it must not short-circuit the chain nor
- * become a rule key.
- * @returns declared identity or ''
- */
+/** First non-blank source wins; a whitespace-only XWayland class is no identity nor rule key. */
 export function readDeclaredIdentity(win) {
     for (const read of [
         () => win?.get_wm_class?.(),
@@ -82,9 +67,6 @@ export function readDeclaredIdentity(win) {
     }
     return '';
 }
-
-
-
 
 // Weak cache for resolved fallback identities; declared identities bypass cache.
 const fallbackIdentities = new WeakMap();
@@ -124,13 +106,7 @@ export function resolveWindowIdentity(win) {
     return identity;
 }
 
-
-/**
- * Reads a comprehensive, safe snapshot of a Meta.Window.
- * Absorbs all C-boundary exceptions during window teardown and returns null if the window is inaccessible.
- *
- * @param win - Meta.Window
- */
+/** Full snapshot, or null when the window is inaccessible; C-boundary throws are absorbed. */
 export function readWindow(win, {wmClassOverride = null, classifier = null} = {}) {
     if (!win)
         return null;
@@ -141,7 +117,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         b = getWindowBufferRect(win, {throwOnError: true});
         f = getWindowFrameRect(win, {throwOnError: true});
     } catch {
-        // Window being destroyed mid-read.
+        // throwOnError: a window being destroyed mid-read throws instead of reporting zero rects.
         return null;
     }
 
@@ -162,9 +138,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         return false;
     }, false);
 
-    // The buffer's alpha channel decides who paints a bare X11 window's shadow, and only there:
-    // Mutter's has_shadow() abstains for a non-opaque (ARGB32) window. An SSD frame's texture is
-    // the frame client's, so it would answer for the client inside it; the read is skipped there.
+    // Bare X11 only: has_shadow() abstains on ARGB32, and an SSD frame would answer for its client.
     let bufferAlpha = null;
     if (!hasSsd && isX11 && !hasRing)
         bufferAlpha = safeRead(() => getWindowBufferAlpha(win), null);
@@ -205,10 +179,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         insets,
         hasRing,
         monitorScale: getPhysicalMonitorScale(win),
-        // The monitors the buffer touches, with their `ceil` variants: the actor's box is what the
-        // engine sized the FBO from, and the clip picks the scale out of this set. Computed here so
-        // a paint re-reads no display; null when the scan is incomplete, which leaves the clip
-        // holding the derivation instead of picking from a partial set.
+        // Buffer's monitors with ceil variants, so no paint re-reads the display; null if partial.
         monitorScaleCandidates: offscreenScaleCandidates(getWindowScaleCandidates(win)),
 
         isMaximized,
@@ -235,10 +206,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     };
 }
 
-/**
- * Checks whether an object matches the minimal shape of a resolved WindowReading snapshot
- * (has a string clientTypeToken and frameRect property) as distinguished from a raw Meta.Window.
- */
+/** Snapshot rather than a raw Meta.Window: it carries a client type token and a frame rect. */
 export function isWindowReading(value) {
     return Boolean(
         value &&
@@ -248,19 +216,12 @@ export function isWindowReading(value) {
     );
 }
 
-/**
- * Whether process classification is still in flight.
- */
+/** Null means in flight, not "no": both classifier fields are tri-state. */
 export function isClassificationPending(reading) {
     return reading?.nativeLikeCorners === null || reading?.hasGtk4Client === null;
 }
 
-/**
- * What a reconcile should do, read from the reading alone: keep the display while the reading could
- * not be taken or classification is in flight, drop it when the rects were read but have no extent,
- * apply otherwise. A null reading is "could not read this pass", not "window gone" - the manager
- * tears down through `unmanaging`/`destroy`.
- */
+/** A null reading is "could not read this pass", not "gone": teardown comes through unmanaging. */
 export function reconcileOutcome(reading) {
     if (!reading)
         return 'defer';

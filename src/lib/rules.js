@@ -13,11 +13,7 @@ export const RULE_AXES = Object.freeze([
     RuleAxis.CORNERS, RuleAxis.SHADOW, RuleAxis.RESIZE,
 ]);
 
-/**
- * Parse a stored state: the axes whose automatic decision the user reversed,
- * comma-separated in canonical order. '' (no axis) is valid and means no rule.
- * @returns Null when not valid stored grammar
- */
+/** Parse a stored state: reversed axes, comma-separated in canonical order. Null when invalid. */
 export function parseRuleState(state) {
     if (typeof state !== 'string')
         return null;
@@ -26,8 +22,7 @@ export function parseRuleState(state) {
     if (state === '')
         return axes;
 
-    // Order is part of the format: prefs always renders canonically, so string
-    // comparison is enough to match, and a hand-edited misorder is dropped loudly.
+    // Order is part of the format: prefs renders canonically, so a hand-edited misorder drops.
     let lastIndex = -1;
     for (const part of state.split(',')) {
         const index = RULE_AXES.indexOf(part);
@@ -39,10 +34,7 @@ export function parseRuleState(state) {
     return axes;
 }
 
-/**
- * Renders the canonical stored form: the reversed axes in canonical order, e.g.
- * 'corners,shadow'. Nothing reversed renders as '' (no rule to store).
- */
+/** The canonical stored form: reversed axes in order, e.g. 'corners,shadow'. '' means no rule. */
 export function buildRuleState(axes = null) {
     const reversed = new Set(axes ?? []);
     return RULE_AXES.filter(axis => reversed.has(axis)).join(',');
@@ -52,17 +44,13 @@ export function boolString(value) {
     return value ? 'true' : 'false';
 }
 
-/**
- * Splits a rule key into identity and specifier at the last colon.
- */
+/** Splits at the last colon: the identity is opaque, so it may itself hold ':' and spaces. */
 function splitRuleKey(key) {
     const sep = key.lastIndexOf(':');
     return {identity: key.slice(0, sep), specifier: key.slice(sep + 1)};
 }
 
-/**
- * Normalizes rule key identity to lowercase for case-insensitive matching.
- */
+/** Lowercases the identity only, so matching ignores the case a client reports. */
 function canonicalRuleKey(key) {
     const {identity, specifier} = splitRuleKey(key);
     return `${identity.toLowerCase()}:${specifier}`;
@@ -74,9 +62,7 @@ export function isWindowBackedAppId(appId) {
     return WINDOW_BACKED_APP_ID_PATTERN.test(appId);
 }
 
-/**
- * @returns Identity or '' when nothing identifies the window
- */
+/** @returns Identity, or '' when nothing identifies the window. */
 export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pid = -1} = {}) {
     if (declared?.trim())
         return declared.trim();
@@ -90,11 +76,7 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
 
 const BOOL_FIELD = '(?:true|false)';
 
-/**
- * The structural attributes that key a rule, in canonical order, and the only statement of the field
- * set: `name` (specifier spelling), `key` (kind object), `reading` (window reading, where it differs),
- * `fallback`, `pattern`, `text` (value to stored form) and `parse` (stored form to value).
- */
+/** The rule key's attributes in canonical order: one statement of names, keys and converters. */
 export const FINGERPRINT_FIELDS = [
     {
         name: 'client_type',
@@ -120,10 +102,7 @@ export const FINGERPRINT_FIELDS = [
     boolField('has_ssd', 'hasSsd', false),
 ];
 
-/**
- * @returns One boolean attribute's table entry: the grammar every boolean shares, its fallback and
- * the two conversions, which are the same in both directions.
- */
+/** One boolean attribute's entry: grammar, fallback, and the two same-direction converters. */
 function boolField(name, key, fallback) {
     return {name, key, fallback, pattern: BOOL_FIELD, text: boolString, parse: raw => raw === 'true'};
 }
@@ -132,13 +111,7 @@ const FINGERPRINT_MAP = Object.freeze(
     Object.fromEntries(FINGERPRINT_FIELDS.map(f => [f.name, f]))
 );
 
-/**
- * Reads the seven structural attributes out of a caller's kind object, applying each field's fallback
- * for an omitted one. A kind may carry more than these (`width`, `height`, `frameWidth`, ...); those
- * are the key builder's own business.
- *
- * @returns Keyed by each field's `key`
- */
+/** Reads the seven attributes off a kind object, filling each omission with its fallback. */
 function readKind(kind = {}) {
     const fields = {};
     for (const field of FINGERPRINT_FIELDS) {
@@ -148,17 +121,10 @@ function readKind(kind = {}) {
     return fields;
 }
 
-// Fixed-size windows (allows_resize=false) may optionally include a size=WxH suffix
-// to distinguish different dialogs/toolbars of the same kind. Resizable windows MUST NOT have size.
-// The identity is opaque - it may hold ':' and spaces - so this pins only the specifier and
-// requires a nonempty identity ahead of the last ':'. The specifier has no ':' of its own.
+// Only a fixed-size key may carry size=WxH; the identity is opaque, so pin just the specifier.
 const SIZE_SUFFIX = ',size=\\d+x\\d+';
 
-/**
- * One shape's specifier grammar, built from the table with the attributes that shape pins. The two
- * shapes are the only structural rule the pattern adds to the table: a fixed-size key may carry a
- * size, a resizable one may not.
- */
+/** One shape's specifier grammar: the table with that shape's pinned attributes applied. */
 function specifierPattern(pinned) {
     return FINGERPRINT_FIELDS
         .map(field => `${field.name}=${pinned[field.name] ?? field.pattern}`)
@@ -172,12 +138,7 @@ const VALID_RULE_KEY_PATTERN = new RegExp(
     ')$'
 );
 
-/**
- * @param [kind.width=null] - Fixed logical width (only valid when allowsResize is false)
- * @param [kind.height=null] - Fixed logical height (only valid when allowsResize is false)
- * @returns Canonical key or '' when wmClass is missing
- * @throws When the rendered specifier is not colon-free (a field the table cannot own)
- */
+/** @returns Canonical key, '' without wmClass; throws when the specifier gains a ':'. */
 export function buildRuleKey(wmClass, kind = {}) {
     if (!wmClass?.trim())
         return '';
@@ -192,18 +153,14 @@ export function buildRuleKey(wmClass, kind = {}) {
     if (!fields.allowsResize && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
         specifier += `,size=${Math.round(w)}x${Math.round(h)}`;
 
-    // Nothing escapes the identity, so a ':' in the specifier would move the last-':' separator.
-    // Fail loudly here rather than let resolveRule look the kind up under a different key.
+    // A ':' here would move the last-':' separator, so resolveRule would look up a different key.
     if (specifier.includes(':'))
         throw new Error(`rule specifier is not colon-free: ${specifier}`);
 
     return `${wmClass.toLowerCase()}:${specifier}`;
 }
 
-/**
- * Sanitizes window titles associated with picked rules (display only, keyed by canonical rule key).
- * @returns Canonical key -> one-line title
- */
+/** Sanitizes picked-rule titles: canonical key -> one-line title, display only. */
 export function sanitizeRuleTitles(rawTitles = {}) {
     if (!rawTitles || typeof rawTitles !== 'object')
         return {};
@@ -217,8 +174,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
         const oneLine = title.replace(/[\r\n]+/g, ' ').trim();
         if (!oneLine)
             continue;
-        // Same canonicalisation as the states, or a mixed-case stored key would land under
-        // its lowercased state key and lose its title on the next write.
+        // Same canonicalisation as the states, or a mixed-case key loses its title next write.
         const canonicalKey = canonicalRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             journal.warn(`Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
@@ -230,9 +186,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
     return clean;
 }
 
-/**
- * @returns Canonical key -> canonical axis state
- */
+/** @returns Canonical key -> canonical axis state, dropping anything invalid or colliding. */
 export function sanitizeWindowRules(rawRules = {}) {
     if (!rawRules || typeof rawRules !== 'object')
         return {};
@@ -271,10 +225,7 @@ export function sanitizeWindowRules(rawRules = {}) {
     return clean;
 }
 
-/**
- * Stores a state, canonicalising it first. A state with nothing reversed ('') stores
- * nothing: it is the same as having no rule, so the key is removed.
- */
+/** Stores a state, canonicalised; a state with nothing reversed removes the key. */
 export function withRule(rules = {}, key, state) {
     const axes = parseRuleState(state);
     if (!axes)
@@ -314,9 +265,7 @@ export function parseRuleKey(key) {
     return {baseWmClass, specifier, properties};
 }
 
-/**
- * @returns The reversed axes, or null when no rule matched
- */
+/** @returns The reversed axes, or null when no rule matched. */
 export function resolveRule(wmClass, rules = {}, kind = {}) {
     if (!wmClass)
         return null;
@@ -331,7 +280,7 @@ export function resolveRule(wmClass, rules = {}, kind = {}) {
         ? parseRuleState(rules[key])
         : null;
 
-    // 1. For fixed-size windows with known dimensions, prefer an exact-size rule.
+    // Fixed window: exact-size key first, then generic; a resizable window has only generic.
     if (isFixed) {
         const exactKey = buildRuleKey(wmClass, {...fields, width: frameWidth, height: frameHeight});
         const matched = lookup(exactKey);
@@ -339,7 +288,6 @@ export function resolveRule(wmClass, rules = {}, kind = {}) {
             return matched;
     }
 
-    // 2. Generic rule key as fallback for fixed-size, or primary for resizable.
     const genericKey = buildRuleKey(wmClass, fields);
 
     if (has(genericKey))
@@ -347,25 +295,18 @@ export function resolveRule(wmClass, rules = {}, kind = {}) {
     return null;
 }
 
-/**
- * @returns The kind the picker's wire dictionary describes. Its values are strings, so each one goes
- * through the field's own converter - the form both processes share.
- */
+/** @returns The kind a wire dictionary describes, each string value through the field's parse. */
 export function kindFromWire(properties = {}) {
     const kind = {};
     for (const field of FINGERPRINT_FIELDS) {
-        // An absent field is the field's declared fallback, not whatever its converter makes of
-        // `undefined`: the converter cannot tell the two apart, and one of them flips the key's shape.
+        // Absent is the fallback, not parse(undefined): one of them flips the key's shape.
         const raw = properties?.[field.key];
         kind[field.key] = raw === undefined ? field.fallback : field.parse(raw);
     }
     return kind;
 }
 
-/**
- * @returns The kind a parsed rule key describes. parseRuleKey has already given every field its typed
- * value, so this only renames them, filling an omission with the field's fallback.
- */
+/** @returns The kind a parsed key describes; parseRuleKey typed the values, this renames them. */
 export function kindFromSpecifier(specifier = {}) {
     const kind = {};
     for (const field of FINGERPRINT_FIELDS) {
@@ -375,10 +316,7 @@ export function kindFromSpecifier(specifier = {}) {
     return kind;
 }
 
-/**
- * The picker's property dictionary for a window reading: the same seven attributes the rule key
- * stores, rendered by the same table.
- */
+/** The picker's property dictionary: the same seven attributes the key stores, same table. */
 export function fingerprintProperties(reading) {
     const fields = kindFromReading(reading);
     const properties = {};
@@ -387,10 +325,7 @@ export function fingerprintProperties(reading) {
     return properties;
 }
 
-/**
- * @returns The seven attributes read off a window reading, keyed by their kind-object names. Two
- * reads sit under a different name on a reading (`clientTypeToken`), which the table records.
- */
+/** @returns The seven attributes off a window reading; `reading` names the two that differ. */
 function kindFromReading(reading) {
     const kind = {};
     for (const field of FINGERPRINT_FIELDS)

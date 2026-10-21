@@ -1,11 +1,4 @@
-/**
- * ResizeBand: the strip around a window that starts a resize grab, as one transparent
- * container above its window actor with one reactive child per side. The container is
- * bound to the window actor (position and size), and the strips are placed from the
- * actor's live size on every allocation, so a resize cannot leave the band behind. The
- * children are only hit surfaces; the direction comes from `edgeForPoint()`, GTK's own
- * order.
- */
+/** Strips placed from the actor's live size each allocation, so a resize cannot strand them. */
 
 import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
@@ -32,8 +25,7 @@ import {setActorBox} from './snap.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 
-// The band reaches RESIZE_BAND (12) outward on every side, so the container has to be
-// larger than the window actor by that much, or the regions would be clipped out of it.
+// The regions sit outside the actor, so the container must be larger or they would be clipped away.
 const OUTER = RESIZE_BAND;
 
 function sameBounds(a, b) {
@@ -53,12 +45,9 @@ function sameConstrainedEdges(a, b) {
 export const ResizeBand = GObject.registerClass({
     GTypeName: RESIZE_BAND_G_TYPE,
 }, class ResizeBand extends St.Widget {
-    /**
-     * @param container - windowGroup; band inserted above windowActor
-     */
+    /** @param container - windowGroup; the band is inserted above windowActor */
     _init(windowActor, container) {
-        // clip_to_allocation keeps picking inside the band bounding box: nothing of ours
-        // may swallow a click the regions do not cover.
+        // clip_to_allocation keeps picking in the band box: nothing of ours swallows a stray click.
         super._init({
             name: RESIZE_BAND_G_TYPE,
             reactive: false,
@@ -83,7 +72,7 @@ export const ResizeBand = GObject.registerClass({
         this._scale = 1;
         this._constrainedEdges = null;
 
-        // Bind directly to window actor to track live size during drag without debounce lag.
+        // Bound directly to the actor: a debounced read would lag the live size during a drag.
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -OUTER],
             [Clutter.BindCoordinate.Y, -OUTER],
@@ -97,8 +86,7 @@ export const ResizeBand = GObject.registerClass({
                 name: `${RESIZE_BAND_G_TYPE}-${region}`,
                 reactive: true,
             });
-            // connectObject attaches the handlers to this band's lifetime: destroy()
-            // takes the children with it, so nothing has to be disconnected by hand.
+            // connectObject ties the handlers to this band, so destroy() takes them with it.
             child.connectObject('enter-event',
                 (_actor, event) => this._applyCursor(region, event), this);
             child.connectObject('motion-event',
@@ -110,8 +98,7 @@ export const ResizeBand = GObject.registerClass({
             this._regions.set(region, child);
         }
 
-        // Follow the window actor's visibility (minimize, other workspace) so a hidden
-        // window leaves no click-catching strip behind.
+        // Follow the actor's visibility, so a minimized window leaves no click-catching strip.
         this._visibleBinding = windowActor.bind_property(
             'visible', this, 'visible', GObject.BindingFlags.SYNC_CREATE);
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
@@ -119,14 +106,7 @@ export const ResizeBand = GObject.registerClass({
         container.insert_child_above(this, windowActor);
     }
 
-    /**
-     * Store the decisions the geometry is derived from. The regions themselves are placed
-     * in vfunc_allocate() from the actor's live size, so this does not carry absolute px.
-     * @param params.insets - Ring between actor and body
-     * @param [params.bounds=null] - Monitor rect
-     * @param [params.boundsUnknown=false] - Whether `bounds` could not be read
-     * @param [params.scale=1] - Monitor scale the frame was read at
-     */
+    /** What the geometry derives from; strips are placed in vfunc_allocate, so no absolute px. */
     setGeometry({insets, bounds = null, boundsUnknown = false, scale = 1, constrainedEdges = null}) {
         const nextInsets = insets ?? ZERO_INSETS;
         const nextBoundsUnknown = Boolean(boundsUnknown);
@@ -151,28 +131,21 @@ export const ResizeBand = GObject.registerClass({
         this.queue_relayout();
     }
 
-    /**
-     * Allocate the four strips from the container's own allocation plus the stored insets.
-     * Called after the BindConstraints have sized the container for this frame, so the
-     * strips are always placed against the size being painted.
-     */
+    /** Runs after the BindConstraints sized the container, so strips match the painted size. */
     vfunc_allocate(box) {
-        // Bypass St.Widget layout manager to preserve direct child allocations.
+        // Bypass the layout manager to keep the direct child allocations.
         this.set_allocation(box);
 
-        // Guard against late allocations arriving after or during destroy().
+        // A late allocation can arrive after or during destroy().
         if (!this._childBox)
             return;
 
-        // The mapping from the live container box to the frame and the translated monitor
-        // bounds lives in the pure bandParamsInto, so its sign conventions stay spec-covered;
-        // the scratch record is reused every resize frame.
+        // Sign conventions live in the pure bandParamsInto; the scratch record is reused each frame.
         bandParamsInto(this._params, box, this._insets, this._bounds, this._scale);
-        // Kept for `_directionForEvent()`, which resolves the pointer against the same
-        // container-coordinate frame the strips were placed from.
+        // Kept for `_directionForEvent()`, which resolves the pointer in the same container frame.
         this._frame = this._params.frame;
 
-        // Written into `this._bands` in place; the returned flag replaces the old sameBands().
+        // Written in place into `this._bands`; the flag says whether any rect moved.
         const changed = computeResizeBandsInto(this._bands, {
             frame: this._params.frame,
             bounds: this._params.bounds,
@@ -189,16 +162,12 @@ export const ResizeBand = GObject.registerClass({
             if (rect)
                 setActorBox(childBox, rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
             else
-                // Zero area, not hidden: hiding a child queues a relayout from inside
-                // this allocation, which leaves the band itself needing one and trips
-                // Clutter's "can't update stage views ... needs an allocation" warning.
-                // A zero-size reactive child is simply never picked.
+                // Zero area, not hidden: hiding here queues a relayout and trips Clutter's warning.
                 setActorBox(childBox, 0, 0, 0, 0);
             child.allocate(childBox);
         }
 
-        // The ground moved under the pointer: drop the stale cursor until motion resets it.
-        // Only when it actually moved, or a hover would flicker on every allocation.
+        // The ground moved: drop the stale cursor, but only on a move, or hover flickers each time.
         if (changed)
             this.resetCursor();
     }
@@ -241,10 +210,7 @@ export const ResizeBand = GObject.registerClass({
         super.destroy();
     }
 
-    /**
-     * The direction under a pointer event, resolved by GTK's own order. The strip is only
-     * the surface that delivered the event; the frame carries the geometry.
-     */
+    /** The strip only delivered the event; the frame carries the geometry, in GTK's own order. */
     _directionForEvent(event) {
         if (!this._frame)
             return null;
@@ -255,9 +221,7 @@ export const ResizeBand = GObject.registerClass({
         });
     }
 
-    /**
-     * @returns Clutter.EVENT_PROPAGATE
-     */
+    /** @returns Clutter.EVENT_PROPAGATE */
     _applyCursor(region, event) {
         const direction = this._directionForEvent(event);
         if (this._hover?.region === region && this._hover.direction === direction)
@@ -267,9 +231,7 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_PROPAGATE;
     }
 
-    /**
-     * @returns Clutter.EVENT_PROPAGATE
-     */
+    /** @returns Clutter.EVENT_PROPAGATE */
     _clearCursor(region) {
         if (this._hover?.region === region) {
             this._hover = null;
@@ -278,9 +240,7 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_PROPAGATE;
     }
 
-    /**
-     * @returns EVENT_STOP when the grab was handed to Mutter
-     */
+    /** @returns EVENT_STOP when the grab was handed to Mutter */
     _onButtonPress(event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
             return Clutter.EVENT_PROPAGATE;
@@ -297,7 +257,6 @@ export const ResizeBand = GObject.registerClass({
         const [x, y] = event.get_coords();
         const posHint = new Graphene.Point({x, y});
 
-        // Hand off to Mutter via the compositor grab helper.
         const op = getResizeGrabOp(direction);
         const grabbed = beginWindowGrabOp(
             win,

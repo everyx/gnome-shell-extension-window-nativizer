@@ -12,22 +12,14 @@ import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 
-// 2× the libadwaita radius: below it the two corner arcs overlap, so no rounded rect fits (helper surface, e.g. wl-clipboard 1×1).
+/** 2× the radius: below it the corner arcs overlap, so no rounded rect fits a 1×1 helper. */
 export const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
-// How far the farthest shadow layer reaches out: blur plus spread, the layer's own extent.
 const SHADOW_REACH = Math.max(...ADWAITA_STYLE.window.shadows.map(({blur, spread}) => blur + spread));
 
-/**
- * Visual floor, in logical px: at or below 2.5× the radius the corners read as a pill, at or below
- * 2× the shadow reach the shadow dominates the body it sits behind. It is judged on the size a
- * window was first decided at, never on the size it is in now.
- */
+/** Pill below 2.5× radius, shadow-dominated below 2× reach; read on the size first decided. */
 export const VISUAL_MIN_DECORABLE_SIZE = Math.max(2.5 * ADWAITA_STYLE.window.radius, 2 * SHADOW_REACH);
 
-/**
- * @returns Two-sided totals, each >= 0
- */
 export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     return {
         w: Math.max(0, bufferWidth - frameWidth),
@@ -35,11 +27,7 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
     };
 }
 
-/**
- * Whether the window type has an independent, full-fledged form that can accept
- * Adwaita decoration. Transient menus, popups, tooltips, DND layers, and desktop
- * docks are excluded.
- */
+/** Transient menus, popups, tooltips, DND layers and docks have no independent form to decorate. */
 export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
     return windowType === WindowType.NORMAL ||
            windowType === WindowType.DIALOG ||
@@ -47,12 +35,6 @@ export function isDecoratableWindowType(windowType = WindowType.NORMAL) {
            windowType === WindowType.UTILITY;
 }
 
-/**
- * @param [params.frameWidth=Infinity] - Current frame width, logical px
- * @param [params.frameHeight=Infinity] - Current frame height, logical px
- * @param [params.initialFrameWidth=null] - Frame width the window was first decided at, logical px
- * @param [params.initialFrameHeight=null] - Frame height the window was first decided at, logical px
- */
 export function checkDecorationEligibility({
     windowType = WindowType.NORMAL,
     isMaximized = false, isFullscreen = false,
@@ -67,15 +49,11 @@ export function checkDecorationEligibility({
     if (isMaximized || isFullscreen)
         return {eligible: false, reason: 'maximized/fullscreen'};
 
-    // Two floors in one place, reading two sizes. This one is geometric and reads the frame as it
-    // is right now: below 2*radius the two arcs have met, so no rounded rect fits and a 1×1 helper
-    // (wl-clipboard) would get a shadow over nothing. A drag under it drops the decoration.
+    // Geometric floor on the frame as it is now: below 2*radius the arcs have met, so nothing fits.
     if (frameWidth < MIN_DECORABLE_SIZE || frameHeight < MIN_DECORABLE_SIZE)
         return {eligible: false, reason: `too-small(${frameWidth}x${frameHeight})`};
 
-    // The visual floor reads the size the window was FIRST decided at, which the user never chose,
-    // so no drag can flip it. 0, NaN and Infinity are unreadable rather than small: they abstain,
-    // and the caller's latch stays open for a pass that can read one.
+    // The visual floor reads the size first decided, which no drag flips; 0, NaN, Infinity abstain.
     const initialSize = Number.isFinite(initialFrameWidth) && initialFrameWidth > 0 &&
         Number.isFinite(initialFrameHeight) && initialFrameHeight > 0
         ? {width: initialFrameWidth, height: initialFrameHeight} : null;
@@ -87,21 +65,12 @@ export function checkDecorationEligibility({
     return {eligible: true, reason: ''};
 }
 
-/**
- * Whether the client declared a decoration ring of its own, on either axis - the same question
- * Mutter's boolean `has_custom_frame_extents` answers (any declared margin counts).
- * An SSD window's ring is drawn by the frame client, not the client, so it is not a declaration.
- */
+/** Mutter's has_custom_frame_extents: any declared margin counts, an SSD frame's ring does not. */
 export function declaresOwnShadow({hasSsd = false, sideW, sideH}) {
     return !hasSsd && (sideW > 0 || sideH > 0);
 }
 
-/**
- * Who paints a bare X11 window's shadow, read from the buffer's alpha channel. Mutter's has_shadow()
- * abstains for a non-opaque (ARGB32) window and paints one for an opaque one, so a buffer with
- * alpha leaves the shadow to us while an RGB one is what Mutter already paints. A null read
- * abstains from both.
- */
+/** Mutter abstains on an ARGB32 buffer and paints an opaque one, so alpha means ours to paint. */
 function bareX11ShadowOwner(bufferAlpha) {
     if (bufferAlpha === true)
         return 'ours';
@@ -110,10 +79,7 @@ function bareX11ShadowOwner(bufferAlpha) {
     return 'unknown';
 }
 
-/**
- * @param params.sideW - Widest declared margin on the horizontal axis, logical px
- * @param params.sideH - Widest declared margin on the vertical axis, logical px
- */
+/** Widest declared margin per axis, logical px; alpha is read only for a bare X11 window. */
 export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
@@ -128,9 +94,7 @@ export function inferDecorationBaseline({
     let reason = `no-csd(${insets})`;
 
     if (!hasSsd && isX11 && !(sideW > 0 || sideH > 0)) {
-        // The alpha read is meaningful only for a bare X11 window: a depth-24 client wrapped in a
-        // depth-32 SSD frame reports the frame's alpha, so hasSsd must be false for the number to
-        // be the client's own.
+        // Bare X11 only: a depth-24 client in a depth-32 SSD frame reports the frame's alpha.
         const owner = bareX11ShadowOwner(bufferAlpha);
         if (owner === 'mutter') {
             shadow = false;
@@ -138,8 +102,7 @@ export function inferDecorationBaseline({
         } else if (owner === 'ours') {
             reason = 'x11-rgba-shadow-ours';
         } else {
-            // Unknown: no shadow of ours, so it can never be a second one, and no corners either,
-            // since a clip with nothing under it would cut a body we did not round for.
+            // Unknown: no shadow of ours, and no corners: the clip would cut an unrounded body.
             shadow = false;
             corners = false;
             reason = 'x11-shadow-unknown';
@@ -158,10 +121,7 @@ export function inferDecorationBaseline({
     return {shadow, corners, reason};
 }
 
-/**
- * The ring the client declared, read the one way both the decision and the picker's rule key
- * need, so the two cannot disagree. Reads per-side rectangles, falling back to two-sided totals.
- */
+/** Shared with the picker's rule key so the two cannot disagree; totals when insets are absent. */
 export function clientDeclaredRing({
     hasSsd = false,
     insets = null,
@@ -181,9 +141,7 @@ export function isFractionalScale(scale) {
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     if (!preferCrispText)
         return true;
-    // An unknown scale is its own state, not an integer: the read can be fractional, and
-    // clipping it would blur the text this setting exists to protect. Skip the clip for this
-    // pass - the next reconcile retries the scale read - rather than guess an integer.
+    // An unknown scale is its own state: clipping it blurs the text this setting protects, so skip.
     if (scale === null || scale === undefined)
         return false;
     return !isFractionalScale(scale);
@@ -191,11 +149,7 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
 
 export {isWindowMaximized, isWindowTiled};
 
-/**
- * The declared margin, read the two ways the questions need. `declaringSides` is the widest margin
- * per axis - "a ring on either side", the shadow question. `narrowestSides` is the smallest: the band
- * needs `RESIZE_BAND` on every side, not an average, where a 0,24 ring is not 12. Totals serve as both.
- */
+/** The ring question reads the widest margin per axis, the band the narrowest: 0,24 is not 12. */
 export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {
     if (!insets) {
         const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
@@ -214,11 +168,7 @@ export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, fr
     };
 }
 
-/**
- * Whether the window gets the resize band - independent of the decoration, so a `resize-only`
- * rule is valid. Capability gates (unresizable, maximized/fullscreen, SSD, too small) are never
- * overridden; a reversed axis bypasses only the GTK4 handle reading below.
- */
+/** Independent of the decoration, so a resize-only rule is valid; reversal skips the GTK4 read. */
 export function decideResizeBand({
     reversed = false,
     allowsResize = true,
@@ -229,35 +179,24 @@ export function decideResizeBand({
     bufferWidth = 0, bufferHeight = 0,
     frameWidth = 0, frameHeight = 0,
 } = {}) {
-    // Capability, never overridable: no explicit value conjures these.
     if (!allowsResize || isMaximized || isFullscreen)
         return false;
-    // Mutter's own frame carries the resize handles; a band would only take clicks the
-    // frame already owns. `win.decorated` is a policy flag, but no `_MUTTER_FRAME_FOR`
-    // check exists on the GJS side, and the flag is the best reading there is.
+    // Mutter's frame owns the handles; `win.decorated` is a policy flag and GJS has no frame check.
     if (hasSsd)
         return false;
-    // `MIN_BAND_WINDOW` is only the ring's sanity bound (the band has to fit on the short
-    // axis), never a native one: GTK's input region does not depend on the window size.
+    // Sanity bound only (the band must fit the short axis), never native: GTK's input region is free.
     if (!(frameWidth >= MIN_BAND_WINDOW) || !(frameHeight >= MIN_BAND_WINDOW))
         return false;
 
-    // The automatic reading: the client's own handle is already at least RESIZE_BAND on every
-    // side. Only GTK4 proves this from its margins - it sizes the handle itself; a GTK3
-    // window's margins are its theme's shadow. A bare window reserves no ring.
+    // Only GTK4 sizes its own handle; GTK3 margins are the theme's shadow, a bare window has none.
     const {narrowestSides} =
         declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const hasNativeHandle = hasGtk4Client &&
         narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND;
 
-    // A rule reverses that reading and nothing else: the gates above are physics.
     return reversed ? hasNativeHandle : !hasNativeHandle;
 }
 
-/**
- * Resolves one axis: a rule reverses the automatic decision on the axes it names.
- * @param baseline - What the heuristic decided
- */
 function resolveAxisValue(reversedAxes, axis, baseline) {
     return reversedAxes?.has(axis) ? !baseline : baseline;
 }
@@ -295,22 +234,17 @@ export function evaluateWindowActions({
         initialFrameWidth, initialFrameHeight,
     });
 
-    // The shadow axis asks whether either side of an axis declares a ring, so it reads
-    // the widest margin per axis (`declaringSides`).
+    // The shadow axis asks whether either side declares a ring, so it reads the widest margin.
     const {declaringSides} = declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
     const {sideW, sideH} = declaringSides;
 
-    // The visual floor is a reading of how the decoration carries at a size the user never chose,
-    // not a capability: it answers both axes off, and a rule naming an axis reverses it there like
-    // any other reading. The geometric floor and the structural gates return below, out of reach.
+    // A reading, not a capability: a rule reverses it on the axis it names; the gates below do not.
     const visuallyFloored = eligibility.reversible === true;
     const baseline = visuallyFloored
         ? {corners: false, shadow: false, reason: eligibility.reason}
         : inferDecorationBaseline({isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners});
 
-    // Semantics vs strategy: `clientDeclaredRing` answers "did the client declare a ring?" (an SSD
-    // frame's ring is frame-drawn, so no). The strategy "the SSD ring is ours to clear when we
-    // clip" is separate and handled here, so the predicate can stay pure.
+    // `clientDeclaredRing` stays a pure question; clearing the SSD ring is strategy, handled here.
     const clientOwnRing = clientDeclaredRing({hasSsd, insets, bufferWidth, bufferHeight, frameWidth, frameHeight});
 
     const rule = resolveRule(wmClass, rules, {
@@ -334,16 +268,13 @@ export function evaluateWindowActions({
     const ssdRing = hasSsd && (sideW > 0 || sideH > 0);
     const ownRing = clientOwnRing || ssdRing;
 
-    // The automatic shadow decision, takeover included: the ring was painted for the
-    // corners we replace, so the shadow is ours by default. A rule then reverses that
-    // decision, and only that decision - which is why the takeover comes first.
+    // Takeover first: the ring was painted for the corners we replace, so the shadow is ours.
     let shadow = baseline.shadow;
     if (clip && ownRing)
         shadow = true;
     shadow = resolveAxisValue(rule, RuleAxis.SHADOW, shadow);
 
-    // Transient window state, not a judgment: a tile match reports where the window
-    // sits right now, and the rule - which outlives it - applies again on restore.
+    // Transient: a tile match says where the window sits now; the rule applies again on restore.
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
 
@@ -355,17 +286,13 @@ export function evaluateWindowActions({
         insets, bufferWidth, bufferHeight, frameWidth, frameHeight,
     });
 
-    // The tiled ring is not a shadow: upstream gives a tiled window a 1px ring instead, marked by
-    // style.border. One predicate decides both whether it is drawn and whether the client's ring is
-    // erased - erasing a ring we do not replace leaves no edge.
+    // A tiled window gets upstream's 1px ring, not a shadow: `style.border` decides drawing it.
     const drawRing = Boolean(style.border) && (clip || shadow || drawResize);
 
-    // Ring is ours to clear exactly when the ring we draw is ours.
+    // Clear only the ring drawn by us: erasing one we do not replace would leave no edge.
     const clear = ownRing && (shadow || drawRing);
 
-    // The ring, resolved once: whether it is ours to take over (`clear`) and whether the clip must
-    // sit `flatSafeInsets` inside because the client painted a border up to the actor edge instead
-    // of declaring one (`safeInset`). Flatness reads the side insets, not the two-sided totals.
+    // `clear` takes the ring over; `safeInset` clips inside it, flatness read per side, not totals.
     const flat = !insets ||
         (insets.left <= 0 && insets.top <= 0 && insets.right <= 0 && insets.bottom <= 0);
     const ring = {
@@ -381,9 +308,7 @@ export function evaluateWindowActions({
     if (shadowBeforeTiling && !shadow)
         reason = `tile-match(shadow-off,${reason})`;
 
-    // Decoration stops at a structural disqualifier, but the band keeps its own physics
-    // gates: a window too small for corners can still be grabbable. A kind that is ours on
-    // no axis (dock, desktop) gets neither.
+    // Decoration stops at a structural disqualifier, the band keeps its gates; a dock gets neither.
     if (!eligibility.eligible && !visuallyFloored) {
         return {
             drawShadow: false, drawClip: false, drawRing: false,

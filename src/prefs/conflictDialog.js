@@ -6,9 +6,7 @@ import {keyAxisCapabilities, _, ngettext} from '../lib/rulePresenter.js';
 import {findAppInfoByWmClass} from '../lib/appInfo.js';
 import {setupRuleRowHeader, populateAxisIcons, ensureCustomStyles} from './ruleUi.js';
 
-/**
- * Presents a modal dialog for resolving import conflicts between existing rules and imported rules.
- */
+/** Modal dialog that resolves import conflicts between existing rules and imported rules. */
 export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     ensureCustomStyles();
     const {installedApps, iconTheme} = ctx;

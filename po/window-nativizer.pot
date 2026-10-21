@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-20 22:07+0800\n"
+"POT-Creation-Date: 2026-10-21 21:59+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,321 +19,320 @@ msgstr ""
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
 #. Translators: One of the three rule axes: rounded window corners.
-#: src/lib/rulePresenter.js:51
+#: src/lib/rulePresenter.js:42
 msgid "Corners"
 msgstr ""
 
 #. Translators: One of the three rule axes: the window shadow.
-#: src/lib/rulePresenter.js:53
+#: src/lib/rulePresenter.js:44
 msgid "Shadow"
 msgstr ""
 
 #. Translators: One of the three rule axes: the resize band around the window.
-#: src/lib/rulePresenter.js:55
+#: src/lib/rulePresenter.js:46
 msgid "Resize"
 msgstr ""
 
-#: src/lib/rulePresenter.js:83
+#: src/lib/rulePresenter.js:69
 msgid "Windows of this kind are never decorated"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:97
+#: src/lib/rulePresenter.js:78
 msgid "The window frame can already be resized"
 msgstr ""
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:100
+#: src/lib/rulePresenter.js:81
 msgid "Fixed-size windows have no resize handle"
 msgstr ""
 
-#: src/lib/rulePresenter.js:116 src/prefs/conflictDialog.js:165
-#: src/prefs/conflictDialog.js:170
+#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:163
+#: src/prefs/conflictDialog.js:168
 msgid "Automatic"
 msgstr ""
 
 #. Translators: A dialog window.
-#: src/lib/rulePresenter.js:122
+#: src/lib/rulePresenter.js:100
 msgid "dialog"
 msgstr ""
 
 #. Translators: A dialog that blocks its parent window.
-#: src/lib/rulePresenter.js:124
+#: src/lib/rulePresenter.js:102
 msgid "modal dialog"
 msgstr ""
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/lib/rulePresenter.js:126
+#: src/lib/rulePresenter.js:104
 msgid "utility window"
 msgstr ""
 
 #. Translators: A normal, top-level window.
-#: src/lib/rulePresenter.js:131
+#: src/lib/rulePresenter.js:109
 msgid "window"
 msgstr ""
 
-#: src/lib/rulePresenter.js:141
+#: src/lib/rulePresenter.js:116
 msgid "XWayland"
 msgstr ""
 
-#: src/lib/rulePresenter.js:141
+#: src/lib/rulePresenter.js:116
 msgid "Wayland"
 msgstr ""
 
-#. Translators: %s is the client type and the window type, e.g. "Wayland window". If your
-#. language puts the type first, use the placeholders as %2$s %1$s.
-#: src/lib/rulePresenter.js:144
+#. Translators: %s is client type then window type ("Wayland window"); reorder with %2$s %1$s.
+#: src/lib/rulePresenter.js:118
 #, javascript-format
 msgid "%s %s"
 msgstr ""
 
 #. Translators: The window has no parent window.
-#: src/lib/rulePresenter.js:147
+#: src/lib/rulePresenter.js:121
 msgid "with no parent"
 msgstr ""
 
 #. Translators: The window is attached to its parent window.
-#: src/lib/rulePresenter.js:149
+#: src/lib/rulePresenter.js:123
 msgid "attached to its parent"
 msgstr ""
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/lib/rulePresenter.js:151
+#: src/lib/rulePresenter.js:125
 msgid "with a parent"
 msgstr ""
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/lib/rulePresenter.js:166
+#: src/lib/rulePresenter.js:140
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr ""
 
 #. Translators: A window the user cannot resize.
-#: src/lib/rulePresenter.js:169
+#: src/lib/rulePresenter.js:143
 msgid "fixed-size"
 msgstr ""
 
 #. Translators: A window the user can resize.
-#: src/lib/rulePresenter.js:173
+#: src/lib/rulePresenter.js:147
 msgid "resizable"
 msgstr ""
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/lib/rulePresenter.js:181
+#: src/lib/rulePresenter.js:154
 msgid "frame drawn by the system"
 msgstr ""
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/lib/rulePresenter.js:184
+#: src/lib/rulePresenter.js:157
 msgid "no shadow margins"
 msgstr ""
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/lib/rulePresenter.js:189
+#: src/lib/rulePresenter.js:162
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr ""
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/lib/rulePresenter.js:193
+#: src/lib/rulePresenter.js:166
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:18
+#: src/prefs/conflictDialog.js:16
 msgid "Resolve Import Conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:49
+#: src/prefs/conflictDialog.js:47
 msgid "Cancel"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:55
+#: src/prefs/conflictDialog.js:53
 msgid "Apply"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:66
+#: src/prefs/conflictDialog.js:64
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs/conflictDialog.js:82
+#: src/prefs/conflictDialog.js:80
 msgid "Keep"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:83
+#: src/prefs/conflictDialog.js:81
 msgid "Keep existing rules for all conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:88
+#: src/prefs/conflictDialog.js:86
 msgid "Replace"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:89
+#: src/prefs/conflictDialog.js:87
 msgid "Replace existing rules with imported rules for all conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:231
+#: src/prefs/conflictDialog.js:229
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr ""
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:107
+#: src/prefs/ruleUi.js:96
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr ""
 
-#: src/prefs/ruleUi.js:139
+#: src/prefs/ruleUi.js:125
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr ""
 
-#: src/prefs.js:56
+#: src/prefs.js:52
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:61
+#: src/prefs.js:56
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:63
+#: src/prefs.js:58
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
 #. Translators: Closes the error dialog.
-#: src/prefs.js:107
+#: src/prefs.js:93
 msgid "Close"
 msgstr ""
 
-#: src/prefs.js:171
+#: src/prefs.js:151
 msgid "Revert to the automatic decision"
 msgstr ""
 
-#: src/prefs.js:265
+#: src/prefs.js:243
 msgid "Window Pick Failed"
 msgstr ""
 
-#: src/prefs.js:267
+#: src/prefs.js:245
 msgid "A window is already being picked"
 msgstr ""
 
-#: src/prefs.js:268
+#: src/prefs.js:246
 msgid "Could not connect to the Window Nativizer extension — it is not enabled"
 msgstr ""
 
-#: src/prefs.js:297
+#: src/prefs.js:273
 msgid "No correction added: it could not be saved"
 msgstr ""
 
-#: src/prefs.js:309
+#: src/prefs.js:285
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr ""
 
-#: src/prefs.js:310
+#: src/prefs.js:286
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:320
+#: src/prefs.js:296
 msgid "The correction takes effect once the window is restored"
 msgstr ""
 
-#: src/prefs.js:333
+#: src/prefs.js:309
 msgid "No corrections to export"
 msgstr ""
 
-#: src/prefs.js:345
+#: src/prefs.js:321
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs.js:371
+#: src/prefs.js:347
 msgid "Clipboard is empty or does not contain text"
 msgstr ""
 
-#: src/prefs.js:407 src/prefs.js:429
+#: src/prefs.js:383 src/prefs.js:405
 msgid "All rules in clipboard are already up to date"
 msgstr ""
 
-#: src/prefs.js:416 src/prefs.js:439
+#: src/prefs.js:392 src/prefs.js:415
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs.js:446
+#: src/prefs.js:422
 #, javascript-format
 msgid "Import failed: %s"
 msgstr ""
 
-#: src/prefs.js:458
+#: src/prefs.js:434
 msgid "Pick window…"
 msgstr ""
 
-#: src/prefs.js:461
+#: src/prefs.js:437
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:466
+#: src/prefs.js:442
 msgid "Import from Clipboard"
 msgstr ""
 
-#: src/prefs.js:467
+#: src/prefs.js:443
 msgid "Export to Clipboard"
 msgstr ""
 
-#: src/prefs.js:473 src/prefs.js:476
+#: src/prefs.js:449 src/prefs.js:452
 msgid "More actions"
 msgstr ""
 
-#: src/prefs.js:488
+#: src/prefs.js:464
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:489
+#: src/prefs.js:465
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr ""
 
-#: src/prefs.js:525
+#: src/prefs.js:501
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
-#: src/prefs.js:595
+#: src/prefs.js:570
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:601
+#: src/prefs.js:576
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:602
+#: src/prefs.js:577
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:607
+#: src/prefs.js:582
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:608
+#: src/prefs.js:583
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr ""
 
-#: src/prefs.js:614
+#: src/prefs.js:589
 msgid "Force overview corners on every window"
 msgstr ""
 
-#: src/prefs.js:615
+#: src/prefs.js:590
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"

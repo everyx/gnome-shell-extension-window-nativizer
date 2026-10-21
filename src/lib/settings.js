@@ -3,9 +3,6 @@ import {sanitizeRuleTitles, sanitizeWindowRules} from './rules.js';
 
 export const SETTINGS_KEY_WINDOW_RULES = 'window-rules';
 
-/**
- * Validates and normalizes raw entries dictionary in a single pass.
- */
 export function sanitizeEntries(raw) {
     const rawStates = {};
     const rawTitles = {};
@@ -30,9 +27,7 @@ export function sanitizeEntries(raw) {
     return entries;
 }
 
-/**
- * One entry per rule: active state and display sample title.
- */
+/** One entry per rule: stored state plus the display-only sample title. */
 export function readEntries(settings) {
     return sanitizeEntries(readValue(settings, SETTINGS_KEY_WINDOW_RULES));
 }
@@ -53,9 +48,6 @@ export function setWindowRules(settings, rules) {
     writeEntries(settings, mergeEntries(readEntries(settings), {rules}));
 }
 
-/**
- * Updates or inserts a single rule entry and its display-only title.
- */
 export function setWindowRule(settings, key, state, title = '') {
     const entries = readEntries(settings);
     const nextEntries = {...entries};
@@ -66,17 +58,11 @@ export function setWindowRule(settings, key, state, title = '') {
     setAllRuleEntries(settings, nextEntries);
 }
 
-/**
- * Writes raw entries map directly after sanitization.
- */
 export function setAllRuleEntries(settings, entries) {
     writeEntries(settings, entries);
 }
 
-/**
- * Serializes active window rules into a canonical JSON export string.
- * @returns Formatted JSON string
- */
+/** Versioned payload; a title is written only when set, so a round trip drops the empty ones. */
 export function exportRulesJson(entries) {
     const clean = sanitizeEntries(entries);
     const rules = {};
@@ -93,9 +79,6 @@ export function exportRulesJson(entries) {
     return JSON.stringify(payload, null, 2);
 }
 
-/**
- * Parses and sanitizes rules from JSON text, separating non-conflicting entries from conflicts.
- */
 export function importRulesJson(existingEntries, jsonText) {
     if (!jsonText || !jsonText.trim())
         throw new Error('Empty clipboard or content');
@@ -166,7 +149,6 @@ export function importRulesJson(existingEntries, jsonText) {
                 importedTitle: importedEntry.title || '',
             });
         } else {
-            // Same state: supplement title if existing title is empty
             const titleSupplemented = Boolean(!existing.title && importedEntry.title);
             if (titleSupplemented) {
                 nonConflictingEntries[key] = {
@@ -197,9 +179,6 @@ export function importRulesJson(existingEntries, jsonText) {
     };
 }
 
-/**
- * Applies user conflict resolutions and merges with non-conflicting entries.
- */
 export function applyConflictResolutions(existingEntries, nonConflictingEntries, cleanImported, resolutions) {
     const nextEntries = {...nonConflictingEntries};
     let resolvedUpdatedCount = 0;
@@ -227,9 +206,7 @@ export function applyConflictResolutions(existingEntries, nonConflictingEntries,
     };
 }
 
-/**
- * Read-modify-write over the one key. A rule write keeps the titles of surviving keys.
- */
+/** Read-modify-write over the one key; a rule write keeps the titles of surviving keys. */
 function mergeEntries(entries, {rules = null}) {
     const merged = {};
     const keys = new Set([...Object.keys(entries), ...Object.keys(rules ?? {})]);

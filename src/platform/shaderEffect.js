@@ -1,7 +1,4 @@
-/**
- * Adapts between Clutter.ShaderEffect (GNOME 51+) and Shell.GLSLEffect (GNOME 50).
- * Subclasses provide static shader source via getShaderSource().
- */
+/** Adapts Clutter.ShaderEffect (51+) and Shell.GLSLEffect (50); subclasses supply the source. */
 
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
@@ -10,11 +7,7 @@ import GObject from 'gi://GObject';
 
 import {resolveUniformLocation} from './uniformLocation.js';
 
-/**
- * Shell.GLSLEffect was dropped in GNOME 51 (gi://Shell namespace import remains valid,
- * but Shell.GLSLEffect evaluates to undefined). When undefined, we take the modern
- * Clutter.ShaderEffect branch.
- */
+/** Shell.GLSLEffect is gone in GNOME 51, so the undefined class is what picks the modern branch. */
 export const ShaderEffect = Shell?.GLSLEffect
     ? GObject.registerClass({
         GTypeName: 'WindowNativizerShaderEffectCompat',
@@ -37,13 +30,9 @@ export const ShaderEffect = Shell?.GLSLEffect
             }
         }
 
-        /**
-         * Sets float uniform using variable name, caching location on GNOME 50.
-         * Targets modern GNOME 51 3-argument signature: (name, n_components, value).
-         */
+        /** The 50 API takes a uniform location, so the name is resolved through a cache. */
         set_uniform_float(name, n_components, value) {
-            // The map is created in _init; build_pipeline() may run before that, so treat
-            // it as optional here too rather than assuming its presence.
+            // The map is created in _init, which build_pipeline() can run before; keep it optional.
             const cache = this._uniformLocMap ??= new Map();
             const loc = resolveUniformLocation(cache, name, n => this.get_uniform_location(n));
             if (loc !== -1)

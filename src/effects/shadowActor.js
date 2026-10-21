@@ -1,6 +1,4 @@
-/**
- * ShadowActor: 8-slice baked shadow below window actor; cross-fades on style change.
- */
+// Baked 8-slice shadow below a window actor; cross-fades between styles on a style change.
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -28,54 +26,32 @@ export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
 export const ShadowActor = GObject.registerClass({
     GTypeName: SHADOW_ACTOR_G_TYPE,
 }, class ShadowActor extends Clutter.Actor {
-    /**
-     * @param container - windowGroup; shadow inserted below windowActor
-     * @param [St] - The St namespace the clip target path uses, so the applied
-     *        phase read identifies the surface container by the clip's rule, not a global
-     * @param [options.journal] - Where the body-authority diagnostic writes; the decoration's own
-     */
+    /** St decides the clip's phase read; options.journal is where the body diagnostic writes. */
     _init(windowActor, container, St = null, options = {}) {
         super._init({name: 'WindowNativizerShadowActor', reactive: false, opacity: 255});
 
         this._windowActor = windowActor;
         this._container = container;
         this._St = St;
-        // The actor the clip resolved as its target. Its read is the shadow's body authority, so the
-        // two derive their body from one source (see shadowLayout's bodySource). Kept live by
-        // setClipTarget() on every decorate pass; null falls back to the window actor, exactly as
-        // resolveClipSize does.
+        // Clip's resolved target, adopted by setClipTarget(); its read is the body authority.
         this._clipTarget = null;
-        // The size read from `_clipTarget` when it was last adopted. setClipTarget() compares it
-        // against the live read so an in-place resize of the same container still repaints (see
-        // clipTargetReadChanged): the shadow's own box is bound to the window actor and does not
-        // move for a container-only resize, so nothing else would schedule that paint.
+        // Read at adoption so an in-place container resize repaints: the bound box cannot move.
         this._clipTargetSize = null;
-        // The pass plan the next relayout settles from: the reference points the hold compares
-        // against and the window's own size as of the previous pass. Null until the first pass; the
-        // layout then derives the body from the live reads, exactly as it did before the settle
-        // existed.
+        // Reference points the next settle compares against; null until a pass derives them live.
         this._bodyPlan = null;
-        // The body-authority diagnostic: a persistent disagreement is one journal line per episode
-        // and a pass it does not speak for re-arms it. The episode is this actor's lifetime, since the
-        // decoration builds a new one, so there is nothing to reset.
+        // One journal line per episode; the actor is rebuilt per decoration, so nothing to reset.
         this._bodyDiagnostic = new Diagnostic(options.journal ?? journal, 1);
         this._insets = null;
         this._scale = 1.0;
-        // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
-        // mirror is the safe default until the decoration reports the real strategy.
+        // Mirror of the clip target's phase strategy; false is the safe default until reported.
         this._phaseInTransform = false;
-        // The last phase a pass could read. While the fallback monitor scan cannot complete,
-        // the shadow keeps this rather than translating by a fabricated zero; the clip keeps the
-        // same phase, so the two cuts stay on one line. Zero is only the start.
+        // Last readable phase; a failed monitor scan keeps it, so both cuts stay on one line.
         this._lastOffset = {x: 0, y: 0};
         this._fade = new ShadowFadeStateMachine({
             now: () => GLib.get_monotonic_time() / 1000,
         });
 
-        // The bind constraint pins the actor at `window - PAD`; the position derived from the
-        // window's transform (below) is applied as a translation on top of it, because assigning
-        // `x`/`y` on an actor that still needs an allocation trips Clutter's "can't update stage
-        // views ... needs an allocation" warning on every resize frame.
+        // Bind pins window - PAD; x/y on an unallocated actor warns, so translate instead.
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
             [Clutter.BindCoordinate.Y, -SHADOW_PAD],
@@ -87,9 +63,7 @@ export const ShadowActor = GObject.registerClass({
         this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
-        // Position, translation, actor scale and pivot all move the cutout. `allocation` is also
-        // needed: the applied phase is read from the surface container's cached transform, which
-        // Mutter only invalidates on the window actor's allocation change.
+        // allocation too: Mutter invalidates its cached surface transform on allocation change.
         this._geometrySignals = ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y',
             'pivot-point', 'allocation'].map(prop =>
             windowActor.connect(`notify::${prop}`, () => this._syncGeometry()));
@@ -100,18 +74,12 @@ export const ShadowActor = GObject.registerClass({
         container.insert_child_below(this, windowActor);
     }
 
-    /**
-     * Synchronizes the shadow's derived position and translation with the window actor. The bind
-     * constraint's `window - PAD` is the layout position; `shadowLayoutPosition` and the window's
-     * translation plus Mutter's subpixel offset are folded into a translation, since a layout-space
-     * offset ignores the actor's scale. Only writes what changed: every assignment queues a relayout.
-     */
+    /** Folds position and subpixel phase into a translation: a layout offset ignores scale. */
     _syncGeometry() {
         if (!this._windowActor)
             return;
         const offset = shadowPhaseOffset(findMetaWindowCached(this._windowActor), this._phaseInTransform, this._St);
-        // A null offset is an unreadable monitor geometry, not a zero phase: keep the last good
-        // phase so the shadow's cutout stays on the clip's line instead of hopping to zero.
+        // Null is an unreadable monitor, not zero: keep the last phase instead of hopping to 0.
         if (offset)
             this._lastOffset = offset;
         const position = shadowLayoutPosition(this._windowActor);
@@ -126,12 +94,7 @@ export const ShadowActor = GObject.registerClass({
             this.translation_y = nextY;
     }
 
-    /**
-     * Follows the resolved clip target's phase strategy so both cuts read one source. Flips when
-     * the container becomes identified or refused, and re-syncs the translation the shadow already
-     * carries so the strategy change is not deferred to the next position change.
-     * @param phaseInTransform - True when the clip target carries the phase in its transform
-     */
+    /** Re-syncs the translation on a flip, so the change is not deferred to the next move. */
     setPhaseInTransform(phaseInTransform) {
         const next = Boolean(phaseInTransform);
         if (this._phaseInTransform === next)
@@ -160,12 +123,7 @@ export const ShadowActor = GObject.registerClass({
         return this._fade.style;
     }
 
-    /**
-     * Points the shadow at the clip's resolved target, whose read is the body authority the clip
-     * cuts. A changed target or a changed read of the same target re-derives the cast; the read
-     * matters because a surface container can resize in place while the shadow's bound box does not
-     * move, so nothing else would schedule that paint.
-     */
+    /** A changed read of the same target repaints too: a container resizes while the box cannot. */
     setClipTarget(clipTarget) {
         const next = clipTarget ?? null;
         const nextSize = readActorSize(next);
@@ -176,19 +134,12 @@ export const ShadowActor = GObject.registerClass({
         this.queue_redraw();
     }
 
-    /**
-     * Sets the body plan the next layout settles from. WindowDecoration hands the same plan to the
-     * clip, so cast and cut derive one body; the plan carries no resolved body, and the layout
-     * settles from the live reads at its own relayout clock.
-     */
+    /** Same plan the clip gets, so cast and cut derive one body; it carries no resolved body. */
     setBodyPlan(plan) {
         this._bodyPlan = plan ?? null;
     }
 
-    /**
-     * @returns Live,
-     *          read-only shadow geometry for the debug reply; every field is a read.
-     */
+    /** Live reads only, for the debug reply. */
     get diagnosticsView() {
         const style = this._fade?.style ?? null;
         const cast = style?.cast ?? null;
@@ -206,9 +157,7 @@ export const ShadowActor = GObject.registerClass({
         };
     }
 
-    /**
-     * Sets display scale externally, eliminating Shell queries from paint passes.
-     */
+    /** Scale set from outside so paint passes issue no Shell query. */
     setScale(scale) {
         if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale) && this._scale !== scale) {
             this._scale = scale;
@@ -217,11 +166,7 @@ export const ShadowActor = GObject.registerClass({
         }
     }
 
-    /**
-     * The ring the client declared, per side. Stored, not the body: the body is recomputed
-     * from this actor's live size on every paint, so a resize cannot leave a stale cast.
-     * @param insets - null = whole actor
-     */
+    /** Stores the declared ring, not the body: the body re-derives from live size each paint. */
     setShadowInsets(insets) {
         const next = insets
             ? {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom}
@@ -236,9 +181,6 @@ export const ShadowActor = GObject.registerClass({
         this.queue_redraw();
     }
 
-    /**
-     * @param style - resolved for current window state
-     */
     setShadowStyle(style) {
         const {radius, shadows, animate = false} = style;
         const key = styleKey(radius, shadows);
@@ -250,12 +192,7 @@ export const ShadowActor = GObject.registerClass({
         this.queue_redraw();
     }
 
-    /**
-     * One handoff per decoration pass. The setters run in the order this actor's own invariants need:
-     * the phase strategy and the target decide which reads the cast settles from, then the plan and the
-     * scale it lays out at, and the style last, because a changed style starts its cross-fade from the
-     * scale and insets already in place.
-     */
+    /** Setter order is the actor's invariant: target, phase, then plan and scale, style last. */
     applyPass(pass) {
         this.setPhaseInTransform(pass.phaseInTransform);
         this.setClipTarget(pass.clipTarget);
@@ -270,11 +207,11 @@ export const ShadowActor = GObject.registerClass({
         if (this.width <= 0 || this.height <= 0 || !currentStyle)
             return;
 
-        // Bring the blend up to the frame being drawn, then keep frames coming while it runs.
+        // Advance the blend to the drawn frame, then queue more frames while it runs.
         if (this._fade.advance())
             this.queue_redraw();
 
-        // Inherit Clutter actor paint opacity (e.g. for window minimize/fade animations).
+        // Carry Clutter's actor paint opacity through, so minimize and fade animations apply.
         const paintOpacity = this.get_paint_opacity() / 255;
         if (paintOpacity <= 0)
             return;
@@ -320,10 +257,7 @@ export const ShadowActor = GObject.registerClass({
         return style.pipeline;
     }
 
-    /**
-     * The layout decision (cast, slices, snapped quads) lives in the pure shadowLayout;
-     * this method owns only the Clutter box objects it reuses per physical scale.
-     */
+    /** shadowLayout owns the decision; this owns only the Clutter boxes reused per scale. */
     _relayout(style, scale) {
         const layout = shadowLayout(style, {width: this.width, height: this.height},
             this._insets ?? ZERO_INSETS, scale, {
@@ -331,8 +265,7 @@ export const ShadowActor = GObject.registerClass({
                     findMetaWindowCached(this._windowActor)),
                 bodyPlan: this._bodyPlan,
             });
-        // Only a settle that could not decide says something about the window. The call is made either
-        // way so a run of decided passes re-arms the latch; skipping it is how an episode went silent.
+        // Called on every pass, decided or not: a decided pass re-arms the one-strike latch.
         this._reportBodyDisagreement(layout);
 
         const slicesChanged = layout.castChanged || !style.slices;
@@ -354,10 +287,9 @@ export const ShadowActor = GObject.registerClass({
             style.boxesByScale.set(scale, entry);
         }
 
-        // Snap only the boxes this paint writes; a repeat paint of the same scale and cast
-        // allocates nothing.
+        // Snap only the boxes this paint writes: a repeat paint of the same cast allocates nothing.
         if (slicesChanged || entry.cast !== style.cast) {
-            // Snap in actor-local space to keep cutlines invariant during window drag.
+            // Actor-local space keeps the cutlines invariant while the window is dragged.
             snapSliceBoxesInto(entry.boxes, style.cast, style.corner, scale);
             entry.cast = style.cast;
         }
@@ -365,12 +297,7 @@ export const ShadowActor = GObject.registerClass({
         return entry.boxes;
     }
 
-    /**
-     * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip cuts,
-     * or nothing when the settle decided this pass, could not read the window, or has nothing to say.
-     * The latch is the shared one with a single strike: the first pass with something to say speaks,
-     * any pass without re-arms it.
-     */
+    /** Speaks once per episode; any pass with nothing to say re-arms the one-strike latch. */
     _reportBodyDisagreement(layout) {
         const state = settleUndecidedState(layout);
         if (!state) {
@@ -391,18 +318,19 @@ export const ShadowActor = GObject.registerClass({
             try {
                 this._windowActor?.disconnect?.(sid);
             } catch {
+                // The actor went away with its signal.
             }
         }
         this._geometrySignals = [];
         try {
             this._windowActor.disconnect(this._destroyId);
         } catch {
-            // Already destroyed.
+            // Disconnect failed because the window actor is already gone.
         }
         try {
             this._container?.remove_child(this);
         } catch {
-            // Container already gone.
+            // remove_child failed because the container is already gone.
         }
         this._container = null;
         super.destroy();

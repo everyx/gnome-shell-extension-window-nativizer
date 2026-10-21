@@ -1,6 +1,4 @@
-// The offscreen box Clutter gives a ClutterOffscreenEffect, in the units its clip shader uses:
-// one shader unit is one logical pixel. The FBO is not the actor's box, so the box is derived
-// per paint from the FBO's own extent.
+/** From the FBO's own extent each paint: patched and unpatched mutter size the box differently. */
 
 import {roundHalfAwayFromZero} from '../platform/numeric.js';
 
@@ -10,24 +8,14 @@ export const ENLARGE_ROUNDING_PAD = 0.75;
 /** Upstream's total padding per axis (the `- 3`), split 2 near / 1 far on an integer box. */
 export const ENLARGE_TOTAL_PAD = 3;
 
-/**
- * `_clutter_actor_box_enlarge_for_effects` on the axis of an actor-local box `[0, length]`.
- * Returns the enlarged near and far edges, in logical px, still relative to the actor origin.
- * `CLUTTER_NEARBYINT` is `(int) (x + 0.5f)` for x >= 0 - half away from zero, not the ties-to-even
- * `nearbyint()` its name suggests - and `roundHalfAwayFromZero` carries that rule for every sign.
- */
+/** Trap: `CLUTTER_NEARBYINT` is half away from zero, not ties-to-even as its name suggests. */
 function enlargeAxis(length) {
     const far = Math.ceil(length + ENLARGE_ROUNDING_PAD);
     const near = far - roundHalfAwayFromZero(length) - ENLARGE_TOTAL_PAD;
     return {near, far};
 }
 
-/**
- * C's `clutter_round_to_256ths`, applied to the scaled edges before they are rounded onto the
- * device grid. The monitor scale is a float32: `282 * 1.333333373` is 376.000017 in double
- * precision and exactly 376 in the float32 the compositor multiplies in. Without this, a 441x281
- * body at 4/3 asked for a 285.0-unit quad and cut the bottom edge a device pixel short.
- */
+/** The scale is float32 upstream, so a double 376.000017 must land on 376 before rounding. */
 function roundTo256ths(value) {
     return Math.round(value * 256) / 256;
 }
@@ -37,10 +25,7 @@ function usableScale(scale) {
     return Number.isFinite(scale) && scale > 0 ? scale : 1.0;
 }
 
-/**
- * One axis of the offscreen box at scale `s`: the enlarged edges floored and ceiled onto the device
- * grid, in device px relative to the actor origin. `end - start` is the axis's FBO extent.
- */
+/** One axis on the device grid: `end - start` is the axis's FBO extent. */
 function scaledAxis(length, s) {
     const {near, far} = enlargeAxis(length);
     return {
@@ -49,13 +34,7 @@ function scaledAxis(length, s) {
     };
 }
 
-/**
- * The offscreen box a shader effect on an actor of `size` gets at `scale`, as the clip needs it: the
- * FBO extent in logical px (`width`/`height`, the span `p / quadSize` normalizes over), and where
- * the actor origin sits inside it (`offsetX`/`offsetY`, the shader's `uFboOffset`).
- *
- * `width * scale` and `offsetX * scale` land on whole device pixels by construction.
- */
+/** `width`/`height` span `p / quadSize`; `offsetX`/`offsetY` are the shader's `uFboOffset`. */
 export function offscreenQuad(size, scale = 1.0) {
     const s = usableScale(scale);
     const x = scaledAxis(Number.isFinite(size?.width) ? size.width : 0, s);
@@ -68,11 +47,7 @@ export function offscreenQuad(size, scale = 1.0) {
     };
 }
 
-/**
- * The FBO device extent an engine allocating `size` at `scale` would hand the clip, un-divided: the
- * same derivation `offscreenQuad` makes, kept in device px because that is what a read FBO is
- * compared against.
- */
+/** Same derivation undivided, in device px: that is what a read FBO is compared against. */
 export function offscreenDeviceExtent(size, scale = 1.0) {
     const s = usableScale(scale);
     const x = scaledAxis(Number.isFinite(size?.width) ? size.width : 0, s);
@@ -80,19 +55,10 @@ export function offscreenDeviceExtent(size, scale = 1.0) {
     return {width: x.end - x.start, height: y.end - y.start};
 }
 
-/**
- * How far a scale's predicted device extent and the FBO Clutter allocated may differ. The derivation
- * is phase-free while the FBO's edges carry the source framebuffer's subpixel phase: one edge may
- * move one device pixel without the scale being wrong. Past that, no candidate explains the read.
- */
+/** One px of slack: FBO edges carry subpixel phase, so an edge may move a pixel. */
 export const OFFSCREEN_BOX_TOLERANCE = 1;
 
-/**
- * The scales an engine may have allocated a window's FBO at: every monitor scale the actor's box
- * touches, plus each one's `ceil`, ascending and deduplicated. The `ceil` variant is unpatched
- * mutter's `ceilf (resource_scale)`; the real-scale caller uses the scale itself. Only the FBO's
- * extent tells the two apart, so both are offered.
- */
+/** Each scale and its `ceil`: only the FBO's extent tells patched mutter from unpatched. */
 export function offscreenScaleCandidates(scales) {
     if (!Array.isArray(scales))
         return null;
@@ -108,24 +74,15 @@ export function offscreenScaleCandidates(scales) {
     return out.length ? out.sort((a, b) => a - b) : null;
 }
 
-/** The largest edge disagreement between two device extents. */
 function extentDistance(a, b) {
     return Math.max(Math.abs(a.width - b.width), Math.abs(a.height - b.height));
 }
 
-/**
- * The scale the engine produced an FBO with, and whether any candidate explains the read: a
- * candidate explains it when its predicted device extent lands within one device pixel, the subpixel
- * phase. Nothing within that budget means the candidate set has not caught up with the engine, and
- * the caller holds the derivation instead of dividing by the wrong scale.
- */
+/** Nothing in tolerance means the candidates lag the engine, so the caller holds the derivation. */
 export function resolveOffscreenScale(size, target, scale, candidates = null) {
-    // Never `actor.get_resource_scale()` here: it answers `ceilf (real_resource_scale)`, so 1.25
-    // and 4/3 both return 2 - the one bit this selection has to keep - and dividing the quad by it
-    // draws the body at 62.5%. Mutter keeps the real value private, with no GIR read.
+    // Never `get_resource_scale()`: its `ceilf` makes 1.25 and 4/3 both 2, drawing the body at 62.5%.
     const declared = usableScale(scale);
-    // An incomplete set still offers the declared scale: the read alone can then say whether the
-    // derivation spans it, which is all the caller's fallback needs.
+    // An incomplete set still offers the declared scale, so the read can test that one.
     const offers = Array.isArray(candidates) && candidates.length ? candidates : [declared];
     if (!Number.isFinite(target?.width) || !Number.isFinite(target?.height) ||
         !(target.width > 0) || !(target.height > 0))
@@ -147,12 +104,7 @@ export function resolveOffscreenScale(size, target, scale, candidates = null) {
     return {scale: best, explained: true};
 }
 
-/**
- * The extent the shader normalizes its texture coordinates over. The size Clutter reports for the
- * FBO wins whenever that read is available, since the coordinates span the FBO itself. `target` is
- * that read in device px, or null, divided by the scale that produced it - never by the clip's
- * declared scale, so a wrongly-scaled clip still spans it.
- */
+/** The FBO's read wins, divided by the scale that produced it, not the clip's declared scale. */
 export function offscreenExtent(derived, target, scale) {
     if (!Number.isFinite(target?.width) || !Number.isFinite(target?.height))
         return {width: derived.width, height: derived.height};
@@ -160,24 +112,13 @@ export function offscreenExtent(derived, target, scale) {
     return {width: target.width / s, height: target.height / s};
 }
 
-/**
- * Whether a paint owes the shader new `uQuadSize` / `uFboOffset` values. `quad` and `offset` are the
- * vectors the effect last wrote; the box carries every number they are built from, the origin
- * included, because an FBO reallocated at another scale can move the origin while the read extent
- * stays put.
- */
+/** The origin is compared too: a reallocated FBO can move it while the read extent stays put. */
 export function offscreenUniformsStale(quad, offset, box) {
     return quad[0] !== box.extent.width || quad[1] !== box.extent.height ||
         offset[0] !== box.offsetX || offset[1] !== box.offsetY;
 }
 
-/**
- * One paint's offscreen box: the extent the shader's coordinates span, the actor origin inside it,
- * and the derived device extent the reconciliation compares against the FBO. Extent and origin
- * share the picked scale; `candidates` is the reconcile pass's set, or null when incomplete.
- *
- * A read no candidate explains holds the derivation for the pass, so the body stays whole.
- */
+/** A read no candidate explains holds the derivation for the pass, so the body stays whole. */
 export function offscreenPaintBox(size, scale, target, candidates = null) {
     const s = usableScale(scale);
     const quad = offscreenQuad(size, s);
@@ -192,8 +133,7 @@ export function offscreenPaintBox(size, scale, target, candidates = null) {
         };
     }
     const fboScale = pick.scale;
-    // Bit-identical reuse when the declared scale already explains the FBO, so the common path does
-    // not grow a second derivation; a mismatch re-derives both spans on the FBO's own grid.
+    // Reuse the quad when the declared scale explains the FBO; a mismatch re-derives on the FBO's grid.
     const fboQuad = fboScale === s ? quad : offscreenQuad(size, fboScale);
     return {
         scale: fboScale,

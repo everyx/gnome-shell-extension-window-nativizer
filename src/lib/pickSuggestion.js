@@ -1,11 +1,4 @@
-/**
- * What a pick should correct: the axes a window kind can be corrected on, the suggestion a pick makes,
- * and whether storing it would change anything (all pure).
- *
- * The suggestion asks the decoration decision what each axis currently answers and reverses every
- * axis the kind can act on, so the two modules agree about a kind by construction rather than by
- * sharing a table.
- */
+/** Pure: it reverses whatever the decision module answers, so the two agree by construction. */
 
 import {evaluateWindowActions, isDecoratableWindowType} from './detector.js';
 import {
@@ -39,12 +32,7 @@ function kindParams(params) {
     };
 }
 
-/**
- * Which axes a kind can be corrected on at all - the same answer the preferences window
- * uses to decide whether to offer a switch. Capability, not choice: an axis the runtime
- * cannot act on has no decision to reverse.
- * @returns Keyed by RuleAxis
- */
+/** Capability, not choice: prefs offers a switch by it, and an ignored axis has no decision. */
 export function ruleAxisCapabilities({
     windowType = WindowType.NORMAL, allowsResize = true, hasSsd = false,
 } = {}) {
@@ -56,19 +44,12 @@ export function ruleAxisCapabilities({
     };
 }
 
-/**
- * Picker suggestion: correct every axis this kind can be corrected on. The user picked the window
- * because it looks wrong, so the pick is the whole correction, not the smallest one; an axis the kind
- * cannot be corrected on is left out, because naming it could not take effect.
- */
+/** The whole correction, not the smallest: the user picked it because it already looks wrong. */
 export function suggestedRuleState(params) {
     const caps = ruleAxisCapabilities(params);
     return buildRuleState(RULE_AXES.filter(axis => caps[axis]));
 }
 
-/**
- * @returns Null when the window cannot be identified
- */
 export function suggestedRuleWouldChange(properties, params, state) {
     const key = buildRuleKeyFromProperties(properties);
     if (!key)

@@ -1,51 +1,26 @@
-/**
- * Diagnostic invariants: the conditions a healthy decoration pass must satisfy, and the edge-triggered
- * latches that make a violation speak once per episode. Each invariant is a pure predicate returning the
- * body of a line or null; `Diagnostic` owns the strike policy and the sink every invariant shares, the
- * journal adds the prefix, and health is silence.
- */
+/** Pure predicates plus a strike latch, so a violation speaks once per episode; health is quiet. */
 
 import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
 
-/**
- * How far the derived offscreen box's device extent and the FBO Clutter allocated may differ: one
- * device pixel, the subpixel phase an edge may carry. The geometry module owns the number, because
- * it is also what tells an FBO a candidate scale explains from one none does.
- */
+/** One device pixel, the subpixel phase an edge may carry; the geometry module owns the number. */
 export {OFFSCREEN_BOX_TOLERANCE};
 
-/**
- * Consecutive violating passes an invariant must see before it is allowed to speak: a geometry
- * change and the actor allocation that follows settle a pass apart, so one pass would warn on
- * every resize. Agreement resets the count.
- */
+/** Violating passes before speaking: a geometry change and its allocation settle a pass apart. */
 export const INVARIANT_STRIKES = 2;
 
 export const BUFFER_ACTOR_TOLERANCE = 0.5;
 
-/** How far the fallback phase mirror and Mutter's applied phase may differ. The observed
- * misalignment is a whole physical pixel; this tolerance is far below it and above float residue. */
+/** The misalignment seen is a whole physical pixel; this sits far below it, above float residue. */
 export const PHASE_ALIGNMENT_TOLERANCE = 0.05;
 
-/**
- * The largest magnitude a real subpixel phase can have, in logical px: Mutter's transform snaps a
- * layout coordinate to the nearest physical grid line, so a real phase is below `1 / scale` logical
- * px. Beyond this bound a value is a position or a stale transform, not a phase.
- */
+/** A real phase is under `1 / scale` logical px: Mutter snaps to the grid, so more is a position. */
 export const PHASE_MAGNITUDE_BOUND = 2;
 
-/**
- * @returns A latch that has not seen a violation
- */
 export function freshInvariantState() {
     return {strikes: 0, warned: false};
 }
 
-/**
- * Advances one invariant's latch by one pass. A null warning is agreement and re-arms the latch; a
- * warning counts a strike and is returned only once the count reaches `strikes` and this episode has
- * not spoken yet. Every later violating pass stays silent until agreement - one WARNING per episode.
- */
+/** A null warning re-arms; a warning speaks once per episode and stays silent until agreement. */
 export function evaluateInvariant(state, warning, strikes = INVARIANT_STRIKES) {
     if (!warning)
         return {state: freshInvariantState(), message: null};
@@ -59,25 +34,16 @@ export function evaluateInvariant(state, warning, strikes = INVARIANT_STRIKES) {
     return {state: next, message: warning};
 }
 
-/**
- * One invariant's latch together with the journal it writes to, so a pass has no state to hold and
- * no branch to take: `check()` is called every pass and agreement re-arms it. That call cannot be
- * skipped without losing an episode, which is how a diagnostic once went silent for good.
- */
+/** Latch plus journal, so a pass holds no state and cannot skip the call that re-arms it. */
 export class Diagnostic {
-    /**
-     * @param journal - Receives a line when this episode's first warning is due
-     * @param [strikes] - Consecutive violating passes before it may speak
-     */
+    /** `strikes` is how many consecutive violating passes this instance waits for. */
     constructor(journal, strikes = INVARIANT_STRIKES) {
         this._journal = journal;
         this._strikes = strikes;
         this._state = freshInvariantState();
     }
 
-    /**
-     * Advances one pass. Agreeing re-arms the episode; a violation speaks once per episode.
-     */
+    /** Agreeing re-arms the episode; a violation speaks once per episode. */
     check(warning) {
         const {state, message} = evaluateInvariant(this._state, warning, this._strikes);
         this._state = state;
@@ -85,20 +51,13 @@ export class Diagnostic {
             this._journal.warn(message);
     }
 
-    /**
-     * Forgets the episode. For a teardown, which is not a pass: the object outlives what it described.
-     */
+    /** For a teardown, which is not a pass: the object outlives what it described. */
     reset() {
         this._state = freshInvariantState();
     }
 }
 
-/**
- * Names a window for a journal line: class first, then title, then pid, so a reader can find it.
- * The reading's `wmClass` is the class, and a pick reply's `windowTitle` is the title.
- *
- * @returns A label, never empty
- */
+/** Class first, then title, then pid, so the journal line names a window a reader can find. */
 export function windowIdentityLabel({wmClass, title, pid} = {}) {
     const name = `${wmClass ?? ''}`.trim() || `${title ?? ''}`.trim();
     if (name)
@@ -108,12 +67,7 @@ export function windowIdentityLabel({wmClass, title, pid} = {}) {
     return 'an unidentified window';
 }
 
-/**
- * Builds the WARNING text for a pass whose buffer rect and window actor allocation disagree - the
- * pair that names which of the two reads lagged, where the body-authority warning cannot. Only the
- * extents are compared: origins may differ legitimately by an animation's translation. Null within
- * `BUFFER_ACTOR_TOLERANCE`, or when either rect is degenerate.
- */
+/** Extents only: origins may differ by an animation's translation. Null on a degenerate rect. */
 export function bufferAllocationWarning(bufferRect, actorBox, label = windowIdentityLabel()) {
     if (!positiveRect(bufferRect) || !positiveRect(actorBox))
         return null;
@@ -123,23 +77,16 @@ export function bufferAllocationWarning(bufferRect, actorBox, label = windowIden
         `allocation ${rectSummary(actorBox)} for ${label} beyond ${BUFFER_ACTOR_TOLERANCE}px`;
 }
 
-/**
- * Builds the WARNING text for a fallback pass whose mirror phase does not match Mutter's applied
- * phase. Unavailable - and no warning - when the two reads came from different actors (a phase
- * against a position) or when either read exceeds `PHASE_MAGNITUDE_BOUND`; the raw values stay in
- * the text. Call only on the fallback path.
- */
+/** Unavailable, not a disagreement, when a read exceeds the bound; fallback path only. */
 export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLabel()) {
-    // A pair read from two actors is not comparable: the mirror's actor carried one layout and the
-    // applied read subtracted another. Report unavailable rather than fabricate a phase.
+    // Two actors carried two layouts, so the pair is not comparable: unavailable, never a phase.
     if (mirror?.actor !== undefined && applied?.actor !== undefined && mirror.actor !== applied.actor)
         return null;
 
     if (!finitePhase(mirror) || !finitePhase(applied))
         return null;
 
-    // A read outside the subpixel range is a misread (a position, or a stale transform). Surface it
-    // as unavailable with the raw numbers rather than as a phase disagreement.
+    // Past the subpixel range a read is a position or stale transform: unavailable, with raw values.
     if (!boundedPhase(mirror) || !boundedPhase(applied)) {
         return `Fallback subpixel phase unavailable for ${label}: mirror ` +
             `${phaseSummary(mirror)} applied ${phaseSummary(applied)} exceeds ` +
@@ -153,34 +100,21 @@ export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLab
         `Mutter applied ${phaseSummary(applied)} for ${label} beyond ${PHASE_ALIGNMENT_TOLERANCE}px`;
 }
 
-/**
- * Builds the WARNING text for an overview pass that could not install the mask although the window
- * was ready for one - the capability or geometry refusals, not the "not ready yet" deferrals, which
- * the caller separates out. Names the gate so the journal says why the preview stayed square.
- */
+/** The capability and geometry refusals only; the caller separates out the "not ready yet" ones. */
 export function overviewMaskRefusalWarning(reason, label = windowIdentityLabel()) {
     return `Overview mask not installed for ${label} although the window was ready: ${reason}`;
 }
 
-/**
- * Builds the WARNING text for a shadow bake whose framebuffer could not be allocated. The bake
- * retries on the next paint, so a persistent shortage is one line per episode rather than one per
- * frame.
- */
+/** The bake retries next paint, so a persistent shortage is one line per episode, not per frame. */
 export function shadowBakeFailureWarning(buffer) {
     return `Could not allocate a ${buffer}x${buffer} shadow buffer`;
 }
 
-/**
- * Builds the WARNING text for a paint whose derived offscreen box does not span the FBO Clutter
- * allocated, both extents in device px. Null when either extent is unknown or they agree within
- * `OFFSCREEN_BOX_TOLERANCE`.
- */
+/** Both extents in device px; null when either is unknown or they agree within the tolerance. */
 export function offscreenBoxWarning(derived, target) {
     if (!finiteExtent(derived) || !finiteExtent(target))
         return null;
-    // Whole device pixels on both sides: rounding keeps float residue from reading as a part, and
-    // the tolerance is the subpixel phase an edge may carry.
+    // Rounding keeps float residue from reading as a part; the tolerance is one edge's phase.
     const dx = Math.abs(Math.round(derived.width) - Math.round(target.width));
     const dy = Math.abs(Math.round(derived.height) - Math.round(target.height));
     if (dx <= OFFSCREEN_BOX_TOLERANCE && dy <= OFFSCREEN_BOX_TOLERANCE)
@@ -216,9 +150,7 @@ function finitePhase(phase) {
     return Boolean(phase) && Number.isFinite(phase.x) && Number.isFinite(phase.y);
 }
 
-/**
- * @returns Whether the phase is within the subpixel range on both axes
- */
+/** False is out of the subpixel range on an axis: a position or stale transform, not a phase. */
 function boundedPhase(phase) {
     return finitePhase(phase) &&
         Math.abs(phase.x) <= PHASE_MAGNITUDE_BOUND &&
@@ -229,9 +161,7 @@ function phaseSummary(phase) {
     return `(${fmt2(phase.x)},${fmt2(phase.y)})`;
 }
 
-/**
- * @returns The value with two decimal places, so a sub-pixel phase is visible
- */
+/** Two decimals, so a sub-pixel phase stays visible. */
 function fmt2(value) {
     return Number(value).toFixed(2);
 }

@@ -1,6 +1,4 @@
-/**
- * Unified exports for zero-side-effect GNOME Shell & Mutter platform library for GNOME 50+.
- */
+// Seam module: tools/gjs-surface.js imports it to assert every seam export is callable.
 
 export {
     isWindowMaximized,

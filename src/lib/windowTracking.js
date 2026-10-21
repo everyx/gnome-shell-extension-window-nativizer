@@ -1,11 +1,4 @@
-/**
- * Window tracking: the windows the manager drives, one record each - the decoration, the signals it
- * is subscribed with, and the two sources that gate a pass.
- *
- * Which signals can change a decoration input, and how a burst of them coalesces into one pass, is
- * routing policy and lives here. What a pass then does with the reading is the manager's business,
- * so this module never reads a window's state, geometry or style.
- */
+/** Which signals can change a decoration input, and how a burst of them becomes one pass. */
 
 import GLib from 'gi://GLib';
 
@@ -13,51 +6,34 @@ import {isDecoratableWindowType} from './detector.js';
 import {getSurfaceContainer, getWindowActor, getWindowPid, getWindowType}
     from '../platform/window.js';
 
-/**
- * How long a burst of geometry signals settles before one pass reads the window. Every signal a
- * decoration input can change on arrives in bursts during a drag, and one pass per burst is what the
- * geometry path is designed for.
- */
+/** A drag delivers its signals in bursts; the geometry path is designed for one pass per burst. */
 export const RECONCILE_DEBOUNCE_MS = 50;
 
-/**
- * The window signals a decoration input can change on. Keys change nothing here on purpose: the
- * manager connects no workspace signal, because no decoration input depends on the workspace.
- */
+// No workspace signal: no decoration input depends on the workspace, so keys change nothing.
 const WINDOW_SIGNALS = [
     'position-changed', 'size-changed',
     'notify::maximized-horizontally', 'notify::maximized-vertically',
     'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
 ];
 
-/**
- * The actor signals a pass reads: children arriving and leaving can replace the clip target, and the
- * window actor's own allocation is the first-frame gate below.
- */
+// Children coming and going can replace the clip target; the actor's allocation is the gate below.
 const ACTOR_SIGNALS = ['child-added', 'child-removed'];
 
-/**
- * One tracked window. The signals, the debounce and the first-frame gate belong to the manager's
- * lifecycle rather than the decoration's, so they live beside it.
- */
+/** One tracked window; its signals, debounce and first-frame gate outlive the decoration. */
 class TrackedWindow {
     constructor(win, decoration, pid) {
         this.win = win;
         this.decoration = decoration;
-        // Read once and remembered: a later read during teardown can come back empty, which would
-        // leave the process classified with no owner to forget it by.
+        // Read once: a later teardown read can come back empty, leaving no owner to forget it by.
         this.pid = pid;
         this.signals = [];
         this.timeout = null;
         this.idleId = null;
         this.firstFrameDone = false;
         this.actorWired = false;
-        // The container whose notify::allocation this record is subscribed to, so a re-wiring pass does
-        // not re-connect the same actor. Null until the child exists.
+        // The container notify::allocation is connected to, so a re-wiring pass cannot repeat it.
         this.wiredContainer = null;
-        // This pass's read of the rule, handed to the decoration so the clip and the phase readers use
-        // one answer. Distinct from `wiredContainer`: a container that disappeared leaves the old
-        // subscription standing while this pass has none to report.
+        // A vanished container keeps its wiredContainer subscription, but this read reports none.
         this.surfaceContainer = null;
     }
 
@@ -67,12 +43,7 @@ class TrackedWindow {
 }
 
 export class WindowTracking {
-    /**
-     * @param onPassDue - Called with the window when a pass is due; the manager reads and applies
-     * @param onGone - Called with the window before its record is dropped, from `unmanaging`
-     * @param [debounceMs] - How long a burst settles, for a test clock
-     * @param [St] - The St namespace the clip-target resolver identifies a surface container with
-     */
+    /** @param [St] - The St namespace the clip-target resolver needs to spot a foreign child. */
     constructor({onPassDue, onGone, debounceMs = RECONCILE_DEBOUNCE_MS, St = null}) {
         this._onPassDue = onPassDue;
         this._onGone = onGone;
@@ -85,9 +56,6 @@ export class WindowTracking {
         return this._windows.size;
     }
 
-    /**
-     * Whether any tracked window has a pass waiting on its debounce.
-     */
     get hasPending() {
         for (const record of this._windows.values()) {
             if (record.timeout)
@@ -96,21 +64,12 @@ export class WindowTracking {
         return false;
     }
 
-    /**
-     * @returns Whether the manager draws this window: a decoratable kind it is not already tracking
-     */
     accepts(win) {
         return Boolean(win) && !this._windows.has(win) &&
             isDecoratableWindowType(getWindowType(win));
     }
 
-    /**
-     * Subscribes a window and runs its first pass: immediately when its actor is already allocated,
-     * otherwise once the allocation arrives.
-     *
-     * @param decoration - The decoration the manager built for this window
-     * @returns The record, or null when the window is not one to track
-     */
+    /** Runs the first pass now when the actor is allocated, else when its allocation arrives. */
     add(win, decoration) {
         if (!this.accepts(win))
             return null;
@@ -121,9 +80,7 @@ export class WindowTracking {
         for (const signal of WINDOW_SIGNALS)
             this._connect(record, win, signal, () => this.touch(win));
 
-        // Focus is not geometry, so it is not debounced: the shadow it selects is the animation the
-        // user is watching, and delaying its start by the debounce window is visible against the
-        // window's own backdrop change.
+        // Focus is not debounced: the shadow must start with the animation the user is watching.
         this._connect(record, win, 'notify::appears-focused', () => this.passNow(win));
         this._connect(record, win, 'unmanaging', () => this._onGone(win));
 
@@ -138,11 +95,7 @@ export class WindowTracking {
         return record;
     }
 
-    /**
-     * Re-reads where this window's actor signals belong. Called from every pass, because the surface
-     * container can be replaced (XWayland swaps the surface child) and the actor itself can appear
-     * late.
-     */
+    /** Re-read each pass: XWayland swaps the surface child, and the actor can appear late. */
     observe(win) {
         const record = this._windows.get(win);
         if (!record)
@@ -161,10 +114,7 @@ export class WindowTracking {
                 this._connect(record, actor, signal, () => this.touch(win));
         }
 
-        // The clip attaches to the surface container, a child of the window actor, whose allocation
-        // can move (0 -> real, a buffer swap) without the actor's changing. Watching it re-runs the
-        // readings so the insets cannot go stale and re-verifies a target that was deferred while the
-        // container was unallocated.
+        // The container's allocation can move (0 -> real, buffer swap) while the actor's does not.
         const container = getSurfaceContainer(actor, win, this._St);
         record.surfaceContainer = container;
         if (container && container !== record.wiredContainer) {
@@ -175,9 +125,7 @@ export class WindowTracking {
         }
     }
 
-    /**
-     * Coalesces a burst into one pass. A window already waiting is left to the pass it has.
-     */
+    /** Coalesces a burst into one pass; a window already waiting keeps the pass it has. */
     touch(win) {
         const record = this._windows.get(win);
         if (!record || record.timeout)
@@ -189,9 +137,6 @@ export class WindowTracking {
         });
     }
 
-    /**
-     * Runs a pass now, superseding a debounce that was waiting.
-     */
     passNow(win) {
         const record = this._windows.get(win);
         if (!record)
@@ -200,12 +145,7 @@ export class WindowTracking {
         this._onPassDue(win);
     }
 
-    /**
-     * Learns a window's pid after the fact: an X11 client sets `_NET_WM_PID` only once the window
-     * exists, so the read taken at tracking time can come back empty.
-     *
-     * @returns The remembered pid, 0 when unknown
-     */
+    /** An X11 client sets _NET_WM_PID late, so the read at tracking time can come back empty. */
     learnPid(win) {
         const record = this._windows.get(win);
         if (record && !(record.pid > 0))
@@ -217,11 +157,7 @@ export class WindowTracking {
         return this._windows.get(win) ?? null;
     }
 
-    /**
-     * The surface container this pass read for a window, or null when it has none (or has not been
-     * observed yet). `observe()` resolves it once per pass; the decoration consumes this rather than
-     * asking the same question again.
-     */
+    /** The container `observe()` read this pass; the decoration consumes it instead of asking. */
     surfaceContainer(win) {
         return this._windows.get(win)?.surfaceContainer ?? null;
     }
@@ -230,19 +166,12 @@ export class WindowTracking {
         return this._windows.has(win);
     }
 
-    /**
-     * @returns A snapshot of [window, record] pairs, so a caller can release while iterating
-     */
+    /** A snapshot, so a caller can release while iterating. */
     entries() {
         return [...this._windows.entries()];
     }
 
-    /**
-     * Drops a window's pending work and subscriptions and forgets it. The decoration is the caller's
-     * to destroy, in its own order.
-     *
-     * @returns The record that was dropped, or null
-     */
+    /** Drops pending work and signals; the decoration stays the caller's to destroy. */
     release(win) {
         const record = this._windows.get(win);
         if (!record)
@@ -253,12 +182,7 @@ export class WindowTracking {
         return record;
     }
 
-    /**
-     * The first-frame gate: a window actor only has a size once Mutter has allocated it, and a pass
-     * before that reads a placeholder frame. An allocation with an extent opens the gate on an idle
-     * (mutating the actor tree during allocation is not allowed); anything else is geometry and is
-     * debounced like the rest.
-     */
+    /** The gate opens on an idle: the actor tree cannot be mutated during allocation. */
     _onAllocation(win, actor) {
         const record = this._windows.get(win);
         if (!record)
@@ -290,10 +214,6 @@ export class WindowTracking {
         }
     }
 
-    /**
-     * @param [only] - Disconnect just this object's signal; omit it to disconnect every signal the
-     *        record holds
-     */
     _unwatch(record, only) {
         if (only) {
             const index = record.signals.findIndex(([obj]) => obj === only);
@@ -308,15 +228,12 @@ export class WindowTracking {
         record.signals.length = 0;
     }
 
-    /**
-     * Connects a signal a decoration input can change on. A failure is swallowed: a window or actor
-     * torn down mid-subscription must not abort the pass that discovered it.
-     */
+    /** A failed connect is swallowed: an object torn down mid-subscription must not abort it. */
     _connect(record, obj, signal, handler) {
         try {
             record.signals.push([obj, obj.connect(signal, handler)]);
         } catch {
-            // The object is already gone; the pass that found it will not look again.
+            // A signal on a dead object cannot be tracked; the pass that finds it skips it.
         }
     }
 
@@ -324,7 +241,6 @@ export class WindowTracking {
         try {
             obj.disconnect(id);
         } catch {
-            // Object already destroyed.
         }
     }
 }

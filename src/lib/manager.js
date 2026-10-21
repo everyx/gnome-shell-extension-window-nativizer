@@ -59,8 +59,7 @@ export class Manager {
         shadowTexture.reset();
         this._classifier?.destroy();
         this._classifier = new ProcessClassifier();
-        // Created before anything can route a pass: a failure later in enable is rolled back through
-        // disable(), which tears the tracker down with everything else.
+        // Created first, so a later enable() failure rolls back through disable() and drops it.
         this._tracking = new WindowTracking({
             onPassDue: win => this._reconcileWindow(win),
             onGone: win => this._forgetWindow(win),
@@ -70,7 +69,6 @@ export class Manager {
         // A provider answer can land after a window has been decided (see probeAdwaitaLook()).
         this._classifier.setOnProcessKnown(pid => this._onProcessKnown(pid));
 
-        // Track the overview state so decorations switch into overview mode with it.
         this._inOverview = Boolean(Main.overview.visible);
         const display = getDisplay();
         this._lastFocusWindow = getFocusWindow(display);
@@ -91,7 +89,6 @@ export class Manager {
         this._connect(this._signals, display, 'notify::focus-window', () => {
             this._resetBandCursors();
 
-            // Reconcile focus shadow styles for the windows losing and gaining focus.
             const previous = this._lastFocusWindow;
             const focusWin = getFocusWindow(display);
             this._lastFocusWindow = focusWin;
@@ -106,7 +103,6 @@ export class Manager {
             this._reconcile();
         });
 
-        // Honor system animation toggle to snap shadow state instantly when animations are disabled.
         this._connect(this._signals, St.Settings.get(), 'notify::enable-animations', () => {
             this._animationsEnabled = St.Settings.get().enable_animations;
             this._reconcile();
@@ -144,8 +140,7 @@ export class Manager {
     disable() {
         this._inOverview = false;
 
-        // Isolate per-window errors so a failure on one window never aborts teardown
-        // of remaining windows or drops global signal and state disconnection.
+        // Per-window isolation: one failure must not abort teardown of the windows left.
         for (const [win] of this._tracking?.entries() ?? []) {
             try {
                 this._destroyWindow(win);
@@ -201,9 +196,6 @@ export class Manager {
         this._forceOverviewCorners = this._settings.get_boolean('force-overview-corners');
     }
 
-    /**
-     * Whether libadwaita would be using its dark palette.
-     */
     _isDark() {
         return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
     }
@@ -221,9 +213,7 @@ export class Manager {
         signalsList.length = 0;
     }
 
-    /**
-     * @param [safe=false] - Swallow connect failure (window/actor signals vary across Shell versions)
-     */
+    /** [safe] swallows a connect failure: window and actor signals vary across Shell versions. */
     _connect(list, obj, signal, handler, safe = false) {
         try {
             list.push([obj, obj.connect(signal, handler)]);
@@ -250,13 +240,7 @@ export class Manager {
         this._tracking.add(win, deco);
     }
 
-    /**
-     * Ends the manager's bookkeeping for a window, then tears down its decoration. The signals, the
-     * idle and the debounce belong to the tracking module, so releasing the window drops them; the
-     * decoration's own teardown is this method's.
-     *
-     * @returns The dropped record, for the caller that needs what it remembered
-     */
+    /** Release drops the tracking-owned signals and idle; the decoration's own teardown is ours. */
     _destroyWindow(win, options = {}) {
         const record = this._tracking?.release(win) ?? null;
         record?.decoration.destroy(options);
@@ -269,21 +253,17 @@ export class Manager {
         if (this._lastFocusWindow === win)
             this._lastFocusWindow = null;
 
-        // The remembered pid, not a fresh read: the window is on its way out, so a read here can
-        // come back empty, and an empty read must not decide whether a process still has windows.
+        // Remembered pid, not a fresh read: a closing window can read empty.
         const pid = record?.pid ?? 0;
         if (pid > 0) {
             const hasPeer = this._tracking?.entries()
                 .some(([, other]) => other.pid === pid) ?? false;
-            // Last window for pid gone -> drop process cache.
             if (!hasPeer)
                 this._classifier?.forgetProcess(pid);
         }
     }
 
-    /**
-     * A process's answer landed after nothing could be decided for its windows: decide them now.
-     */
+    /** A process answer that landed too late: decide its windows now. */
     _onProcessKnown(pid) {
         for (const [win, record] of this._tracking?.entries() ?? []) {
             if (record.pid === pid)
@@ -296,31 +276,24 @@ export class Manager {
         if (!record)
             return;
 
-        // Reads and the decision run outside the try: `getWindowActor`, `observe`'s container read and
-        // `_connect` each catch their own, and `evaluateWindowActions` touches no GObject. A throw from
-        // them is ours, and letting it escape is what makes a firing guard visible instead of silent.
+        // Reads and the decision sit outside the try; a throw there is ours and must stay visible.
         const actor = getWindowActor(win);
         this._tracking.observe(win);
         if (!actor || actor.width === 0 || actor.height === 0)
             return;
 
-        // The remembered pid can still be unusable: tracking happens on `window-created`, and an
-        // X11 client sets `_NET_WM_PID` only after the window exists. Learn it here and remember it,
-        // so a late pid is still classified and teardown keeps a value.
+        // Tracking runs on window-created, so an X11 client may set _NET_WM_PID only later.
         this._tracking.learnPid(win);
         this._classifier?.probeAdwaitaLook(record.pid);
 
         const inputs = this._decorationInputs(win);
-        // The branch itself lives in the reading module, so a spec can table it:
-        // no reading to undecorate, classification in flight to wait, otherwise apply.
+        // The branch lives in the reading module so a spec can table it: defer, undecorate, apply.
         const outcome = reconcileOutcome(inputs);
         if (outcome === 'defer')
             return;
         const actions = outcome === 'apply' ? evaluateWindowActions(inputs) : null;
 
-        // Only the decoration's own calls are guarded: they touch actors, effects and the compositor,
-        // which does throw while Mutter tears the window down. That is an expected outcome and stays
-        // silent - one line per closed window is noise, and the log audit counts lines exactly.
+        // Guard only the decoration's calls: actors do throw while Mutter tears a window down.
         try {
             if (outcome === 'undecorate') {
                 record.decoration.undecorate();
@@ -329,8 +302,7 @@ export class Manager {
                     actions,
                     inputs,
                     actor,
-                    // The pass's one reading of the surface-container rule: `observe()` resolved it
-                    // above, and the decoration consumes it rather than asking again.
+                    // Read once by observe() above, so the decoration does not ask again.
                     surfaceContainer: this._tracking.surfaceContainer(win),
                     inOverview: this._inOverview,
                     forceOverviewCorners: this._forceOverviewCorners,
@@ -382,29 +354,19 @@ export class Manager {
             record.decoration.resetBandCursor();
     }
 
-    /**
-     * Inputs for evaluateWindowActions; shared with pickAnswer().
-     */
+    /** Inputs for evaluateWindowActions, shared with pickAnswer() so one reading serves both. */
     _decorationInputs(win) {
-        // No catch: `readWindow` answers null rather than throwing (its two rect reads have their own
-        // try, the rest go through safeRead), so a throw from here is a bug of ours and must be seen.
-        // Swallowing it would make it identical to an unreadable window, which defers forever.
+        // No catch: readWindow answers null instead of throwing, so a throw here is our bug.
         return win ? this._collectDecorationInputs(win) : null;
     }
 
     _collectDecorationInputs(win) {
         const reading = readWindow(win, {classifier: this._classifier});
-        // A null reading means the rects could not be read. Keep it null so `reconcileOutcome`
-        // defers instead of tearing the decoration down; only a window that is actually gone
-        // reaches `destroy` through the actor path. A reading with `hasValidGeometry` false is a
-        // read answer of "no extent", which still routes to undecorate.
+        // Null stays null: a window we cannot read is not a window that is gone.
         if (!reading)
             return null;
 
-        // The visual floor judges the size the window was first decided at, so the latch closes on
-        // the first pass the classification landed on: a pass that still defers, or that read no
-        // extent, is not a frame to judge and must not close it. The picker's own reading comes
-        // through here too, so one answer serves both.
+        // Latch only on an apply pass: one that defers or read no extent is not a frame to judge.
         const deco = this._tracking?.get(win)?.decoration ?? null;
         if (reconcileOutcome(reading) === 'apply')
             deco?.latchInitialFrameSize(reading);
@@ -423,13 +385,7 @@ export class Manager {
         };
     }
 
-    /**
-     * What picking a window means, from one reading: the property dictionary prefs reads, the rule
-     * state the pick would store, and whether that would change the decoration.
-     *
-     * @returns Null when the window cannot be read; the state is null when there is no geometry, which
-     *          is also when no rule can be suggested
-     */
+    /** One reading's properties, suggested rule state, and whether that would change it. */
     pickAnswer(win) {
         const inputs = this._decorationInputs(win);
         if (!inputs)
@@ -448,16 +404,12 @@ export class Manager {
         };
     }
 
-    /**
-     * Read-only state inspection snapshot for a tracked window decoration.
-     * The introspection boundary for a tracked window's state in E2E tests and debugging.
-     */
+    /** Read-only state snapshot of a tracked window; the E2E and debugging boundary. */
     stateView(win) {
         const record = this._tracking?.get(win);
         if (!record)
             return null;
-        // firstFrameDone/isPendingReconcile are manager bookkeeping, so the manager adds them
-        // to the decoration's own snapshot rather than the decoration reporting them.
+        // Manager bookkeeping, added here rather than by the decoration's own snapshot.
         return {
             ...record.decoration.stateView,
             firstFrameDone: record.firstFrameDone,
@@ -465,33 +417,19 @@ export class Manager {
         };
     }
 
-    /**
-     * The live decoration for a tracked window, for read-only diagnostics. Returns the
-     * `WindowDecoration` itself (not its `stateView` snapshot), so the inspector can read the live
-     * clip internals the diagnostic reply carries.
-     */
+    /** The live decoration, not its snapshot, so the inspector can read the live clip internals. */
     decorationFor(win) {
         return this._tracking?.get(win)?.decoration ?? null;
     }
 
-    /**
-     * Number of windows currently tracked by the manager.
-     */
     get trackedCount() {
         return this._tracking?.size ?? 0;
     }
 
-    /**
-     * Whether any tracked window has a pending debounce reconcile timer.
-     */
     get hasPendingWindowReconcile() {
         return Boolean(this._tracking?.hasPending);
     }
 
-    /**
-     * Whether the window is actively managed with a rounded clip.
-     * @param win - Meta.Window
-     */
     isWindowActivelyClipped(win) {
         return Boolean(this._tracking?.get(win)?.decoration.isActivelyClipped);
     }

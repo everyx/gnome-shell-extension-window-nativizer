@@ -1,23 +1,6 @@
-/**
- * The window picker's hit test as a pure decision.
- *
- * The picker walks the live MetaWindowActor list, resolves workspaces through platform
- * adapters and reads Meta.Window properties - all GI. The rule that turns those readings
- * into a window is plain data: topmost first, skip unmapped/minimized/hidden/other-workspace/
- * non-decoratable candidates, and take the first whose frame rect contains the point. It
- * lived inside InspectorService, where the only way to exercise it was the D-Bus e2e.
- */
+/** Plain data, so it is testable without GI: the topmost candidate whose frame holds the point. */
 
-
-/**
- * Picks the topmost window whose frame rect contains the point.
- *
- * Candidates are ordered bottom-to-top, so the scan runs backwards. Null entries stand for
- * actors that went away while the list was being read and are skipped.
- *
- * @param activeWorkspace - Truthy when a workspace is current
- * @returns The window, or null when no candidate matches
- */
+/** Candidates run bottom-to-top, so the scan goes backwards; nulls are actors that went away. */
 export function pickTarget(candidates, activeWorkspace, stageX, stageY) {
     for (let i = candidates.length - 1; i >= 0; i--) {
         const candidate = candidates[i];

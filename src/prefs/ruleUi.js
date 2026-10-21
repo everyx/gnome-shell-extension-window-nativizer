@@ -13,10 +13,7 @@ export const AXIS_ICONS = {
 
 let _cssProviderRegistered = false;
 
-/**
- * Registers custom CSS styling for recently imported rows and conflict dialog headings.
- * Safe and idempotent to call multiple times.
- */
+/** Registers the prefs CSS once; safe to call repeatedly. */
 export function ensureCustomStyles() {
     if (_cssProviderRegistered)
         return;
@@ -41,9 +38,7 @@ export function ensureCustomStyles() {
     _cssProviderRegistered = true;
 }
 
-/**
- * Adds the bundled icons directory to the GTK IconTheme search path.
- */
+/** Adds the bundled icons directory to the icon theme's search path; a failure leaves it stock. */
 export function registerIconThemePath(iconTheme) {
     try {
         const moduleDir = import.meta.url.slice(0, import.meta.url.lastIndexOf('/') + 1);
@@ -53,9 +48,7 @@ export function registerIconThemePath(iconTheme) {
     }
 }
 
-/**
- * Creates a Gtk.Image displaying the symbolic icon for the specified axis.
- */
+/** The axis's bundled symbolic icon, or its stock fallback. */
 export function createAxisImage(axis, iconTheme) {
     const {bundled, fallback} = AXIS_ICONS[axis];
     return new Gtk.Image({
@@ -65,9 +58,7 @@ export function createAxisImage(axis, iconTheme) {
     });
 }
 
-/**
- * Populates a Gtk.Box with axis icons or a fallback label with clean tooltips.
- */
+/** Replaces a box's children with one icon per corrected axis, or a fallback label if none. */
 export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackLabel = null) {
     let child = box.get_first_child();
     while (child) {
@@ -98,9 +89,7 @@ export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackL
     }
 }
 
-/**
- * Builds an Adw.SwitchRow for configuring an individual rule axis.
- */
+/** An Adw.SwitchRow for one axis: on means the user reversed the automatic decision. */
 export function buildAxisSwitch(axis, corrected, onChange) {
     const name = axisName(axis);
     // Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
@@ -117,10 +106,7 @@ export function buildAxisSwitch(axis, corrected, onChange) {
     return switchRow;
 }
 
-/**
- * Configures the standard header presentation (title, subtitle, icon, tooltip, accessibility)
- * for a rule row, shared across the main preferences list and the conflict dialog.
- */
+/** The title, subtitle, icon, tooltip and a11y labels shared by the list and conflict rows. */
 export function setupRuleRowHeader(row, options) {
     const {name, sampleTitle, properties, appInfo} = options;
 
