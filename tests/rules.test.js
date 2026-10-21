@@ -626,3 +626,33 @@ describe('withRule', () => {
         expect(() => withRule({}, key, undefined)).toThrow();
     });
 });
+
+describe('kindFromWire (an absent wire field keeps the value the table declares)', () => {
+    // The picker's reply is a string dictionary, so a field it does not carry is a field the reader
+    // cannot distinguish from one that reads as false. Driving this from FINGERPRINT_FIELDS is what
+    // catches a field added later without touching the spec; the defect it was written for is
+    // `allowsResize` absent reading as false, which flips the key to the fixed-size variant with a
+    // size suffix, i.e. a rule the runtime then never matches for that window.
+    const reply = () => ({
+        wmClass: 'wechat', clientType: 'wayland', windowType: '0', hasParent: 'false',
+        allowsResize: 'true', isAttachedDialog: 'false', hasRing: 'false', hasSsd: 'false',
+        width: '800', height: '600',
+    });
+
+    it('builds the same key as a reply with every field, whichever one is missing', () => {
+        const generic = buildRuleKey('wechat');
+        const wrong = FINGERPRINT_FIELDS.filter(field => {
+            const properties = reply();
+            delete properties[field.key];
+            return buildRuleKeyFromProperties(properties) !== generic;
+        }).map(field => field.name);
+
+        expect(wrong).toEqual([]);
+    });
+
+    it('ignores replies that carry fields the table does not know', () => {
+        // The other direction of the same skew: a newer shell's extra keys must not reach the key.
+        const properties = {...reply(), nativeLikeCorners: 'true', aFieldFromTheFuture: 'x'};
+        expect(buildRuleKeyFromProperties(properties)).toBe(buildRuleKey('wechat'));
+    });
+});
