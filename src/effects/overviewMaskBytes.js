@@ -1,11 +1,4 @@
-/**
- * Pure rounded-corner A_8 mask bytes for the overview preview.
- *
- * The mask is arithmetic over a Uint8Array: fill the body, stamp four corner coverage
- * discs. It used to live in the same function as the Cogl texture upload, inside a module
- * that imports Cogl and Mtk, so the corners the user sees in the overview had no unit
- * oracle. It lives here now: this module returns the bytes, overviewMask.js uploads them.
- */
+/** A_8 corner mask bytes for the overview preview; pure, so a unit test can check the corners. */
 
 function clamp(value, low, high) {
     return Math.max(low, Math.min(high, value));
@@ -20,10 +13,6 @@ function fillRect(data, width, height, x, y, w, h, value) {
         data.fill(value, row * width + x0, row * width + x1);
 }
 
-/**
- * Writes one rounded corner: coverage of the disc centred on (cx, cy) over the
- * square that starts at (squareX, squareY) and spans `r` texture pixels.
- */
 function writeCorner(data, width, height, squareX, squareY, cx, cy, r) {
     const x0 = clamp(Math.round(squareX), 0, width);
     const y0 = clamp(Math.round(squareY), 0, height);
@@ -40,11 +29,7 @@ function writeCorner(data, width, height, squareX, squareY, cx, cy, r) {
     }
 }
 
-/**
- * Builds a rounded-corner A_8 mask matching the desktop clip's body geometry. Alpha is 255 over the
- * body, the four corner squares carry the rounded coverage, and outside it stays 255 unless `erase`
- * asks for the ring to be erased (flat windows). Null for a degenerate body.
- */
+/** 255 over the body, corners stamped; `erase` clears the ring outside. Null if degenerate. */
 export function roundedMaskBytes({
     width, height, frameX, frameY, frameW, frameH, radius, erase,
 }) {
@@ -66,7 +51,6 @@ export function roundedMaskBytes({
     if (erase)
         fillRect(data, width, height, fx, fy, fw, fh, 255);
 
-    // The body is already filled; only the four corner squares differ.
     const r = Math.min(Math.max(radius, 0), fw / 2, fh / 2);
     if (r >= 0.5) {
         writeCorner(data, width, height, fx, fy, fx + r, fy + r, r);

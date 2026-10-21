@@ -1,8 +1,4 @@
-/**
- * RoundedClipEffect: clips the window body to a rounded rect with optional 1px inner outline.
- * Dynamic geometry is computed live on each paint frame to prevent resize lag;
- * styling decisions (radius, insets, outline) are updated via setParams().
- */
+/** Clips the body to a rounded rect with optional outline; geometry is read live each paint. */
 
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
@@ -99,25 +95,15 @@ export const RoundedClipEffect = GObject.registerClass({
         };
     }
 
-    /**
-     * @param [St] - The St namespace the decoration resolved the clip target with,
-     *        handed to the fallback phase read so it identifies the surface container by the
-     *        clip's own rule rather than a global
-     * @param [options.journal] - Where the offscreen-box diagnostic writes; the decoration's own
-     */
+    /** St is what the decoration resolved the target with, so the fallback needs no global. */
     _init(St = null, options = {}) {
         super._init();
 
         this._St = St;
-        // Decisions only; geometry lives in vfunc_paint_target.
         this._insets = ZERO_INSETS;
-        // True while the clip has suspended itself because its target has no paint-able body. The
-        // next reconcile re-enables the effect (WindowDecoration.setOverviewMode); a valid frame
-        // clears this again.
+        // Suspended: the target had no paint-able body; a valid frame or a reconcile clears it.
         this._suspended = false;
-        // The target's phase strategy: the Wayland surface container carries the phase in its
-        // own transform (the default), every fallback target does not. setPhaseInTransform()
-        // flips it for the fallback; see resolveClipTarget in lib/clipTarget.js.
+        // A Wayland surface container carries the phase in its transform; a fallback does not.
         this._phaseInTransform = true;
         this._radius = undefined;
         this._outline = undefined;
@@ -125,8 +111,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._erase = undefined;
         this._clearStroke = undefined;
 
-        // Cached geometry and reusable arrays to avoid per-frame allocations and
-        // redundant GPU uniform uploads.
+        // Cached geometry and reusable arrays: no per-frame allocations, no redundant uploads.
         this._paint = {
             scale: -1,
             width: 0,
@@ -134,23 +119,14 @@ export const RoundedClipEffect = GObject.registerClass({
             frame: {x: -1, y: -1, width: -1, height: -1},
         };
         this._scale = 1.0;
-        // The reconcile pass's candidate scales for this window's FBO, with their `ceil` variants,
-        // or null when that set is incomplete. Paint only predicts and compares with it.
+        // Scales the FBO may hold, `ceil` variants included; null when incomplete, paint predicts.
         this._scaleCandidates = null;
-        // The last phase a fallback pass folded into the frame. While the monitor scan cannot
-        // complete, the clip keeps this rather than jumping to zero; the shadow keeps the same
-        // phase as its translation, so the two cuts stay on one line. ZERO_PHASE is only the
-        // start - there is no earlier correct display to preserve on the first paint.
+        // Last fallback phase folded into the frame: kept while the monitor scan fails, not zeroed.
         this._lastPhase = ZERO_PHASE;
-        // The pass plan the next paint settles from: the reference points the hold compares against
-        // and the window's own size as of the previous pass. It carries no resolved body; the paint
-        // reads the live actors and evaluates the settle on the frame clock. Null until the first pass.
+        // Pass plan (reference sizes, no body); null until the first pass, then read live at paint.
         this._bodyPlan = null;
 
-        // The offscreen-box diagnostic: the derived box and the FBO Clutter allocated are two
-        // readings of one extent, and a part between them speaks once per episode. The decoration
-        // rebuilds this effect per episode, so the episode is the object's lifetime and no reset is
-        // needed here.
+        // Two readings of one extent, one line per episode; rebuilt per episode, nothing to reset.
         this._boxDiagnostic = new Diagnostic(options.journal ?? journal, 1);
 
         this._quadVec = [0, 0];
@@ -162,14 +138,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._clearStrokeVec = [0];
     }
 
-    /**
-     * Store the decisions. Geometry is not here: it is read from the actor every paint.
-     * @param params.insets - Ring between actor and body
-     * @param params.radius - Corner radius in px
-     * @param [params.scale=1.0] - Monitor fractional/integer scale
-     * @param [params.scaleCandidates=null] - Scales the FBO may have been allocated at,
-     *        computed once per reconcile pass; null abstains
-     */
+    /** Stores the styling decisions only; geometry is re-read from the actor on every paint. */
     setParams({insets, radius, outline, erase = false, clearStroke = false, scale = 1.0, scaleCandidates = null}) {
         const changes = clipParamChanges({
             insets: this._insets,
@@ -213,19 +182,14 @@ export const RoundedClipEffect = GObject.registerClass({
             this.set_uniform_float('uClearStroke', 1, this._clearStrokeVec);
         }
 
-        // Insets changed: invalidate cached frame geometry so vfunc_paint_target
-        // is forced to recalculate and re-upload uFrame on the next paint pass.
+        // Insets moved the body: the -1 width sentinel forces the next paint to re-derive uFrame.
         if (changes.frame)
             this._paint.frame.width = -1;
 
         this.queue_repaint();
     }
 
-    /**
-     * Selects the phase strategy for the resolved clip target. Invalidates the cached frame when
-     * it flips, so the next paint recomputes uFrame from the new phase.
-     * @param phaseInTransform - True when the target's own transform carries the phase
-     */
+    /** Sets the phase strategy; a flip invalidates the cached frame so the next paint redoes it. */
     setPhaseInTransform(phaseInTransform) {
         const next = Boolean(phaseInTransform);
         if (this._phaseInTransform === next)
@@ -235,42 +199,27 @@ export const RoundedClipEffect = GObject.registerClass({
         this.queue_repaint();
     }
 
-    /**
-     * Sets the pass plan the next paint settles its body from. WindowDecoration decides no body: it
-     * hands the reference points the hold compares against, and the paint reads the actors and the
-     * window's own size live so the frame tracks what the compositor draws. The shadow gets the same
-     * plan, so both cuts derive one body.
-     */
+    /** Hands the paint the reference sizes it settles against; the shadow gets the same plan. */
     setBodyPlan(plan) {
         const next = plan ?? null;
         const previous = this._bodyPlan;
         if (previous === next)
             return;
         this._bodyPlan = next;
-        // The next paint recomputes the frame from the live reads and clipGeometryChanges sees the
-        // moved edge; only a paint that nothing else queued could miss it.
+        // Only a paint nothing else queued could miss the moved edge; the repaint is not redundant.
         this.queue_repaint();
     }
 
-    /**
-     * One handoff per decoration pass: the parameters the shader reads, then the plan its paints settle
-     * against. The order is the effect's own, so a caller cannot apply half a pass or apply it twice.
-     */
+    /** One handoff per decoration pass, in the effect's own order: params then plan, never half. */
     applyPass(pass) {
         this.setParams(clipParamsFrom(pass));
         this.setBodyPlan(pass.bodyPlan);
     }
 
-    /**
-     * Executes the offscreen clip shader using actor's live dimensions and snapped frame.
-     */
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
         const targetSize = {width: actor?.width ?? 0, height: actor?.height ?? 0};
-        // Both body reads are taken live at paint. The window actor is the authority for whether the
-        // window has a body: a surface container's allocation can read 0 while its child still
-        // paints, so a non-positive target read falls back to the window actor rather than
-        // suspending. The pair also feeds the settle below.
+        // Read live at paint: a container can read 0 while its child still paints, so fall back.
         const win = findMetaWindowCached(actor);
         const windowActorSize = readActorSize(getWindowActor(win));
         const size = isPaintableFrame(targetSize)
@@ -283,26 +232,18 @@ export const RoundedClipEffect = GObject.registerClass({
         this._suspended = false;
 
         const scale = this._scale ?? 1.0;
-        // The phase comes from the resolved target. A Wayland surface container carries it in its own
-        // transform, so the phase stays out of the FBO's box rounding. On the fallback it lives in a
-        // child transform, so the clip folds the window's subpixel offset into its geometry, matching
-        // the shadow's translation. Both derive from `clipFrameFor`.
+        // Phase comes from the resolved target: in-transform on Wayland, into geometry otherwise.
         const phaseWin = this._phaseInTransform ? null : win;
-        // An unknown fallback phase (unreadable monitor geometry) keeps the last good frame; the
-        // shadow takes the same last good phase, so the two cuts keep agreeing.
+        // Unreadable fallback phase: keep the last good one, as the shadow does, so cuts agree.
         const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin, this._St);
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
-        // The frame edge is the body this paint settles from the live reads and the pass plan. A
-        // null plan (before the first pass) uses the live size, a no-op in health. This is the frame
-        // clock: between the manager's debounced passes the cut follows the actor the compositor
-        // is drawing now.
+        // Body settles live each paint from the plan, so the cut tracks the actor between passes.
         const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
             this._bodyPlan).body ?? size;
         const frame = clipFrameForTarget(bodySize, this._insets, scale,
             {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase, this._St);
-        // Backstop: if the derived body is not paint-able even for a positive actor (a future
-        // geometry change, not today's fallback-to-whole-actor), suspend rather than erase.
+        // Backstop: a body still degenerate after all that suspends rather than erasing the window.
         if (!isPaintableFrame(frame)) {
             this._suspend();
             return;
@@ -315,20 +256,14 @@ export const RoundedClipEffect = GObject.registerClass({
             this._paint.scale = changes.scale;
         }
 
-        // Derived from the actor size at the live scale, so it moves with either, and never
-        // cached: it is what makes one shader unit one logical pixel, and a stale box is what
-        // drew the corner arc off the snapped edge.
+        // Never cached: it makes one unit one logical pixel; a stale box drew the arc off edge.
         const target = this._readTargetSize();
-        // The extent and the origin are one position inside the FBO and share its scale: the extent
-        // is the size Clutter allocated (it wins over the derivation), the origin is derived on
-        // that grid. The scale is the candidate the reconcile pass's read picked, since unpatched
-        // mutter allocates by `ceilf (resource_scale)`.
+        // Extent is what Clutter allocated (it beats the derivation); the origin is derived on it.
         const box = offscreenPaintBox(size, scale, target, this._scaleCandidates);
 
         this._checkOffscreenBox(box.predicted, target);
         const extent = box.extent;
-        // The last written pair, not the actor size alone: an FBO reallocated at another scale
-        // moves the origin while the read extent stays put, and only the pair sees that.
+        // Compare the last written pair, not the actor size: a reallocated FBO moves the origin.
         if (changes.size !== undefined || changes.scale !== undefined ||
             offscreenUniformsStale(this._quadVec, this._offsetVec, box)) {
             this._quadVec[0] = extent.width;
@@ -359,12 +294,7 @@ export const RoundedClipEffect = GObject.registerClass({
         super.vfunc_paint_target(node, paintContext);
     }
 
-    /**
-     * The size of the offscreen FBO Clutter allocated, in device px, or null when the read is
-     * unavailable or not positive. `get_target_size` is defined for `ClutterOffscreenEffect`
-     * implementations inside `paint_target`, which is where the clip asks it; `Shell.GLSLEffect`
-     * is one of those on GNOME 50.
-     */
+    /** The FBO extent Clutter allocated, or null when unreadable; `get_target_size` needs paint. */
     _readTargetSize() {
         const read = this.get_target_size?.();
         if (!read?.[0])
@@ -376,44 +306,24 @@ export const RoundedClipEffect = GObject.registerClass({
         return {width, height};
     }
 
-    /**
-     * One paint's offscreen-box reconciliation: the derived box and the FBO Clutter allocated are
-     * two readings of one extent, and the predicate allows the one device pixel a subpixel phase
-     * may move an edge. One violation speaks, because the box is a pure function of this paint's
-     * own size and scale.
-     */
     _checkOffscreenBox(derived, target) {
         this._boxDiagnostic.check(offscreenBoxWarning(derived, target));
     }
 
-    /**
-     * Clears a suspend the reconcile has just overridden. `WindowDecoration.setOverviewMode`
-     * re-enables the clip on every desktop reconcile, possibly before the deferred disable a
-     * degenerate paint queued has run; clearing the flag here keeps that idle from disabling a
-     * target the reconcile judged paint-able. It is state, not a latch: a target still degenerate
-     * on its next paint suspends again.
-     */
+    /** Clears a suspend the reconcile overrode; a still-degenerate target suspends again later. */
     resume() {
         this._suspended = false;
     }
 
-    /**
-     * Suspends the clip after its target turned degenerate. Disabling the effect is what makes the
-     * actor paint directly instead of through an offscreen target that would draw nothing; the
-     * manager's next reconcile re-enables it (`WindowDecoration.setOverviewMode`).
-     */
+    /** Disables the effect so the actor paints directly, not via an offscreen target drawing 0. */
     _suspend() {
-        // Only the transition schedules a disable. A healthy window never reaches here, and a
-        // still-degenerate target must not queue a disable per paint. The flag is state, not a
-        // latch: `resume()` and a valid paint both clear it, so a later paint can suspend again.
+        // Only the transition schedules a disable: a degenerate target must not queue per paint.
         if (this._suspended)
             return;
         this._suspended = true;
-        // Disabling a Clutter.ActorMeta during its actor's own paint trips Clutter's
-        // `!CLUTTER_ACTOR_IN_PAINT` check, so the suspend lands on the idle that follows it.
+        // Disabling during the actor's own paint trips a Clutter check, so it lands on an idle.
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            // A valid frame can have landed between the paint that queued this and the idle; only
-            // disable while the target is still degenerate.
+            // A valid frame may have landed since this idle queued: disable only while suspended.
             if (this._suspended)
                 this.set_enabled(false);
             return GLib.SOURCE_REMOVE;

@@ -1,15 +1,9 @@
 import {findMetaWindow, resolveWindowMonitorScale, resolveWindowScaleCandidates} from './window.js';
 
-/**
- * Returns the active Meta.Display instance, or null.
- */
 export function getDisplay(customDisplay = null) {
     return customDisplay ?? globalThis.global?.display ?? null;
 }
 
-/**
- * Returns the currently focused Meta.Window, or null.
- */
 export function getFocusWindow(display = null) {
     try {
         return (display ?? getDisplay())?.focus_window ?? null;
@@ -18,16 +12,10 @@ export function getFocusWindow(display = null) {
     }
 }
 
-/**
- * Returns the compositor window_group container, or null.
- */
 export function getWindowGroup(customGroup = null) {
     return customGroup ?? globalThis.global?.window_group ?? null;
 }
 
-/**
- * Returns Meta.MonitorManager from the compositor backend or display, or null.
- */
 export function getMonitorManager() {
     try {
         return globalThis.global?.backend?.get_monitor_manager?.() ??
@@ -37,11 +25,7 @@ export function getMonitorManager() {
     }
 }
 
-/**
- * Returns the count of connected monitors. The historical default is 0, which callers that only
- * want a loop bound keep; a caller that must tell "no monitors" from "could not read" passes
- * `strict` and gets null. See `resolveHighestScaleMonitorIndex`.
- */
+/** Default 0 is the historical loop bound; `strict` tells "no monitors" from "could not read". */
 export function getMonitorCount({strict = false} = {}) {
     const display = getDisplay();
     try {
@@ -51,16 +35,12 @@ export function getMonitorCount({strict = false} = {}) {
                 return count;
         }
     } catch {
-        // Display went away.
+        // No monitor manager on this shell; the caller decides what to do without a count.
     }
     return strict ? null : 0;
 }
 
-/**
- * Reads fractional or integer monitor scale from Meta.Display. The historical default is 1.0 (an
- * integer scale); a caller that must not fold an unreadable scale into 1.0 passes `strict` and gets
- * null. Same shape as `getWindowFrameRect`'s `throwOnError`: one read, two failure modes.
- */
+/** Default 1.0 hides an unreadable scale; `strict` returns null so a caller need not fold it in. */
 export function getMonitorScale(monitorIndex, {strict = false} = {}) {
     const display = getDisplay();
     try {
@@ -71,14 +51,11 @@ export function getMonitorScale(monitorIndex, {strict = false} = {}) {
                 return scale;
         }
     } catch {
-        // Display or index went away.
+        // Scale is unreadable here, and a guessed scale is worse than none.
     }
     return strict ? null : 1.0;
 }
 
-/**
- * Reads monitor geometry rectangle {x, y, width, height} from Meta.Display.
- */
 export function getMonitorGeometry(monitorIndex) {
     const display = getDisplay();
     try {
@@ -91,13 +68,7 @@ export function getMonitorGeometry(monitorIndex) {
     return null;
 }
 
-/**
- * The physical monitor scale that sizes a window's offscreen rendering, for a window actor or
- * Meta.Window, or null when unreadable. It is the highest-scale monitor the window's *frame*
- * intersects, the rule Mutter's `real_resource_scale` applies to a straddling actor, not the main
- * monitor `get_monitor()` reports. It drives every scale consumer, so another monitor's scale cuts
- * the window short.
- */
+/** Highest scale the frame intersects, Mutter's real_resource_scale rule, not get_monitor(). */
 export function getPhysicalMonitorScale(actorOrWin) {
     if (!actorOrWin)
         return null;
@@ -106,11 +77,7 @@ export function getPhysicalMonitorScale(actorOrWin) {
     return win ? resolveWindowMonitorScale(win) : null;
 }
 
-/**
- * The scales of every monitor a window's frame intersects, or null when that read cannot be
- * completed. The reconcile pass hands this to the clip so the FBO's scale can be picked from the
- * monitors the engine may have sized it by, rather than by re-reading the display per paint.
- */
+/** The candidate scales the clip picks the FBO's scale from, so no paint re-reads the display. */
 export function getWindowScaleCandidates(actorOrWin) {
     if (!actorOrWin)
         return null;
@@ -119,12 +86,7 @@ export function getWindowScaleCandidates(actorOrWin) {
     return win ? resolveWindowScaleCandidates(win) : null;
 }
 
-/**
- * Resolves a window's monitor geometry safely bounding the index.
- * @param display - Meta.Display
- * @param win - Meta.Window
- * @returns Monitor rect, or null
- */
+/** Bounds win.get_monitor() against the count: a stale index outruns the list after an unplug. */
 export function resolveMonitorBounds(display, win) {
     const disp = display ?? getDisplay();
     try {
@@ -133,17 +95,12 @@ export function resolveMonitorBounds(display, win) {
         if (monitor >= 0 && monitor < nMonitors && typeof disp?.get_monitor_geometry === 'function')
             return disp.get_monitor_geometry(monitor);
     } catch {
-        // Display or index went stale.
+        // Geometry is unreadable here; the caller falls back to the frame rect.
     }
     return null;
 }
 
-/**
- * Retrieves the tab list of windows from Meta.Display.
- * Defaults to Meta.TabList.NORMAL_ALL (3).
- * @param [type=3] - Meta.TabList
- * @param [workspace=null] - Meta.Workspace or null
- */
+/** 3 is Meta.TabList.NORMAL_ALL; the bare number is that enum's value, not an arbitrary pick. */
 export function getTabList(type = 3, workspace = null) {
     const display = getDisplay();
     try {
@@ -153,51 +110,34 @@ export function getTabList(type = 3, workspace = null) {
     }
 }
 
-/**
- * Focuses a window via Meta.Display.
- * @param win - Meta.Window
- */
 export function focusWindow(win, timestamp = 0, customDisplay = null) {
     try {
         getDisplay(customDisplay)?.focus_window?.(win, timestamp);
     } catch {
-        // Window already gone.
+        // Focus is best effort: the window may be gone by the time the call lands.
     }
 }
 
-/**
- * Repositions an actor above a sibling actor in the compositor window group.
- * @param child - Clutter.Actor
- * @param sibling - Clutter.Actor
- */
 export function setActorAboveSibling(child, sibling, customGroup = null) {
     if (!child || !sibling)
         return;
     try {
         getWindowGroup(customGroup)?.set_child_above_sibling?.(child, sibling);
     } catch {
-        // Window group or actors deallocated.
+        // Restacking is best effort; a missing sibling is not worth a failed pass.
     }
 }
 
-/**
- * Repositions an actor below a sibling actor in the compositor window group.
- * @param child - Clutter.Actor
- * @param sibling - Clutter.Actor
- */
 export function setActorBelowSibling(child, sibling, customGroup = null) {
     if (!child || !sibling)
         return;
     try {
         getWindowGroup(customGroup)?.set_child_below_sibling?.(child, sibling);
     } catch {
-        // Window group or actors deallocated.
+        // Restacking is best effort; a missing sibling is not worth a failed pass.
     }
 }
 
-/**
- * Returns all window actors currently tracked by the shell.
- */
 export function getWindowActors() {
     try {
         return globalThis.global?.get_window_actors?.() ?? [];
@@ -206,9 +146,6 @@ export function getWindowActors() {
     }
 }
 
-/**
- * Returns the active workspace index.
- */
 export function getActiveWorkspaceIndex() {
     try {
         return globalThis.global?.workspace_manager?.get_active_workspace_index?.() ?? 0;
@@ -217,13 +154,7 @@ export function getActiveWorkspaceIndex() {
     }
 }
 
-/**
- * Returns the number of workspaces, or 1 when the read is unavailable.
- *
- * One is the answer that never over-states what a window can have: the count is used to size the
- * set of overview previews a window on all workspaces must have, and an unknown count must not
- * turn into a promise of more cards than exist.
- */
+/** 1 never over-states: the count sizes how many overview cards a window gets. */
 export function getWorkspaceCount() {
     try {
         const count = globalThis.global?.workspace_manager?.n_workspaces ?? 1;
@@ -233,9 +164,6 @@ export function getWorkspaceCount() {
     }
 }
 
-/**
- * Returns the currently active workspace object, or null.
- */
 export function getActiveWorkspace() {
     try {
         return globalThis.global?.workspace_manager?.get_active_workspace?.() ?? null;
@@ -244,16 +172,10 @@ export function getActiveWorkspace() {
     }
 }
 
-/**
- * Returns the global Clutter.Stage instance, or null.
- */
 export function getStage() {
     return globalThis.global?.stage ?? null;
 }
 
-/**
- * Returns stage dimensions {width, height}.
- */
 export function getStageDimensions() {
     try {
         const stage = getStage();

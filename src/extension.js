@@ -1,7 +1,3 @@
-/**
- * Window Nativizer extension entry point.
- */
-
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Manager} from './lib/manager.js';
@@ -19,7 +15,7 @@ export default class WindowNativizerExtension extends Extension {
             manager.enable();
             this._inspector = new InspectorService(manager);
         } catch (e) {
-            // Roll back partial enable so idempotency guard does not wedge; surface original error.
+            // Roll back a partial enable, or the idempotency guard wedges; the original error still surfaces.
             try {
                 this.disable();
             } catch (teardownError) {
@@ -30,8 +26,7 @@ export default class WindowNativizerExtension extends Extension {
     }
 
     disable() {
-        // Both references are dropped however teardown ends: `enable()` guards on `_manager`, so a
-        // half-finished disable that threw would turn every later enable into a silent no-op.
+        // Drop both refs however teardown ends: enable() guards on _manager, so a partial disable mutes it.
         try {
             this._inspector?.destroy();
         } finally {

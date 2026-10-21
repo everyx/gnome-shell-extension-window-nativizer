@@ -1,7 +1,4 @@
-/**
- * The picker's own geometry: how much room the highlight border takes, the box it outlines, the
- * concentric corner it draws, and the radius the highlighted window is expected to show.
- */
+/** The picker's own geometry: border width, outlined box, concentric corner, expected radius. */
 
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
@@ -9,12 +6,7 @@ import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 // Picker highlight metrics match upstream Looking Glass (2px border) and screenshot selector fill.
 export {HIGHLIGHT_BORDER_WIDTH};
 
-/**
- * Expected visual corner radius for an inspected window.
- * Maximized, tiled, fullscreen, and unclipped non-Adwaita/SSD windows have square (0px) corners.
- *
- * @returns Visual corner radius in pixels (0 for square corners)
- */
+/** Expected corner radius; maximized, tiled, fullscreen, unclipped non-Adwaita/SSD are square. */
 export function expectedWindowRadius({
     isFullscreen = false,
     isMaximized = false,
@@ -36,11 +28,7 @@ export function expectedWindowRadius({
     return 0;
 }
 
-/**
- * Outset bounding box for the inspector highlight border around the window.
- * Outsetting prevents St CSS inward border drawing from eroding into the client window content.
- *
- */
+/** Outset box for the border: St draws borders inward, which would erode client content. */
 export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
     if (!frame)
         return {x: 0, y: 0, width: 0, height: 0};
@@ -52,10 +40,7 @@ export function highlightBoundingBox(frame, borderWidth = HIGHLIGHT_BORDER_WIDTH
     };
 }
 
-/**
- * Concentric outer arc for an outset border; square windows stay 0px.
- *
- */
+/** Concentric outer arc for an outset border; a square window stays 0. */
 export function highlightOuterRadius(innerRadius, borderWidth = HIGHLIGHT_BORDER_WIDTH) {
     return innerRadius > 0 ? innerRadius + borderWidth : 0;
 }

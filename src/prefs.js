@@ -47,38 +47,24 @@ import {
     ensureCustomStyles,
 } from './prefs/ruleUi.js';
 
-/**
- * The sentence for a refused pick. The reasons themselves are in `lib/pickAnswer.js`; the words are
- * here because this process is the one that binds the gettext domain, and as thunks because the
- * module loads before that binding.
- */
+/** Thunks, not strings: this module loads before the process binds the gettext domain. */
 const PICK_REFUSALS = {
     [PickRefusal.UNIDENTIFIABLE]: () => _('No correction added: this window could not be identified'),
     [PickRefusal.NEVER_DECORATED]: () => neverDecorated(),
-    // Written as an escape so the source carries no literal dash while the msgid stays byte-identical:
-    // that string is the key its translation is filed under, and rewriting it drops the translation.
+    // Written as an escape: the msgid keys a translation, so a literal dash would drop it.
     [PickRefusal.NO_SUGGESTION]: () =>
         _('No correction added: the extension did not answer \u2014 restart the session and pick again'),
     [PickRefusal.NO_EFFECT]: () =>
         _('No correction added: it would have no effect on a window of this kind'),
 };
 
-/**
- * @param refusal - A `PickRefusal` code
- * @returns The sentence to show, never empty
- */
+/** A reason this build does not know is still a kind nothing acts on: the fallback says so. */
 function pickRefusalText(refusal) {
-    // A reason this build does not know is still a kind nothing acts on, which is what the fallback
-    // sentence says; inventing a new one would need a catalogue entry nobody can review.
     return (PICK_REFUSALS[refusal] ?? neverDecorated)();
 }
 
-/**
- * @param [cancellable] - Cancelled when the preferences window closes.
- */
 function inspectWindow(callback, cancellable = null) {
-    // The method now takes a debug boolean; `false` is the quiet interactive pick. The extension
-    // owns the field rules, so prefs sends nothing else.
+    // The method takes a debug boolean; `false` is the quiet interactive pick the extension wants.
     Gio.DBus.session.call(
         INSPECTOR_DBUS_NAME,
         INSPECTOR_DBUS_PATH,
@@ -108,11 +94,6 @@ function showError(parentWindow, heading, body) {
     dialog.present(parentWindow);
 }
 
-/**
- * Immutable ambient preferences context passed across UI builders.
- */
-
-
 function _prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
     const rows = [];
     for (const [key, entry] of Object.entries(entries ?? {})) {
@@ -133,8 +114,7 @@ function _prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
         });
     }
 
-    // Tier 0: Recently imported items pinned to top
-    // Tier 1: Existing items
+    // Tier 0: recently imported items pinned to top, tier 1: everything else.
     rows.sort((a, b) => {
         const tierA = a.isRecentlyImported ? 0 : 1;
         const tierB = b.isRecentlyImported ? 0 : 1;
@@ -187,8 +167,7 @@ function _buildRuleRow(rowData, ctx, onRefresh) {
     const iconBox = new Gtk.Box({spacing: 8, valign: Gtk.Align.CENTER});
     populateAxisIcons(iconBox, corrected, caps, iconTheme);
 
-    // ExpanderRow prepends suffixes to keep its arrow last, so add in
-    // reverse visual order: [icons] … [delete][chevron].
+    // ExpanderRow prepends suffixes to keep its arrow last, so add in reverse visual order.
     row.add_suffix(deleteButton);
     row.add_suffix(iconBox);
 
@@ -248,7 +227,6 @@ function _buildRuleRow(rowData, ctx, onRefresh) {
 
 function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
     const {window, settings, installedApps, pickCancellable, isWindowAlive} = ctx;
-    // Bound here rather than threaded through the call site below.
     const pickWindow = callback => inspectWindow(callback, pickCancellable);
     pickButton.connect('clicked', () => {
         window.set_visible(false);
@@ -269,12 +247,11 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
                 return;
             }
 
-            // Empty = cancelled pick or extension disabling - not an error.
+            // Empty means a cancelled pick or the extension disabling, not an error.
             if (!props || Object.keys(props).length === 0)
                 return;
 
-            // What this pick is worth is decided in one place: the rule it would store, or the reason
-            // it stores none. Only the words for each reason belong to this process.
+            // One place decides what a pick is worth; only the words for each reason live here.
             const verdict = pickVerdict(props);
             if (verdict.refusal) {
                 window.add_toast(new Adw.Toast({title: pickRefusalText(verdict.refusal)}));
@@ -290,8 +267,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             setWindowRule(settings, ruleKey, state,
                 typeof props.windowTitle === 'string' ? props.windowTitle : '');
 
-            // Read-back is a persistence check, not redundancy: sanitize inside
-            // setWindowRule may drop what it staged.
+            // Read-back is a persistence check: sanitize inside setWindowRule may drop the entry.
             if (!Object.prototype.hasOwnProperty.call(readEntries(settings), ruleKey)) {
                 window.add_toast(new Adw.Toast({
                     title: _('No correction added: it could not be saved'),
@@ -363,7 +339,7 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
         try {
             text = clipboard.read_text_finish(res);
         } catch {
-            // Read failed or cancelled
+            // Read failed or cancelled.
         }
 
         if (!text || !text.trim()) {
@@ -573,8 +549,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         registerIconThemePath(iconTheme);
 
-        // Picker hides prefs window; reply may arrive after prefs closed - guard UI touches, and
-        // cancel the call itself so its closure stops holding this window's widgets.
+        // The reply may arrive after close: guard UI touches, and cancel to free the widgets.
         let windowAlive = true;
         const pickCancellable = new Gio.Cancellable();
         window.connect('destroy', () => {

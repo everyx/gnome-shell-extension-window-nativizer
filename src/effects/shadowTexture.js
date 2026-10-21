@@ -1,7 +1,4 @@
-/**
- * Shadow baking: one baked buffer per style, sliced into 8 rects.
- * The pure geometry it bakes and slices lives in shadowGeometry.js.
- */
+/** One baked buffer per style, shared by every window wearing it; geometry: shadowGeometry.js. */
 
 import Cogl from 'gi://Cogl';
 
@@ -20,14 +17,9 @@ const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
 let destroyed = false; // sealed after destroy()
-// The bake-failure diagnostic: the retry loop must not repeat the line every paint, and a bake that
-// allocates re-arms it so a later shortage still speaks. It is session-level because what it reports
-// is: the cache is keyed by style and shared by every window wearing it, so no window's journal.
+// One line per episode, re-armed by a good bake; session-level because the cache is shared.
 const bakeDiagnostic = new Diagnostic(journal, 1);
 
-/**
- * Clears baked cache and seals it until reset().
- */
 export function destroy() {
     destroyed = true;
     pipelines.clear();
@@ -38,9 +30,7 @@ export function reset() {
     bakeDiagnostic.reset();
 }
 
-/**
- * The colour a style's layers are drawn in: the first one that names a colour, else black.
- */
+/** The colour a style's layers are drawn in: the first that names one, else black. */
 function styleColor(shadows) {
     return shadows.find(s => s.color)?.color ?? [0, 0, 0];
 }
@@ -51,9 +41,7 @@ export function styleKey(radius, shadows) {
     return `${radius}|${layers.join(';')}`;
 }
 
-/**
- * @param context - exists only inside paint
- */
+/** @param context - a Cogl context, and it exists only inside paint. */
 function shadowPipeline(context, radius, shadows) {
     if (destroyed)
         return null;
@@ -69,9 +57,7 @@ function shadowPipeline(context, radius, shadows) {
     return pipeline;
 }
 
-/**
- * Per-window pipeline sharing the baked texture (for cross-fade opacity).
- */
+/** Per-window pipeline over the shared baked texture, so each cross-fades its own opacity. */
 export function shadowPipelineFor(context, radius, shadows) {
     const source = shadowPipeline(context, radius, shadows);
     if (!source)
@@ -82,9 +68,6 @@ export function shadowPipelineFor(context, radius, shadows) {
     return pipeline;
 }
 
-/**
- * @param opacity - 0..1
- */
 export function setPipelineOpacity(pipeline, opacity) {
     const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
     pipeline.set_color(new Cogl.Color({red: 255, green: 255, blue: 255, alpha}));

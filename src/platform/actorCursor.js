@@ -1,12 +1,8 @@
-/**
- * Resolves per-actor pointer cursors on GNOME 50+ (Clutter.Actor.set_cursor_type).
- */
+// Per-actor pointer cursors on GNOME 50+, where Clutter gained Actor.set_cursor_type.
 
 import {PREFIX} from './journal.js';
 
-/**
- * Recognized cursor shapes for window resize bands and inspector picker.
- */
+/** Resize directions plus the picker crosshair, in band terms rather than Clutter enum names. */
 export const CursorShape = Object.freeze({
     DEFAULT: 'default',
     CROSSHAIR: 'crosshair',
@@ -41,10 +37,7 @@ function clutterNamespace() {
     }
 }
 
-/**
- * A shape this module does not know is a programming error, not a line that cannot do it: the two are
- * told apart by where they end up - this throws, an absent enum returns null.
- */
+/** An unknown shape throws, an absent Clutter enum returns null: the two failures stay apart. */
 export function cursorTypeFor(shape, types = clutterNamespace()?.CursorType ?? null) {
     const member = ENUM_MEMBER[shape];
     if (!member)
@@ -54,10 +47,7 @@ export function cursorTypeFor(shape, types = clutterNamespace()?.CursorType ?? n
     return types[member] ?? null;
 }
 
-/**
- * Sets an actor's pointer cursor. A line with no per-actor cursor leaves the pointer alone rather
- * than throwing: the band still resizes, it just does not say so with the cursor.
- */
+/** An actor with no per-actor cursor leaves the pointer alone: the band still resizes, silently. */
 export function setActorCursor(actor, shape, types = undefined) {
     const cursorType = cursorTypeFor(shape, types);
     if (cursorType === null || typeof actor?.set_cursor_type !== 'function')

@@ -1,17 +1,9 @@
-/**
- * The body plan: the settle's state for one window, owned here, and the live reads both cuts settle
- * from. The rules themselves stay pure in `clipParams.js`; this owns their clock, so neither the
- * decoration nor the two effects carry the reference points by hand.
- */
+/** One window's settle state and the live reads both cuts settle from; clipParams stays pure. */
 
 import {BODY_SETTLE_TOLERANCE, isPaintableFrame, settleClipBody} from './clipParams.js';
 import {getWindowBufferRect, getWindowFrameRect} from '../platform/window.js';
 
-/**
- * A live actor's size, or null when the actor is gone or its read throws. The body authority is read
- * from actors we do not own (a surface container can be replaced mid-flight), so a torn-down read is
- * "unknown" and leaves the settle to fall back rather than aborting the paint.
- */
+/** A live actor's size, or null when gone or the read throws: an unowned actor can vanish. */
 export function readActorSize(actor) {
     if (!actor)
         return null;
@@ -22,13 +14,7 @@ export function readActorSize(actor) {
     }
 }
 
-/**
- * The window's own size, read live: its frame rect, else its buffer rect. It separates a resize from a
- * body that moved on its own, so both cuts read it on their own frame; only its previous value travels
- * in the plan.
- *
- * The buffer is read only when the frame cannot answer: this runs on the paint clock.
- */
+/** The window's own size, frame rect else buffer rect; runs on the paint clock, no extra reads. */
 export function readWindowSize(win) {
     const frame = getWindowFrameRect(win);
     if (isPaintableFrame(frame))
@@ -39,9 +25,7 @@ export function readWindowSize(win) {
     return null;
 }
 
-/**
- * The three reads one paint or relayout settles from, taken live.
- */
+/** The three reads one paint or relayout settles from, taken live. */
 export function readBodySizes(clipTarget, windowActor, win) {
     return {
         targetSize: readActorSize(clipTarget),
@@ -50,11 +34,7 @@ export function readBodySizes(clipTarget, windowActor, win) {
     };
 }
 
-/**
- * One window's settle: the last settled body, the read it came from, the window's own size then, and
- * the count that bounds a hold. A decoration makes one and advances it once per pass; the paints read
- * the snapshot it hands out.
- */
+/** One window's settle: last settled body, its authority and window size, and the hold count. */
 export class BodyPlan {
     constructor({tolerance = BODY_SETTLE_TOLERANCE} = {}) {
         this._tolerance = tolerance;
@@ -64,10 +44,7 @@ export class BodyPlan {
         this._strikes = 0;
     }
 
-    /**
-     * The reference points a paint settles against, as one value. Fresh per pass, because a plan that
-     * moved under a paint would let the cut and the cast disagree about which frame they are on.
-     */
+    /** Fresh per pass: a plan moving under a paint would let the cut and the cast disagree. */
     get settle() {
         return {
             previousBody: this._body,
@@ -78,12 +55,7 @@ export class BodyPlan {
         };
     }
 
-    /**
-     * Drops the reference points, which a decoration episode boundary must: the reads they were
-     * compared against belonged to the episode that ended, so keeping them lets the next pass hold - and
-     * therefore draw - a body from before the gap. The ring hold drops its buffer witness for the same
-     * reason.
-     */
+    /** An episode boundary must drop these, or the next pass draws a body from before the gap. */
     reset() {
         this._body = null;
         this._authority = null;
@@ -91,12 +63,7 @@ export class BodyPlan {
         this._strikes = 0;
     }
 
-    /**
-     * Advances one pass. The actor sizes come from the resolved target and the window actor; the
-     * window's own size comes from the pass's reading, since the pass is the clock that read it.
-     *
-     * @returns This pass's settle: the body to act on, its authority, and whether it is held
-     */
+    /** Advances one pass; window size comes from the pass, which is the clock that read it. */
     next({targetSize = null, windowActorSize = null, windowSize = null} = {}) {
         const settled = settleClipBody(targetSize, windowActorSize,
             this._body, this._authority, windowSize, this._windowSize, this._tolerance, this._strikes);

@@ -1,14 +1,6 @@
-/**
- * Uniform location cache resolution.
- *
- * `get_uniform_location` returns -1 until shader compilation on first paint.
- * Misses (-1) are never cached to avoid freezing uniforms.
- */
+/** get_uniform_location answers -1 until the first paint, so a miss must never be cached. */
 
-/**
- * @param cache - name -> location; only non-negative hits
- * @returns a valid location, or -1 when the uniform is still unresolved
- */
+/** @returns a valid location, or -1 while the uniform is still unresolved */
 export function resolveUniformLocation(cache, name, getLocation) {
     let loc = cache.get(name);
     if (loc === undefined || loc === -1) {

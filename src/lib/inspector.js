@@ -50,7 +50,7 @@ import {
     resolveWindowIdentity,
 } from './window.js';
 
-// Highlight visual styling derived from upstream Shell pickers.
+// Highlight styling mirrors upstream Shell's pickers.
 
 function highlightStyle(outerRadius) {
     return `border: ${HIGHLIGHT_BORDER_WIDTH}px solid -st-accent-color; ` +
@@ -75,13 +75,11 @@ export class InspectorService {
         this._overlay = null;
         this._highlight = null;
         this._pendingInvocation = null;
-        // Whether the pick in flight was asked for diagnostics; read once when it is answered.
         this._pendingDiagnostics = false;
     }
 
     destroy() {
-        // The picker teardown must not be able to skip the D-Bus teardown below: `_cleanupPickUI`
-        // touches actors that may already be gone at shell shutdown.
+        // Guarded: `_cleanupPickUI` touches actors that may already be gone at shell shutdown.
         try {
             this._cancelInteractivePick();
         } catch (e) {
@@ -95,25 +93,17 @@ export class InspectorService {
 
         if (this._dbusImpl) {
             this._dbusImpl.unexport();
-            // `wrapJSObject`'s three handlers close over this service, forming a cycle GJS cannot
-            // collect: `unexport()` alone leaves the implementation, the service and the manager
-            // alive forever, one set per enable/disable cycle. Disconnecting them breaks it.
+            // `wrapJSObject`'s handlers form a cycle GJS never collects: disconnect them too.
             GObject.signal_handlers_destroy(this._dbusImpl);
             this._dbusImpl = null;
         }
     }
 
-    /**
-     * D-Bus method PickWindow (GJS name `PickWindowAsync`). The required boolean is the whole
-     * compatibility boundary: `false` is the quiet interactive pick, `true` adds read-only
-     * diagnostics. There is no non-interactive path - diagnostics ride the same user gesture, which
-     * is also the authorisation to read that state.
-     */
+    /** `true` adds read-only diagnostics to the same gesture; there is no non-interactive path. */
     PickWindowAsync(params, invocation) {
         const {valid, diagnostics} = parseDebugFlag(params);
         if (!valid) {
-            // The method requires its boolean. A caller that was not updated fails here rather than
-            // silently getting the quiet interactive pick.
+            // A caller that was not updated fails here rather than silently getting the quiet pick.
             invocation.return_error_literal(
                 Gio.IOErrorEnum,
                 Gio.IOErrorEnum.INVALID_ARGUMENT,
@@ -136,8 +126,7 @@ export class InspectorService {
         try {
             this._startInteractivePick();
         } catch (e) {
-            // The picker could not be put on screen: tear down whatever it did build and answer,
-            // or the invocation stays pending and every later pick is refused as BUSY.
+            // Answer even on failure, or the invocation stays pending and every later pick is BUSY.
             journal.failure(e, 'Failed to start the window picker');
             this._cancelInteractivePick();
         }
@@ -145,12 +134,11 @@ export class InspectorService {
 
     _findTargetWindow(stageX, stageY) {
         const actors = getWindowActors();
-        // Hoisted out of the loop: the active workspace cannot change while one hit test enumerates windows.
+        // Hoisted: the active workspace cannot change during one hit test.
         const activeWorkspace = getActiveWorkspace();
         const candidates = [];
         for (const winActor of actors) {
-            // A window torn down mid-scan must not abort the hit test - or escape a Clutter
-            // handler and leave the D-Bus call unanswered: skip it and keep looking.
+            // A torn-down window must not escape a Clutter handler and leave the call unanswered.
             try {
                 const win = getWindowFromActor(winActor);
                 let onAllWorkspaces = false;
@@ -172,23 +160,15 @@ export class InspectorService {
                     frame: getWindowFrameRect(win),
                 });
             } catch {
-                // Deallocated between the actor-list snapshot and these reads.
                 candidates.push(null);
             }
         }
         return pickTarget(candidates, activeWorkspace, stageX, stageY);
     }
 
-    /**
-     * Builds the pick reply for a window. Public fields are always present; diagnostics-only
-     * fields are added only when the caller asked for them, which is the whole point of the
-     * debug argument. Nothing here is printed and no journal line is written in either mode.
-     *
-     */
+    /** Diagnostics fields are added only when asked; nothing here is printed or journaled. */
     _buildReply(win, diagnostics) {
-        // One answer covers the dictionary and the rule state the pick would store. Without a manager
-        // - a spec, or a session whose manager is gone - the dictionary alone is still a truthful
-        // reply, and the preferences window refuses a pick it cannot judge rather than guessing.
+        // With no manager the dictionary is still truthful; prefs refuses a pick it cannot judge.
         const answer = this._manager?.pickAnswer?.(win) ?? null;
         const properties = {
             ...answer?.properties ?? extractWindowProperties(win, resolveWindowIdentity(win)),
@@ -197,9 +177,7 @@ export class InspectorService {
         if (diagnostics) {
             Object.assign(properties, extractDiagnosticProperties(
                 win, this._manager?.decorationFor?.(win) ?? null, null, St));
-            // The process classification is read from the cache only. A diagnostic must not start
-            // the async probe (that would mutate the state it observes); `unknown` is "no answer
-            // cached yet" and `cannotTell` is "no classifier to ask".
+            // Cache only: a diagnostic must not start the probe it observes; `unknown` = uncached.
             properties.nativeLikeCorners = cachedNativeLikeCorners(
                 this._manager?.classifier, getWindowPid(win));
         }
@@ -226,8 +204,7 @@ export class InspectorService {
             isMaximized: reading.isMaximized,
             isTiled: reading.tiled,
             isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped?.(win)),
-            // The read may not have landed. The highlight lives for one frame and no decision hangs
-            // on it, so it keeps the answer the probe used to give for an unclassified process.
+            // The read may not have landed; the highlight lives a frame and keeps the old default.
             hasNativeLikeCorners: reading.nativeLikeCorners ?? true,
             hasSsd: reading.hasSsd,
             baseRadius: ADWAITA_STYLE.window.radius,
@@ -235,10 +212,7 @@ export class InspectorService {
     }
 
     _startInteractivePick() {
-        // Both widgets are built before either is added, and both references are published before
-        // the first `add_child`: the overlay is full-screen and reactive, so a throw between the two
-        // would leave it swallowing every click until the shell restarted, out of reach of
-        // `_cleanupPickUI()`.
+        // Publish both refs before `add_child`, or a throw leaves the overlay eating every click.
         const dims = getStageDimensions();
         this._overlay = new St.Widget({
             name: 'WindowNativizerInspectorOverlay',
@@ -249,10 +223,7 @@ export class InspectorService {
             height: dims.height,
         });
 
-        // The accent colour is the `-st-accent-color` CSS term, not a literal:
-        // St resolves it from St.Settings:accent-color and re-resolves every mapped
-        // widget's style when that setting changes, so the highlight follows the
-        // system accent without a signal of our own to connect.
+        // `-st-accent-color` re-resolves when St.Settings changes, so no signal of our own.
         this._currentRadius = null;
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
@@ -268,10 +239,7 @@ export class InspectorService {
             try {
                 const targetWin = this._findTargetWindow(x, y);
                 if (targetWin) {
-                    // No probe from here: a window the manager does not track would leave a
-                    // process answer with no owner to forget it by, and any later process given
-                    // that pid would inherit it. The picker reads whatever the manager already
-                    // knows.
+                    // No probe: an untracked window leaves an answer with no owner to forget it.
                     const frame = getWindowFrameRect(targetWin);
                     if (!frame)
                         return;
@@ -291,7 +259,6 @@ export class InspectorService {
                     this._highlight.visible = false;
                 }
             } catch {
-                // The target went away between hit test and highlight; drop the highlight.
                 this._highlight.visible = false;
             }
             return Clutter.EVENT_STOP;
@@ -305,9 +272,9 @@ export class InspectorService {
                     targetWin = this._findTargetWindow(x, y);
                 }
             } catch {
-                // A torn-down target reads as a cancel; the invocation is still answered below.
+                // A pick cannot throw into the shell's event handler.
             }
-            // Always reached, so the D-Bus caller cannot be left waiting on a thrown handler.
+            // Always reached, so a thrown hit test still answers the caller.
             this._finishInteractivePick(targetWin);
             return Clutter.EVENT_STOP;
         });
@@ -322,7 +289,7 @@ export class InspectorService {
         try {
             this._activeGrab = Main.pushModal(this._overlay);
         } catch (e) {
-            // Must answer the D-Bus call or the prefs window hangs waiting.
+            // Must answer the D-Bus call, or the prefs window hangs waiting.
             journal.failure(e, 'Could not grab the window picker');
             this._finishInteractivePick(null);
             return;
@@ -330,7 +297,7 @@ export class InspectorService {
         try {
             setActorCursor(getStage(), CursorShape.CROSSHAIR);
         } catch {
-            // stage may be unmanaging
+            // The cursor is cosmetic; a stage that refused the call must not stop a pick.
         }
     }
 
@@ -351,21 +318,17 @@ export class InspectorService {
         }
 
         try {
-            // Diagnostics stay behind the debug argument; the quiet interactive path is
-            // byte-for-byte today's reply, and the diagnostics path adds fields to it.
+            // Diagnostics stay behind the debug argument; the quiet reply is unchanged.
             const properties = this._buildReply(win, diagnostics);
             invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
         } catch (e) {
-            // A pick is user-initiated and one-shot, so a line here costs nothing - unlike the
-            // reconcile pass, which runs per signal. The empty reply still goes out, so the caller is
-            // never left waiting on one that will not come.
+            // A pick is one-shot, so a journal line costs nothing; the empty reply still goes out.
             journal.failure(e, 'Failed to answer the pick');
-            // The invocation itself may also be gone by now, so its throw must not escape into the
-            // Clutter handler.
+            // The invocation itself may be gone too, so its throw must not escape into the handler.
             try {
                 invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
-                // Invocation already answered.
+                // The invocation is already gone.
             }
         }
     }
@@ -378,15 +341,14 @@ export class InspectorService {
             try {
                 inv.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
-                // Invocation already answered.
+                // The invocation is already gone.
             }
         }
         this._cleanupPickUI();
     }
 
     _cleanupPickUI() {
-        // popModal can throw "incorrect pop" if the grab was already released;
-        // cursor and overlay must be restored either way or a crosshair leaks.
+        // popModal can throw "incorrect pop"; cursor and overlay must be restored either way.
         try {
             if (this._activeGrab)
                 Main.popModal(this._activeGrab);
@@ -399,21 +361,19 @@ export class InspectorService {
         try {
             setActorCursor(getStage(), CursorShape.DEFAULT);
         } catch {
-            // stage may be unmanaging
+            // The cursor is cosmetic; a stage that refused the call must not stop teardown.
         }
 
         this._currentRadius = null;
         try {
             this._highlight?.destroy();
         } catch {
-            // Already destroyed or stage unmanaging.
         }
         this._highlight = null;
 
         try {
             this._overlay?.destroy();
         } catch {
-            // Already destroyed or stage unmanaging.
         }
         this._overlay = null;
     }

@@ -1,8 +1,4 @@
-/**
- * Resize band geometry for compositor resize grab.
- * `edgeForPoint()` resolves direction (first match wins, matching GTK semantics).
- * `computeResizeBands()` calculates the four disjoint outer ring hit rectangles.
- */
+// Resize band geometry for the compositor grab: the edge a point takes, and the ring's four strips.
 
 import {RESIZE_HANDLE_SIZE, RESIZE_HANDLE_CORNER_SIZE} from './gtkRules.generated.js';
 
@@ -12,20 +8,10 @@ export const RESIZE_CORNER = RESIZE_HANDLE_CORNER_SIZE;
 
 export const MIN_BAND_WINDOW = 2 * RESIZE_BAND;
 
-/**
- * The four reactive surfaces of the ring, clockwise. They are only where an event lands;
- * the direction comes from `edgeForPoint()`, never from which one was entered. The top and
- * bottom strips span the full width, so the outward corners belong to them and the left and
- * right strips fill the middle. Half-open, like Clutter's picking.
- */
+/** Clockwise catch surfaces; direction comes from edgeForPoint, not from which one was entered. */
 export const RESIZE_BAND_REGIONS = ['top', 'right', 'bottom', 'left'];
 
-
-/**
- * Which of a window's four edges Mutter holds fixed: `maximized_vertically` fixes the top and
- * bottom, `maximized_horizontally` the left and right, and both together are all four.
- * @param [params.constrainedEdges=null] - Edges already known
- */
+/** Maximized vertically pins top and bottom, maximized horizontally pins left and right. */
 export function normalizeConstrainedEdges({
     constrainedEdges = null,
     maximizedHorizontally = false,
@@ -39,12 +25,7 @@ export function normalizeConstrainedEdges({
     };
 }
 
-/**
- * Maps pointer coordinate to resize direction.
- * Points inside window body resolve to null (handled by client).
- * Constrained edges resolve to null, and adjacent corners resolve to unconstrained edge.
- * @param frame - Window body, in the same space as `x`/`y`
- */
+/** Body points are the client's; a constrained edge yields null, its corner the free edge. */
 export function edgeForPoint(frame, x, y, {
     constrainedEdges = null,
     maximizedHorizontally = false,
@@ -128,9 +109,7 @@ export function edgeForPoint(frame, x, y, {
     return null;
 }
 
-/**
- * Clears one region in place, reporting whether it held a band.
- */
+/** Clears one region in place, reporting whether it held a band. */
 function clearBand(bands, region) {
     if (!bands[region])
         return false;
@@ -138,11 +117,7 @@ function clearBand(bands, region) {
     return true;
 }
 
-/**
- * Writes one region of the ring into `bands` in place, reusing the region's own rect object
- * when it already has one, and returns whether the written value differs from what was there.
- * A `constrained` edge is held fixed and gets no strip.
- */
+/** Reuses the region's rect so a steady ring allocates nothing; a constrained edge clears it. */
 function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
     if (constrained || !(rw > 0) || !(rh > 0))
         return clearBand(bands, region);
@@ -173,9 +148,7 @@ function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
     return changed;
 }
 
-/**
- * @returns Every surface present, all null
- */
+/** @returns Every surface present, all null */
 export function emptyBands() {
     const bands = {};
     for (const region of RESIZE_BAND_REGIONS)
@@ -183,12 +156,7 @@ export function emptyBands() {
     return bands;
 }
 
-/**
- * Writes the four outer ring rectangles into `bands`, clipped to `bounds`. `bounds = null` means "do
- * not clip to a monitor"; `boundsUnknown = true` means the monitor rect could not be read, so every
- * strip is dropped rather than written at full extent, where a flush window would grow a strip onto
- * the neighbouring monitor.
- */
+/** boundsUnknown drops every strip; at full extent one would land on the neighbouring monitor. */
 export function computeResizeBandsInto(bands, {
     frame,
     bounds = null,
@@ -222,9 +190,7 @@ export function computeResizeBandsInto(bands, {
 
     const b = RESIZE_BAND;
     const {x, y, width, height} = frame;
-    // Half-open, so the crops meet without overlap: the top and bottom take the full width
-    // (and with it the outward corners), the left and right fill the middle height. A
-    // constrained edge (e.g. side-tiled against a boundary) has no grab strip.
+    // Half-open so the crops meet: top and bottom take the full width, left and right the middle.
     let changed = false;
     changed = clipValuesInto(bands, 'top', x - b, y - b, width + 2 * b, b, bounds, constrained.top) || changed;
     changed = clipValuesInto(bands, 'right', x + width, y, b, height, bounds, constrained.right) || changed;
@@ -233,22 +199,14 @@ export function computeResizeBandsInto(bands, {
     return changed;
 }
 
-/**
- * @param params - see `computeResizeBandsInto`
- * @returns One rect per side, null where it is empty
- */
+/** @param params - see `computeResizeBandsInto`; one rect per side, null where it is empty. */
 export function computeResizeBands(params) {
     const bands = emptyBands();
     computeResizeBandsInto(bands, params);
     return bands;
 }
 
-/**
- * Writes the container mapping into `out` in place, reusing `out.frame` and `out.bounds`. The band
- * container is the window actor grown by RESIZE_BAND per side, so the body starts RESIZE_BAND + the
- * declared inset in. `bounds` is a monitor rect in stage coordinates, translated into container
- * coordinates so clip and frame share one space.
- */
+/** Body starts RESIZE_BAND plus the declared inset in; bounds is moved into container space. */
 export function bandParamsInto(out, containerBox, insets, bounds, scale) {
     const containerWidth = containerBox.x2 - containerBox.x1;
     const containerHeight = containerBox.y2 - containerBox.y1;
@@ -273,22 +231,12 @@ export function bandParamsInto(out, containerBox, insets, bounds, scale) {
     return out;
 }
 
-/**
- * Allocating wrapper over `bandParamsInto`, for callers that do not keep a scratch record
- * (the spec helper `bandBoxes` and the specs themselves).
- */
+/** Allocating wrapper over `bandParamsInto`, for callers that keep no scratch record. */
 export function bandParams(containerBox, insets, bounds, scale) {
     return bandParamsInto({frame: null, bounds: null, scale: 1}, containerBox, insets, bounds, scale);
 }
 
-/**
- * The four strip rects one container allocation produces, as plain data.
- *
- * This is the mapping `vfunc_allocate()` uses plus the ring computation, so the sign and
- * scale conventions of the live allocation are spec-covered. A constrained or empty side
- * stays null; the actor writes it as a 0x0 child box.
- *
- */
+/** The live vfunc_allocate mapping plus the ring, so its sign and scale conventions are tested. */
 export function bandBoxes(containerBox, insets, bounds, scale, constrainedEdges = null) {
     const params = bandParams(containerBox, insets, bounds, scale);
     return {params, boxes: computeResizeBands({...params, constrainedEdges})};

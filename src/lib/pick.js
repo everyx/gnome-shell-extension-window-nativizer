@@ -23,7 +23,7 @@ import {
 
 export {WindowClientType};
 
-// Re-exported window inspection utilities for backward compatibility.
+/** Re-exported so importers that still reach through this module keep working. */
 export {
     buildRuleKeyFromProperties,
     readWindowString,
@@ -34,12 +34,7 @@ export {
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/WindowNativizer';
 
-/**
- * The inspector's D-Bus interface. One method, one boolean: `debug = false` is the quiet
- * interactive pick, `debug = true` is the same interactive pick with the read-only diagnostics
- * added to the reply. Kept as data here (not in `inspector.js`) so the signature can be asserted
- * without loading the Shell's St/Main modules.
- */
+/** Kept as data so a spec can assert the signature without loading the St/Main modules. */
 export const INSPECTOR_DBUS_IFACE_XML = `
 <node>
   <interface name="${INSPECTOR_DBUS_NAME}">
@@ -50,9 +45,6 @@ export const INSPECTOR_DBUS_IFACE_XML = `
   </interface>
 </node>`;
 
-/**
- * @param winOrReading - Meta.Window or existing WindowReading
- */
 export function extractWindowProperties(winOrReading, wmClassOverride = null) {
     if (!winOrReading)
         return {};
@@ -65,8 +57,7 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
 
     const props = {
         wmClass: wmClassOverride || reading.declaredWmClass,
-        // The seven structural attributes come from the rule table, so the dictionary prefs turns back
-        // into a key and the key itself cannot disagree about what a window kind is.
+        // The structural keys come from the rule table, so prefs turns the dictionary back into one key.
         ...fingerprintProperties(reading),
         isMaximized: boolString(reading.isMaximized),
         isFullscreen: boolString(reading.isFullscreen),
@@ -82,22 +73,16 @@ export function extractWindowProperties(winOrReading, wmClassOverride = null) {
     return props;
 }
 
-/**
- * Builds the pick reply's subpixel-phase diagnostic fields, letting a user compare the mirror we
- * cut on with the phase Mutter applied. Both are strings; an unreadable read says so rather than
- * claiming zero. Runs only on a pick, never per frame. Both reads use the clip's container rule.
- */
+/** Both read through the clip's own container rule, so the mirror and the applied phase compare. */
 export function extractPhaseProperties(win, St = null) {
     const mirror = getWindowSubpixelOffset(win, St);
     const properties = {
-        // null is "the monitor scan could not complete", not a phase of zero; say so rather than
-        // report a fabricated zero the user would compare against the applied read.
+        // null means the scan did not complete, not a zero phase; say unknown rather than fabricate one.
         mirrorPhaseX: mirror ? String(mirror.x) : 'unknown',
         mirrorPhaseY: mirror ? String(mirror.y) : 'unknown',
     };
 
-    // The applied transform only exists for a Wayland surface container; the mirror's own doc
-    // answers zero for X11, so the applied side says not-applicable instead of echoing that zero.
+    // The applied transform exists only on Wayland, so X11 says n/a rather than echo a zero.
     if (getWindowClientType(win) !== WindowClientType.WAYLAND) {
         properties.appliedPhaseX = 'n/a';
         properties.appliedPhaseY = 'n/a';
@@ -110,12 +95,7 @@ export function extractPhaseProperties(win, St = null) {
     return properties;
 }
 
-/**
- * The decoration-side diagnostics keys, in reply order. Named once so `extractDiagnosticProperties`
- * and `WindowDecoration.diagnosticsView` cannot silently disagree about what crossing the bus is.
- * The live clip and the shadow over the same body are carried here; the overview is deliberately
- * left out.
- */
+/** Named once so reply and diagnosticsView agree; the overview is deliberately left out. */
 export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
     'clipTargetType',
     'clipTargetName',
@@ -132,12 +112,7 @@ export const DIAGNOSTIC_DECORATION_KEYS = Object.freeze([
     'shadowRightBand',
 ]);
 
-/**
- * Reads the D-Bus in-args into the two facts the inspector branches on: was the required boolean
- * passed, and does it ask for diagnostics. A call with no argument is *invalid*, not `false` - D-Bus
- * has no default arguments, and treating it as a quiet pick would hide the arity break. There is no
- * non-interactive path.
- */
+/** No arg is invalid, not false: D-Bus has no defaults, so reading it as quiet hides the break. */
 export function parseDebugFlag(params) {
     if (!Array.isArray(params) || params.length < 1)
         return {valid: false, diagnostics: false};
@@ -150,11 +125,7 @@ export function parseDebugFlag(params) {
     };
 }
 
-/**
- * Renders the cached Adwaita classification without starting a probe: a diagnostic must not change
- * what it observes. `unknown` means not yet classified, `cannotTell` means no classifier, and only a
- * landed answer becomes `true`/`false` - without that a cache miss would read as "not libadwaita".
- */
+/** A diagnostic must not change what it observes: no probe, and a miss is unknown, not false. */
 export function cachedNativeLikeCorners(classifier, pid) {
     if (!classifier || typeof classifier.adwaitaLook !== 'function' || !(pid > 0))
         return 'cannotTell';
@@ -164,11 +135,7 @@ export function cachedNativeLikeCorners(classifier, pid) {
     return cached ? 'true' : 'false';
 }
 
-/**
- * Renders a read value as the stringly `a{ss}` reply expects. Nullish and non-finite reads become
- * an explicit `unavailable` rather than being dropped, so a caller can tell "not reachable" from
- * "not in this reply".
- */
+/** Nullish and non-finite become unavailable, telling "not reachable" from "not in this reply". */
 function diagnosticText(value) {
     if (value === null || value === undefined)
         return 'unavailable';
@@ -194,11 +161,7 @@ const PHASE_FIELDS = Object.freeze([
     'mirrorPhaseX', 'mirrorPhaseY', 'appliedPhaseX', 'appliedPhaseY',
 ]);
 
-/**
- * Builds the diagnostics-only half of the `PickWindow` reply. Every live read is isolated in its own
- * group, so one throw degrades only that group to `unavailable` rather than discarding the reply,
- * and nothing writes, probes or queues a repaint.
- */
+/** One throw costs only its own group's fields, and nothing here writes, probes or repaints. */
 export function extractDiagnosticProperties(win, deco = null, reads = null, St = null) {
     const read = reads ?? {
         phases: w => extractPhaseProperties(w, St),
@@ -220,9 +183,6 @@ export function extractDiagnosticProperties(win, deco = null, reads = null, St =
         };
     });
 
-    // The getter reads live GObject state; a torn-down actor there must cost only the decoration
-    // block, not the reply. Each key is read and rendered independently so one bad field cannot
-    // drop the others.
     let view = null;
     try {
         view = deco?.diagnosticsView ?? null;
@@ -240,9 +200,6 @@ export function extractDiagnosticProperties(win, deco = null, reads = null, St =
     return properties;
 }
 
-/**
- * Assigns one logical read group, degrading just its fields to `unavailable` when it throws.
- */
 function readGroup(properties, keys, read) {
     try {
         Object.assign(properties, read());

@@ -1,9 +1,4 @@
-/**
- * Pure shadow geometry: the baked square and how it slices across a window.
- *
- * Kept free of GI imports so the degenerate-size rules stay unit-testable; the Cogl
- * bake lives in shadowTexture.js.
- */
+/** Pure geometry without GI imports, so the degenerate-size rules stay unit-testable. */
 
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
@@ -13,23 +8,14 @@ import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/wind
 
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 
-/**
- * How far the clip's body authority and the shadow's own body may differ before it is a defect. One
- * logical pixel sits above the fractional-scale residue between `buffer / scale` and an integer
- * allocation, and below the whole-pixel defects this separates (the observed one was 2px).
- */
+/** One logical px: above the scale residue, below the whole-pixel defects it separates. */
 export const SHADOW_BODY_TOLERANCE = BODY_SETTLE_TOLERANCE;
 
-// The bake's own near-side margin and total extra; see lib/shadowBake.js.
+// 2px near + 1px far, the shape Clutter's box-enlarge rule gives on an integer box.
 const BAKE_ORIGIN = SHADOW_BAKE_ORIGIN;
 const BAKE_EXTRA = SHADOW_BAKE_EXTRA;
 
-/**
- * Canonical square 2*(pad+radius) with middle 2*pad (settled strip).
- * Corner slice spans 2*pad+radius so the cutline sits at the settled profile (C0 continuity).
- * @param radius - Corner radius in px
- * @returns sizes in px
- */
+/** 2*(pad+radius) square, middle 2*pad; the corner spans 2*pad+radius so the cutline stays C0. */
 export function shadowGeometry(radius) {
     const corner = 2 * SHADOW_PAD + radius;
     const window = 2 * (SHADOW_PAD + radius);
@@ -40,11 +26,7 @@ export function shadowGeometry(radius) {
     };
 }
 
-/**
- * Computes the cast rect from an already-resolved body size: the expansion of the phase-free
- * `clipFrameFor` body by `SHADOW_PAD`, so the hole is the clip's frame edge rather than a second
- * derivation of it.
- */
+/** The hole is the clip's phase-free frame edge plus SHADOW_PAD, not a second derivation of it. */
 export function shadowCastRectForBody(bodySize, insets, scale = 1.0) {
     const body = clipFrameFor(bodySize, insets, scale, ZERO_PHASE);
     return {
@@ -55,12 +37,7 @@ export function shadowCastRectForBody(bodySize, insets, scale = 1.0) {
     };
 }
 
-/**
- * Computes the cast rect from the actor's live size by snapping the body frame and expanding it by
- * `SHADOW_PAD`, the same `clipFrameFor` expression the resolved-body form uses. The cast is
- * deliberately phase-free: the shadow actor carries the phase as a translation, which keeps the cast
- * actor-local for drag invariance.
- */
+/** Phase-free: the actor carries the phase as a translation, so the cast stays actor-local. */
 export function shadowCastRect(actorSize, insets, scale = 1.0) {
     return shadowCastRectForBody({
         width: actorSize.width - SHADOW_PAD * 2,
@@ -68,11 +45,7 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
     }, insets, scale);
 }
 
-/**
- * The WARNING text for a shadow box that no longer describes the clip's body, or null when they agree
- * within `SHADOW_BODY_TOLERANCE`. It names the authority and the shadow's body (and the window actor
- * when known) with the signed delta, so a journal hit says which side moved and by how much.
- */
+/** Names both body extents and the signed delta, so a journal line says which side moved. */
 export function shadowBodyWarning(authority, shadowBox, windowActorBox = null, state = null) {
     if (!authority || !shadowBox)
         return null;
@@ -85,26 +58,17 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null, s
     const actor = windowActorBox
         ? ` (window actor ${fmt2(windowActorBox.width)}x${fmt2(windowActorBox.height)})`
         : '';
-    // The delta is printed explicitly: the two sides are the *body* extents being compared (the
-    // shadow box carries SHADOW_PAD per side), so a reader sees which side is larger and by how
-    // much instead of reading three near-identical numbers next to a bare tolerance.
+    // Both sides are body extents, so three near-identical numbers need the printed sign.
     const deltaWidth = authority.width - bodyWidth;
     const deltaHeight = authority.height - bodyHeight;
     return `Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
         `disagrees with the shadow body ${fmt2(bodyWidth)}x${fmt2(bodyHeight)}${actor} ` +
         `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px` +
-        // Why the settle could not decide is what tells one episode from another: the same extents
-        // print for a hold and for strikes spent, and only this says which the code was in.
+        // A hold and spent strikes print the same extents; only this says which the code was in.
         `${state ? ` (${state})` : ''}`;
 }
 
-/**
- * The phrase naming why the settle could not decide this pass, or null when it did: only then does a
- * disagreement between the authority and the shadow's box say anything about the window.
- *
- * No reading of that window's size returns null: it holds blind, so the disagreement is about a
- * window being mapped or torn down.
- */
+/** Names why the settle could not decide; null when it did, or when the size is unreadable. */
 export function settleUndecidedState({unsettled = false, pairDisagreementStrikes = 0, windowKnown = false} = {}) {
     if (!windowKnown)
         return null;
@@ -116,11 +80,7 @@ export function settleUndecidedState({unsettled = false, pairDisagreementStrikes
     return pairDisagreementStrikes > 0 ? 'settled out of strikes on the window actor' : null;
 }
 
-/**
- * Whether a fresh clip-target read differs from the one the shadow last laid out from, so the caller
- * must schedule another layout. The authority is the read, not the object: a container resized in
- * place is a change, and an unknown read is a change from a known one.
- */
+/** The read, not the reference, is the authority: a container resized in place is a change. */
 export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, nextSize) {
     if (previousTarget !== nextTarget)
         return true;
@@ -129,18 +89,12 @@ export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, 
     return previousSize.width !== nextSize.width || previousSize.height !== nextSize.height;
 }
 
-/**
- * @returns The value with two decimal places, so a sub-pixel difference is visible
- */
+/** Two decimals, so a sub-pixel difference shows in the warning. */
 function fmt2(value) {
     return Number(value).toFixed(2);
 }
 
-/**
- * The shadow actor's translation for a window actor: the window actor's own translation plus the
- * subpixel offset, so the cutout lands on the buffer's physical phase while the window's animation is
- * kept. Composed here so it can be asserted without a Clutter actor.
- */
+/** Actor translation plus the subpixel offset, so the cutout lands on the buffer's phase. */
 export function shadowTranslation(windowActor, offset) {
     return {
         x: (windowActor?.translation_x ?? 0) + offset.x,
@@ -148,12 +102,7 @@ export function shadowTranslation(windowActor, offset) {
     };
 }
 
-/**
- * The shadow actor's layout position for a window actor under a Clutter scale/pivot transform: it is
- * derived from that transform rather than from the actor's layout box, because `SHADOW_PAD` is baked
- * into both the layout box and the local cutout, and only the transform cancels the two at any scale
- * and pivot.
- */
+/** From the transform, not the layout box: only it cancels SHADOW_PAD at any scale or pivot. */
 export function shadowLayoutPosition(windowActor, pad = SHADOW_PAD) {
     const x = windowActor?.x ?? 0;
     const y = windowActor?.y ?? 0;
@@ -167,11 +116,7 @@ export function shadowLayoutPosition(windowActor, pad = SHADOW_PAD) {
     };
 }
 
-/**
- * The subpixel phase the shadow translates by, chosen by the same strategy as the clip: the applied
- * transform on the container path, the mirrored arithmetic on the fallback path, so one source feeds
- * both cuts. Null when neither can answer, and the caller keeps its last good phase.
- */
+/** Same strategy as the clip, so one source feeds both cuts; null keeps the caller's last phase. */
 export function shadowPhaseOffset(win, phaseInTransform, St = null) {
     if (phaseInTransform) {
         const applied = getAppliedSubpixelPhase(win, St);
@@ -181,12 +126,7 @@ export function shadowPhaseOffset(win, phaseInTransform, St = null) {
     return getWindowSubpixelOffset(win, St);
 }
 
-/**
- * The shadow's slices: eight rects (four corners at 1:1, four edges stretched from a 1px strip) with an
- * empty middle. Sizes clamp at zero, since a resize can pass a degenerate cast, and a cast narrower
- * than two corners samples only the bake pixels its quad shows - the same inequality the decoration
- * floor is.
- */
+/** Corners at 1:1, edges stretched from a 1px strip, empty middle; sizes clamp at zero. */
 export function shadowSlices({corner, window, buffer}, width, height) {
     const safeW = Math.max(0, width);
     const safeH = Math.max(0, height);
@@ -200,8 +140,7 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     const right = Math.max(c, safeW - c);
     const bottom = Math.max(c, safeH - c);
 
-    // Bake px the corner shows: all of them when the cast is wide enough for both corners (which
-    // is the only size the bake was sized for), `c` of them - the outer ones - when it is not.
+    // A cast narrower than two corners shows only its outer `c` bake px, not the same ones scaled.
     const shown = c / buffer;
     const innerNear = near + shown;
     const outerFar = far + span;
@@ -219,12 +158,7 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     ];
 }
 
-/**
- * Decides one paint's layout: the cast rect, the slices, the corner, whether the cast moved enough to
- * rebuild them, and the body authority it settled on. The settle runs on the actor's allocation clock,
- * so the cast tracks the frame the compositor draws; without `bodySource` the body is the actor box
- * minus `SHADOW_PAD`.
- */
+/** Runs on the actor's allocation clock, so the cast tracks the frame the compositor draws. */
 export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource = null) {
     const settled = bodySource
         ? resolvePaintBody(bodySource.targetSize, bodySource.windowActorSize, bodySource.windowSize,
@@ -239,8 +173,7 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
     const castChanged = !previous ||
         previous.x !== cast.x || previous.y !== cast.y ||
         previous.width !== cast.width || previous.height !== cast.height;
-    // The slice table carries positions and texture coordinates; only the corner clamp reads the
-    // cast size, so a moved origin reuses it and a resize does not.
+    // Only the corner clamp reads the cast size, so a moved origin reuses the slice table.
     const sizeChanged = !previous ||
         previous.width !== cast.width || previous.height !== cast.height;
 

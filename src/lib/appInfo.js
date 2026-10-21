@@ -1,16 +1,10 @@
 import Gio from 'gi://Gio';
 
-/**
- * Strips the .desktop suffix from an application identifier.
- * 'org.gnome.Nautilus.desktop' -> 'org.gnome.Nautilus'
- */
+/** WM_CLASS carries no `.desktop` suffix, so ids must be stripped before comparing the two. */
 export function stripDesktopSuffix(id) {
     return id.endsWith('.desktop') ? id.slice(0, -8) : id;
 }
 
-/**
- * Retrieves all installed applications that should be displayed in the system.
- */
 export function getInstalledApps() {
     const apps = Gio.AppInfo.get_all();
     const result = [];
@@ -41,9 +35,7 @@ export function getInstalledApps() {
     return result;
 }
 
-/**
- * Resolves an AppInfo descriptor by matching WM_CLASS or desktop IDs.
- */
+/** Also matches desktop ids and startup WM_CLASS, since a window's class need not be the app id. */
 export function findAppInfoByWmClass(wmClass, appsList) {
     if (!wmClass)
         return null;
