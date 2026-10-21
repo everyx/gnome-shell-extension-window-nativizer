@@ -8,8 +8,9 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {clipTargetReadChanged, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {clipTargetReadChanged, settleUndecided, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {readBodySizes, readActorSize} from './bodyPlan.js';
+import {evaluateInvariant, freshInvariantState} from '../lib/diagnosticInvariants.js';
 import {shadowStyleFrom} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
@@ -52,9 +53,9 @@ export const ShadowActor = GObject.registerClass({
         // layout then derives the body from the live reads, exactly as it did before the settle
         // existed.
         this._bodyPlan = null;
-        // Edge-trigger for the body-authority warning, so a persistent disagreement is one loud
-        // journal line per episode rather than one per paint frame.
-        this._bodyWarningActive = false;
+        // The body-authority warning's latch: the shared invariant state, so a persistent disagreement
+        // is one journal line per episode and a pass it does not speak for re-arms it.
+        this._bodyLatch = freshInvariantState();
         this._insets = null;
         this._scale = 1.0;
         // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
@@ -327,7 +328,12 @@ export const ShadowActor = GObject.registerClass({
                     findMetaWindowCached(this._windowActor)),
                 bodyPlan: this._bodyPlan,
             });
-        this._warnOnBodyDisagreement(layout.authority);
+        // A disagreement the settle already decided - the window's own size confirmed one read - is the
+        // settle working; only a settle that could not decide says something about the window. Passing
+        // null rather than skipping the call keeps the once-per-episode latch's reset reachable: a run
+        // of decided passes must re-arm it, or the next episode would never speak.
+        this._warnOnBodyDisagreement(
+            settleUndecided(layout.unsettled, layout.pairDisagreementStrikes) ? layout.authority : null);
 
         const slicesChanged = layout.castChanged || !style.slices;
         if (slicesChanged) {
@@ -360,23 +366,20 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip
-     * cuts; the shadow's box is bound to the window actor, so on a healthy window the two agree and
-     * this is silent. Edge-triggered, so a persistent disagreement is one WARNING, not one per frame;
-     * agreement re-arms it.
+     * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip cuts,
+     * or null when the settle decided this pass and there is nothing to say.
+     *
+     * The latch is the shared invariant one with a single strike: the first pass with something to say
+     * speaks, and any pass without re-arms it, so a later episode speaks again.
      */
     _warnOnBodyDisagreement(authority) {
-        const warning = shadowBodyWarning(authority,
-            {width: this.width, height: this.height},
-            readActorSize(this._windowActor));
-        if (warning) {
-            if (!this._bodyWarningActive) {
-                this._bodyWarningActive = true;
-                console.warn(warning);
-            }
-            return;
-        }
-        this._bodyWarningActive = false;
+        const {state, message} = evaluateInvariant(this._bodyLatch,
+            shadowBodyWarning(authority,
+                {width: this.width, height: this.height},
+                readActorSize(this._windowActor)), 1);
+        this._bodyLatch = state;
+        if (message)
+            console.warn(message);
     }
 
     destroy() {
