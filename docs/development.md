@@ -163,8 +163,12 @@ through a `Diagnostic` (`diagnosticInvariants.js`), which owns the edge-triggere
 once per episode and re-arms when the violation clears, so a condition that lasts many frames is
 one line rather than one per frame. Its `check()` is called every pass with null when there is
 nothing to say, because a pass that skips the call leaves the latch armed and the next episode
-silent. An exception a `catch` would otherwise swallow goes through `journal.failure`, which keeps
-the stack and the context the catch would have discarded.
+silent. An exception a `catch` would otherwise swallow goes through `journal.failure`, which keeps the stack
+and the context the catch would have discarded - unless the catch is the reconcile pass's, whose
+`apply()` touches actors Mutter is destroying and legitimately throws once per closed window. The
+rule there is positional rather than about the exception: reads and the decision run outside the
+`try`, so a bug in them escapes as a `JS ERROR`, and only the decoration's own calls are absorbed.
+A guard that fires has to be visible; a teardown that throws is not news.
 
 Every line is written by `src/platform/journal.js`, which owns the `[window-nativizer]` prefix and the
 sink. Nothing else in `src/` writes to the console: the predicate returns content, the journal adds

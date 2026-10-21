@@ -296,40 +296,46 @@ export class Manager {
         if (!record)
             return;
 
+        // Reads and the decision run outside the try: `getWindowActor`, `observe`'s container read and
+        // `_connect` each catch their own, and `evaluateWindowActions` touches no GObject. A throw from
+        // them is ours, and letting it escape is what makes a firing guard visible instead of silent.
+        const actor = getWindowActor(win);
+        this._tracking.observe(win);
+        if (!actor || actor.width === 0 || actor.height === 0)
+            return;
+
+        // The remembered pid can still be unusable: tracking happens on `window-created`, and an
+        // X11 client sets `_NET_WM_PID` only after the window exists. Learn it here and remember it,
+        // so a late pid is still classified and teardown keeps a value.
+        this._tracking.learnPid(win);
+        this._classifier?.probeAdwaitaLook(record.pid);
+
+        const inputs = this._decorationInputs(win);
+        // The branch itself lives in the reading module, so a spec can table it:
+        // no reading to undecorate, classification in flight to wait, otherwise apply.
+        const outcome = reconcileOutcome(inputs);
+        if (outcome === 'defer')
+            return;
+        const actions = outcome === 'apply' ? evaluateWindowActions(inputs) : null;
+
+        // Only the decoration's own calls are guarded: they touch actors, effects and the compositor,
+        // which does throw while Mutter tears the window down. That is an expected outcome and stays
+        // silent - one line per closed window is noise, and the log audit counts lines exactly.
         try {
-            const actor = getWindowActor(win);
-            this._tracking.observe(win);
-            if (!actor || actor.width === 0 || actor.height === 0)
-                return;
-
-            // The remembered pid can still be unusable: tracking happens on `window-created`, and an
-            // X11 client sets `_NET_WM_PID` only after the window exists. Learn it here and remember
-            // it, so a late pid is still classified and teardown keeps a value.
-            this._tracking.learnPid(win);
-            this._classifier?.probeAdwaitaLook(record.pid);
-
-            const inputs = this._decorationInputs(win);
-            // The branch itself lives in the reading module, so a spec can table it:
-            // no reading to undecorate, classification in flight to wait, otherwise apply.
-            const outcome = reconcileOutcome(inputs);
             if (outcome === 'undecorate') {
                 record.decoration.undecorate();
-                return;
+            } else {
+                record.decoration.apply({
+                    actions,
+                    inputs,
+                    actor,
+                    // The pass's one reading of the surface-container rule: `observe()` resolved it
+                    // above, and the decoration consumes it rather than asking again.
+                    surfaceContainer: this._tracking.surfaceContainer(win),
+                    inOverview: this._inOverview,
+                    forceOverviewCorners: this._forceOverviewCorners,
+                });
             }
-            if (outcome === 'defer')
-                return;
-            const actions = evaluateWindowActions(inputs);
-
-            record.decoration.apply({
-                actions,
-                inputs,
-                actor,
-                // The pass's one reading of the surface-container rule: `observe()` resolved it above,
-                // and the decoration consumes it rather than asking again.
-                surfaceContainer: this._tracking.surfaceContainer(win),
-                inOverview: this._inOverview,
-                forceOverviewCorners: this._forceOverviewCorners,
-            });
         } catch {
             // Window went away mid-sync; the next signal re-runs it if it comes back.
         }
@@ -380,13 +386,10 @@ export class Manager {
      * Inputs for evaluateWindowActions; shared with pickAnswer().
      */
     _decorationInputs(win) {
-        if (!win)
-            return null;
-        try {
-            return this._collectDecorationInputs(win);
-        } catch {
-            return null;
-        }
+        // No catch: `readWindow` answers null rather than throwing (its two rect reads have their own
+        // try, the rest go through safeRead), so a throw from here is a bug of ours and must be seen.
+        // Swallowing it would make it identical to an unreadable window, which defers forever.
+        return win ? this._collectDecorationInputs(win) : null;
     }
 
     _collectDecorationInputs(win) {

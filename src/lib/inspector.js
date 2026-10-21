@@ -355,10 +355,13 @@ export class InspectorService {
             // byte-for-byte today's reply, and the diagnostics path adds fields to it.
             const properties = this._buildReply(win, diagnostics);
             invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
-        } catch {
-            // The window went away mid-pick; answer empty (a cancel) so the caller is never
-            // left waiting on a reply that will not come. The invocation itself may also be
-            // gone by now, so its throw must not escape into the Clutter handler.
+        } catch (e) {
+            // A pick is user-initiated and one-shot, so a line here costs nothing - unlike the
+            // reconcile pass, which runs per signal. The empty reply still goes out, so the caller is
+            // never left waiting on one that will not come.
+            journal.failure(e, 'Failed to answer the pick');
+            // The invocation itself may also be gone by now, so its throw must not escape into the
+            // Clutter handler.
             try {
                 invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
