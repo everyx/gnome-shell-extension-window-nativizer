@@ -391,7 +391,6 @@ export const ShadowActor = GObject.registerClass({
             try {
                 this._windowActor?.disconnect?.(sid);
             } catch {
-                // Ignore.
             }
         }
         this._geometrySignals = [];

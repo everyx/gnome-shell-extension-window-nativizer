@@ -23,13 +23,8 @@ export const INVARIANT_STRIKES = 2;
 
 export const BUFFER_ACTOR_TOLERANCE = 0.5;
 
-/**
- * How far the fallback phase mirror and the phase Mutter applied may differ.
- *
- * Both are exact arithmetic over the same layout coordinates, so a healthy pair agrees to float
- * residue. The observed failure is a whole physical pixel of misalignment (0.8 logical px at
- * 1.25, 0.75 at 1.3333); this tolerance is far below that and far above the residue.
- */
+/** How far the fallback phase mirror and Mutter's applied phase may differ. The observed
+ * misalignment is a whole physical pixel; this tolerance is far below it and above float residue. */
 export const PHASE_ALIGNMENT_TOLERANCE = 0.05;
 
 /**

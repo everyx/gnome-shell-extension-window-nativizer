@@ -1,46 +1,6 @@
-/**
- * The offscreen box Clutter gives a ClutterOffscreenEffect, expressed in the units the clip
- * shader's `p` spans, so that one shader unit is exactly one logical pixel.
- *
- * A shader effect's texture coordinates span the whole offscreen FBO, not the actor, so the
- * clip cannot derive `quadSize` from the actor size: it has to know how many logical pixels the
- * FBO covers and where the actor's origin sits inside it. Both come from one box, which Mutter
- * builds in two steps.
- *
- * 1. `_clutter_actor_box_enlarge_for_effects` (clutter/clutter/clutter-actor-box.c, vendored at
- *    vendor/mutter/COMMIT) enlarges the paint box:
- *      x2 = ceilf (x2 + 0.75f);  x1 = x2 - CLUTTER_NEARBYINT (x2 - x1) - 3
- *    The 3px total per axis and the 0.75px rounding margin are its literals; the 2px top/left
- *    origin is not one - it is what the rule yields on an integer-aligned box, and it moves by a
- *    whole logical pixel when the box is fractional.
- * 2. `clutter_offscreen_effect_pre_paint` scales that box by the actor's resource scale and rounds
- *    each edge onto the device grid:
- *      box *= resource_scale;  x1 = (int) floorf (box.x1 + phase);  x2 = (int) ceilf (box.x2 + phase)
- *    The FBO is `x2 - x1` device pixels wide, and `x1 / resource_scale` is the origin the effect
- *    then blits from. This is the shape upstream MR !5179 gives the rule, and what the optional
- *    `mutter-everyx` package builds; the *unpatched* upstream caller of the same release scales
- *    the box by `ceilf (resource_scale)` and blits with `1 / ceilf (resource_scale)` instead, which
- *    makes the FBO up to `ceilf (resource_scale) / resource_scale` larger for the same actor.
- *
- * This extension targets the mutter a plain GNOME Shell ships, not a patched one: the checkout
- * under `research/mutter` (HEAD `8fe247a2`, 50.4) still carries the `ceilf (resource_scale)`
- * caller, and upstream !5179 is unmerged. `mutter-everyx` is an optional local optimization the
- * author maintains. Measured on `mutter-everyx` 51.1 for a 441x281 body at 4/3, `get_target_size()`
- * reports 593x379 device px - the real-scale rule, against the 888x568 the `ceil` rule would
- * allocate. The clip therefore has to hold under *both* rules, which is what
- * `resolveOffscreenScale` below picks between candidate scales for, from the FBO's own extent.
- *
- * The old constants this replaced baked in the `ceilf` caller: at 1.25x that is 2, so they only
- * described an integer scale. At 1.25x the real FBO is 556x356 device px for a 441x281 body, not
- * the 555x355 the constants implied, which made one shader unit 1.2522 device px instead of 1.25 -
- * the corner arc and the pixel-snapped straight edge then disagreed by up to half a physical pixel
- * at the tangent.
- *
- * The phase is not zero in practice: at 4/3 the FBO came out one device pixel larger than a
- * phase-free derivation, because the source framebuffer carries a subpixel phase. The extent is
- * therefore read from the engine (`get_target_size()`) and reconciled every frame, with a one
- * device pixel tolerance; the origin stays derived, since `fbo_offset_x` is not readable.
- */
+// The offscreen box Clutter gives a ClutterOffscreenEffect, in the units its clip shader uses:
+// one shader unit is one logical pixel. The FBO is not the actor's box, so the box is derived
+// per paint from the FBO's own extent.
 
 import {roundHalfAwayFromZero} from '../platform/numeric.js';
 

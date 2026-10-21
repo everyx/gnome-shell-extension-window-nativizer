@@ -95,10 +95,6 @@ export function isWindowMaximized(win) {
     }
 }
 
-/**
- * Checks if the window is fullscreen.
- * @param win - Meta.Window
- */
 export function isWindowFullscreen(win) {
     try {
         return Boolean(win?.is_fullscreen?.());
@@ -107,10 +103,6 @@ export function isWindowFullscreen(win) {
     }
 }
 
-/**
- * Checks if the window is minimized.
- * @param win - Meta.Window
- */
 export function isWindowMinimized(win) {
     try {
         return Boolean(win?.minimized);
@@ -295,10 +287,6 @@ export function isWindowAttachedDialog(win) {
     }
 }
 
-/**
- * Checks whether the window allows resizing.
- * @param win - Meta.Window
- */
 export function isWindowAllowsResize(win) {
     try {
         const value = win?.allows_resize;
@@ -312,10 +300,6 @@ export function isWindowAllowsResize(win) {
     }
 }
 
-/**
- * Checks whether the window is currently hidden by Mutter.
- * @param win - Meta.Window
- */
 export function isWindowHidden(win) {
     try {
         return Boolean(win?.is_hidden?.());
@@ -324,10 +308,6 @@ export function isWindowHidden(win) {
     }
 }
 
-/**
- * Checks whether the window is present on all workspaces.
- * @param win - Meta.Window
- */
 export function isWindowOnAllWorkspaces(win) {
     try {
         return Boolean(win?.is_on_all_workspaces?.());
@@ -336,11 +316,6 @@ export function isWindowOnAllWorkspaces(win) {
     }
 }
 
-/**
- * Checks whether the window is located on a specific workspace.
- * @param win - Meta.Window
- * @param workspace - Meta.Workspace
- */
 export function isWindowLocatedOnWorkspace(win, workspace) {
     try {
         return Boolean(win?.located_on_workspace?.(workspace));
@@ -349,10 +324,6 @@ export function isWindowLocatedOnWorkspace(win, workspace) {
     }
 }
 
-/**
- * Reads the window's display title, returning empty string if unreadable.
- * @param win - Meta.Window
- */
 export function getWindowDisplayTitle(win) {
     try {
         return win?.get_title?.() ?? '';
@@ -419,10 +390,6 @@ function readBufferAlpha(actor) {
     }
 }
 
-/**
- * Checks whether the window is horizontally maximized.
- * @param win - Meta.Window
- */
 export function isWindowMaximizedHorizontally(win) {
     try {
         return Boolean(win?.maximized_horizontally);
@@ -431,10 +398,6 @@ export function isWindowMaximizedHorizontally(win) {
     }
 }
 
-/**
- * Checks whether the window is vertically maximized.
- * @param win - Meta.Window
- */
 export function isWindowMaximizedVertically(win) {
     try {
         return Boolean(win?.maximized_vertically);
@@ -443,10 +406,6 @@ export function isWindowMaximizedVertically(win) {
     }
 }
 
-/**
- * Checks whether the window appears focused.
- * @param win - Meta.Window
- */
 export function isWindowAppearsFocused(win) {
     try {
         return Boolean(win?.appears_focused);
@@ -455,11 +414,6 @@ export function isWindowAppearsFocused(win) {
     }
 }
 
-/**
- * Resolves the matching tile window if one exists.
- * @param win - Meta.Window
- * @returns Meta.Window or null
- */
 export function getWindowTileMatch(win) {
     try {
         return win?.get_tile_match?.() ?? null;
