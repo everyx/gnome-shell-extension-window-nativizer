@@ -86,6 +86,9 @@ export class WindowDecoration {
         // The resolved target's phase strategy; the clip effect reads it at attach/repin time.
         this.clipPhaseInTransform = true;
         this.clipInsets = null;
+        // The surface container the pass supplied, so the phase readers and the clip name the same
+        // actor. Undefined until a pass supplies one; null when that pass found no container.
+        this.surfaceContainer = undefined;
         this.drawClip = false;
         // The resolved ring plan for the current pass; null until the first apply().
         this.ring = null;
@@ -241,14 +244,22 @@ export class WindowDecoration {
      * @param [params.target] - A
      *        resolveClipTarget() result; resolved from the window when omitted
      */
-    apply({actions, inputs, actor = null, target = null, inOverview = false, forceOverviewCorners = false}) {
+    apply({
+        actions, inputs, actor = null, target = null, surfaceContainer = undefined,
+        inOverview = false, forceOverviewCorners = false,
+    }) {
         const winActor = this._getActor(actor);
         if (!winActor)
             return;
 
         this._forceOverviewCorners = Boolean(forceOverviewCorners);
 
-        const resolvedTarget = target ?? resolveClipTarget(this._win, winActor, this._St);
+        const resolvedTarget = target ??
+            resolveClipTarget(this._win, winActor, this._St, surfaceContainer);
+        // The container this pass decided about, kept so the phase readers name the same actor the clip
+        // did. Undefined is "the caller supplied none" (a spec, a standalone apply); null is "this pass
+        // found none", and the two mean different things to `_readPhases`.
+        this.surfaceContainer = surfaceContainer;
         // A container that has not allocated yet defers the target choice: keep the target the clip
         // is already on rather than attach it to an unverified actor. With no earlier target, the
         // window actor - always present and verified - is the fallback. The manager watches the
@@ -553,12 +564,15 @@ export class WindowDecoration {
      *
      */
     _readPhases() {
-        // One container, both reads: the mirror folds that container's layout and the applied read
-        // is that same actor's transform, so the caller's comparison is between one authority.
-        // Tagging each read with the actor it came from lets the predicate refuse a mismatched
-        // pair instead of reporting a position as if it were a phase.
-        const actor = getWindowActor(this._win);
-        const container = actor ? getSurfaceContainer(actor, this._win, this._St) : null;
+        // One container, both reads: the mirror folds that container's layout and the applied read is
+        // that actor's transform, so the caller compares one authority. Tagging each read with its actor
+        // lets the predicate refuse a mismatched pair rather than report a position as a phase. The
+        // pass's container when supplied (a `null` included), else this reads its own.
+        let container = this.surfaceContainer;
+        if (container === undefined) {
+            const actor = getWindowActor(this._win);
+            container = actor ? getSurfaceContainer(actor, this._win, this._St) : null;
+        }
         return {
             mirror: tagPhase(getWindowSubpixelOffset(this._win, this._St, container), container),
             applied: tagPhase(getAppliedSubpixelPhase(this._win, this._St, container), container),

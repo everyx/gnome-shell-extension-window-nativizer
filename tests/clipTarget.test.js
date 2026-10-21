@@ -180,6 +180,48 @@ describe('clipTarget', () => {
             expect(resolveClipTarget(win, null, mockSt)).toBeNull();
         });
 
+        describe('a container the caller already read', () => {
+            it('decides about it without reading the actor tree again', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
+                const surface = new MockSurfaceActor();
+                // The tree would answer with a *different*, incompatible child, so a second read would
+                // change the decision. The supplied container must be the one that decides.
+                const other = new MockSurfaceActor('MetaSurfaceContainerActorWayland',
+                    {x: 40, y: 40, width: 10, height: 10});
+                let reads = 0;
+                const actor = {
+                    ...createMockActor({children: [other]}),
+                    get_children: () => {
+                        reads++;
+                        return [other];
+                    },
+                };
+
+                expect(resolveClipTarget(win, actor, mockSt, surface))
+                    .toEqual({actor: surface, phaseInTransform: true});
+                expect(reads).toBe(0);
+            });
+
+            it('still defers on an unallocated container it was handed', () => {
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
+                const unallocated = new MockSurfaceActor('MetaSurfaceContainerActorWayland',
+                    {x: 0, y: 0, width: 0, height: 0});
+                const actor = createMockActor({children: [unallocated]});
+
+                expect(resolveClipTarget(win, actor, mockSt, unallocated)).toEqual({defer: true});
+            });
+
+            it('reads its own container when the caller supplies none', () => {
+                // The standalone contract: omitting the argument is not "no container".
+                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
+                const surface = new MockSurfaceActor();
+                const actor = createMockActor({children: [surface]});
+
+                expect(resolveClipTarget(win, actor, mockSt))
+                    .toEqual({actor: surface, phaseInTransform: true});
+            });
+        });
+
         describe('Wayland surface container target (keeps the subpixel phase out of the FBO)', () => {
             it('returns the surface container, whose own transform carries the phase', () => {
                 const win = createMockWindow({clientType: WindowClientType.WAYLAND});

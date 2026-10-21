@@ -504,6 +504,38 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadow.destroyed).toBeTrue();
     });
 
+    it('keeps the container the pass supplied, and forgets it when a pass supplies none', () => {
+        // The tracker reads the surface-container rule once per pass; the decoration consumes that
+        // read so the phase pair names the actor the clip was actually attached to. A pass that
+        // supplies nothing must not leave the previous pass's container behind for the phase reader.
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1};
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+
+        deco.apply({actions, inputs, actor: mockActor, target: {defer: true}, surfaceContainer: container});
+        expect(deco.surfaceContainer).toBe(container);
+
+        deco.apply({actions, inputs, actor: mockActor, target: {defer: true}, surfaceContainer: null});
+        expect(deco.surfaceContainer).toBeNull();
+
+        deco.apply({actions, inputs, actor: mockActor, target: {defer: true}});
+        expect(deco.surfaceContainer).toBeUndefined();
+    });
+
     it('hands the clip and the shadow the same St it resolved the target with', () => {
         // The phase readers identify the surface container by this St; the decoration constructs
         // both consumers, so it is the one place the clip's own value has to reach them.

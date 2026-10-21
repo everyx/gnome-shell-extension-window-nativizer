@@ -40,29 +40,34 @@ export function getX11SurfaceChild(actor, St = null) {
 export {isUnallocatedSurfaceBox};
 
 /**
- * Resolves the target actor to attach RoundedClipEffect to, and whether its own transform carries
- * the buffer's subpixel phase. The container comes from `getSurfaceContainer`, the same rule the
- * phase readers use, so the clip and the mirror can never name different actors.
+ * Resolves the target actor to attach RoundedClipEffect to, and whether its own transform carries the
+ * buffer's subpixel phase. The container comes from `getSurfaceContainer`, the rule the phase readers
+ * share, so the clip and the mirror cannot name different actors.
+ *
+ * @param [surfaceContainer] - A container the caller already read this pass; omitted, this reads its own
  */
-export function resolveClipTarget(win, actor, St = null) {
+export function resolveClipTarget(win, actor, St = null, surfaceContainer = undefined) {
     if (!actor)
         return null;
+
+    const container = surfaceContainer === undefined
+        ? getSurfaceContainer(actor, win, St)
+        : surfaceContainer;
 
     const isX11 = getWindowClientType(win) === CLIENT_TYPE_X11;
     // On X11 the surface actor is the first non-foreign child, not blindly the first child: a
     // foreign St.Widget injected ahead of it must never take the clip.
     const defaultTarget = isX11 ? getX11SurfaceChild(actor, St) ?? actor : actor;
 
-    const surfaceContainer = getSurfaceContainer(actor, win, St);
-    if (surfaceContainer) {
+    if (container) {
         // The container has no allocation yet: its box cannot be verified, so defer the choice and
         // keep the last good target rather than attach the clip to an unverified actor. The manager
         // watches this container's notify::allocation and re-runs the resolution once it settles.
-        if (isUnallocatedSurfaceBox(surfaceContainer))
+        if (isUnallocatedSurfaceBox(container))
             return {defer: true};
-        if (isCompatibleSurfaceGeometry(surfaceContainer, win) &&
-            isIntegerAlignedSurfaceBox(surfaceContainer))
-            return {actor: surfaceContainer, phaseInTransform: true};
+        if (isCompatibleSurfaceGeometry(container, win) &&
+            isIntegerAlignedSurfaceBox(container))
+            return {actor: container, phaseInTransform: true};
     }
 
     return {actor: defaultTarget, phaseInTransform: false};

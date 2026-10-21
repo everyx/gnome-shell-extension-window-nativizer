@@ -52,9 +52,13 @@ class TrackedWindow {
         this.idleId = null;
         this.firstFrameDone = false;
         this.actorWired = false;
-        // The surface container the clip targets, tracked so its allocation can be watched without
-        // re-connecting on every pass. Null until the child exists.
+        // The container whose notify::allocation this record is subscribed to, so a re-wiring pass does
+        // not re-connect the same actor. Null until the child exists.
         this.wiredContainer = null;
+        // This pass's read of the rule, handed to the decoration so the clip and the phase readers use
+        // one answer. Distinct from `wiredContainer`: a container that disappeared leaves the old
+        // subscription standing while this pass has none to report.
+        this.surfaceContainer = null;
     }
 
     get isPendingReconcile() {
@@ -145,8 +149,10 @@ export class WindowTracking {
             return;
 
         const actor = getWindowActor(win);
-        if (!actor)
+        if (!actor) {
+            record.surfaceContainer = null;
             return;
+        }
 
         if (!record.actorWired) {
             record.actorWired = true;
@@ -160,6 +166,7 @@ export class WindowTracking {
         // readings so the insets cannot go stale and re-verifies a target that was deferred while the
         // container was unallocated.
         const container = getSurfaceContainer(actor, win, this._St);
+        record.surfaceContainer = container;
         if (container && container !== record.wiredContainer) {
             if (record.wiredContainer)
                 this._unwatch(record, record.wiredContainer);
@@ -208,6 +215,15 @@ export class WindowTracking {
 
     get(win) {
         return this._windows.get(win) ?? null;
+    }
+
+    /**
+     * The surface container this pass read for a window, or null when it has none (or has not been
+     * observed yet). `observe()` resolves it once per pass; the decoration consumes this rather than
+     * asking the same question again.
+     */
+    surfaceContainer(win) {
+        return this._windows.get(win)?.surfaceContainer ?? null;
     }
 
     has(win) {
