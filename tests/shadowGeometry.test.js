@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {clipTargetReadChanged, settleUndecided, shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
+import {clipTargetReadChanged, settleUndecidedState, shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -410,7 +410,7 @@ describe('shadow body authority (one body for the clip and the shadow)', () => {
         });
         expect(decided.authority).toEqual({width: 450, height: 300});
         expect(decided.body).toEqual({width: 700, height: 520});
-        expect(settleUndecided(decided.unsettled, decided.pairDisagreementStrikes)).toBeFalse();
+        expect(settleUndecidedState(decided)).toBeNull();
 
         // Neither read is confirmed by the window's own size: the settle holds and says so.
         const undecided = shadowLayout({radius: 12}, boundShadowBox({width: 804, height: 600}), zero2, 1, {
@@ -422,7 +422,59 @@ describe('shadow body authority (one body for the clip and the shadow)', () => {
                 previousWindowSize: {width: 800, height: 600}},
         });
         expect(undecided.unsettled).toBeTrue();
-        expect(settleUndecided(undecided.unsettled, undecided.pairDisagreementStrikes)).toBeTrue();
+        expect(settleUndecidedState(undecided)).toBe('neither read is confirmed by the window size');
+    });
+
+    it('reports the same disagreement only once the window size is readable, which is the pair', () => {
+        // The reported e2e sighting, and the whole point of the gate: every number is identical in the
+        // two layouts below except the window's own size. Unreadable - no Meta.Window behind the actor
+        // yet, mid-map or mid-teardown - means the settle holds blind and the code has nothing to say
+        // about the window; reporting it turned every such race into a journal line. Readable means the
+        // hold is on evidence, and the disagreement is the window's.
+        const layout = overrides => shadowLayout({radius: 12}, boundShadowBox({width: 700, height: 520}),
+            zero, 1, {
+                targetSize: {width: 450, height: 300},
+                windowActorSize: {width: 700, height: 520},
+                ...overrides,
+            });
+        const blind = layout({
+            windowSize: null,
+            bodyPlan: {previousBody: null, previousAuthority: null, previousWindowSize: null},
+        });
+        const known = layout({
+            // A size that confirms neither read, so the settle can attribute the disagreement and hold.
+            windowSize: {width: 600, height: 400},
+            bodyPlan: {previousBody: {width: 700, height: 520},
+                previousAuthority: {width: 700, height: 520},
+                previousWindowSize: {width: 600, height: 400}},
+        });
+
+        expect(blind.windowKnown).toBeFalse();
+        expect(blind.unsettled).toBeTrue();
+        expect(settleUndecidedState(blind)).toBeNull();
+
+        // The other direction, so a later simplification of the gate cannot silence this one too.
+        expect(known.windowKnown).toBeTrue();
+        expect(known.unsettled).toBeTrue();
+        expect(settleUndecidedState(known)).toBe('neither read is confirmed by the window size');
+    });
+
+    it('spends the strikes on the same pair when the window stays readable', () => {
+        // The second pass of the same episode: the pair still disagrees, no read was confirmed, so the
+        // settle acts on the window actor and reports. Reached from the blind case too, which is why
+        // the gate has to cover this route and not just the hold.
+        const spent = shadowLayout({radius: 12}, boundShadowBox({width: 700, height: 520}), zero, 1, {
+            targetSize: {width: 450, height: 300},
+            windowActorSize: {width: 700, height: 520},
+            windowSize: {width: 600, height: 400},
+            bodyPlan: {previousBody: {width: 700, height: 520},
+                previousAuthority: {width: 700, height: 520},
+                previousWindowSize: {width: 600, height: 400},
+                pairDisagreementStrikes: 1},
+        });
+        expect(spent.unsettled).toBeFalse();
+        expect(spent.body).toEqual({width: 700, height: 520});
+        expect(settleUndecidedState(spent)).toBe('settled out of strikes on the window actor');
     });
 
     it('is a no-op when the container and the window actor agree', () => {
@@ -567,28 +619,50 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
         expect(warning).toContain('-2.00x0.00px');
     });
 
+    it('names why the settle could not decide, so two episodes do not print alike', () => {
+        // The same extents print for a hold and for strikes spent, so the phrase is the only thing that
+        // tells a reader which the code was in.
+        const warning = shadowBodyWarning({width: 428, height: 300}, shadowBox({width: 400, height: 300}),
+            {width: 400, height: 300}, 'settled out of strikes on the window actor');
+        expect(warning).toContain('by 28.00x0.00px');
+        expect(warning).toContain('(settled out of strikes on the window actor)');
+    });
+
     it('stays silent when the authority is unknown', () => {
         expect(shadowBodyWarning(null, shadowBox({width: 400, height: 300}),
             {width: 400, height: 300})).toBeNull();
     });
 });
 
-describe('settleUndecided (when a disagreement is a fact about the window)', () => {
-    it('is true while the settle holds its previous body', () => {
-        expect(settleUndecided(true, 1)).toBeTrue();
-        expect(settleUndecided(true, 0)).toBeTrue();
+describe('settleUndecidedState (when a disagreement is a fact about the window)', () => {
+    const settle = overrides => ({unsettled: false, pairDisagreementStrikes: 0, windowKnown: true, ...overrides});
+
+    it('names the hold that keeps the previous body', () => {
+        expect(settleUndecidedState(settle({unsettled: true, pairDisagreementStrikes: 1})))
+            .toBe('neither read is confirmed by the window size');
+        // The between-pass hold: the authority moved and the window did not, which is the defect this
+        // invariant exists for in the first place.
+        expect(settleUndecidedState(settle({unsettled: true})))
+            .toBe('the authority moved while the window did not');
     });
 
-    it('is true once the settle has spent its strikes and gave up on a confirmation', () => {
-        expect(settleUndecided(false, 2)).toBeTrue();
-        expect(settleUndecided(undefined, 3)).toBeTrue();
+    it('names the strike budget running out on a pair no read confirmed', () => {
+        expect(settleUndecidedState(settle({pairDisagreementStrikes: 2})))
+            .toBe('settled out of strikes on the window actor');
     });
 
-    it('is false when the settle acted on the read the window own size confirmed', () => {
+    it('says nothing when the settle acted on the read the window own size confirmed', () => {
         // The two reads disagree, and the window's own size names the fresh one. The authority being
         // different is then the settle working, not a defect: this is the shape the e2e log audit saw.
-        expect(settleUndecided(false, 0)).toBeFalse();
-        expect(settleUndecided(undefined, 0)).toBeFalse();
+        expect(settleUndecidedState(settle())).toBeNull();
+    });
+
+    it('says nothing when it could not read the window, whatever the strike count', () => {
+        // The other reported sighting: no Meta.Window behind the actor yet, so no size on any pass. The
+        // settle holds blind and then acts out of strikes; neither is a fact about the window.
+        expect(settleUndecidedState(settle({unsettled: true, pairDisagreementStrikes: 1, windowKnown: false})))
+            .toBeNull();
+        expect(settleUndecidedState(settle({pairDisagreementStrikes: 2, windowKnown: false}))).toBeNull();
     });
 });
 

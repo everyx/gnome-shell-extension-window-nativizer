@@ -90,12 +90,16 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     tolerance = BODY_SETTLE_TOLERANCE, pairDisagreementStrikes = 0) {
     const windowResized = windowResizedSince(windowSize, previousWindowSize);
     const authority = resolveBodyAuthority(targetSize, windowActorSize, windowResized);
+    // Whether this pass can say anything about the window at all: the window's own size must be
+    // paintable on this pass and on the last one. Deciding needs both, and so does reporting, because
+    // a settle with no reading of the window is not undecided *about the window*, it is blind to it.
+    const windowKnown = isPaintableFrame(windowSize) && isPaintableFrame(previousWindowSize);
     if (!authority)
-        return {authority: null, body: null, unsettled: false, pairDisagreementStrikes: 0};
+        return {authority: null, body: null, unsettled: false, pairDisagreementStrikes: 0, windowKnown};
     // The fallback path is not a disagreement: a target with no extent is handled by the window
     // actor by construction, and the actor is the authority for whether the window has a body.
     if (!isPaintableFrame(targetSize) || !isPaintableFrame(windowActorSize))
-        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0};
+        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0, windowKnown};
     // Strictly greater: a difference of exactly the tolerance is agreement, the same boundary the warning
     // uses. Both sides are compared raw, because they name the same rectangle - Mutter sizes the actor from
     // the buffer rect and the target is adopted only when it matches - so a declared ring widens both or
@@ -111,7 +115,6 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     // An unknown window size counts as moved here, deliberately: `windowResizedSince` reads it as "not a
     // resize" because there it only picks the authority. Here it vetoes the hold, and vetoing freezes the
     // cut - an unreadable size is a drag, where a frame of lag shows most.
-    const windowKnown = isPaintableFrame(windowSize) && isPaintableFrame(previousWindowSize);
     const windowMoved = !windowKnown ||
         Math.abs(windowSize.width - previousWindowSize.width) >= tolerance ||
         Math.abs(windowSize.height - previousWindowSize.height) >= tolerance;
@@ -132,6 +135,7 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
                 body: targetMatches ? targetSize : windowActorSize,
                 unsettled: false,
                 pairDisagreementStrikes: 0,
+                windowKnown,
             };
         }
         const strikes = pairDisagreementStrikes + 1;
@@ -141,6 +145,7 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
                 body: windowActorSize,
                 unsettled: false,
                 pairDisagreementStrikes: strikes,
+                windowKnown,
             };
         }
         return {
@@ -148,18 +153,20 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
             body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
             unsettled: true,
             pairDisagreementStrikes: strikes,
+            windowKnown,
         };
     }
 
     // The between-pass hold is unchanged: `windowMoved` vetoes it as before.
     const unsettled = bodyMoved && !windowMoved;
     if (!unsettled)
-        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0};
+        return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0, windowKnown};
     return {
         authority,
         body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
         unsettled: true,
         pairDisagreementStrikes: 0,
+        windowKnown,
     };
 }
 
