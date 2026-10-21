@@ -79,6 +79,19 @@ export class BodyPlan {
     }
 
     /**
+     * Drops the reference points, which a decoration episode boundary must: the reads they were
+     * compared against belonged to the episode that ended, so keeping them lets the next pass hold - and
+     * therefore draw - a body from before the gap. The ring hold drops its buffer witness for the same
+     * reason.
+     */
+    reset() {
+        this._body = null;
+        this._authority = null;
+        this._windowSize = null;
+        this._strikes = 0;
+    }
+
+    /**
      * Advances one pass. The actor sizes come from the resolved target and the window actor; the
      * window's own size comes from the pass's reading, since the pass is the clock that read it.
      *

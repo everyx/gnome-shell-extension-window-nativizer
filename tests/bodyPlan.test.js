@@ -171,6 +171,28 @@ describe('BodyPlan (a window’s settle, owned in one place)', () => {
         expect(settled.authority).toBeNull();
     });
 
+    it('can drop its reference points, so a new decoration episode starts fresh', () => {
+        const plan = new BodyPlan();
+        plan.next({targetSize: size(800), windowActorSize: size(800), windowSize: size(800)});
+        expect(plan.settle.previousBody).toEqual(size(800));
+
+        plan.reset();
+
+        // Nothing survives: a hold that outlived a gap would draw the body from before it.
+        expect(plan.settle).toEqual({
+            previousBody: null,
+            previousAuthority: null,
+            previousWindowSize: null,
+            pairDisagreementStrikes: 0,
+            tolerance: 1.0,
+        });
+        // And the next pass behaves like a first one: with no previous window size to confirm either
+        // read, the settle holds rather than believing the pair, which is the documented first-pass
+        // behaviour and the opposite of carrying the old body forward.
+        expect(plan.next({targetSize: size(450), windowActorSize: size(700), windowSize: size(700)}))
+            .toEqual(jasmine.objectContaining({body: size(450), unsettled: true}));
+    });
+
     it('agrees with the reading it was handed, so a paint settles on the same body a pass did', () => {
         // The pass reads the window's size from its own reading; a paint reads it live. Health means
         // the two agree, so a paint with those same numbers lands on the body the pass recorded.
