@@ -1,5 +1,6 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {resolvePaintBody} from '../src/effects/clipParams.js';
+import {clipParamsFrom, shadowStyleFrom} from '../src/effects/decorationPass.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -35,6 +36,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setBodyPlan(plan) {
             this.bodyPlan = plan;
+        }
+
+        // Mirrors the real effect's handoff: the recorded parameters come from the same derivation the
+        // effect uses, so the fake cannot disagree with it about what a pass means.
+        applyPass(pass) {
+            this.pass = pass;
+            this.setParams(clipParamsFrom(pass));
+            this.setBodyPlan(pass.bodyPlan);
         }
 
         get_actor() {
@@ -81,6 +90,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         setShadowStyle(style) {
             this.style = style;
+        }
+
+        // Mirrors the real actor's handoff, in the same order: a scale that is not a usable number
+        // leaves the previous one in place, as `setScale` does.
+        applyPass(pass) {
+            this.pass = pass;
+            this.phaseInTransform = pass.phaseInTransform;
+            this.clipTarget = pass.clipTarget;
+            this.bodyPlan = pass.bodyPlan;
+            if (typeof pass.scale === 'number' && pass.scale > 0)
+                this.scale = pass.scale;
+            this.setShadowInsets(pass.ring?.insets ?? null);
+            this.setShadowStyle(shadowStyleFrom(pass));
         }
 
         destroy() {

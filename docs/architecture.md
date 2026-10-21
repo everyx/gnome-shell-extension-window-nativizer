@@ -28,6 +28,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
 | `effects/clipParams.js` | the clip effect's upload decisions: which uniforms changed and when the cached frame is stale (pure) |
 | `effects/bodyPlan.js` | one window's settle: the reference points a pass advances, and the live reads both cuts settle from |
+| `effects/decorationPass.js` | one pass's value for the two cuts, and what each of them reads it as: the clip's parameters, the shadow's style |
 | `effects/overviewMaskBytes.js` | the overview corner mask's A_8 bytes, split from the Cogl upload (pure) |
 | `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
 | `platform/numeric.js` | the GI-free upstream-numeric primitives the C mirrors share: C `roundf` and GSK's `gsk_rect_snap_direction` (pure) |

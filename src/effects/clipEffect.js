@@ -15,6 +15,7 @@ import {ZERO_PHASE} from '../lib/snap.js';
 import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
+import {clipParamsFrom} from './decorationPass.js';
 import {evaluateInvariant, freshInvariantState, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
 import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
 
@@ -245,6 +246,15 @@ export const RoundedClipEffect = GObject.registerClass({
         // The next paint recomputes the frame from the live reads and clipGeometryChanges sees the
         // moved edge; only a paint that nothing else queued could miss it.
         this.queue_repaint();
+    }
+
+    /**
+     * One handoff per decoration pass: the parameters the shader reads, then the plan its paints settle
+     * against. The order is the effect's own, so a caller cannot apply half a pass or apply it twice.
+     */
+    applyPass(pass) {
+        this.setParams(clipParamsFrom(pass));
+        this.setBodyPlan(pass.bodyPlan);
     }
 
     /**
