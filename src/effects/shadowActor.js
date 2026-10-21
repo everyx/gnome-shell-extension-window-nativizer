@@ -8,7 +8,7 @@ import GObject from 'gi://GObject';
 
 import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
-import {clipTargetReadChanged, settleUndecided, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
+import {clipTargetReadChanged, settleUndecidedState, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {readBodySizes, readActorSize} from './bodyPlan.js';
 import {Diagnostic} from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
@@ -330,12 +330,9 @@ export const ShadowActor = GObject.registerClass({
                     findMetaWindowCached(this._windowActor)),
                 bodyPlan: this._bodyPlan,
             });
-        // A disagreement the settle already decided - the window's own size confirmed one read - is the
-        // settle working; only a settle that could not decide says something about the window. Passing
-        // null rather than skipping the call keeps the once-per-episode latch's reset reachable: a run
-        // of decided passes must re-arm it, or the next episode would never speak.
-        this._warnOnBodyDisagreement(
-            settleUndecided(layout.unsettled, layout.pairDisagreementStrikes) ? layout.authority : null);
+        // Only a settle that could not decide says something about the window. The call is made either
+        // way so a run of decided passes re-arms the latch; skipping it is how an episode went silent.
+        this._reportBodyDisagreement(layout);
 
         const slicesChanged = layout.castChanged || !style.slices;
         if (slicesChanged) {
@@ -369,15 +366,19 @@ export const ShadowActor = GObject.registerClass({
 
     /**
      * Makes a body-authority disagreement loud, once per episode. `authority` is the body the clip cuts,
-     * or null when the settle decided this pass and there is nothing to say.
-     *
-     * The latch is the shared invariant one with a single strike: the first pass with something to say
-     * speaks, and any pass without re-arms it, so a later episode speaks again.
+     * or nothing when the settle decided this pass, could not read the window, or has nothing to say.
+     * The latch is the shared one with a single strike: the first pass with something to say speaks,
+     * any pass without re-arms it.
      */
-    _warnOnBodyDisagreement(authority) {
-        this._bodyDiagnostic.check(shadowBodyWarning(authority,
+    _reportBodyDisagreement(layout) {
+        const state = settleUndecidedState(layout);
+        if (!state) {
+            this._bodyDiagnostic.check(null);
+            return;
+        }
+        this._bodyDiagnostic.check(shadowBodyWarning(layout.authority,
             {width: this.width, height: this.height},
-            readActorSize(this._windowActor)));
+            readActorSize(this._windowActor), state));
     }
 
     destroy() {

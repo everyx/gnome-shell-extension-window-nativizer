@@ -161,6 +161,16 @@ describe('resolveBodyAuthority (resize-aware body authority)', () => {
 });
 
 describe('settleClipBody (do not act on an unsettled target/actor pair)', () => {
+    it('says whether it could read the window at all, which the report needs', () => {
+        // Deciding needs both of the window's own readings, and so does reporting: a settle with no
+        // size to compare against is not undecided about the window, it is blind to it.
+        const size = {width: 400, height: 300};
+        expect(settleClipBody(size, size, null, null, size, size).windowKnown).toBeTrue();
+        expect(settleClipBody(size, size, null, null, null, size).windowKnown).toBeFalse();
+        // The first pass of a window: nothing to compare this size against yet.
+        expect(settleClipBody(size, size, null, null, size, null).windowKnown).toBeFalse();
+    });
+
     it('acts on the fresh body when the target and the window actor agree', () => {
         const settled = settleClipBody({width: 400, height: 300}, {width: 400, height: 300}, null);
         expect(settled.authority).toEqual({width: 400, height: 300});

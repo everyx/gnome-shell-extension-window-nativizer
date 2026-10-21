@@ -73,7 +73,7 @@ export function shadowCastRect(actorSize, insets, scale = 1.0) {
  * within `SHADOW_BODY_TOLERANCE`. It names the authority and the shadow's body (and the window actor
  * when known) with the signed delta, so a journal hit says which side moved and by how much.
  */
-export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
+export function shadowBodyWarning(authority, shadowBox, windowActorBox = null, state = null) {
     if (!authority || !shadowBox)
         return null;
     const bodyWidth = shadowBox.width - SHADOW_PAD * 2;
@@ -92,16 +92,28 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
     const deltaHeight = authority.height - bodyHeight;
     return `Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
         `disagrees with the shadow body ${fmt2(bodyWidth)}x${fmt2(bodyHeight)}${actor} ` +
-        `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px`;
+        `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px` +
+        // Why the settle could not decide is what tells one episode from another: the same extents
+        // print for a hold and for strikes spent, and only this says which the code was in.
+        `${state ? ` (${state})` : ''}`;
 }
 
 /**
- * Whether the settle could not decide which of its two reads is the fresh one: it held, or it ran out
- * of strikes. Only then is a disagreement between the authority and the shadow's bound box a fact
- * about the window rather than the settle choosing a side the window's own size confirms.
+ * The phrase naming why the settle could not decide this pass, or null when it did: only then does a
+ * disagreement between the authority and the shadow's box say anything about the window.
+ *
+ * No reading of that window's size returns null: it holds blind, so the disagreement is about a
+ * window being mapped or torn down.
  */
-export function settleUndecided(unsettled, pairDisagreementStrikes) {
-    return Boolean(unsettled) || pairDisagreementStrikes > 0;
+export function settleUndecidedState({unsettled = false, pairDisagreementStrikes = 0, windowKnown = false} = {}) {
+    if (!windowKnown)
+        return null;
+    if (unsettled) {
+        return pairDisagreementStrikes > 0
+            ? 'neither read is confirmed by the window size'
+            : 'the authority moved while the window did not';
+    }
+    return pairDisagreementStrikes > 0 ? 'settled out of strikes on the window actor' : null;
 }
 
 /**
@@ -244,5 +256,6 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
         cast, slices, corner, castChanged, authority, body,
         unsettled: settled?.unsettled ?? false,
         pairDisagreementStrikes: settled?.pairDisagreementStrikes ?? 0,
+        windowKnown: settled?.windowKnown ?? false,
     };
 }
