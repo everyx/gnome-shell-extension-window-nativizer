@@ -356,8 +356,12 @@ export function resolveRule(wmClass, rules = {}, kind = {}) {
  */
 export function kindFromWire(properties = {}) {
     const kind = {};
-    for (const field of FINGERPRINT_FIELDS)
-        kind[field.key] = field.parse(properties?.[field.key]);
+    for (const field of FINGERPRINT_FIELDS) {
+        // An absent field is the field's declared fallback, not whatever its converter makes of
+        // `undefined`: the converter cannot tell the two apart, and one of them flips the key's shape.
+        const raw = properties?.[field.key];
+        kind[field.key] = raw === undefined ? field.fallback : field.parse(raw);
+    }
     return kind;
 }
 
