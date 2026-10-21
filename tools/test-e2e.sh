@@ -489,35 +489,35 @@ else
 fi
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
-for i in 1 2 3 4 5; do
-    sleep 0.06
-    shell_eval "
-    (() => {
-        const actors = global.get_window_actors();
-        if (actors.length > 0) {
-            actors[0].meta_window.move_frame(true, 80 + $i * 40, 60 + $i * 30);
-        }
-    })()
-    " >/dev/null
-done
-
-# The moves above are the setup, not the assertion: positions must track synchronously,
-# so read back the frame origin the final move targeted (80+5*40, 60+5*30) and fail on
-# drift. move_frame(true, …) is a user operation placed directly, with no animation to
-# wait out - and an empty stage fails here instead of silently passing the loop above.
+# One eval for the moves and the read, for two reasons. `get_window_actors()` follows stack order,
+# so `actors[0]` in a separate call need not be the window that was moved - three windows can be on
+# the stage here. And a read straight after the last `move_frame` asserts scheduling rather than the
+# extension: the request is placed directly, but the frame lands on a later compositor cycle, so the
+# read polls for the target instead of beating it. The moves stay rapid; only the verdict waits.
 MOVE_STATE="$(shell_eval '
-(() => {
+(async () => {
     const actors = global.get_window_actors();
-    if (!actors.length) return JSON.stringify({error: "no actor to verify the moves on"});
-    const f = actors[0].meta_window.get_frame_rect();
-    return JSON.stringify({x: f.x, y: f.y});
+    if (!actors.length) return JSON.stringify({error: "no window to move"});
+    const win = actors[0].meta_window;
+    const target = {x: 280, y: 210};
+    const sleep = ms => new Promise(done => setTimeout(done, ms));
+    for (let i = 1; i <= 5; i++) {
+        win.move_frame(true, 80 + i * 40, 60 + i * 30);
+        await sleep(60);
+    }
+    let frame = win.get_frame_rect();
+    for (let i = 0; i < 40 && (frame.x !== target.x || frame.y !== target.y); i++) {
+        await sleep(50);
+        frame = win.get_frame_rect();
+    }
+    return JSON.stringify({x: frame.x, y: frame.y});
 })()
 ')"
 if ! check_fields "$MOVE_STATE" '{"x": 280, "y": 210}'; then
-    echo "!! Compositor moves did not track synchronously (expected origin 280,210): $MOVE_STATE"
+    echo "!! Compositor moves did not reach the last target (expected origin 280,210): $MOVE_STATE"
     exit 1
 fi
-echo ">> Compositor moves tracked synchronously to (280, 210)."
+echo ">> Compositor moves reached (280, 210)."
 
 # Wait for client process to finish remaining steps (resize, maximize, unmaximize, close)
 wait $CLIENT_PID
