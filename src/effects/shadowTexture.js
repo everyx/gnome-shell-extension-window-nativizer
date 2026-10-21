@@ -7,8 +7,8 @@ import Cogl from 'gi://Cogl';
 
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 import {SHADOW_PAD, shadowGeometry} from './shadowGeometry.js';
-import {evaluateInvariant, freshInvariantState, shadowBakeFailureWarning}
-    from '../lib/diagnosticInvariants.js';
+import {Diagnostic, shadowBakeFailureWarning} from '../lib/diagnosticInvariants.js';
+import {journal} from '../platform/journal.js';
 
 const LAYER_COUNT = 3; // shader expects 3 layers
 
@@ -20,9 +20,10 @@ const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
 let destroyed = false; // sealed after destroy()
-// The bake-failure latch: the retry loop must not repeat the line every paint, and a bake that
-// allocates re-arms it so a later shortage still speaks.
-let bakeLatch = freshInvariantState();
+// The bake-failure diagnostic: the retry loop must not repeat the line every paint, and a bake that
+// allocates re-arms it so a later shortage still speaks. It is session-level because what it reports
+// is: the cache is keyed by style and shared by every window wearing it, so no window's journal.
+const bakeDiagnostic = new Diagnostic(journal, 1);
 
 /**
  * Clears baked cache and seals it until reset().
@@ -34,7 +35,7 @@ export function destroy() {
 
 export function reset() {
     destroyed = false;
-    bakeLatch = freshInvariantState();
+    bakeDiagnostic.reset();
 }
 
 /**
@@ -70,7 +71,6 @@ function shadowPipeline(context, radius, shadows) {
 
 /**
  * Per-window pipeline sharing the baked texture (for cross-fade opacity).
- *
  */
 export function shadowPipelineFor(context, radius, shadows) {
     const source = shadowPipeline(context, radius, shadows);
@@ -97,13 +97,10 @@ function bake(context, radius, shadows) {
     const framebuffer = Cogl.Offscreen.new_with_texture(texture);
     if (!framebuffer.allocate()) {
         // No pass-apart settle here: an allocation either succeeds or not, so one failure speaks.
-        const {state, message} = evaluateInvariant(bakeLatch, shadowBakeFailureWarning(buffer), 1);
-        bakeLatch = state;
-        if (message)
-            console.warn(message);
+        bakeDiagnostic.check(shadowBakeFailureWarning(buffer));
         return null;
     }
-    bakeLatch = freshInvariantState();
+    bakeDiagnostic.check(null);
 
     const pipeline = Cogl.Pipeline.new(context);
     pipeline.set_color(opaqueWhite());

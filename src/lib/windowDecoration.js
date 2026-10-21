@@ -13,13 +13,13 @@ import {MIN_DECORABLE_SIZE} from './detector.js';
 import {BodyPlan, readActorSize} from '../effects/bodyPlan.js';
 import {decorationPass} from '../effects/decorationPass.js';
 import {
+    Diagnostic,
     bufferAllocationWarning,
-    evaluateInvariant,
-    freshInvariantState,
     phaseAlignmentWarning,
     windowIdentityLabel,
 } from './diagnosticInvariants.js';
 import {flatSafeInsets} from './frame.js';
+import {journal} from '../platform/journal.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
 import {resolveMonitorBounds, safeRead} from './window.js';
@@ -57,7 +57,7 @@ export class WindowDecoration {
      * @param [options.St] - Usually imports.gi.St
      * @param [options.OverviewMask] - {buildRoundedMask, opaqueMask} texture builders
      * @param [options.OverviewShadow] - Clutter.Clone subclass carrying the preview shadow
-     * @param [options.warn] - Journal sink for the edge-triggered diagnostics; a spec injects one
+     * @param [options.journal] - Where the diagnostics write; a spec injects one to read the lines
      */
     constructor(win, options = {}) {
         this._win = win;
@@ -68,14 +68,14 @@ export class WindowDecoration {
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
-        this._warn = options.warn ?? (message => console.warn(message));
+        this._journal = options.journal ?? journal;
 
         // The overview's own decoration (mask, container opacity, shadow clone) is a
         // lifecycle of its own; the desktop reads it for clip decisions but never reaches in.
         this.overview = new OverviewDecoration(win, {
             OverviewMask: options.OverviewMask ?? null,
             OverviewShadow: options.OverviewShadow ?? null,
-            warn: this._warn,
+            journal: this._journal,
             // A card rebuild inside the overview can settle on a different mode than the entry
             // did; the desktop clip must follow whatever was actually installed.
             onModeChange: mode => this._syncOverviewClip(mode),
@@ -93,10 +93,10 @@ export class WindowDecoration {
         // The resolved ring plan for the current pass; null until the first apply().
         this.ring = null;
 
-        // Edge-triggered diagnostic latches, one per invariant, reset on agreement. They are
-        // per-window because "one WARNING per episode" is a window's episode, not the session's.
-        this._bufferActorLatch = freshInvariantState();
-        this._phaseLatch = freshInvariantState();
+        // Edge-triggered diagnostics, one per invariant, re-armed on agreement. They are per-window
+        // because an episode is a window's, not the session's.
+        this._bufferActorDiagnostic = new Diagnostic(this._journal);
+        this._phaseDiagnostic = new Diagnostic(this._journal);
 
         this._style = null;
         // Not 1.0: an unread scale is *unknown*, and `apply()` refuses to act on it. A decoration
@@ -412,7 +412,9 @@ export class WindowDecoration {
         if (wanted !== hasClip) {
             if (wanted) {
                 const ClipClass = this._RoundedClipEffect;
-                this.clip = ClipClass ? new ClipClass(this._St) : null;
+                this.clip = ClipClass
+                    ? new ClipClass(this._St, {journal: this._journal})
+                    : null;
                 this.clipTarget = clipTarget;
                 this.clipTarget?.add_effect?.(this.clip);
             } else {
@@ -451,7 +453,9 @@ export class WindowDecoration {
         if (wantShadow !== hasShadow) {
             if (wantShadow) {
                 const ShadowClass = this._ShadowActor;
-                this.shadow = ShadowClass ? new ShadowClass(winActor, this._container, this._St) : null;
+                this.shadow = ShadowClass
+                    ? new ShadowClass(winActor, this._container, this._St, {journal: this._journal})
+                    : null;
             } else {
                 this.shadow?.destroy?.();
                 this.shadow = null;
@@ -536,7 +540,7 @@ export class WindowDecoration {
 
     /**
      * Runs this pass's diagnostic invariants: the conditions a healthy pass must satisfy, made loud once per
-     * episode. The predicates are pure, the per-window latches live here, and each speaks after
+     * episode. The predicates are pure, one `Diagnostic` per invariant lives here, and each speaks after
      * `INVARIANT_STRIKES` consecutive violations. The buffer-versus-allocation pair is this pass's own
      * reading; the phase pair is compared on the fallback path only.
      */
@@ -546,15 +550,14 @@ export class WindowDecoration {
         const actorBox = winActor
             ? {x: winActor.x ?? 0, y: winActor.y ?? 0, width: winActor.width, height: winActor.height}
             : null;
-        this._fireInvariant('_bufferActorLatch',
-            bufferAllocationWarning(bufferRect, actorBox, label));
+        this._bufferActorDiagnostic.check(bufferAllocationWarning(bufferRect, actorBox, label));
 
-        if (!this.clipPhaseInTransform && this._win) {
-            const {mirror, applied} = this._readPhases();
-            this._fireInvariant('_phaseLatch', phaseAlignmentWarning(mirror, applied, label));
-        } else {
-            this._phaseLatch = freshInvariantState();
-        }
+        // A pass with no phase pair has nothing to compare, which is agreement for this invariant,
+        // so it is checked with null rather than skipped: skipping would leave it armed.
+        const {mirror, applied} = this.clipPhaseInTransform || !this._win
+            ? {mirror: null, applied: null}
+            : this._readPhases();
+        this._phaseDiagnostic.check(phaseAlignmentWarning(mirror, applied, label));
     }
 
     /**
@@ -577,19 +580,6 @@ export class WindowDecoration {
             mirror: tagPhase(getWindowSubpixelOffset(this._win, this._St, container), container),
             applied: tagPhase(getAppliedSubpixelPhase(this._win, this._St, container), container),
         };
-    }
-
-    /**
-     * Advances one latch by one pass and logs the text when this pass is the episode's first
-     * sustained violation.
-     * @param key - The latch field name on this decoration
-     * @param warning - This pass's warning text, or null when healthy
-     */
-    _fireInvariant(key, warning) {
-        const {state, message} = evaluateInvariant(this[key], warning);
-        this[key] = state;
-        if (message)
-            this._warn(message);
     }
 
     /**
@@ -626,6 +616,9 @@ export class WindowDecoration {
         // hold that survived the gap would draw the clip and the cast at the body they had before it.
         this.bodyPlan.reset();
         this._passPlan = null;
+        // A report describes the pass that ended, so the next episode starts unheard.
+        this._bufferActorDiagnostic.reset();
+        this._phaseDiagnostic.reset();
         this.overview.drop();
         this._syncClip(false);
         this._syncShadow(false);

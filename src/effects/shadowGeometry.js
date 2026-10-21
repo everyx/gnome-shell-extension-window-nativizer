@@ -90,7 +90,7 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
     // much instead of reading three near-identical numbers next to a bare tolerance.
     const deltaWidth = authority.width - bodyWidth;
     const deltaHeight = authority.height - bodyHeight;
-    return `[window-nativizer] Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
+    return `Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
         `disagrees with the shadow body ${fmt2(bodyWidth)}x${fmt2(bodyHeight)}${actor} ` +
         `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px`;
 }

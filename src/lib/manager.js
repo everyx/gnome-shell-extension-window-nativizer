@@ -5,6 +5,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {evaluateWindowActions} from './detector.js';
 import {suggestedRuleState, suggestedRuleWouldChange} from './pickSuggestion.js';
 import {extractWindowProperties} from './pick.js';
+import {journal} from '../platform/journal.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {reconcileOutcome, readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
@@ -149,7 +150,7 @@ export class Manager {
             try {
                 this._destroyWindow(win);
             } catch (e) {
-                logError(e, '[window-nativizer] Failed to tear down a window decoration');
+                journal.failure(e, 'Failed to tear down a window decoration');
             }
         }
         this._tracking = null;

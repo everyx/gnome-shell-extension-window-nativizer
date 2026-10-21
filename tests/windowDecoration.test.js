@@ -1,4 +1,5 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
+import {Journal} from '../src/platform/journal.js';
 import {resolvePaintBody} from '../src/effects/clipParams.js';
 import {clipParamsFrom, shadowStyleFrom} from '../src/effects/decorationPass.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
@@ -362,7 +363,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             ResizeBand: MockResizeBand,
             OverviewMask,
             OverviewShadow: FakeOverviewShadow,
-            warn,
+            journal: new Journal({warn}),
         });
         const flat = !(insets.left > 0 || insets.top > 0 || insets.right > 0 || insets.bottom > 0);
         deco.apply({
@@ -707,7 +708,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             RoundedClipEffect: MockClipEffect,
             ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
-            warn,
+            journal: new Journal({warn}),
         });
         const actions = {
             drawClip: true,
@@ -756,7 +757,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             RoundedClipEffect: MockClipEffect,
             ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
-            warn,
+            journal: new Journal({warn}),
         });
         const actions = {
             drawClip: true,

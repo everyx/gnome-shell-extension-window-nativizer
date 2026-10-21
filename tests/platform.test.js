@@ -3,6 +3,7 @@
  * Run: pnpm test
  */
 
+import {PREFIX} from '../src/platform/journal.js';
 import {CursorShape, setActorCursor, cursorTypeFor} from '../src/platform/actorCursor.js';
 import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../src/platform/grabOp.js';
 import {resolveUniformLocation} from '../src/platform/uniformLocation.js';
@@ -88,8 +89,16 @@ describe('platform', () => {
 
         it('refuses a shape it does not know, rather than leaving the pointer alone', () => {
             // A misspelt string used to resolve to nothing, which is the same outcome as a line that
-            // has no enum at all - two different things, so they are told apart here.
-            expect(() => cursorTypeFor('sideways', {N_RESIZE: 10})).toThrowError(/unknown cursor shape/);
+            // has no enum at all - two different things, so they are told apart here. This throw can
+            // escape into a Clutter handler, where GJS logs it with no sink of ours, so it carries
+            // the tag itself; a throw our own catches absorb must not, or the line is tagged twice.
+            let thrown = null;
+            try {
+                cursorTypeFor('sideways', {N_RESIZE: 10});
+            } catch (e) {
+                thrown = e.message;
+            }
+            expect(thrown).toBe(`${PREFIX} unknown cursor shape: sideways`);
         });
 
         it('answers null for a shape this line has no member for', () => {

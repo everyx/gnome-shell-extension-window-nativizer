@@ -158,12 +158,18 @@ a setting on, importing a rule file or picking a window is not an event, and a m
 it is noise for both readers. A log line earns its place only when it reports a fault the code
 cannot show the user, or one it recovered from.
 
-The warnings that stay on have two shapes. A persistent violation of a design invariant is reported
-through the edge-triggered latch in `evaluateInvariant`, which speaks once per episode and re-arms
-when the violation clears, so a condition that lasts many frames is one line rather than one per
-frame. An exception a `catch` would otherwise swallow is reported through `logError`, which keeps
-the stack and the context the catch would have discarded. Everything else is either the user's
-business (on screen) or nobody's (not written).
+The warnings that stay on have two shapes. A persistent violation of a design invariant goes
+through a `Diagnostic` (`diagnosticInvariants.js`), which owns the edge-triggered latch: it speaks
+once per episode and re-arms when the violation clears, so a condition that lasts many frames is
+one line rather than one per frame. Its `check()` is called every pass with null when there is
+nothing to say, because a pass that skips the call leaves the latch armed and the next episode
+silent. An exception a `catch` would otherwise swallow goes through `journal.failure`, which keeps
+the stack and the context the catch would have discarded.
+
+Every line is written by `src/platform/journal.js`, which owns the `[window-nativizer]` prefix and the
+sink. Nothing else in `src/` writes to the console: the predicate returns content, the journal adds
+the tag, and a lint rule keeps the two roles apart. Everything else is either the user's business
+(on screen) or nobody's (not written).
 
 ## Measuring in the nested session
 

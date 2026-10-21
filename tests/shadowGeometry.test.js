@@ -526,7 +526,7 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
             {width: 428, height: 300},
             shadowBox({width: 400, height: 300}),
             {width: 400, height: 300});
-        expect(warning).toContain('[window-nativizer] Shadow body authority');
+        expect(warning).toContain('Shadow body authority');
         // The compared shadow extent is the body, not the padded shadow box, and every extent
         // carries a decimal so a sub-pixel disagreement is visible rather than rounded to equal.
         expect(warning).toContain('428.00x300.00');

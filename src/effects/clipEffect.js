@@ -16,7 +16,8 @@ import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
 import {clipParamsFrom} from './decorationPass.js';
-import {evaluateInvariant, freshInvariantState, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
+import {Diagnostic, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
+import {journal} from '../platform/journal.js';
 import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
 
 const DECLARATIONS = `
@@ -102,8 +103,9 @@ export const RoundedClipEffect = GObject.registerClass({
      * @param [St] - The St namespace the decoration resolved the clip target with,
      *        handed to the fallback phase read so it identifies the surface container by the
      *        clip's own rule rather than a global
+     * @param [options.journal] - Where the offscreen-box diagnostic writes; the decoration's own
      */
-    _init(St = null) {
+    _init(St = null, options = {}) {
         super._init();
 
         this._St = St;
@@ -145,9 +147,9 @@ export const RoundedClipEffect = GObject.registerClass({
         // reads the live actors and evaluates the settle on the frame clock. Null until the first pass.
         this._bodyPlan = null;
 
-        // The offscreen-box reconciliation latch: the derived box and the FBO Clutter allocated are
-        // two readings of one extent, and a part between them speaks once per episode.
-        this._boxLatch = freshInvariantState();
+        // The offscreen-box diagnostic: the derived box and the FBO Clutter allocated are two
+        // readings of one extent, and a part between them speaks once per episode.
+        this._boxDiagnostic = new Diagnostic(options.journal ?? journal, 1);
 
         this._quadVec = [0, 0];
         this._offsetVec = [0, 0];
@@ -379,11 +381,7 @@ export const RoundedClipEffect = GObject.registerClass({
      * own size and scale.
      */
     _checkOffscreenBox(derived, target) {
-        const {state, message} = evaluateInvariant(this._boxLatch,
-            offscreenBoxWarning(derived, target), 1);
-        this._boxLatch = state;
-        if (message)
-            console.warn(message);
+        this._boxDiagnostic.check(offscreenBoxWarning(derived, target));
     }
 
     /**
