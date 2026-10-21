@@ -96,6 +96,15 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null) {
 }
 
 /**
+ * Whether the settle could not decide which of its two reads is the fresh one: it held, or it ran out
+ * of strikes. Only then is a disagreement between the authority and the shadow's bound box a fact
+ * about the window rather than the settle choosing a side the window's own size confirms.
+ */
+export function settleUndecided(unsettled, pairDisagreementStrikes) {
+    return Boolean(unsettled) || pairDisagreementStrikes > 0;
+}
+
+/**
  * Whether a fresh clip-target read differs from the one the shadow last laid out from, so the caller
  * must schedule another layout. The authority is the read, not the object: a container resized in
  * place is a change, and an unknown read is a change from a known one.
@@ -231,5 +240,9 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
         corner = geometry.corner;
     }
 
-    return {cast, slices, corner, castChanged, authority, body};
+    return {
+        cast, slices, corner, castChanged, authority, body,
+        unsettled: settled?.unsettled ?? false,
+        pairDisagreementStrikes: settled?.pairDisagreementStrikes ?? 0,
+    };
 }

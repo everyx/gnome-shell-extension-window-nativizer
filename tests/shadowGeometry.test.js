@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {clipTargetReadChanged, shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
+import {clipTargetReadChanged, settleUndecided, shadowBodyWarning, shadowCastRect, shadowGeometry, shadowLayout, shadowPhaseOffset, shadowSlices, shadowTranslation, SHADOW_BODY_TOLERANCE, SHADOW_PAD}
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -396,6 +396,35 @@ describe('shadow body authority (one body for the clip and the shadow)', () => {
         expect(rects[7].x2).toBeGreaterThanOrEqual(bodyRight);
     });
 
+    it('carries the settle\'s verdict, so the warning can tell its work from a defect', () => {
+        const zero2 = {left: 0, top: 0, right: 0, bottom: 0};
+        // The observed e2e shape: the container trails after a resize, the window's own size confirms
+        // the actor, so the settle acts on the actor. Decided, therefore not a defect to report.
+        const decided = shadowLayout({radius: 12}, boundShadowBox({width: 700, height: 520}), zero2, 1, {
+            targetSize: {width: 450, height: 300},
+            windowActorSize: {width: 700, height: 520},
+            windowSize: {width: 700, height: 520},
+            bodyPlan: {previousBody: {width: 700, height: 520},
+                previousAuthority: {width: 700, height: 520},
+                previousWindowSize: {width: 700, height: 520}},
+        });
+        expect(decided.authority).toEqual({width: 450, height: 300});
+        expect(decided.body).toEqual({width: 700, height: 520});
+        expect(settleUndecided(decided.unsettled, decided.pairDisagreementStrikes)).toBeFalse();
+
+        // Neither read is confirmed by the window's own size: the settle holds and says so.
+        const undecided = shadowLayout({radius: 12}, boundShadowBox({width: 804, height: 600}), zero2, 1, {
+            targetSize: {width: 796, height: 600},
+            windowActorSize: {width: 804, height: 600},
+            windowSize: {width: 800, height: 600},
+            bodyPlan: {previousBody: {width: 800, height: 600},
+                previousAuthority: {width: 800, height: 600},
+                previousWindowSize: {width: 800, height: 600}},
+        });
+        expect(undecided.unsettled).toBeTrue();
+        expect(settleUndecided(undecided.unsettled, undecided.pairDisagreementStrikes)).toBeTrue();
+    });
+
     it('is a no-op when the container and the window actor agree', () => {
         const body = {width: 400, height: 300};
         const withAuthority = shadowLayout({radius: 12}, boundShadowBox(body), zero, 1, {
@@ -541,6 +570,25 @@ describe('shadowBodyWarning (the body-authority invariant)', () => {
     it('stays silent when the authority is unknown', () => {
         expect(shadowBodyWarning(null, shadowBox({width: 400, height: 300}),
             {width: 400, height: 300})).toBeNull();
+    });
+});
+
+describe('settleUndecided (when a disagreement is a fact about the window)', () => {
+    it('is true while the settle holds its previous body', () => {
+        expect(settleUndecided(true, 1)).toBeTrue();
+        expect(settleUndecided(true, 0)).toBeTrue();
+    });
+
+    it('is true once the settle has spent its strikes and gave up on a confirmation', () => {
+        expect(settleUndecided(false, 2)).toBeTrue();
+        expect(settleUndecided(undefined, 3)).toBeTrue();
+    });
+
+    it('is false when the settle acted on the read the window own size confirmed', () => {
+        // The two reads disagree, and the window's own size names the fresh one. The authority being
+        // different is then the settle working, not a defect: this is the shape the e2e log audit saw.
+        expect(settleUndecided(false, 0)).toBeFalse();
+        expect(settleUndecided(undefined, 0)).toBeFalse();
     });
 });
 
