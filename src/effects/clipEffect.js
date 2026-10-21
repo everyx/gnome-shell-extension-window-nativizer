@@ -148,7 +148,9 @@ export const RoundedClipEffect = GObject.registerClass({
         this._bodyPlan = null;
 
         // The offscreen-box diagnostic: the derived box and the FBO Clutter allocated are two
-        // readings of one extent, and a part between them speaks once per episode.
+        // readings of one extent, and a part between them speaks once per episode. The decoration
+        // rebuilds this effect per episode, so the episode is the object's lifetime and no reset is
+        // needed here.
         this._boxDiagnostic = new Diagnostic(options.journal ?? journal, 1);
 
         this._quadVec = [0, 0];

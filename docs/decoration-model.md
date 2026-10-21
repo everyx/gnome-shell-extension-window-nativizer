@@ -1165,6 +1165,35 @@ hold a correct ring indefinitely. A decoration dropped for a reading it could no
 witness with it: the buffer it was compared against is gone, so a later hold cannot compare against a
 subject this decoration never saw.
 
+**What an episode boundary clears.** A decoration outlives the geometry that built it: it is kept while
+the window is minimized or between a resize's passes, and it is what the next usable reading rebuilds
+from. So each field has an owner, and only three owners survive a gap. The extension's own
+(`_journal`, the injected effect classes) and the window's (`_win`, the overview child) were never in
+question. The interesting line is between *pass* state, which the next `apply()` rewrites by
+construction, and *episode* state, which is what a hold or a latch reads back - the settle's reference
+points, the ring hold's buffer witness, the two diagnostic latches - and that is what `undecorate()`
+clears, field by field. Two fields are deliberately kept across a gap: `_scale`, because an unread
+scale is *unknown* rather than 1.0 and a rebuilt decoration must not read it as "no scaling", and
+`_initialFrameSize`, because the visual floor judges the size the window was first decided at and
+latching it again would move the floor under a drag. The spec
+(`tests/windowDecoration.test.js`, `LIFETIMES`) is the source of truth for which field is which; it
+also fails when a field is added without a declared lifetime, so this is a rule the code enforces
+rather than one a reader has to remember.
+
+**A pass writes its history only once it has drawn.** `apply()` reads the actors, builds the actors it
+needs, pushes the overview's own state and only then writes the state the next pass reads back,
+because every part of that calls into GObject - a lock, an unmanage or a teardown mid-pass throws, and
+so can the clip's resume at the end. The manager swallows that throw, so a
+half-applied pass used to leave the settle's reference points and the ring witness advanced while
+nothing had been drawn, and the next pass compared against a pass that never happened.
+
+That is a bound on the history, not a transaction. An effect the pass attached before a later stage
+threw stays attached, and unwinding a half-attached effect during a teardown would be the worse risk.
+What the next pass is promised is that it reads the history of the last pass that *finished*, and
+builds what that one could not. The diagnostic invariants run before any of it for the reason they
+exist at all: they judge the readings, not the drawing, so a pass that throws still spoke or re-armed.
+A line from them means an invariant was violated, never that the decoration was applied.
+
 **The shadow is not resized to match; only its cast follows the authority.** That is deliberate, and it was verified rather than assumed: driving the authority larger than the shadow actor's own allocation in a nested session at 1.3333 (control 700×500; +28 ⇒ +28.5 logical px of visible shadow; +120 ⇒ +120) showed the added area is painted. `ShadowActor` overrides no paint volume, so a custom paint node is not clipped by the allocation, and the extra slices appear.
 
 **A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip — which re-reads its size at paint — moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
