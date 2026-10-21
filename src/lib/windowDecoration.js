@@ -118,6 +118,9 @@ export class WindowDecoration {
         // moved can make a new ring real; see the ring plan below for why the window's own size
         // cannot answer that.
         this._lastBuffer = null;
+        // The ring the last pass settled on, next to the buffer it was read from: both are the hold's
+        // witness, and both belong to the episode that read them.
+        this._lastRing = null;
         // The plan handed to the clip and the shadow for the paints after this pass: the plan's state
         // as this pass found it, taken before it advances.
         this._passPlan = null;
@@ -286,15 +289,15 @@ export class WindowDecoration {
         // is "incomplete", and the clip abstains on it instead of picking from a partial set.
         this._scaleCandidates = inputs?.monitorScaleCandidates ?? null;
 
+        // The invariants this pass can judge are judged before anything is drawn: they read the pass's
+        // own readings and the actors, and a pass that throws later must still have spoken or re-armed.
+        // A line here says the readings violated an invariant, never that the decoration was applied.
+        this._checkDiagnosticInvariants(inputs, winActor);
+
         // Hand the geometry path the plan, not a resolved body: the actors and the window's own size are
         // read live at paint, so the cut and the cast settle from them there and track the frame being drawn.
         const windowSize = readWindowExtent(inputs);
         this._passPlan = this.bodyPlan.settle;
-        this.bodyPlan.next({
-            targetSize: readActorSize(clipTarget),
-            windowActorSize: readActorSize(winActor),
-            windowSize,
-        });
 
         // One plan per pass: the insets the body uses, and the meanings the clip shader gives the ring.
         // The ring hold covers a ring that moves while nothing else does; its witness is the BUFFER, since
@@ -314,8 +317,6 @@ export class WindowDecoration {
             if (drifted)
                 ringNow = this._lastRing;
         }
-        this._lastBuffer = buffer;
-        this._lastRing = ringNow;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
                 ? flatSafeInsets(scale) : ringNow,
@@ -335,12 +336,21 @@ export class WindowDecoration {
         // pass that draws nothing (maximized, fullscreen) must still clear the previous one's.
         this._applyStyle(actions.style, actions.drawClip, scale, readableScale);
 
-        this._checkDiagnosticInvariants(inputs, winActor);
-
-        // _syncClip only runs the overview transition when the clip's presence changed, so the
-        // style this pass produced - and a desktop pass that has to take the clip back - is
-        // applied to the overview state here.
+        // _syncClip only runs the overview transition when the clip's presence changed, so this pass's
+        // style - and a desktop pass taking the clip back - is applied to the overview here. Not an
+        // epilogue: it resumes the clip, sets its enabled flag and pushes the pass, so it can throw.
         this.setOverviewMode(inOverview);
+
+        // The history, written last: everything above can throw, that sync included, and a throw must
+        // not advance the episode. Not a transaction - an effect attached before the throw stays
+        // attached. The next pass reads the history of the last pass that finished.
+        this.bodyPlan.next({
+            targetSize: readActorSize(clipTarget),
+            windowActorSize: readActorSize(winActor),
+            windowSize,
+        });
+        this._lastBuffer = buffer;
+        this._lastRing = ringNow;
     }
 
     /**

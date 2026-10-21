@@ -696,6 +696,155 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.shadow.scale).toBe(1.25);
     });
 
+    it('commits the episode only after the pass has drawn, so a throw cannot advance it', () => {
+        // A GObject call on an actor Mutter is tearing down throws, and the manager swallows it. If the
+        // settle's reference points and the ring hold's witness have already moved by then, the next pass
+        // settles against a pass that drew nothing - the BodyPlan bug one level down.
+        class ThrowingClipEffect {
+            constructor() {
+                throw new Error('Mutter is tearing down');
+            }
+        }
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: ThrowingClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            journal: new Journal({warn: () => {}}),
+        });
+        const before = deco.bodyPlan.settle;
+
+        const pass = () => deco.apply({
+            actions: {
+                drawClip: true, drawRing: false, drawShadow: false, drawResize: false,
+                ring: {clear: false, safeInset: false},
+                style: {radius: 12, outline: null, shadows: []},
+            },
+            inputs: {
+                insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1,
+                frameRect: {x: 0, y: 0, width: 800, height: 600},
+                bufferRect: {x: 0, y: 0, width: 800, height: 600},
+                bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            },
+            actor: mockActor,
+            target: mockActor,
+        });
+
+        expect(pass).toThrow();
+
+        expect(deco.bodyPlan.settle).toEqual(before);
+        expect(deco._lastBuffer).toBeNull();
+        expect(deco._lastRing).toBeNull();
+    });
+
+    it('keeps the history still when a later stage throws, and rebuilds on the next pass', () => {
+        // The clip constructor throwing is the easy case: nothing has been built yet. This one throws
+        // from the shadow, after the clip exists, so it also pins what the commit does NOT promise -
+        // the actor the pass already attached stays attached, because unwinding a half-attached effect
+        // during a teardown would be worse than finishing the next pass from there.
+        let throwsOnce = true;
+        class FlakyShadowActor extends MockShadowActor {
+            constructor(...args) {
+                if (throwsOnce) {
+                    throwsOnce = false;
+                    throw new Error('Mutter is tearing down');
+                }
+                super(...args);
+            }
+        }
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: FlakyShadowActor,
+            ResizeBand: MockResizeBand,
+            journal: new Journal({warn: () => {}}),
+        });
+        const before = deco.bodyPlan.settle;
+        const pass = () => deco.apply({
+            actions: {
+                drawClip: true, drawRing: false, drawShadow: true, drawResize: false,
+                ring: {clear: false, safeInset: false},
+                style: {radius: 12, outline: null, shadows: []},
+            },
+            inputs: {
+                insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1,
+                frameRect: {x: 0, y: 0, width: 800, height: 600},
+                bufferRect: {x: 0, y: 0, width: 800, height: 600},
+                bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
+            },
+            actor: mockActor,
+            target: mockActor,
+        });
+
+        expect(pass).toThrow();
+        expect(deco.bodyPlan.settle).toEqual(before);
+        expect(deco._lastBuffer).toBeNull();
+        // Not a rollback: the clip the pass attached before the shadow threw is still here.
+        expect(deco.clip).not.toBeNull();
+
+        // The recovery the guarantee is really about: the next pass settles from the history it had,
+        // not from one that never finished, and the actor it could not build arrives.
+        pass();
+        expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
+        expect(deco._lastBuffer).not.toBeNull();
+        expect(deco.shadow).not.toBeNull();
+    });
+
+    it('keeps the history still when the overview sync throws, which is the last thing it does', () => {
+        // `setOverviewMode` is not a harmless epilogue: it reaches the clip's resume, its enabled flag
+        // and a pass push. If it threw after the history had been written, the guarantee would hold
+        // for every stage but the last one.
+        class ThrowingResumeClip extends MockClipEffect {
+            constructor(...args) {
+                super(...args);
+                this.failResume = false;
+            }
+
+            resume() {
+                if (this.failResume)
+                    throw new Error('Mutter is tearing down');
+            }
+        }
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: ThrowingResumeClip,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+            journal: new Journal({warn: () => {}}),
+        });
+        const pass = bufferRect => deco.apply({
+            actions: {
+                drawClip: true, drawRing: false, drawShadow: false, drawResize: false,
+                ring: {clear: false, safeInset: false},
+                style: {radius: 12, outline: null, shadows: []},
+            },
+            inputs: {
+                insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1,
+                frameRect: {x: 0, y: 0, width: 800, height: 600},
+                bufferRect,
+                bufferWidth: bufferRect.width, bufferHeight: bufferRect.height,
+                frameWidth: 800, frameHeight: 600,
+            },
+            actor: mockActor,
+            target: mockActor,
+        });
+
+        const firstBuffer = {x: 0, y: 0, width: 800, height: 600};
+        pass(firstBuffer);
+        const afterFirst = deco.bodyPlan.settle;
+        deco.clip.failResume = true;
+
+        // A buffer that moved, so the witness advancing would be visible: comparing two equal passes
+        // would prove nothing, which is how the first cut of this spec passed on a broken order.
+        expect(() => pass({x: 0, y: 0, width: 802, height: 600})).toThrow();
+
+        expect(deco._lastBuffer).toBe(firstBuffer);
+        expect(deco.bodyPlan.settle).toEqual(afterFirst);
+    });
+
     it('warns once when the buffer and the window actor allocation disagree for two passes', () => {
         // The transient the journal could not attribute: the buffer reads 798 while the window
         // actor is 800 wide, so one of the two reads lagged the other in this pass. A single pass
@@ -1399,6 +1548,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             // The settle's reference points are the same kind of witness: a hold that outlived the gap
             // would draw the clip and the cast at the body they had before it.
             expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
+            // The actors this pass built go too. `_syncShadow` needs the window actor to answer, so this
+            // one is only reachable with one behind the decoration, which the harness provides.
+            expect(deco.shadow).not.toBeNull();
 
             deco.undecorate();
             expect(deco._lastBuffer).toBeNull();
@@ -1407,6 +1559,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 previousBody: null, previousAuthority: null, previousWindowSize: null,
             }));
             expect(deco._passPlan).toBeNull();
+            expect(deco.shadow).toBeNull();
         });
 
         it('skips the hold and drops the witness when this pass cannot read a ring', () => {
@@ -2484,5 +2637,115 @@ describe('WindowDecoration.initialFrameSize (the visual-floor latch)', () => {
         const deco = makeDeco();
         expect(deco.latchInitialFrameSize({frameWidth: 30, frameHeight: 30}))
             .toEqual({width: 30, height: 30});
+    });
+});
+
+describe('WindowDecoration state lifetimes (what an episode boundary must clear)', () => {
+    // Every own field answers one question - may it survive a gap? - and the answers are not
+    // interchangeable: a hold's reference points must go, a window's first size must not. A field
+    // that is not in this table fails the coverage spec below, which is the point: the wrong
+    // lifetime is invisible until a window comes back from a minimize.
+    //
+    //   session  the extension's, for as long as it is enabled
+    //   window   this Meta.Window's, latched once and kept across an episode
+    //   episode  this episode's, cleared by undecorate()
+    //   pass     written again by the next apply(), so nothing to clear
+    //   resource an actor or effect, dropped with the episode
+    const LIFETIMES = {
+        _win: 'window',
+        _container: 'window',
+        _display: 'session',
+        _St: 'session',
+        _journal: 'session',
+        _RoundedClipEffect: 'session',
+        _ShadowActor: 'session',
+        _ResizeBand: 'session',
+        overview: 'window',
+        clip: 'resource',
+        shadow: 'resource',
+        resizeBand: 'resource',
+        clipTarget: 'pass',
+        clipInsets: 'pass',
+        clipPhaseInTransform: 'pass',
+        surfaceContainer: 'pass',
+        drawClip: 'pass',
+        ring: 'pass',
+        _style: 'pass',
+        _scaleCandidates: 'pass',
+        _pass: 'pass',
+        _forceOverviewCorners: 'pass',
+        _scale: 'window',
+        _initialFrameSize: 'window',
+        bodyPlan: 'episode',
+        _lastBuffer: 'episode',
+        _lastRing: 'episode',
+        _passPlan: 'episode',
+        _bufferActorDiagnostic: 'episode',
+        _phaseDiagnostic: 'episode',
+    };
+
+    const fieldsOf = lifetime => Object.keys(LIFETIMES).filter(field => LIFETIMES[field] === lifetime);
+    // One journal for every decoration here, so a diagnostic compares equal to a fresh one - and so a
+    // spec that arms one writes nothing to the console.
+    const quiet = new Journal({warn: () => {}});
+    const makeDeco = () => new WindowDecoration(null, {container: {}, display: {}, journal: quiet});
+    const snapshot = (deco, fields) =>
+        Object.fromEntries(fields.map(field => [field, deco[field]]));
+
+    it('declares a lifetime for every field and no field it does not own', () => {
+        const owned = Object.keys(makeDeco());
+        const declared = Object.keys(LIFETIMES);
+
+        expect(owned.filter(field => !declared.includes(field))).toEqual([]);
+        expect(declared.filter(field => !owned.includes(field))).toEqual([]);
+    });
+
+    it('returns every episode field to its fresh value, so a gap is not evidence', () => {
+        const fields = fieldsOf('episode');
+        const fresh = makeDeco();
+        const deco = makeDeco();
+        deco.bodyPlan.next({targetSize: {width: 400, height: 300},
+            windowActorSize: {width: 400, height: 300}, windowSize: {width: 400, height: 300}});
+        deco._lastBuffer = {x: 0, y: 0, width: 400, height: 300};
+        deco._lastRing = {left: 1, top: 2, right: 3, bottom: 4};
+        deco._passPlan = deco.bodyPlan.settle;
+        for (const diagnostic of [deco._bufferActorDiagnostic, deco._phaseDiagnostic]) {
+            diagnostic.check('a violation');
+            diagnostic.check('a violation');
+        }
+        // The seed has to differ from fresh, or the assertion below would pass on an empty episode.
+        expect(snapshot(deco, fields)).not.toEqual(snapshot(fresh, fields));
+
+        deco.undecorate();
+
+        expect(snapshot(deco, fields)).toEqual(snapshot(fresh, fields));
+    });
+
+    it('keeps what belongs to the window, because a gap says nothing about it', () => {
+        const deco = makeDeco();
+        const overview = deco.overview;
+        deco._scale = 1.3333;
+        deco.latchInitialFrameSize({frameWidth: 800, frameHeight: 600});
+
+        deco.undecorate();
+
+        // An unread scale is *unknown*, not 1.0, and the visual floor is latched once per window: a
+        // decoration that dropped either would flip its look on the first pass after a minimize.
+        expect(deco._scale).toBe(1.3333);
+        expect(deco.initialFrameSize).toEqual({width: 800, height: 600});
+        expect(deco.overview).toBe(overview);
+    });
+
+    it('drops the resources it can drop without a window actor', () => {
+        // The shadow is the exception: `_syncShadow` answers the actor it is given, so a bare
+        // decoration keeps it. The harness specs cover that path with an actor behind it.
+        const deco = makeDeco();
+        deco.clip = {remove_effect: () => {}};
+        deco.resizeBand = {destroy: () => {}};
+
+        deco.undecorate();
+
+        expect(deco.clip).toBeNull();
+        expect(deco.resizeBand).toBeNull();
     });
 });

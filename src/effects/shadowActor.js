@@ -56,7 +56,8 @@ export const ShadowActor = GObject.registerClass({
         // existed.
         this._bodyPlan = null;
         // The body-authority diagnostic: a persistent disagreement is one journal line per episode
-        // and a pass it does not speak for re-arms it.
+        // and a pass it does not speak for re-arms it. The episode is this actor's lifetime, since the
+        // decoration builds a new one, so there is nothing to reset.
         this._bodyDiagnostic = new Diagnostic(options.journal ?? journal, 1);
         this._insets = null;
         this._scale = 1.0;
