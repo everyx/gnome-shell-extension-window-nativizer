@@ -323,6 +323,9 @@ export class Manager {
                 actions,
                 inputs,
                 actor,
+                // The pass's one reading of the surface-container rule: `observe()` resolved it above,
+                // and the decoration consumes it rather than asking again.
+                surfaceContainer: this._tracking.surfaceContainer(win),
                 inOverview: this._inOverview,
                 forceOverviewCorners: this._forceOverviewCorners,
             });

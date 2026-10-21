@@ -188,6 +188,23 @@ describe('WindowTracking — what wakes a pass', () => {
         expect(second.liveSignals).toContain('notify::allocation');
         expect(tracking.get(win).wiredContainer).toBe(second);
     });
+
+    it('hands the container it read to the pass, so the clip need not read the rule again', () => {
+        const {tracking} = makeTracker();
+        const container = fakeEmitter({width: 800, height: 600, x: 0, y: 0});
+        const actor = fakeEmitter({width: 800, height: 600, get_children: () => [container]});
+        const win = fakeWindow({actor});
+
+        tracking.add(win, decoration());
+        expect(tracking.surfaceContainer(win)).toBe(container);
+
+        // A pass with no container says so with null, which is different from never having observed.
+        const bare = fakeEmitter({width: 800, height: 600, get_children: () => []});
+        const other = fakeWindow({actor: bare});
+        tracking.add(other, decoration());
+        expect(tracking.surfaceContainer(other)).toBeNull();
+        expect(tracking.surfaceContainer(fakeWindow())).toBeNull();
+    });
 });
 
 describe('WindowTracking — teardown', () => {

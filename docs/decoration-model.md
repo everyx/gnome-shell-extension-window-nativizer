@@ -784,7 +784,11 @@ by that same value explicitly. Both cuts then follow one source. Both phase read
 (`getAppliedSubpixelPhase` and the mirror `getWindowSubpixelOffset`) identify the container through
 `getSurfaceContainer` with the same `St` the clip resolved its target with, threaded from the
 manager through the decoration into the effect and the shadow actor, so the foreign-widget rule is
-one rule everywhere and never falls back to `globalThis.St` or the constructor-name heuristic. The read only reflects a move once
+one rule everywhere and never falls back to `globalThis.St` or the constructor-name heuristic. The
+rule itself is read **once per pass**: `WindowTracking.observe()` resolves the container because it
+is the module that decides which actor's allocation wakes a pass, and the decoration consumes that
+answer (`apply({surfaceContainer})`) instead of asking again - so the clip's target and the phase
+pair's actor are the same read rather than two reads that agree. The read only reflects a move once
 Mutter has invalidated the cached transform, which it does on the window actor's allocation change,
 so `ShadowActor` syncs on `notify::allocation` as well as position, translation, scale and pivot -
 on position alone the read held the previous position's phase indefinitely (measured at 1.25x: the
