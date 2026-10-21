@@ -21,6 +21,8 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
+| `pnpm run stats` | code size and EGO `quality/code-volume` budget; CI posts the base→head delta as a PR comment |
+| `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000; `stats` itself only reports |
 | `pnpm run test:decoration` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
 | `pnpm run check:decoration` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
