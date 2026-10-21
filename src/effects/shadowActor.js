@@ -10,7 +10,8 @@ import {ZERO_INSETS} from '../lib/frame.js';
 import {pipelineOpacityFor} from '../lib/style.js';
 import {clipTargetReadChanged, settleUndecided, shadowBodyWarning, shadowLayout, shadowLayoutPosition, shadowPhaseOffset, shadowTranslation, SHADOW_PAD} from './shadowGeometry.js';
 import {readBodySizes, readActorSize} from './bodyPlan.js';
-import {evaluateInvariant, freshInvariantState} from '../lib/diagnosticInvariants.js';
+import {Diagnostic} from '../lib/diagnosticInvariants.js';
+import {journal} from '../platform/journal.js';
 import {shadowStyleFrom} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
@@ -31,8 +32,9 @@ export const ShadowActor = GObject.registerClass({
      * @param container - windowGroup; shadow inserted below windowActor
      * @param [St] - The St namespace the clip target path uses, so the applied
      *        phase read identifies the surface container by the clip's rule, not a global
+     * @param [options.journal] - Where the body-authority diagnostic writes; the decoration's own
      */
-    _init(windowActor, container, St = null) {
+    _init(windowActor, container, St = null, options = {}) {
         super._init({name: 'WindowNativizerShadowActor', reactive: false, opacity: 255});
 
         this._windowActor = windowActor;
@@ -53,9 +55,9 @@ export const ShadowActor = GObject.registerClass({
         // layout then derives the body from the live reads, exactly as it did before the settle
         // existed.
         this._bodyPlan = null;
-        // The body-authority warning's latch: the shared invariant state, so a persistent disagreement
-        // is one journal line per episode and a pass it does not speak for re-arms it.
-        this._bodyLatch = freshInvariantState();
+        // The body-authority diagnostic: a persistent disagreement is one journal line per episode
+        // and a pass it does not speak for re-arms it.
+        this._bodyDiagnostic = new Diagnostic(options.journal ?? journal, 1);
         this._insets = null;
         this._scale = 1.0;
         // The resolved clip target's phase strategy, kept in step by setPhaseInTransform(). The
@@ -373,13 +375,9 @@ export const ShadowActor = GObject.registerClass({
      * speaks, and any pass without re-arms it, so a later episode speaks again.
      */
     _warnOnBodyDisagreement(authority) {
-        const {state, message} = evaluateInvariant(this._bodyLatch,
-            shadowBodyWarning(authority,
-                {width: this.width, height: this.height},
-                readActorSize(this._windowActor)), 1);
-        this._bodyLatch = state;
-        if (message)
-            console.warn(message);
+        this._bodyDiagnostic.check(shadowBodyWarning(authority,
+            {width: this.width, height: this.height},
+            readActorSize(this._windowActor)));
     }
 
     destroy() {

@@ -426,7 +426,10 @@ describe('rule key invariant', () => {
     });
 
     it('refuses a specifier carrying a colon rather than mis-splitting it', () => {
-        expect(() => buildRuleKey('app', {clientType: 'wayland:x11'})).toThrow();
+        // Anchored: every caller of this one absorbs the throw, so the tag belongs to the journal
+        // that writes the line, not to the message. A prefix here would be tagged twice.
+        expect(() => buildRuleKey('app', {clientType: 'wayland:x11'}))
+            .toThrowError(/^rule specifier is not colon-free: /);
     });
 });
 
@@ -619,7 +622,7 @@ describe('withRule', () => {
     it('refuses anything outside the axis grammar', () => {
         expect(() => withRule({}, key, 'shadow,corners')).toThrow();
         expect(() => withRule({}, key, 'corners=on')).toThrow();
-        expect(() => withRule({}, key, 'both')).toThrow();
+        expect(() => withRule({}, key, 'both')).toThrowError(/^unknown rule state: both$/);
         expect(() => withRule({}, key, undefined)).toThrow();
     });
 });

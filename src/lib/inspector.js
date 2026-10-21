@@ -7,6 +7,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
+import {journal} from '../platform/journal.js';
 import {
     getWindowActors,
     getActiveWorkspace,
@@ -84,7 +85,7 @@ export class InspectorService {
         try {
             this._cancelInteractivePick();
         } catch (e) {
-            logError(e, '[window-nativizer] Failed to tear down the window picker');
+            journal.failure(e, 'Failed to tear down the window picker');
         }
 
         if (this._ownerId) {
@@ -137,7 +138,7 @@ export class InspectorService {
         } catch (e) {
             // The picker could not be put on screen: tear down whatever it did build and answer,
             // or the invocation stays pending and every later pick is refused as BUSY.
-            logError(e, '[window-nativizer] Failed to start the window picker');
+            journal.failure(e, 'Failed to start the window picker');
             this._cancelInteractivePick();
         }
     }
@@ -322,7 +323,7 @@ export class InspectorService {
             this._activeGrab = Main.pushModal(this._overlay);
         } catch (e) {
             // Must answer the D-Bus call or the prefs window hangs waiting.
-            logError(e, '[window-nativizer] Could not grab the window picker');
+            journal.failure(e, 'Could not grab the window picker');
             this._finishInteractivePick(null);
             return;
         }
@@ -387,7 +388,7 @@ export class InspectorService {
             if (this._activeGrab)
                 Main.popModal(this._activeGrab);
         } catch (e) {
-            logError(e, '[window-nativizer] Failed to release the window picker grab');
+            journal.failure(e, 'Failed to release the window picker grab');
         } finally {
             this._activeGrab = null;
         }

@@ -7,6 +7,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+import {journal} from '../platform/journal.js';
+
 // Per-process via /proc/<pid>/maps. The first is
 // the only GTK4 one, whose own resize handle the band can prove from a window's declared ring.
 const GTK4_PROVIDER = 'libadwaita-1.so';
@@ -119,8 +121,7 @@ export class ProcessClassifier {
             try {
                 this._onProcessKnown?.(pid);
             } catch (cbError) {
-                if (typeof logError === 'function')
-                    logError(cbError, '[window-nativizer] Error in onProcessKnown callback');
+                journal.failure(cbError, 'Error in onProcessKnown callback');
             }
         };
         try {

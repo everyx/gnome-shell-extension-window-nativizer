@@ -1,13 +1,11 @@
 /**
  * Diagnostic invariants: the conditions a healthy decoration pass must satisfy, and the edge-triggered
- * latches that make a violation speak once per episode. Each invariant is a pure predicate returning a
- * WARNING text or null; `evaluateInvariant` owns the strike policy every invariant shares, and health is
- * silence.
+ * latches that make a violation speak once per episode. Each invariant is a pure predicate returning the
+ * body of a line or null; `Diagnostic` owns the strike policy and the sink every invariant shares, the
+ * journal adds the prefix, and health is silence.
  */
 
 import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
-
-const PREFIX = '[window-nativizer]';
 
 /**
  * How far the derived offscreen box's device extent and the FBO Clutter allocated may differ: one
@@ -67,6 +65,40 @@ export function evaluateInvariant(state, warning, strikes = INVARIANT_STRIKES) {
 }
 
 /**
+ * One invariant's latch together with the journal it writes to, so a pass has no state to hold and
+ * no branch to take: `check()` is called every pass and agreement re-arms it. That call cannot be
+ * skipped without losing an episode, which is how a diagnostic once went silent for good.
+ */
+export class Diagnostic {
+    /**
+     * @param journal - Receives a line when this episode's first warning is due
+     * @param [strikes] - Consecutive violating passes before it may speak
+     */
+    constructor(journal, strikes = INVARIANT_STRIKES) {
+        this._journal = journal;
+        this._strikes = strikes;
+        this._state = freshInvariantState();
+    }
+
+    /**
+     * Advances one pass. Agreeing re-arms the episode; a violation speaks once per episode.
+     */
+    check(warning) {
+        const {state, message} = evaluateInvariant(this._state, warning, this._strikes);
+        this._state = state;
+        if (message)
+            this._journal.warn(message);
+    }
+
+    /**
+     * Forgets the episode. For a teardown, which is not a pass: the object outlives what it described.
+     */
+    reset() {
+        this._state = freshInvariantState();
+    }
+}
+
+/**
  * Names a window for a journal line: class first, then title, then pid, so a reader can find it.
  * The reading's `wmClass` is the class, and a pick reply's `windowTitle` is the title.
  *
@@ -92,7 +124,7 @@ export function bufferAllocationWarning(bufferRect, actorBox, label = windowIden
         return null;
     if (extentsAgree(bufferRect, actorBox, BUFFER_ACTOR_TOLERANCE))
         return null;
-    return `${PREFIX} Window buffer ${rectSummary(bufferRect)} disagrees with the window actor ` +
+    return `Window buffer ${rectSummary(bufferRect)} disagrees with the window actor ` +
         `allocation ${rectSummary(actorBox)} for ${label} beyond ${BUFFER_ACTOR_TOLERANCE}px`;
 }
 
@@ -114,7 +146,7 @@ export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLab
     // A read outside the subpixel range is a misread (a position, or a stale transform). Surface it
     // as unavailable with the raw numbers rather than as a phase disagreement.
     if (!boundedPhase(mirror) || !boundedPhase(applied)) {
-        return `${PREFIX} Fallback subpixel phase unavailable for ${label}: mirror ` +
+        return `Fallback subpixel phase unavailable for ${label}: mirror ` +
             `${phaseSummary(mirror)} applied ${phaseSummary(applied)} exceeds ` +
             `${PHASE_MAGNITUDE_BOUND}px`;
     }
@@ -122,7 +154,7 @@ export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLab
     if (Math.abs(mirror.x - applied.x) <= PHASE_ALIGNMENT_TOLERANCE &&
         Math.abs(mirror.y - applied.y) <= PHASE_ALIGNMENT_TOLERANCE)
         return null;
-    return `${PREFIX} Fallback subpixel phase ${phaseSummary(mirror)} disagrees with the phase ` +
+    return `Fallback subpixel phase ${phaseSummary(mirror)} disagrees with the phase ` +
         `Mutter applied ${phaseSummary(applied)} for ${label} beyond ${PHASE_ALIGNMENT_TOLERANCE}px`;
 }
 
@@ -132,7 +164,7 @@ export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLab
  * the caller separates out. Names the gate so the journal says why the preview stayed square.
  */
 export function overviewMaskRefusalWarning(reason, label = windowIdentityLabel()) {
-    return `${PREFIX} Overview mask not installed for ${label} although the window was ready: ${reason}`;
+    return `Overview mask not installed for ${label} although the window was ready: ${reason}`;
 }
 
 /**
@@ -141,7 +173,7 @@ export function overviewMaskRefusalWarning(reason, label = windowIdentityLabel()
  * frame.
  */
 export function shadowBakeFailureWarning(buffer) {
-    return `${PREFIX} Could not allocate a ${buffer}x${buffer} shadow buffer`;
+    return `Could not allocate a ${buffer}x${buffer} shadow buffer`;
 }
 
 /**
@@ -158,7 +190,7 @@ export function offscreenBoxWarning(derived, target) {
     const dy = Math.abs(Math.round(derived.height) - Math.round(target.height));
     if (dx <= OFFSCREEN_BOX_TOLERANCE && dy <= OFFSCREEN_BOX_TOLERANCE)
         return null;
-    return `${PREFIX} Offscreen box ${extentSummary(derived)} device px disagrees with the ` +
+    return `Offscreen box ${extentSummary(derived)} device px disagrees with the ` +
         `${extentSummary(target)} FBO Clutter allocated beyond ${OFFSCREEN_BOX_TOLERANCE}px`;
 }
 

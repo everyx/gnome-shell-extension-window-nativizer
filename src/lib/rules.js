@@ -1,3 +1,4 @@
+import {journal} from '../platform/journal.js';
 import {WindowType} from './mutterRules.generated.js';
 
 export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
@@ -197,7 +198,7 @@ export function buildRuleKey(wmClass, kind = {}) {
     // Nothing escapes the identity, so a ':' in the specifier would move the last-':' separator.
     // Fail loudly here rather than let resolveRule look the kind up under a different key.
     if (specifier.includes(':'))
-        throw new Error(`[window-nativizer] rule specifier is not colon-free: ${specifier}`);
+        throw new Error(`rule specifier is not colon-free: ${specifier}`);
 
     return `${wmClass.toLowerCase()}:${specifier}`;
 }
@@ -223,7 +224,7 @@ export function sanitizeRuleTitles(rawTitles = {}) {
         // its lowercased state key and lose its title on the next write.
         const canonicalKey = canonicalRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
-            console.warn(`[window-nativizer] Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
+            journal.warn(`Dropping case-colliding title key "${key}" (conflicts with "${seenKeys.get(canonicalKey)}")`);
             continue;
         }
         seenKeys.set(canonicalKey, key);
@@ -244,13 +245,13 @@ export function sanitizeWindowRules(rawRules = {}) {
 
     for (const [key, state] of Object.entries(rawRules)) {
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
-            console.warn(`[window-nativizer] Dropping invalid rule key: "${key}"`);
+            journal.warn(`Dropping invalid rule key: "${key}"`);
             continue;
         }
 
         const axes = parseRuleState(state);
         if (!axes) {
-            console.warn(`[window-nativizer] Dropping rule with invalid state: "${state}" for key "${key}"`);
+            journal.warn(`Dropping rule with invalid state: "${state}" for key "${key}"`);
             continue;
         }
 
@@ -262,7 +263,7 @@ export function sanitizeWindowRules(rawRules = {}) {
         const canonicalKey = canonicalRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             const existingKey = seenKeys.get(canonicalKey);
-            console.warn(`[window-nativizer] Dropping case-colliding rule key "${key}" (conflicts with "${existingKey}")`);
+            journal.warn(`Dropping case-colliding rule key "${key}" (conflicts with "${existingKey}")`);
             continue;
         }
 
@@ -280,7 +281,7 @@ export function sanitizeWindowRules(rawRules = {}) {
 export function withRule(rules = {}, key, state) {
     const axes = parseRuleState(state);
     if (!axes)
-        throw new Error(`[window-nativizer] unknown rule state: ${state}`);
+        throw new Error(`unknown rule state: ${state}`);
     const next = {...rules};
     const canonical = buildRuleState(axes);
     if (!canonical)

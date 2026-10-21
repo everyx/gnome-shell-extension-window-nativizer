@@ -6,6 +6,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Manager} from './lib/manager.js';
 import {InspectorService} from './lib/inspector.js';
+import {journal} from './platform/journal.js';
 
 export default class WindowNativizerExtension extends Extension {
     enable() {
@@ -22,7 +23,7 @@ export default class WindowNativizerExtension extends Extension {
             try {
                 this.disable();
             } catch (teardownError) {
-                logError(teardownError, '[window-nativizer] teardown after a failed enable()');
+                journal.failure(teardownError, 'teardown after a failed enable()');
             }
             throw e;
         }

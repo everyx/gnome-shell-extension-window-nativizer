@@ -9,6 +9,7 @@ import {
     OFFSCREEN_BOX_TOLERANCE,
     PHASE_ALIGNMENT_TOLERANCE,
     PHASE_MAGNITUDE_BOUND,
+    Diagnostic,
     bufferAllocationWarning,
     evaluateInvariant,
     freshInvariantState,
@@ -229,5 +230,57 @@ describe('shadowBakeFailureWarning (one line per bake-failure episode)', () => {
         state = attempt(state, true, warn);
         attempt(state, false, warn);
         expect(warn).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('Diagnostic (a latch that writes its own line)', () => {
+    const warn = () => {
+        const sink = jasmine.createSpy('warn');
+        return {sink, quarantine: new Diagnostic({warn: sink})};
+    };
+
+    it('speaks once per episode to the journal it was built with', () => {
+        const {sink, quarantine} = warn();
+
+        quarantine.check('disagrees');
+        quarantine.check('disagrees');
+
+        expect(sink).toHaveBeenCalledOnceWith('disagrees');
+    });
+
+    it('re-arms on a pass with nothing to say, so a later episode speaks again', () => {
+        // The shape of a bug this object exists to prevent: a decided pass used to skip the call
+        // entirely, which left the latch armed for good. Agreement now goes through check(null).
+        const {sink, quarantine} = warn();
+
+        quarantine.check('disagrees');
+        quarantine.check('disagrees');
+        expect(sink).toHaveBeenCalledTimes(1);
+
+        quarantine.check(null);
+        quarantine.check('disagrees');
+        quarantine.check('disagrees');
+
+        expect(sink).toHaveBeenCalledTimes(2);
+    });
+
+    it('honours the strike count it was given', () => {
+        const sink = jasmine.createSpy('warn');
+        const first = new Diagnostic({warn: sink}, 1);
+
+        first.check('disagrees');
+
+        expect(sink).toHaveBeenCalledOnceWith('disagrees');
+    });
+
+    it('forgets the episode on reset, which is a teardown rather than a pass', () => {
+        const sink = jasmine.createSpy('warn');
+        const quarantine = new Diagnostic({warn: sink}, 1);
+
+        quarantine.check('disagrees');
+        quarantine.reset();
+        quarantine.check('disagrees');
+
+        expect(sink).toHaveBeenCalledTimes(2);
     });
 });

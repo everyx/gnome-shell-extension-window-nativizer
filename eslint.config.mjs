@@ -63,6 +63,18 @@ export default [
         },
     },
     {
+        // One sink, so one prefix and one place a line is built. The prefs process is excluded: it
+        // has no shell journal and no logError, so its own console is the only thing there is.
+        files: ['src/**/*.js'],
+        ignores: ['src/platform/journal.js', 'src/prefs/**'],
+        rules: {
+            'no-restricted-syntax': ['error', {
+                selector: "MemberExpression[object.name='console']",
+                message: 'Write the line through src/platform/journal.js, which owns the prefix.',
+            }],
+        },
+    },
+    {
         files: ['src/**/*.js'],
         languageOptions: {
             sourceType: 'module',

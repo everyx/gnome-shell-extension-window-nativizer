@@ -4,13 +4,13 @@
  * actors rather than on a preview card.
  */
 
-import {ZERO_INSETS} from './frame.js';
 import {
-    evaluateInvariant,
-    freshInvariantState,
+    Diagnostic,
     overviewMaskRefusalWarning,
     windowIdentityLabel,
 } from './diagnosticInvariants.js';
+import {ZERO_INSETS} from './frame.js';
+import {journal} from '../platform/journal.js';
 import {WindowClientType} from './mutterRules.generated.js';
 import {isPaintableFrame} from '../effects/clipParams.js';
 import {getWorkspaceCount} from '../platform/display.js';
@@ -74,11 +74,9 @@ export class OverviewDecoration {
         this._mountedShadowSource = null;
         this._forceOverviewCorners = false;
         // A readiness refusal is a deferral (nothing cached); a refusal after the readiness gates
-        // passed is the "square in the overview" defect. The latch makes that one line per
+        // passed is the "square in the overview" defect. The diagnostic makes that one line per
         // episode, re-armed by an install or by leaving the overview.
-        // `console.warn` is not writable, so the sink is injectable and a spec observes the line.
-        this._warn = options.warn ?? (message => console.warn(message));
-        this._maskRefusalLatch = freshInvariantState();
+        this._maskRefusalDiagnostic = new Diagnostic(options.journal ?? journal);
     }
 
     get inOverview() {
@@ -181,7 +179,7 @@ export class OverviewDecoration {
     }
 
     _release() {
-        this._maskRefusalLatch = freshInvariantState();
+        this._maskRefusalDiagnostic.reset();
         this._clearMask();
         this._clearShadow();
         this._syncHooks();
@@ -260,7 +258,7 @@ export class OverviewDecoration {
         // refusal. Nothing is cached and the buffer's or the allocation's arrival earns a fresh
         // reconcile, so this must not be read as the window being stuck square.
         if (!this._canMask || !this._maskReady()) {
-            this._maskRefusalLatch = freshInvariantState();
+            this._maskRefusalDiagnostic.check(null);
             return false;
         }
 
@@ -320,8 +318,8 @@ export class OverviewDecoration {
 
         this._stex = stex;
         this._maskKey = key;
-        // The mask landed: re-arm the latch so a later refusal speaks as its own episode.
-        this._maskRefusalLatch = freshInvariantState();
+        // The mask landed: re-arm the diagnostic so a later refusal speaks as its own episode.
+        this._maskRefusalDiagnostic.check(null);
         this._applyOpacityBypass();
         return true;
     }
@@ -379,16 +377,14 @@ export class OverviewDecoration {
      * this watches for.
      */
     _refuseMask(reason) {
+        // A leg the user asked for is an intended rounding path, so it is not a refusal: it
+        // re-arms the episode like a pass that never refused.
         if (this._forceOverviewCorners) {
-            this._maskRefusalLatch = freshInvariantState();
+            this._maskRefusalDiagnostic.check(null);
             return false;
         }
         const label = windowIdentityLabel({title: getWindowDisplayTitle(this._win)});
-        const {state, message} = evaluateInvariant(this._maskRefusalLatch,
-            overviewMaskRefusalWarning(reason, label));
-        this._maskRefusalLatch = state;
-        if (message)
-            this._warn(message);
+        this._maskRefusalDiagnostic.check(overviewMaskRefusalWarning(reason, label));
         return false;
     }
 

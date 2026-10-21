@@ -2,6 +2,8 @@
  * Resolves per-actor pointer cursors on GNOME 50+ (Clutter.Actor.set_cursor_type).
  */
 
+import {PREFIX} from './journal.js';
+
 /**
  * Recognized cursor shapes for window resize bands and inspector picker.
  */
@@ -46,7 +48,7 @@ function clutterNamespace() {
 export function cursorTypeFor(shape, types = clutterNamespace()?.CursorType ?? null) {
     const member = ENUM_MEMBER[shape];
     if (!member)
-        throw new Error(`[window-nativizer] unknown cursor shape: ${shape}`);
+        throw new Error(`${PREFIX} unknown cursor shape: ${shape}`);
     if (!types)
         return null;
     return types[member] ?? null;
