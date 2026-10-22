@@ -739,8 +739,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(pass).toThrow();
 
         expect(deco.bodyPlan.settle).toEqual(before);
-        expect(deco._lastBuffer).toBeNull();
-        expect(deco._lastRing).toBeNull();
+        expect(deco._witness).toBeNull();
     });
 
     it('keeps the history still when a later stage throws, and rebuilds on the next pass', () => {
@@ -785,7 +784,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         expect(pass).toThrow();
         expect(deco.bodyPlan.settle).toEqual(before);
-        expect(deco._lastBuffer).toBeNull();
+        expect(deco._witness).toBeNull();
         // Not a rollback: the clip the pass attached before the shadow threw is still here.
         expect(deco.clip).not.toBeNull();
 
@@ -793,7 +792,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // not from one that never finished, and the actor it could not build arrives.
         pass();
         expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
-        expect(deco._lastBuffer).not.toBeNull();
+        expect(deco._witness).not.toBeNull();
         expect(deco.shadow).not.toBeNull();
     });
 
@@ -846,7 +845,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // would prove nothing, which is how the first cut of this spec passed on a broken order.
         expect(() => pass({x: 0, y: 0, width: 802, height: 600})).toThrow();
 
-        expect(deco._lastBuffer).toBe(firstBuffer);
+        expect(deco._witness.buffer).toBe(firstBuffer);
         expect(deco.bodyPlan.settle).toEqual(afterFirst);
     });
 
@@ -1588,7 +1587,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 {frameRect: RESTORED_FRAME, bufferRect: RESTORED_BUFFER,
                     insets: {left: 24, top: 21, right: 24, bottom: 27}},
             ]);
-            expect(deco._lastBuffer).not.toBeNull();
+            expect(deco._witness).not.toBeNull();
             // The settle's reference points are the same kind of witness: a hold that outlived the gap
             // would draw the clip and the cast at the body they had before it.
             expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
@@ -1597,8 +1596,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             expect(deco.shadow).not.toBeNull();
 
             deco.undecorate();
-            expect(deco._lastBuffer).toBeNull();
-            expect(deco._lastRing).toBeNull();
+            expect(deco._witness).toBeNull();
             expect(deco.bodyPlan.settle).toEqual(jasmine.objectContaining({
                 previousBody: null, previousAuthority: null, previousWindowSize: null,
             }));
@@ -1610,7 +1608,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             // `inputs.insets` is null whenever insetsFromRects refuses (the frame does not fit
             // inside the buffer), a supported state that routes to the flat path. The hold's drift
             // comparison dereferenced it, so apply() threw; the manager's catch discarded the whole
-            // pass, so _lastBuffer/_lastRing never advanced and the same throw repeated every frame
+            // pass, so the witness never advanced and the same throw repeated every frame
             // with no journal line. A ring that cannot be read cannot be compared: the hold is
             // skipped and the previous ring is not resurrected from an unreadable pass.
             const deco = buildDeco();
@@ -1622,7 +1620,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 {frameRect: frame, bufferRect: buffer, insets: settled},
             ]);
             expect(rings[0]).toEqual(settled);
-            expect(deco._lastRing).toEqual(settled);
+            expect(deco._witness.ring).toEqual(settled);
 
             // Same buffer, so the hold is armed; the ring cannot be read this pass.
             expect(() => ringThrough(deco, [
@@ -1630,7 +1628,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             ])).not.toThrow();
 
             expect(deco.stateView.ring.insets).toBeNull();
-            expect(deco._lastRing).toBeNull();
+            expect(deco._witness.ring).toBeNull();
         });
     });
 
@@ -2742,8 +2740,7 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
         _scale: 'window',
         _initialFrameSize: 'window',
         bodyPlan: 'episode',
-        _lastBuffer: 'episode',
-        _lastRing: 'episode',
+        _witness: 'episode',
         _passPlan: 'episode',
         _bufferActorDiagnostic: 'episode',
         _phaseDiagnostic: 'episode',
@@ -2771,8 +2768,8 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
         const deco = makeDeco();
         deco.bodyPlan.next({targetSize: {width: 400, height: 300},
             windowActorSize: {width: 400, height: 300}, windowSize: {width: 400, height: 300}});
-        deco._lastBuffer = {x: 0, y: 0, width: 400, height: 300};
-        deco._lastRing = {left: 1, top: 2, right: 3, bottom: 4};
+        deco._witness = {buffer: {x: 0, y: 0, width: 400, height: 300},
+            ring: {left: 1, top: 2, right: 3, bottom: 4}};
         deco._passPlan = deco.bodyPlan.settle;
         for (const diagnostic of [deco._bufferActorDiagnostic, deco._phaseDiagnostic]) {
             diagnostic.check('a violation');
