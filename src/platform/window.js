@@ -1,5 +1,6 @@
 /** Window-level Shell and Mutter API calls and reads for GNOME 50+. */
 
+import {rectanglesOverlap, rectContains, rectEquals} from './rect.js';
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
 import {getMonitorScale, getMonitorGeometry, getMonitorCount, getDisplay, getStage} from './display.js';
 import {roundHalfAwayFromZero} from './numeric.js';
@@ -452,13 +453,6 @@ function coversBox(candidate, box) {
         candidate.y + candidate.height >= box.y + box.height - EPSILON;
 }
 
-/** Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`. */
-function rectanglesOverlap(a, b) {
-    const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
-    const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
-    return width > 0 && height > 0;
-}
-
 // Both caches exist because the phase mirror runs every paint; `monitors-changed` clears them.
 let monitorList = null;
 let resolvedMonitor = null;
@@ -541,16 +535,6 @@ function cacheHoldsRect(cached, rect) {
 /** Highest-scale monitor the frame intersects, mirroring Mutter's frame-rect scan. */
 function resolveFrameMonitorIndex(win) {
     return resolveHighestScaleMonitorIndex(win, getWindowFrameRect(win));
-}
-
-function rectEquals(a, b) {
-    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
-
-function rectContains(outer, inner) {
-    return outer.x <= inner.x && outer.y <= inner.y &&
-        outer.x + outer.width >= inner.x + inner.width &&
-        outer.y + outer.height >= inner.y + inner.height;
 }
 
 /** The resolved monitor's scale, read from the cached list so a paint takes no display call. */

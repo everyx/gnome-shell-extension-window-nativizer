@@ -1,5 +1,6 @@
 /** Pure decisions: which uniforms changed, when the frame is stale; the effect only uploads. */
 
+import {rectEquals, sameSize} from '../platform/rect.js';
 import {INVARIANT_STRIKES} from '../lib/diagnosticInvariants.js';
 
 /** Outline as the shader's vec4, 0..255 channels scaled to 0..1; `null` (no outline) is alpha 0. */
@@ -189,12 +190,10 @@ export function clipGeometryChanges(prev, next) {
     const changes = {};
     if (!prev || prev.scale !== next.scale)
         changes.scale = next.scale;
-    if (!prev || prev.width !== next.width || prev.height !== next.height)
+    if (!sameSize(prev, next))
         changes.size = [next.width, next.height];
     const frame = next.frame;
-    const previous = prev?.frame;
-    if (!previous || previous.x !== frame.x || previous.y !== frame.y ||
-        previous.width !== frame.width || previous.height !== frame.height)
+    if (!rectEquals(prev?.frame, frame))
         changes.frame = [frame.x, frame.y, frame.width, frame.height];
     return changes;
 }

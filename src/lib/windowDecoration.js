@@ -2,6 +2,7 @@ import {resolveClipTarget} from './clipTarget.js';
 import {MIN_DECORABLE_SIZE} from './detector.js';
 import {BodyPlan, readActorSize} from '../effects/bodyPlan.js';
 import {decorationPass} from '../effects/decorationPass.js';
+import {insetsMoved, rectEquals} from '../platform/rect.js';
 import {
     Diagnostic,
     bufferAllocationWarning,
@@ -214,19 +215,11 @@ export class WindowDecoration {
 
         // Hold a ring that drifts while nothing else moves: the buffer witnesses it, not the frame.
         const buffer = inputs?.bufferRect ?? null;
-        const bufferMoved = !this._lastBuffer || !buffer ||
-            buffer.x !== this._lastBuffer.x || buffer.y !== this._lastBuffer.y ||
-            buffer.width !== this._lastBuffer.width || buffer.height !== this._lastBuffer.height;
+        const bufferMoved = !rectEquals(this._lastBuffer, buffer);
         let ringNow = rawInsets;
         // A null ring is frame-not-inside-buffer, not a moved one: skip the hold, keep nothing.
-        if (!bufferMoved && this._lastRing && rawInsets) {
-            const drifted = Math.abs((this._lastRing.left ?? 0) - (rawInsets.left ?? 0)) >= 1 ||
-                Math.abs((this._lastRing.top ?? 0) - (rawInsets.top ?? 0)) >= 1 ||
-                Math.abs((this._lastRing.right ?? 0) - (rawInsets.right ?? 0)) >= 1 ||
-                Math.abs((this._lastRing.bottom ?? 0) - (rawInsets.bottom ?? 0)) >= 1;
-            if (drifted)
-                ringNow = this._lastRing;
-        }
+        if (!bufferMoved && insetsMoved(this._lastRing, rawInsets))
+            ringNow = this._lastRing;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
                 ? flatSafeInsets(scale) : ringNow,

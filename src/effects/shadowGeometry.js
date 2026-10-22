@@ -1,5 +1,6 @@
 /** Pure geometry without GI imports, so the degenerate-size rules stay unit-testable. */
 
+import {rectEquals, sameSize} from '../platform/rect.js';
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
@@ -170,12 +171,9 @@ export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource =
         ? shadowCastRectForBody(body, insets, scale)
         : shadowCastRect(actorSize, insets, scale);
     const previous = style.cast;
-    const castChanged = !previous ||
-        previous.x !== cast.x || previous.y !== cast.y ||
-        previous.width !== cast.width || previous.height !== cast.height;
+    const castChanged = !rectEquals(previous, cast);
     // Only the corner clamp reads the cast size, so a moved origin reuses the slice table.
-    const sizeChanged = !previous ||
-        previous.width !== cast.width || previous.height !== cast.height;
+    const sizeChanged = !sameSize(previous, cast);
 
     let slices = style.slices;
     let corner = style.corner;
