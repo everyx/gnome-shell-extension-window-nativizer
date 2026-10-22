@@ -12,6 +12,7 @@ import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
 import {clipParamsFrom} from './decorationPass.js';
+import {PendingSource} from './pendingSource.js';
 import {Diagnostic, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
 import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
@@ -103,6 +104,7 @@ export const RoundedClipEffect = GObject.registerClass({
         this._insets = ZERO_INSETS;
         // Suspended: the target had no paint-able body; a valid frame or a reconcile clears it.
         this._suspended = false;
+        this._disable = null;
         // A Wayland surface container carries the phase in its transform; a fallback does not.
         this._phaseInTransform = true;
         this._radius = undefined;
@@ -229,7 +231,7 @@ export const RoundedClipEffect = GObject.registerClass({
             this._suspend();
             return;
         }
-        this._suspended = false;
+        this.resume();
 
         const scale = this._scale ?? 1.0;
         // Phase comes from the resolved target: in-transform on Wayland, into geometry otherwise.
@@ -312,6 +314,7 @@ export const RoundedClipEffect = GObject.registerClass({
 
     /** Clears a suspend the reconcile overrode; a still-degenerate target suspends again later. */
     resume() {
+        this._disable?.cancel();
         this._suspended = false;
     }
 
@@ -322,11 +325,19 @@ export const RoundedClipEffect = GObject.registerClass({
             return;
         this._suspended = true;
         // Disabling during the actor's own paint trips a Clutter check, so it lands on an idle.
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        this._disable ??= new PendingSource(
+            callback => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, callback),
+            id => GLib.Source.remove(id));
+        this._disable.queue(() => {
             // A valid frame may have landed since this idle queued: disable only while suspended.
             if (this._suspended)
                 this.set_enabled(false);
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    /** Drops a queued disable; teardown calls this so the idle cannot reach a destroyed effect. */
+    cancelPendingDisable() {
+        this._disable?.cancel();
     }
 });

@@ -57,8 +57,7 @@ export class Manager {
 
     enable() {
         shadowTexture.reset();
-        this._classifier?.destroy();
-        this._classifier = new ProcessClassifier();
+        this._classifier = this._replaceClassifier();
         // Created first, so a later enable() failure rolls back through disable() and drops it.
         this._tracking = new WindowTracking({
             onPassDue: win => this._reconcileWindow(win),
@@ -158,7 +157,16 @@ export class Manager {
         this._tearDownStrays();
         this._classifier?.destroy();
         this._classifier = null;
+        // The phase mirror caches monitors per display; a stale list would outlive this session.
+        invalidateMonitorCache();
         shadowTexture.destroy();
+    }
+
+    /** A fresh classifier replaces the old one, so a dead instance's caches cannot survive a cycle. */
+    _replaceClassifier() {
+        this._classifier?.destroy();
+        this._classifier = null;
+        return new ProcessClassifier();
     }
 
     _tearDownStrays() {

@@ -461,12 +461,12 @@ function rectanglesOverlap(a, b) {
 
 // Both caches exist because the phase mirror runs every paint; `monitors-changed` clears them.
 let monitorList = null;
-let resolvedMonitor = new WeakMap();
+let resolvedMonitor = null;
 
 /** Drops both caches; the manager calls this from `monitors-changed`, so the next read rebuilds. */
 export function invalidateMonitorCache() {
     monitorList = null;
-    resolvedMonitor = new WeakMap();
+    resolvedMonitor = null;
 }
 
 /** Monitors as {geometry, scale}; null is unreadable, never a fabricated empty list. */
@@ -499,6 +499,7 @@ function resolveHighestScaleMonitorIndex(win, rect) {
     if (entries === null)
         return null;
 
+    resolvedMonitor ??= new WeakMap();
     const cached = resolvedMonitor.get(win);
     if (cached && cached.entries === entries && cacheHoldsRect(cached, rect))
         return cached.index;

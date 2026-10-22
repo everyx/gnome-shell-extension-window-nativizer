@@ -50,6 +50,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         get_actor() {
             return this._actor;
         }
+
+        // The real effect queues its disable on an idle; detaching it has to drop that idle.
+        cancelPendingDisable() {
+            this.cancelled = (this.cancelled ?? 0) + 1;
+        }
     }
 
     class MockShadowActor {
@@ -1088,6 +1093,45 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clipPhaseInTransform).toBeFalse();
     });
 
+    it('cancels a queued disable before detaching the clip', () => {
+        // The effect disables itself on an idle when its body goes degenerate. Detaching it - on a
+        // re-pin or on teardown - must drop that idle, or it fires on a disposed effect.
+        const container = makeEffectActor({x: 0, y: 0, width: 800, height: 600});
+        mockWin.get_buffer_rect = () => ({x: 0, y: 0, width: 800, height: 600});
+        mockActor.get_children = () => [container];
+
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: false,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 8, top: 8, right: 8, bottom: 8}, monitorScale: 1};
+
+        deco.apply({actions, inputs, actor: mockActor});
+        const clip = deco.clip;
+        expect(clip.get_actor()).toBe(container);
+        expect(clip.cancelled ?? 0).toBe(0);
+
+        // A re-pin moves the effect to another actor, so the queued disable has to go with it.
+        container.width = 700;
+        deco.apply({actions, inputs, actor: mockActor});
+        expect(clip.cancelled).toBe(1);
+
+        // Teardown detaches it once more.
+        deco.destroy();
+        expect(clip.cancelled).toBe(2);
+    });
+
     it('follows a replaced surface container', () => {
         // XWayland can swap the surface child. The clip must detach from the old container and
         // attach to the new one, not stay on the actor that is going away.
@@ -2119,6 +2163,27 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         const masked = setupMaskHarness();
         expect(masked.deco.overview.setMode(true, readings)).toBe('mask');
         expect(masked.surface.hasMask).toBeTrue();
+    });
+
+    it('does not re-install anything after the decoration ends', () => {
+        // drop() is re-entrant, destroy() is not: once the decoration ends, a late setMode - a
+        // card rebuild that raced the teardown - must not put a mask back on a dead window.
+        const harness = setupMaskHarness({drawClip: true});
+        harness.deco.setOverviewMode(true);
+        expect(harness.deco.overview.inOverview).toBeTrue();
+
+        harness.deco.overview.drop();
+        expect(harness.deco.overview.inOverview).toBeFalse();
+
+        // The window can still come back while the decoration lives.
+        harness.deco.setOverviewMode(true);
+        expect(harness.deco.overview.inOverview).toBeTrue();
+
+        harness.deco.overview.destroy();
+        expect(harness.deco.overview.inOverview).toBeFalse();
+
+        harness.deco.setOverviewMode(true);
+        expect(harness.deco.overview.inOverview).toBeFalse();
     });
 
     it('warns once when the overview mask refuses although the window was ready', () => {

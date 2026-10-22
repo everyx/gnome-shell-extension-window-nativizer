@@ -489,28 +489,62 @@ else
 fi
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
-# One eval for the moves and the read, for two reasons. `get_window_actors()` follows stack order,
-# so `actors[0]` in a separate call need not be the window that was moved - three windows can be on
-# the stage here. And a read straight after the last `move_frame` asserts scheduling rather than the
-# extension: the request is placed directly, but the frame lands on a later compositor cycle, so the
-# read polls for the target instead of beating it. The moves stay rapid; only the verdict waits.
+# The client above runs its own resize/maximize timeline for the first ~2s, and a maximized window
+# ignores move_frame - so the moves below raced it. Wait for two identical consecutive reads: the
+# timeline's steps are 200ms apart, so one read can land in a gap between two resizes.
+PREV=""
+STILL=""
+for i in $(seq 1 100); do
+    NOW="$(shell_eval '
+    (() => {
+        const a = global.get_window_actors().find(x => x.meta_window?.get_title() === "Window Nativizer E2E Client");
+        if (!a) return "gone";
+        const w = a.meta_window;
+        if (w.maximized_horizontally || w.maximized_vertically) return "maximized";
+        const f = w.get_frame_rect();
+        return `size:${f.width}x${f.height}`;
+    })()
+    ' | tr -d '"')"
+    case "$NOW" in
+        gone|maximized) PREV="" ;;
+        *)
+            if [[ "$NOW" = "$PREV" ]]; then
+                STILL="$NOW"
+                break
+            fi
+            PREV="$NOW" ;;
+    esac
+    sleep 0.1
+done
+if [[ -z "$STILL" ]]; then
+    echo "!! The decorated client never settled for the move check (last read: ${NOW:-none})"
+    exit 1
+fi
+# One eval for the moves and the read: the window is pinned by title rather than by stack position
+# (the blend check above activates windows, and activation restacks), and a read straight after the
+# last `move_frame` would assert scheduling - the frame lands on a later compositor cycle, so the
+# read polls for the target instead of beating it.
 MOVE_STATE="$(shell_eval '
 (async () => {
-    const actors = global.get_window_actors();
-    if (!actors.length) return JSON.stringify({error: "no window to move"});
-    const win = actors[0].meta_window;
+    const actor = global.get_window_actors()
+        .find(a => a.meta_window?.get_title() === "Window Nativizer E2E Client");
+    if (!actor) return JSON.stringify({error: "no window to move"});
+    const win = actor.meta_window;
     const target = {x: 280, y: 210};
     const sleep = ms => new Promise(done => setTimeout(done, ms));
+    const seen = [];
     for (let i = 1; i <= 5; i++) {
         win.move_frame(true, 80 + i * 40, 60 + i * 30);
         await sleep(60);
+        const f = win.get_frame_rect();
+        seen.push(`${i}:${f.x},${f.y}`);
     }
     let frame = win.get_frame_rect();
     for (let i = 0; i < 40 && (frame.x !== target.x || frame.y !== target.y); i++) {
         await sleep(50);
         frame = win.get_frame_rect();
     }
-    return JSON.stringify({x: frame.x, y: frame.y});
+    return JSON.stringify({x: frame.x, y: frame.y, seen: seen.join(" ")});
 })()
 ')"
 if ! check_fields "$MOVE_STATE" '{"x": 280, "y": 210}'; then

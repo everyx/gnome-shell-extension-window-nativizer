@@ -37,6 +37,7 @@ export class OverviewDecoration {
         this._onModeChange = options.onModeChange ?? null;
 
         this._inOverview = false;
+        this._destroyed = false;
         this._stex = null;
         this._maskKey = null;
         this._bypassContainer = null;
@@ -84,7 +85,7 @@ export class OverviewDecoration {
     }
 
     setMode(inOverview, readings = {}) {
-        this._inOverview = Boolean(inOverview);
+        this._inOverview = Boolean(inOverview) && !this._destroyed;
 
         this._canMask = this.canApplyMask({
             drawClip: readings.drawClip ?? false,
@@ -107,7 +108,7 @@ export class OverviewDecoration {
 
     /** Both setMode and _refresh settle here, so the mode returned is the one that installed. */
     _settleMode() {
-        if (!this._inOverview) {
+        if (this._destroyed || !this._inOverview) {
             this._release();
             return 'square';
         }
@@ -128,9 +129,15 @@ export class OverviewDecoration {
         return this._forceOverviewCorners ? 'clip' : 'square';
     }
 
+    /** Re-entrant release; destroy() is terminal. */
     drop() {
         this._inOverview = false;
         this._release();
+    }
+
+    destroy() {
+        this._destroyed = true;
+        this.drop();
     }
 
     _release() {
@@ -154,7 +161,6 @@ export class OverviewDecoration {
             try {
                 this._win.disconnect(this._sizeId);
             } catch {
-                // Window already gone.
             }
             this._sizeId = 0;
         }
@@ -163,7 +169,6 @@ export class OverviewDecoration {
             try {
                 this._win.disconnect(this._workspaceId);
             } catch {
-                // Window already gone.
             }
             this._workspaceId = 0;
         }
