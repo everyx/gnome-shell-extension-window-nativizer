@@ -1,7 +1,7 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {Journal} from '../src/platform/journal.js';
 import {resolvePaintBody} from '../src/effects/clipParams.js';
-import {clipParamsFrom, shadowStyleFrom} from '../src/effects/decorationPass.js';
+import {clipParamsFrom, decorationPass, shadowStyleFrom} from '../src/effects/decorationPass.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -478,8 +478,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // Attach clip while in overview, with the style already decided -> the clip is
         // suspended so the preview clone samples the window's own mipmapped texture
         // instead of an offscreen FBO.
-        deco.drawClip = true;
-        deco._style = {radius: 12, outline: null, shadows: []};
+        deco._pass = decorationPass({style: {radius: 12, outline: null, shadows: []},
+            drawClip: true, inOverview: true});
         deco._syncClip(true, mockActor, insets, true);
         expect(deco.hasClip).toBeTrue();
         expect(deco.clip.enabled).toBeFalse();
@@ -1600,7 +1600,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             expect(deco.bodyPlan.settle).toEqual(jasmine.objectContaining({
                 previousBody: null, previousAuthority: null, previousWindowSize: null,
             }));
-            expect(deco._passPlan).toBeNull();
+            expect(deco._pass).toBeNull();
             expect(deco.shadow).toBeNull();
         });
 
@@ -1703,9 +1703,9 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // shader preserves 1:1 sampling without pushing coords inward.
         // Flat ringless windows use FLAT_SAFE_INSET (1px inward) to excise rectangular client borders,
         // while retaining Adwaita inner outline on desktop to achieve seamless native decoration consistency.
-        expect(deco.ring.clear).toBeFalse();
-        expect(deco.ring.erase).toBeTrue();
-        expect(deco.clipInsets).toEqual(FLAT_SAFE_INSET);
+        expect(deco.stateView.ring.clear).toBeFalse();
+        expect(deco.stateView.ring.erase).toBeTrue();
+        expect(deco.diagnosticsView.clipInsets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.insets).toEqual(FLAT_SAFE_INSET);
         expect(deco.shadow.insets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.erase).toBeTrue();
@@ -1742,8 +1742,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // leave most of the client's own border behind, so the plan carries the device-derived
         // cover instead.
         const cover = {left: 2.4, top: 2.4, right: 2.4, bottom: 2.4};
-        expect(deco.ring.insets).toEqual(cover);
-        expect(deco.clipInsets).toEqual(cover);
+        expect(deco.stateView.ring.insets).toEqual(cover);
+        expect(deco.diagnosticsView.clipInsets).toEqual(cover);
         expect(deco.clip.params.insets).toEqual(cover);
         expect(deco.shadow.insets).toEqual(cover);
     });
@@ -1775,7 +1775,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasClip).toBeTrue();
         // The clip body and the shadow body are the same rect: any inward offset puts our shadow
         // where libadwaita puts the window's own edge pixel, and exposes the shader's inward bleed.
-        expect(deco.clipInsets).toEqual(declaredInsets);
+        expect(deco.diagnosticsView.clipInsets).toEqual(declaredInsets);
         expect(deco.clip.params.insets).toEqual(declaredInsets);
         expect(deco.clip.params.erase).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeTrue();
@@ -1952,7 +1952,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasClip).toBeFalse();
         expect(deco.hasShadow).toBeFalse();
         expect(deco.hasResizeBand).toBeFalse();
-        expect(deco.drawClip).toBeFalse();
+        expect(deco.stateView.drawClip).toBeFalse();
     });
 
     it('re-applies the mask when a workspace move or a resize rebuilds the card', () => {
@@ -2441,7 +2441,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.stateView.drawClip).toBeFalse();
         expect(deco.overview.canApplyMask({
             drawClip: deco.stateView.drawClip,
-            hasStyle: Boolean(deco._style),
+            hasStyle: Boolean(deco._pass?.style),
         })).toBeFalse();
     });
 
@@ -2728,20 +2728,14 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
         shadow: 'resource',
         resizeBand: 'resource',
         clipTarget: 'pass',
-        clipInsets: 'pass',
         clipPhaseInTransform: 'pass',
         surfaceContainer: 'pass',
-        drawClip: 'pass',
-        ring: 'pass',
-        _style: 'pass',
-        _scaleCandidates: 'pass',
         _pass: 'pass',
         _forceOverviewCorners: 'pass',
         _scale: 'window',
         _initialFrameSize: 'window',
         bodyPlan: 'episode',
         _witness: 'episode',
-        _passPlan: 'episode',
         _bufferActorDiagnostic: 'episode',
         _phaseDiagnostic: 'episode',
     };
@@ -2770,7 +2764,6 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
             windowActorSize: {width: 400, height: 300}, windowSize: {width: 400, height: 300}});
         deco._witness = {buffer: {x: 0, y: 0, width: 400, height: 300},
             ring: {left: 1, top: 2, right: 3, bottom: 4}};
-        deco._passPlan = deco.bodyPlan.settle;
         for (const diagnostic of [deco._bufferActorDiagnostic, deco._phaseDiagnostic]) {
             diagnostic.check('a violation');
             diagnostic.check('a violation');
