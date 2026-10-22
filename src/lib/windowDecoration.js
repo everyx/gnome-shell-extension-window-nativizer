@@ -81,9 +81,8 @@ export class WindowDecoration {
         // Latched once, never moved: the visual floor reads it, so a drag cannot flip the corners.
         this._initialFrameSize = null;
         // The hold's witness: the ring is buffer - frame, so only a moved buffer makes a ring real.
-        this._lastBuffer = null;
-        // The last settled ring and its buffer; both belong to the episode that read them.
-        this._lastRing = null;
+        // The buffer and the ring are one record because neither is ever read without the other.
+        this._witness = null;
         // The plan both cuts paint against, as this pass found it, before it advances.
         this._passPlan = null;
         // This pass's value, kept so an overview mode change can re-push the clip outside a pass.
@@ -215,11 +214,12 @@ export class WindowDecoration {
 
         // Hold a ring that drifts while nothing else moves: the buffer witnesses it, not the frame.
         const buffer = inputs?.bufferRect ?? null;
-        const bufferMoved = !rectEquals(this._lastBuffer, buffer);
+        const witness = this._witness;
         let ringNow = rawInsets;
-        // A null ring is frame-not-inside-buffer, not a moved one: skip the hold, keep nothing.
-        if (!bufferMoved && insetsMoved(this._lastRing, rawInsets))
-            ringNow = this._lastRing;
+        // The hold is for a buffer that did not move: a null ring is frame-not-inside-buffer, not a
+        // drifted one, and insetsMoved answers false for it.
+        if (rectEquals(witness?.buffer, buffer) && insetsMoved(witness?.ring, rawInsets))
+            ringNow = witness.ring;
         this.ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
                 ? flatSafeInsets(scale) : ringNow,
@@ -247,8 +247,7 @@ export class WindowDecoration {
             windowActorSize: readActorSize(winActor),
             windowSize,
         });
-        this._lastBuffer = buffer;
-        this._lastRing = ringNow;
+        this._witness = {buffer, ring: ringNow};
     }
 
     /** Falls back to the last good scale, so a transient miss cannot jump a fractional display. */
@@ -462,8 +461,7 @@ export class WindowDecoration {
         this._style = null;
         this.ring = null;
         // The witness goes with the ring: a ring from before the gap must not be held across it.
-        this._lastBuffer = null;
-        this._lastRing = null;
+        this._witness = null;
         this.bodyPlan.reset();
         this._passPlan = null;
         // A report describes the pass that ended, so the next episode starts unheard.
