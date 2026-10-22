@@ -233,7 +233,14 @@ echo ">> Shell session confirmed settled onto desktop."
 # announcing itself is what distinguishes "ran" from "mapped and exited cleanly".
 echo ">> [test-e2e] Launching GTK4 client (resize, maximize, close sequence)..."
 rm -f "$STATE_DIR/e2e-client.log"
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated > "$STATE_DIR/e2e-client.log" 2>&1 &
+# The client's own timeline ends by closing the window, and the checks below move and focus it, so
+# the timeline waits for a signal rather than a delay: it starts when the file below appears, which
+# the movement check writes once it is done. A delay was a guess at how long the checks take, and a
+# wrong guess is either the old race or a stalled run.
+TIMELINE_GO="$STATE_DIR/timeline-go"
+rm -f "$TIMELINE_GO"
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --go-file "$TIMELINE_GO" \
+    > "$STATE_DIR/e2e-client.log" 2>&1 &
 CLIENT_PID=$!
 
 # Wait for client window actor to be mapped
@@ -489,35 +496,23 @@ else
 fi
 
 echo ">> [test-e2e] Simulating high-frequency compositor window movement..."
-# The client above runs its own resize/maximize timeline for the first ~2s, and a maximized window
-# ignores move_frame - so the moves below raced it. Wait for two identical consecutive reads: the
-# timeline's steps are 200ms apart, so one read can land in a gap between two resizes.
-PREV=""
-STILL=""
+# The client is still and unmaximized until this script releases its timeline, so this only guards
+# a client that mapped maximized or died before the checks below.
+READY=0
 for i in $(seq 1 100); do
-    NOW="$(shell_eval '
+    READY="$(shell_eval '
     (() => {
         const a = global.get_window_actors().find(x => x.meta_window?.get_title() === "Window Nativizer E2E Client");
-        if (!a) return "gone";
+        if (!a) return 0;
         const w = a.meta_window;
-        if (w.maximized_horizontally || w.maximized_vertically) return "maximized";
-        const f = w.get_frame_rect();
-        return `size:${f.width}x${f.height}`;
+        return w.maximized_horizontally || w.maximized_vertically ? 0 : 1;
     })()
-    ' | tr -d '"')"
-    case "$NOW" in
-        gone|maximized) PREV="" ;;
-        *)
-            if [[ "$NOW" = "$PREV" ]]; then
-                STILL="$NOW"
-                break
-            fi
-            PREV="$NOW" ;;
-    esac
+    ' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$READY" = 1 ] && break
     sleep 0.1
 done
-if [[ -z "$STILL" ]]; then
-    echo "!! The decorated client never settled for the move check (last read: ${NOW:-none})"
+if [ "$READY" != 1 ]; then
+    echo "!! The decorated client is not ready for the move check (gone or maximized)"
     exit 1
 fi
 # One eval for the moves and the read: the window is pinned by title rather than by stack position
@@ -552,6 +547,10 @@ if ! check_fields "$MOVE_STATE" '{"x": 280, "y": 210}'; then
     exit 1
 fi
 echo ">> Compositor moves reached (280, 210)."
+
+# Nothing below touches the window again, so the client may run its resize/maximize/close timeline.
+# This is the signal that replaces a delay: the timeline starts here, not on a timer the checks race.
+: > "$TIMELINE_GO"
 
 # Wait for client process to finish remaining steps (resize, maximize, unmaximize, close)
 wait $CLIENT_PID

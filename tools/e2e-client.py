@@ -9,14 +9,22 @@ Creates a non-CSD GTK4 window and executes a deterministic sequence of operation
 
 With --decorated the window keeps its own CSD instead, so it declares margins; with --hold <ms>
 it just maps and stays for that long, which is what the declared-margin case needs. --title names
-it, so a caller can pick this window out of a stage another client already occupies.
+it, so a caller can pick this window out of a stage another client already occupies. --go-file
+<path> holds the timeline until that file exists, so a caller can run its own interaction checks on
+a still window first: the sequence below ends by closing it, and anything that moves or resizes it
+during the sequence is racing the close. A signal, not a delay, so the caller never has to guess
+how long its own checks take.
 """
 
+import os
 import sys
 import gi
 
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
+
+POLL_MS = 50
+GO_TIMEOUT_MS = 120000
 
 def option(name, fallback=None):
     return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else fallback
@@ -58,6 +66,7 @@ def on_activate(app):
     ]
 
     hold_ms = int(option('--hold', 0))
+    go_file = option('--go-file')
 
     if hold_ms:
         def close_later():
@@ -66,18 +75,41 @@ def on_activate(app):
         GLib.timeout_add(hold_ms, close_later)
         return
 
-    for delay, action, desc in steps:
-        def make_cb(act, d):
-            def cb():
-                # The harness asserts every step fired (see the step log it greps),
-                # so report each one: a client that maps and instantly exits cleanly
-                # must not read as a client that ran its timeline.
-                print("STEP:", d, flush=True)
-                label.set_text(d)
-                act()
-                return GLib.SOURCE_REMOVE
-            return cb
-        GLib.timeout_add(delay, make_cb(action, desc))
+    def make_cb(act, d):
+        def cb():
+            # The harness asserts every step fired (see the step log it greps),
+            # so report each one: a client that maps and instantly exits cleanly
+            # must not read as a client that ran its timeline.
+            print("STEP:", d, flush=True)
+            label.set_text(d)
+            act()
+            return GLib.SOURCE_REMOVE
+        return cb
+
+    def start_timeline():
+        for delay, action, desc in steps:
+            GLib.timeout_add(delay, make_cb(action, desc))
+
+    if not go_file:
+        start_timeline()
+        return
+
+    # Poll rather than wait on a file monitor: the signal is one file that may already exist by the
+    # time this runs, and a 50ms poll costs nothing next to the steps it gates. The cap only breaks a
+    # deadlock - a caller that never signals would otherwise hold the window open forever.
+    def poll_for_go(elapsed_ms=0):
+        if os.path.exists(go_file):
+            start_timeline()
+            return GLib.SOURCE_REMOVE
+        if elapsed_ms >= GO_TIMEOUT_MS:
+            print("GO: no signal within", GO_TIMEOUT_MS // 1000, "s; running the timeline anyway",
+                flush=True)
+            start_timeline()
+            return GLib.SOURCE_REMOVE
+        GLib.timeout_add(POLL_MS, lambda: poll_for_go(elapsed_ms + POLL_MS))
+        return GLib.SOURCE_REMOVE
+
+    GLib.timeout_add(POLL_MS, poll_for_go)
 
 app.connect('activate', on_activate)
 exit_code = app.run(None)
