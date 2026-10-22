@@ -221,7 +221,6 @@ export const ResizeBand = GObject.registerClass({
         });
     }
 
-    /** @returns Clutter.EVENT_PROPAGATE */
     _applyCursor(region, event) {
         const direction = this._directionForEvent(event);
         if (this._hover?.region === region && this._hover.direction === direction)
@@ -231,7 +230,6 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_PROPAGATE;
     }
 
-    /** @returns Clutter.EVENT_PROPAGATE */
     _clearCursor(region) {
         if (this._hover?.region === region) {
             this._hover = null;
@@ -240,7 +238,7 @@ export const ResizeBand = GObject.registerClass({
         return Clutter.EVENT_PROPAGATE;
     }
 
-    /** @returns EVENT_STOP when the grab was handed to Mutter */
+    /** Hands the grab to Mutter, or lets the press through. */
     _onButtonPress(event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
             return Clutter.EVENT_PROPAGATE;

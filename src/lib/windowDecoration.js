@@ -115,7 +115,7 @@ export class WindowDecoration {
         return this._initialFrameSize ? {...this._initialFrameSize} : null;
     }
 
-    /** Closes the latch; a 1x1 placeholder or a frame below the floor is unreadable, not small. */
+    /** Closes the latch; below the floor is unreadable, not small. */
     latchInitialFrameSize({frameWidth, frameHeight} = {}) {
         if (!this._initialFrameSize && frameWidth >= MIN_DECORABLE_SIZE &&
             frameHeight >= MIN_DECORABLE_SIZE &&
@@ -302,7 +302,6 @@ export class WindowDecoration {
     }
 
     _syncClip(wantEffect, clipTarget = null, insets = null, inOverview = false) {
-        // Clip effect requires valid insets (null indicates frame does not fit inside buffer).
         const wanted = wantEffect && Boolean(insets);
         const hasClip = Boolean(this.clip);
 
@@ -375,7 +374,7 @@ export class WindowDecoration {
         try {
             bounds = resolveMonitorBounds(this._display, this._win);
         } catch {
-            // Defend against window deallocation or monitor hotplug races
+            // A window that is being deallocated, or a monitor that just went away.
         }
 
         const constrainedEdges = normalizeConstrainedEdges({
@@ -465,7 +464,6 @@ export class WindowDecoration {
         this.resizeBand?.resetCursor?.();
     }
 
-    /** Drops every effect and actor; the signal bindings survive because the manager owns them. */
     undecorate() {
         this.drawClip = false;
         this._style = null;
@@ -488,6 +486,9 @@ export class WindowDecoration {
         if (!this.clip)
             return;
 
+        // A queued disable must not reach an effect this pass is detaching or losing with its actor.
+        this.clip.cancelPendingDisable?.();
+
         // Detach from the effect's real actor, not clipTarget, which may already name the next one.
         const actor = this.clip.get_actor?.() ?? this.clipTarget;
         if (!actor)
@@ -509,7 +510,7 @@ export class WindowDecoration {
         }
         this.resizeBand = null;
 
-        this.overview.drop();
+        this.overview.destroy();
 
         if (!keepVisualsForClose) {
             this._removeClipEffect();
