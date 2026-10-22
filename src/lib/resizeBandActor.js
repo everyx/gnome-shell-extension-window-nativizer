@@ -9,6 +9,7 @@ import St from 'gi://St';
 import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {setActorAboveSibling} from '../platform/display.js';
+import {insetsEqual, rectEquals} from '../platform/rect.js';
 
 import {ZERO_INSETS} from './frame.js';
 import {
@@ -28,18 +29,27 @@ export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';
 // The regions sit outside the actor, so the container must be larger or they would be clipped away.
 const OUTER = RESIZE_BAND;
 
+/** What the band is told before the first setGeometry: no ring, no bounds, identity scale. */
+const NO_GEOMETRY = Object.freeze({
+    insets: ZERO_INSETS, bounds: null, boundsUnknown: false, scale: 1, constrainedEdges: null,
+});
+
+// `a === b` first: for a cache, absent on both reads as unchanged, which is a statement about this
+// comparison rather than about equality - platform/rect.js answers the latter, where an unreadable
+// side never equals anything.
 function sameBounds(a, b) {
-    if (!a || !b)
-        return a === b;
-    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+    return a === b || (a && b && rectEquals(a, b));
 }
 
 function sameConstrainedEdges(a, b) {
-    if (!a && !b)
-        return true;
-    if (!a || !b)
-        return false;
-    return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;
+    return a === b || (a && b && insetsEqual(a, b));
+}
+
+/** Whether a setGeometry call would change anything, which is what decides the relayout. */
+function sameGeometry(a, b) {
+    return a.scale === b.scale && a.boundsUnknown === b.boundsUnknown &&
+        insetsEqual(a.insets, b.insets) && sameBounds(a.bounds, b.bounds) &&
+        sameConstrainedEdges(a.constrainedEdges, b.constrainedEdges);
 }
 
 export const ResizeBand = GObject.registerClass({
@@ -66,11 +76,8 @@ export const ResizeBand = GObject.registerClass({
         this._params = {frame: null, bounds: null, scale: 1};
         this._frame = null;
         this._hover = null;
-        this._insets = ZERO_INSETS;
-        this._bounds = null;
-        this._boundsUnknown = false;
-        this._scale = 1;
-        this._constrainedEdges = null;
+        // Everything setGeometry is told, as one record: the check and the layout read it whole.
+        this._geometry = NO_GEOMETRY;
 
         // Bound directly to the actor: a debounced read would lag the live size during a drag.
         for (const [coordinate, offset] of [
@@ -108,26 +115,18 @@ export const ResizeBand = GObject.registerClass({
 
     /** What the geometry derives from; strips are placed in vfunc_allocate, so no absolute px. */
     setGeometry({insets, bounds = null, boundsUnknown = false, scale = 1, constrainedEdges = null}) {
-        const nextInsets = insets ?? ZERO_INSETS;
-        const nextBoundsUnknown = Boolean(boundsUnknown);
-        const nextConstrained = normalizeConstrainedEdges({constrainedEdges});
-        if (this._insets.left === nextInsets.left && this._insets.top === nextInsets.top &&
-            this._insets.right === nextInsets.right && this._insets.bottom === nextInsets.bottom &&
-            this._scale === scale && sameBounds(this._bounds, bounds) &&
-            this._boundsUnknown === nextBoundsUnknown &&
-            sameConstrainedEdges(this._constrainedEdges, nextConstrained))
+        const next = {
+            // Copied, so a caller reusing one insets object cannot change the geometry under us.
+            insets: {...insets ?? ZERO_INSETS},
+            bounds: bounds ? {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height} : null,
+            boundsUnknown: Boolean(boundsUnknown),
+            scale,
+            constrainedEdges: normalizeConstrainedEdges({constrainedEdges}),
+        };
+        if (sameGeometry(this._geometry, next))
             return;
 
-        this._insets = {
-            left: nextInsets.left, top: nextInsets.top,
-            right: nextInsets.right, bottom: nextInsets.bottom,
-        };
-        this._bounds = bounds
-            ? {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height}
-            : null;
-        this._boundsUnknown = nextBoundsUnknown;
-        this._scale = scale;
-        this._constrainedEdges = nextConstrained;
+        this._geometry = next;
         this.queue_relayout();
     }
 
@@ -141,7 +140,7 @@ export const ResizeBand = GObject.registerClass({
             return;
 
         // Sign conventions live in the pure bandParamsInto; the scratch record is reused each frame.
-        bandParamsInto(this._params, box, this._insets, this._bounds, this._scale);
+        bandParamsInto(this._params, box, this._geometry.insets, this._geometry.bounds, this._geometry.scale);
         // Kept for `_directionForEvent()`, which resolves the pointer in the same container frame.
         this._frame = this._params.frame;
 
@@ -149,10 +148,10 @@ export const ResizeBand = GObject.registerClass({
         const changed = computeResizeBandsInto(this._bands, {
             frame: this._params.frame,
             bounds: this._params.bounds,
-            boundsUnknown: this._boundsUnknown,
+            boundsUnknown: this._geometry.boundsUnknown,
             // No surface clip: the band may sit outside the client's surface.
             scale: this._params.scale,
-            constrainedEdges: this._constrainedEdges,
+            constrainedEdges: this._geometry.constrainedEdges,
         });
 
         const childBox = this._childBox;
@@ -199,7 +198,7 @@ export const ResizeBand = GObject.registerClass({
         this._bands = null;
         this._params = null;
         this._frame = null;
-        this._constrainedEdges = null;
+        this._geometry = NO_GEOMETRY;
         try {
             this._container?.remove_child(this);
         } catch {
@@ -217,7 +216,7 @@ export const ResizeBand = GObject.registerClass({
         const [x, y] = event.get_coords();
         const [originX, originY] = this.get_transformed_position();
         return edgeForPoint(this._frame, x - originX, y - originY, {
-            constrainedEdges: this._constrainedEdges,
+            constrainedEdges: this._geometry.constrainedEdges,
         });
     }
 

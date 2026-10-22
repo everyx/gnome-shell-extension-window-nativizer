@@ -1,4 +1,5 @@
 import {
+    insetsEqual,
     insetsMoved,
     rectContains,
     rectEquals,
@@ -85,6 +86,35 @@ describe('rectanglesOverlap', () => {
     it('answers false when either side is unreadable', () => {
         expect(rectanglesOverlap(null, rect(0, 0, 10, 10))).toBeFalse();
         expect(rectanglesOverlap(rect(0, 0, 10, 10), null)).toBeFalse();
+    });
+});
+
+describe('insetsEqual', () => {
+    const insets = (left, top, right, bottom) => ({left, top, right, bottom});
+
+    it('compares all four sides, unlike the tolerance-based insetsMoved', () => {
+        const base = insets(8, 8, 8, 8);
+        expect(insetsEqual(base, insets(8, 8, 8, 8))).toBeTrue();
+        // A sub-pixel difference is a difference here: this answers "same", not "settled".
+        expect(insetsEqual(base, insets(8.5, 8, 8, 8))).toBeFalse();
+        expect(insetsEqual(base, insets(8, 9, 8, 8))).toBeFalse();
+        expect(insetsEqual(base, insets(8, 8, 9, 8))).toBeFalse();
+        expect(insetsEqual(base, insets(8, 8, 8, 9))).toBeFalse();
+    });
+
+    it('reads a missing side as 0', () => {
+        expect(insetsEqual({left: 4}, {left: 4})).toBeTrue();
+        expect(insetsEqual({left: 4}, insets(4, 0, 0, 0))).toBeTrue();
+        expect(insetsEqual({}, insets(0, 0, 0, 0))).toBeTrue();
+        expect(insetsEqual({left: 4}, {left: 5})).toBeFalse();
+    });
+
+    it('answers false when either side is unreadable, leaving "both absent" to the caller', () => {
+        // The one caller is a change cache, where absent on both reads as unchanged; that is its
+        // statement to make, so it does it explicitly rather than bending this predicate.
+        expect(insetsEqual(null, insets(0, 0, 0, 0))).toBeFalse();
+        expect(insetsEqual(insets(0, 0, 0, 0), null)).toBeFalse();
+        expect(insetsEqual(null, null)).toBeFalse();
     });
 });
 
