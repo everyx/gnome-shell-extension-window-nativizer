@@ -1,0 +1,71 @@
+name: CI Image
+
+# The image the four CI jobs run in. Built here rather than on every run: installing `gnome-shell`
+# took 84s, 72s and 723s on three consecutive runs, and the variance was the network, not the work.
+#
+# `v1` moves, so the jobs pick up a rebuilt toolchain without a second commit. The `sha-<short>` tag
+# alongside it is the pin: point a job at that tag when a rebuild needs to be deliberate, or when a
+# toolchain regression has to be bisected.
+#
+# A pull request builds the image but does not publish it, so a broken Dockerfile fails review rather
+# than a later master push; only master, the schedule and a manual dispatch publish.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/docker/**'
+      - '.github/workflows/ci-image.yml'
+  pull_request:
+    paths:
+      - '.github/docker/**'
+      - '.github/workflows/ci-image.yml'
+  # Monthly, so Ubuntu security updates reach the toolchain without anyone remembering.
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/window-nativizer-ci
+          tags: |
+            type=raw,value=v1
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/docker
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
