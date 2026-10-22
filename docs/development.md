@@ -17,7 +17,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
-| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `test`, and `check:decoration` |
+| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `lint:ego`, `test`, and `check:decoration` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
@@ -29,7 +29,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 when a budget is exceeded; a lone stress-ratio miss inside the known swing exits 2, which is the tool saying one re-run is worth it) |
 | `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
-| `pnpm run lint:ego` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
+| `pnpm run lint:ego` | the EGO reviewer's linter, compared against `tools/ego-lint-baseline.txt`: a finding that is not in the baseline, one that now appears more often, or a baseline entry that no longer appears all exit 1. `-- --update` rewrites the baseline; `EGO_LINT_DIR` points at a prepared checkout |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
 | `pnpm run lint:zip` | analyses that zip with shexli |
 | `pnpm run gen:code` | regenerates all transpiled shaders, styling constants, and upstream bindings |
