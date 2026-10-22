@@ -8,13 +8,10 @@ export function decorationPass({
     scaleCandidates = null, bodyPlan = null, clipTarget = null, phaseInTransform = false,
     inOverview = false,
 }) {
-    // Frozen because the record is replayed: _pushPass re-derives from it when the overview mode
-    // changes, so in-place edits would leave the clip and the re-push disagreeing about one pass.
-    // Shallow on purpose - the nested ring, style and plan are rebuilt each pass, never shared.
-    return Object.freeze({
+    return {
         style, ring, drawClip, scale, readableScale,
         scaleCandidates, bodyPlan, clipTarget, phaseInTransform, inOverview,
-    });
+    };
 }
 
 /** A draw-nothing pass still states radius 0 and no outline, so no pass inherits a stale corner. */
