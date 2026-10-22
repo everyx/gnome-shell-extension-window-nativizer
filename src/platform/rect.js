@@ -5,14 +5,14 @@
  */
 
 /** Whether two rects cover the same box. */
-export function rectEquals(a, b) {
-    return Boolean(a && b) && a.x === b.x && a.y === b.y &&
-        a.width === b.width && a.height === b.height;
+export function rectEquals(first, second) {
+    return Boolean(first && second) && first.x === second.x && first.y === second.y &&
+        first.width === second.width && first.height === second.height;
 }
 
 /** Whether two sizes agree, origin aside. */
-export function sameSize(a, b) {
-    return Boolean(a && b) && a.width === b.width && a.height === b.height;
+export function sameSize(first, second) {
+    return Boolean(first && second) && first.width === second.width && first.height === second.height;
 }
 
 /** Whether `outer` covers `inner` on all four sides, edges inclusive. */
@@ -23,20 +23,30 @@ export function rectContains(outer, inner) {
 }
 
 /** Whether two layout rects overlap with positive area, matching `mtk_rectangle_intersect`. */
-export function rectanglesOverlap(a, b) {
-    if (!a || !b)
+export function rectanglesOverlap(first, second) {
+    if (!first || !second)
         return false;
-    const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
-    const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
+    const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
     return width > 0 && height > 0;
 }
 
-/** Whether any side of two inset sets differs by `tolerance` or more; a missing side counts as 0. */
-export function insetsMoved(a, b, tolerance = 1) {
-    if (!a || !b)
+/** Whether two inset sets name the same four sides; a missing side counts as 0. */
+export function insetsEqual(first, second) {
+    if (!first || !second)
         return false;
-    return Math.abs((a.left ?? 0) - (b.left ?? 0)) >= tolerance ||
-        Math.abs((a.top ?? 0) - (b.top ?? 0)) >= tolerance ||
-        Math.abs((a.right ?? 0) - (b.right ?? 0)) >= tolerance ||
-        Math.abs((a.bottom ?? 0) - (b.bottom ?? 0)) >= tolerance;
+    return (first.left ?? 0) === (second.left ?? 0) &&
+        (first.top ?? 0) === (second.top ?? 0) &&
+        (first.right ?? 0) === (second.right ?? 0) &&
+        (first.bottom ?? 0) === (second.bottom ?? 0);
+}
+
+/** Whether any side of two inset sets differs by `tolerance` or more; a missing side counts as 0. */
+export function insetsMoved(first, second, tolerance = 1) {
+    if (!first || !second)
+        return false;
+    return Math.abs((first.left ?? 0) - (second.left ?? 0)) >= tolerance ||
+        Math.abs((first.top ?? 0) - (second.top ?? 0)) >= tolerance ||
+        Math.abs((first.right ?? 0) - (second.right ?? 0)) >= tolerance ||
+        Math.abs((first.bottom ?? 0) - (second.bottom ?? 0)) >= tolerance;
 }
