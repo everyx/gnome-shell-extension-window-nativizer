@@ -1,5 +1,11 @@
 /** Mask, opacity bypass and shadow clone hang on the client's own actors, not on a preview card. */
 
+/** What the desktop reads before the first setMode: the same defaults setMode normalises to. */
+const NO_READINGS = Object.freeze({
+    radius: 0, insets: null, erase: false, scale: 1,
+    shadow: null, forceOverviewCorners: false,
+});
+
 import {
     Diagnostic,
     overviewMaskRefusalWarning,
@@ -48,14 +54,10 @@ export class OverviewDecoration {
 
         // Taken from the last apply(), so a card rebuild can re-read them; nothing else can change them.
         this._canMask = false;
-        this._radius = 0;
-        this._insets = null;
-        this._erase = false;
-        this._scale = 1;
-        this._shadowSource = null;
+        // What the last setMode was told, kept as one record: every reader below takes it whole.
+        this._readings = NO_READINGS;
         // The source the mounted clones came from, so a replaced desktop shadow actor re-mounts them.
         this._mountedShadowSource = null;
-        this._forceOverviewCorners = false;
         // Past readiness, a refusal is the square-overview defect, latched to one line per episode.
         this._maskRefusalDiagnostic = new Diagnostic(options.journal ?? journal);
     }
@@ -91,12 +93,14 @@ export class OverviewDecoration {
             drawClip: readings.drawClip ?? false,
             hasStyle: readings.hasStyle ?? false,
         });
-        this._radius = readings.radius ?? 0;
-        this._insets = readings.insets ?? null;
-        this._erase = readings.erase ?? false;
-        this._scale = readings.scale ?? 1;
-        this._shadowSource = readings.shadow ?? null;
-        this._forceOverviewCorners = Boolean(readings.forceOverviewCorners);
+        this._readings = Object.freeze({
+            radius: readings.radius ?? 0,
+            insets: readings.insets ?? null,
+            erase: readings.erase ?? false,
+            scale: readings.scale ?? 1,
+            shadow: readings.shadow ?? null,
+            forceOverviewCorners: Boolean(readings.forceOverviewCorners),
+        });
 
         return this._settleMode();
     }
@@ -114,7 +118,7 @@ export class OverviewDecoration {
         }
 
         // Mask, forced clip or square: forcing also needs the mask to reach every painted corner.
-        const forcedToClip = this._forceOverviewCorners && !this._maskReachesCorners();
+        const forcedToClip = this._readings.forceOverviewCorners && !this._maskReachesCorners();
         const maskable = this._canMask && this._maskReady() && !forcedToClip;
         this._syncHooks();
         let installed = false;
@@ -126,7 +130,7 @@ export class OverviewDecoration {
         this._applyShadow();
         if (installed)
             return 'mask';
-        return this._forceOverviewCorners ? 'clip' : 'square';
+        return this._readings.forceOverviewCorners ? 'clip' : 'square';
     }
 
     /** Re-entrant release; destroy() is terminal. */
@@ -224,7 +228,7 @@ export class OverviewDecoration {
 
         // Insets and radius are logical; the texture carries the client's buffer.
         const bufferScale = textureWidth / actorWidth;
-        const insets = this._insets ?? ZERO_INSETS;
+        const insets = this._readings.insets ?? ZERO_INSETS;
         const key = this._maskKeyFor(textureWidth, textureHeight, bufferScale);
 
         // Same mask, same texture: skip the rebuild but re-assert the bypass, or Mutter skips the mask.
@@ -233,7 +237,7 @@ export class OverviewDecoration {
             return true;
         }
 
-        const maskScale = this._overviewMaskScale(textureWidth, textureHeight, bufferScale, this._scale || 1);
+        const maskScale = this._overviewMaskScale(textureWidth, textureHeight, bufferScale, this._readings.scale || 1);
         const mask = buildRoundedMask(context, {
             width: textureWidth * maskScale,
             height: textureHeight * maskScale,
@@ -241,8 +245,8 @@ export class OverviewDecoration {
             frameY: insets.top * bufferScale * maskScale,
             frameW: (actorWidth - insets.left - insets.right) * bufferScale * maskScale,
             frameH: (actorHeight - insets.top - insets.bottom) * bufferScale * maskScale,
-            radius: this._radius * bufferScale * maskScale,
-            erase: this._erase,
+            radius: this._readings.radius * bufferScale * maskScale,
+            erase: this._readings.erase,
         });
         if (!mask)
             return this._refuseMask('the mask builder returned nothing');
@@ -258,9 +262,9 @@ export class OverviewDecoration {
 
     /** Mutter clears the mask slot on a destination-size move that reaches us through no signal. */
     _maskKeyFor(textureWidth, textureHeight, bufferScale) {
-        const {left = 0, top = 0, right = 0, bottom = 0} = this._insets ?? {};
-        return [textureWidth, textureHeight, bufferScale, this._scale, this._radius,
-            this._erase, left, top, right, bottom].join(':');
+        const {left = 0, top = 0, right = 0, bottom = 0} = this._readings.insets ?? {};
+        return [textureWidth, textureHeight, bufferScale, this._readings.scale, this._readings.radius,
+            this._readings.erase, left, top, right, bottom].join(':');
     }
 
     /** The opaque fast path needs 255; the texture's opacity is this container's times the actor's. */
@@ -292,7 +296,7 @@ export class OverviewDecoration {
     /** With forced corners the clip is intended, so a refusal there is not the defect watched for. */
     _refuseMask(reason) {
         // A leg the user asked for is no refusal: it re-arms the episode like a pass that never refused.
-        if (this._forceOverviewCorners) {
+        if (this._readings.forceOverviewCorners) {
             this._maskRefusalDiagnostic.check(null);
             return false;
         }
@@ -353,12 +357,12 @@ export class OverviewDecoration {
     /** One per preview: a Clutter.Clone has one parent, and the shadow sits beside the window actor. */
     _applyShadow() {
         const OverviewShadow = this._OverviewShadowClass;
-        if (!this._shadowSource || !OverviewShadow)
+        if (!this._readings.shadow || !OverviewShadow)
             return;
         // Keyed on the source: a rebuild replaces it, so a count-only check left clones on the dead actor.
-        if (this._mountedShadowSource !== this._shadowSource) {
+        if (this._mountedShadowSource !== this._readings.shadow) {
             this._clearShadow();
-            this._mountedShadowSource = this._shadowSource;
+            this._mountedShadowSource = this._readings.shadow;
         }
         if (this._shadows.length >= this._expectedPreviewCount())
             return;
@@ -375,7 +379,7 @@ export class OverviewDecoration {
             if (!container)
                 continue;
             try {
-                const shadow = new OverviewShadow(this._shadowSource, preview, container, width);
+                const shadow = new OverviewShadow(this._readings.shadow, preview, container, width);
                 const entry = {preview, shadow};
                 this._shadows.push(entry);
                 shadow.connect('destroy', () => {
