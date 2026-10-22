@@ -93,14 +93,14 @@ export class OverviewDecoration {
             drawClip: readings.drawClip ?? false,
             hasStyle: readings.hasStyle ?? false,
         });
-        this._readings = Object.freeze({
+        this._readings = {
             radius: readings.radius ?? 0,
             insets: readings.insets ?? null,
             erase: readings.erase ?? false,
             scale: readings.scale ?? 1,
             shadow: readings.shadow ?? null,
             forceOverviewCorners: Boolean(readings.forceOverviewCorners),
-        });
+        };
 
         return this._settleMode();
     }

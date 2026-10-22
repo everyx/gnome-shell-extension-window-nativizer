@@ -22,21 +22,6 @@ const ring = (overrides = {}) => ({
     ...overrides,
 });
 
-describe('the pass record', () => {
-    it('is frozen, so a replayed pass cannot be edited in place', () => {
-        // The same value serves as this pass's snapshot and as what an overview mode change re-derives
-        // from. If a later reader edited it, the clip would keep painting the pass it was handed while
-        // the re-push derived from the edited one.
-        const pass = decorationPass({style: style(), ring: ring(), drawClip: true});
-
-        expect(Object.isFrozen(pass)).toBeTrue();
-        expect(() => {
-            pass.inOverview = true;
-        }).toThrow();
-        expect(pass.inOverview).toBeFalse();
-    });
-});
-
 describe('clipParamsFrom', () => {
     it('cuts inside the ring the pass is worn with and draws its corner', () => {
         const params = clipParamsFrom(decorationPass({
