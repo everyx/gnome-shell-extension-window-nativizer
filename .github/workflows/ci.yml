@@ -14,6 +14,10 @@ jobs:
   lint:
     name: Code Quality & Style
     runs-on: ubuntu-latest
+    container:
+      # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
+      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
+      image: ghcr.io/everyx/window-nativizer-ci:v1
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -32,11 +36,6 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gettext
-
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
@@ -51,6 +50,10 @@ jobs:
   ego-lint:
     name: EGO Reviewer Compliance
     runs-on: ubuntu-latest
+    container:
+      # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
+      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
+      image: ghcr.io/everyx/window-nativizer-ci:v1
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -67,11 +70,6 @@ jobs:
           ref: v0.1.31
           path: .ego-lint
 
-      - name: Install GLib schema compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglib2.0-dev-bin
-
       - name: Run ego-lint compliance checks
         run: |
           # Upstream bug in the pinned release: under `set -eo pipefail` the
@@ -86,6 +84,10 @@ jobs:
   test:
     name: Unit Tests (GJS + Jasmine)
     runs-on: ubuntu-latest
+    container:
+      # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
+      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
+      image: ghcr.io/everyx/window-nativizer-ci:v1
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -100,17 +102,6 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
-      - name: Install system test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gjs libglib2.0-dev-bin gettext meson ninja-build gir1.2-graphene-1.0
-
-      - name: Install jasmine-gjs
-        run: |
-          git clone --depth 1 https://github.com/ptomato/jasmine-gjs.git /tmp/jasmine-gjs
-          meson setup /tmp/jasmine-gjs/build /tmp/jasmine-gjs --prefix=/usr
-          sudo ninja -C /tmp/jasmine-gjs/build install
-
       - name: Run Jasmine unit tests
         run: pnpm test
 
@@ -120,6 +111,10 @@ jobs:
   pack:
     name: Extension Package Build
     runs-on: ubuntu-latest
+    container:
+      # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
+      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
+      image: ghcr.io/everyx/window-nativizer-ci:v1
     permissions:
       contents: read
       pull-requests: write
@@ -138,11 +133,6 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
-
-      - name: Install packaging tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnome-shell gettext libglib2.0-dev-bin
 
       - name: Pack extension
         run: pnpm run build
