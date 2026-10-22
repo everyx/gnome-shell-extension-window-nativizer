@@ -59,27 +59,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # The pin, the upstream patch and the baseline comparison all live in tools/ego-lint.sh, so
+      # this job and a contributor's pre-commit cannot disagree about which tool ran, or about what
+      # it saw - the two Object.freeze() warnings that reached master were printed here and the job
+      # stayed green, because a warning is not a failure.
+      - name: Read the ego-lint pin
+        id: ego
+        run: echo "ref=$(cat tools/ego-lint.version)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout gnome-extension-reviewer
         uses: actions/checkout@v7
         with:
           repository: ZviBaratz/gnome-extension-reviewer
-          # Pinned: the tool's `main` has broken this job twice - an unbound
-          # variable on the "may pass with comments" path (any single warning
-          # aborted the job) and, before that, a grep that fails the step under
-          # `set -e`. Bump deliberately and re-read the verdict logic when you do.
-          ref: v0.1.31
+          # The tool's `main` has broken this job twice - an unbound variable on the
+          # "may pass with comments" path, and a grep that fails the step under `set -e`.
+          # Bump tools/ego-lint.version deliberately and re-read the verdict logic when you do.
+          ref: ${{ steps.ego.outputs.ref }}
           path: .ego-lint
 
       - name: Run ego-lint compliance checks
-        run: |
-          # Upstream bug in the pinned release: under `set -eo pipefail` the
-          # verdict's `grep "^WARN|"` exits 1 when an extension has no warnings at
-          # all, which fails the step before the verdict is printed. Tolerate the
-          # empty result while keeping the count fed by the pipeline.
-          sed -i -e 's/grep "\^WARN|" "\$RESULTS_FILE" | cut/grep "\^WARN|" "\$RESULTS_FILE" 2>\/dev\/null | cut/' \
-                 -e 's/| sort -u | wc -l)/| sort -u | wc -l || true)/' \
-                 .ego-lint/skills/ego-lint/scripts/ego-lint.sh
-          bash .ego-lint/ego-lint --show all src/
+        run: EGO_LINT_DIR=.ego-lint bash tools/ego-lint.sh
 
   test:
     name: Unit Tests (GJS + Jasmine)

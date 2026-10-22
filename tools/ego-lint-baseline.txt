@@ -1,0 +1,12 @@
+# Findings this repository accepts, one line per rule and file: <rule> <path> <count>.
+# A path is "-" when the finding names no file. Regenerate with: pnpm run lint:ego -- --update
+# Each line is a decision, so read the diff: a new line accepts a warning for good.
+lifecycle/untracked-timeout	lib/nativeLikeCorners.js	1
+metadata/future-shell-version	-	1
+quality/code-volume	-	1
+quality/destroy-try-catch	lib/inspector.js	2
+quality/destroy-try-catch	lib/manager.js	1
+quality/destroy-try-catch	lib/overviewDecoration.js	1
+quality/private-api	lib/manager.js	1
+R-SLOP-27	lib/windowDecoration.js	1
+schema-usage/unused-key	-	1
