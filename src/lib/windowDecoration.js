@@ -158,14 +158,26 @@ export class WindowDecoration {
     }
 
     /** Applies one pass's actions and readings; the target comes from the window when omitted. */
-    apply({
-        actions, inputs, actor = null, target = null, surfaceContainer = undefined,
-        inOverview = false, forceOverviewCorners = false,
-    }) {
-        const winActor = this._getActor(actor);
+    apply(request) {
+        const winActor = this._getActor(request.actor ?? null);
         if (!winActor)
             return;
 
+        const read = this._readPass(request, winActor);
+        this._drawPass(read, winActor);
+        this._settlePass(read, winActor);
+    }
+
+    /**
+     * Everything this pass reads, before anything is written: target, scale, witness, the plan it
+     * settles against, and the ring those compose into. Only the resolved target and the two inputs
+     * the overview reads later stay on `this`; the rest travels in the record, so no read can be
+     * reordered behind a write that would change it.
+     */
+    _readPass({
+        actions, inputs, target = null, surfaceContainer = undefined,
+        inOverview = false, forceOverviewCorners = false,
+    }, winActor) {
         this._forceOverviewCorners = Boolean(forceOverviewCorners);
 
         const resolvedTarget = target ??
@@ -186,8 +198,6 @@ export class WindowDecoration {
         const rawInsets = inputs.insets;
         // An unreadable scale must not postpone the clip: an unclipped frame is worse than 1.0.
         const readableScale = this._resolveScale(inputs);
-        const scale = readableScale ?? 1.0;
-        const scaleCandidates = inputs?.monitorScaleCandidates ?? null;
 
         // Judged before anything draws: a pass that throws later must still speak or re-arm.
         this._checkDiagnosticInvariants(inputs, winActor);
@@ -205,6 +215,7 @@ export class WindowDecoration {
         // drifted one, and insetsMoved answers false for it.
         if (rectEquals(witness?.buffer, buffer) && insetsMoved(witness?.ring, rawInsets))
             ringNow = witness.ring;
+        const scale = readableScale ?? 1.0;
         const ring = {
             insets: actions.ring.safeInset && (actions.drawClip || actions.drawShadow)
                 ? flatSafeInsets(scale) : ringNow,
@@ -212,46 +223,60 @@ export class WindowDecoration {
             erase: actions.ring.clear || actions.ring.safeInset,
         };
 
-        this._syncClip(actions.drawClip || actions.ring.clear, clipTarget, ring.insets, inOverview);
+        return {
+            actions, inputs, inOverview, ring, ringNow, buffer, windowSize, passPlan,
+            scale, readableScale, scaleCandidates: inputs?.monitorScaleCandidates ?? null,
+            clipTarget, phaseInTransform: this.clipPhaseInTransform,
+        };
+    }
+
+    /** The writes, in the order the devices need them; the pass is recorded once they exist. */
+    _drawPass(read, winActor) {
+        const {actions, ring, inOverview} = read;
+
+        this._syncClip(actions.drawClip || actions.ring.clear, read.clipTarget, ring.insets, inOverview);
 
         // A cleared ring defers to the client's shadow, but never while our clip is in place.
         const deferToClientShadow = actions.ring.clear && !this.clip;
         this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
 
-        this._syncResizeBand(actions.drawResize, inputs, ring.insets, winActor);
+        this._syncResizeBand(actions.drawResize, read.inputs, ring.insets, winActor);
 
         // Only a readable scale is stored: the substituted 1.0 lays out this pass and no more.
-        this._scale = readableScale;
+        this._scale = read.readableScale;
         // Record what is drawn, not asked: the overview must not mask a corner no clip ever cut.
         const drawnClip = Boolean(this.clip && actions.drawClip && actions.style.radius > 0);
-        this._pass = decorationPass({
+        const pass = decorationPass({
             style: actions.style,
             ring,
             drawClip: drawnClip,
-            scale,
-            readableScale,
-            scaleCandidates,
-            bodyPlan: passPlan,
-            clipTarget,
-            phaseInTransform: this.clipPhaseInTransform,
+            scale: read.scale,
+            readableScale: read.readableScale,
+            scaleCandidates: read.scaleCandidates,
+            bodyPlan: read.passPlan,
+            clipTarget: read.clipTarget,
+            phaseInTransform: read.phaseInTransform,
+            // Not snapshotted: the overview owns this answer and setMode refuses while it is
+            // destroyed, so the value is read from the owner rather than from the request.
             inOverview: this.overview.inOverview,
         });
-        this.clip?.applyPass?.(this._pass);
-        if (this.shadow) {
-            // Both cuts read one phase source and body: a transient disagreement cannot split them.
-            this.shadow.applyPass?.(this._pass);
-        }
+        this._pass = pass;
+        this.clip?.applyPass?.(pass);
+        // Both cuts read one phase source and body: a transient disagreement cannot split them.
+        this.shadow?.applyPass?.(pass);
 
         // Presence changes only in _syncClip, so this pass's style is pushed here, and can throw.
         this.setOverviewMode(inOverview);
+    }
 
-        // Written last: a throw must not advance the episode, though an attached effect stays.
+    /** Written last: a throw must not advance the episode, though an attached effect stays. */
+    _settlePass(read, winActor) {
         this.bodyPlan.next({
-            targetSize: readActorSize(clipTarget),
+            targetSize: readActorSize(read.clipTarget),
             windowActorSize: readActorSize(winActor),
-            windowSize,
+            windowSize: read.windowSize,
         });
-        this._witness = {buffer, ring: ringNow};
+        this._witness = {buffer: read.buffer, ring: read.ringNow};
     }
 
     /** Falls back to the last good scale, so a transient miss cannot jump a fractional display. */
@@ -326,8 +351,8 @@ export class WindowDecoration {
         // A re-pin restates the phase strategy too; the setter is a no-op while unchanged.
         if (this.clip)
             this.clip.setPhaseInTransform?.(this.clipPhaseInTransform);
-        // Only a clip appearing or going away changes the overview options; apply() does the rest.
-        // The insets go with it: the pass is not built yet, and the overview needs this pass's.
+        // A clip that appears is suppressed at once, not at the end of the pass: the overview must
+        // never hold an enabled clip, even between these two calls.
         if (wanted !== hasClip)
             this.setOverviewMode(inOverview, this.clip ? insets : null);
     }

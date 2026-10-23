@@ -950,6 +950,37 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(warn).toHaveBeenCalledTimes(1);
     });
 
+    it('hands both cuts the phase strategy the resolved target asked for', () => {
+        // The pass is the one thing both cuts read their phase from, so a field that the read
+        // phase resolves but the record drops reaches the shadow as the default `false` while the
+        // clip keeps the real strategy: the two cuts then measure the phase differently.
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        const actions = {
+            drawClip: true,
+            drawRing: false,
+            drawShadow: true,
+            drawResize: false,
+            ring: {clear: false, safeInset: false},
+            style: {radius: 12, outline: null, shadows: []},
+        };
+        const inputs = {insets: {left: 0, top: 0, right: 0, bottom: 0}, monitorScale: 1};
+
+        for (const phaseInTransform of [true, false]) {
+            deco.apply({
+                actions, inputs, actor: mockActor,
+                target: {actor: mockActor, phaseInTransform},
+            });
+            expect(deco.clip.pass.phaseInTransform).toBe(phaseInTransform);
+            expect(deco.shadow.pass.phaseInTransform).toBe(phaseInTransform);
+        }
+    });
+
     it('clears every resize band while the monitor bounds cannot be read', () => {
         // A window flush against the right edge of monitor 0. Its strips reach RESIZE_BAND past
         // the edge: with readable bounds they are clipped at the monitor, but reading the
