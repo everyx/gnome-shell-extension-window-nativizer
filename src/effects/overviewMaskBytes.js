@@ -1,4 +1,4 @@
-/** A_8 corner mask bytes for the overview preview; pure, so a unit test can check the corners. */
+/** A_8 corner mask bytes for the overview preview; pure, so the corners can be read directly. */
 
 function clamp(value, low, high) {
     return Math.max(low, Math.min(high, value));

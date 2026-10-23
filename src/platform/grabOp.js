@@ -33,7 +33,7 @@ function metaNamespace() {
     }
 }
 
-/** The Meta namespace is a parameter so a spec can supply its own. */
+/** The Meta namespace is a parameter, so which typelib is used is the caller's choice. */
 export function getResizeGrabOp(direction, meta = metaNamespace()) {
     const grabOp = meta?.GrabOp;
     if (!grabOp)

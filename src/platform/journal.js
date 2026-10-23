@@ -1,10 +1,10 @@
-/** Sole writer: one grep finds every message, and one injected object lets a spec observe all. */
+/** Sole writer: one grep finds every message, and one injected object observes them all. */
 
 /** The tag a support log is searched for; a throw escaping our catches is the one untagged line. */
 export const PREFIX = '[window-nativizer]';
 
 export class Journal {
-    /** Sinks are injectable because the Shell's console.warn is not writable from a spec. */
+    /** Sinks are injectable because the Shell's console.warn cannot be replaced. */
     constructor(options = {}) {
         this._warn = options.warn ?? (message => console.warn(message));
         this._failure = options.failure ?? ((error, message) => logError(error, message));
@@ -21,5 +21,5 @@ export class Journal {
     }
 }
 
-/** Shared default: a decoration and its effects must share a sink, or a spec sees half a pass. */
+/** Shared default: a decoration and its effects must share a sink, or half a pass goes elsewhere. */
 export const journal = new Journal();

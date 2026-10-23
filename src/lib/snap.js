@@ -141,7 +141,7 @@ function writeSnappedSliceCoords(out, cast, corner, scale) {
     out[7] = Math.max(out[6], y3);
 }
 
-/** The same slices as plain rects, so a spec can table the arithmetic as data. */
+/** The same slices as plain rects, so the arithmetic can be read as data. */
 export function snapSliceRects(cast, corner, scale) {
     const s = [0, 0, 0, 0, 0, 0, 0, 0];
     writeSnappedSliceCoords(s, cast, corner, scale);

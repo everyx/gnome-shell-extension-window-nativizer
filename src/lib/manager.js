@@ -295,7 +295,7 @@ export class Manager {
         this._classifier?.probeAdwaitaLook(record.pid);
 
         const inputs = this._decorationInputs(win);
-        // The branch lives in the reading module so a spec can table it: defer, undecorate, apply.
+        // The branch lives in the reading module, so it is a pure function of the reading.
         const outcome = reconcileOutcome(inputs);
         if (outcome === 'defer')
             return;
