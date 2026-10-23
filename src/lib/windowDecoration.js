@@ -87,7 +87,7 @@ export class WindowDecoration {
 
     /** The size the window was first decided at, or null while the latch is open. */
     get initialFrameSize() {
-        return this._initialFrameSize ? {...this._initialFrameSize} : null;
+        return this._initialFrameSize;
     }
 
     /** Closes the latch; below the floor is unreadable, not small. */
