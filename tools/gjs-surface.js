@@ -37,6 +37,10 @@
 import GLib from 'gi://GLib';
 import System from 'system';
 
+import {beginWindowGrabOp, getPointerSprite} from '../src/platform/grabOp.js';
+import {setActorCursor} from '../src/platform/actorCursor.js';
+import {coglContextForBake} from '../src/platform/coglContext.js';
+
 const VERBOSE = ARGV.includes('--verbose');
 const SCRIPT = GLib.filename_from_uri(import.meta.url)[0];
 const ROOT = GLib.path_get_dirname(GLib.path_get_dirname(SCRIPT));
@@ -391,26 +395,16 @@ for (const group of GROUPS) {
 // this file's to pin. Ask each seam what it selected and assert the selection is callable on the
 // typelibs this shell is running - that is the runtime half of the ownership rule, and it is what
 // the deleted per-member arity and parameter tables used to stand in for.
-// Each seam is imported from the module that owns it, named here rather than re-exported through a
-// barrel: the barrel gave this probe one entry point at the cost of 56 lines that nothing in src/
-// imported, and a name moved between seam modules should move here too.
-const SEAM_EXPORTS = [
-    ['shaderEffect.js', ['ShaderEffect']],
-    ['grabOp.js', ['beginWindowGrabOp', 'getPointerSprite']],
-    ['actorCursor.js', ['setActorCursor']],
-    ['coglContext.js', ['coglContextForBake']],
-];
-const platform = {};
-for (const [file, names] of SEAM_EXPORTS) {
-    let module = null;
-    try {
-        module = await import(GLib.filename_to_uri(
-            GLib.build_filenamev([ROOT, 'src', 'platform', file]), null));
-    } catch (e) {
-        fail(`src/platform/${file}`, `the seam module did not load: ${e.message}`);
-    }
-    for (const name of names)
-        platform[name] = module?.[name];
+// ShaderEffect is the one seam loaded dynamically: it imports Clutter, Cogl and Shell, so on a shell
+// whose typelibs are not all present a static import would take this probe down before it reported
+// anything. The other three name no GI namespace and are imported at the top with the rest.
+const platform = {beginWindowGrabOp, getPointerSprite, setActorCursor, coglContextForBake};
+try {
+    const shaderEffect = await import(GLib.filename_to_uri(
+        GLib.build_filenamev([ROOT, 'src', 'platform', 'shaderEffect.js']), null));
+    platform.ShaderEffect = shaderEffect.ShaderEffect;
+} catch (e) {
+    fail('src/platform/shaderEffect.js', `the seam module did not load: ${e.message}`);
 }
 if (platform) {
     const seam = (what, value) => {
