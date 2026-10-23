@@ -168,3 +168,21 @@ export const CODE = `
     float outAlpha = min(a, 1.0) * cogl_color_in.a;
     cogl_color_out = vec4(uColor.rgb * outAlpha, outAlpha);
 `;
+
+/**
+ * One entry per uniform DECLARATIONS declares, with the arity its GLSL type gives it. A name that
+ * is not here is not in the shader either, and a misspelt key reads as undefined rather than as a
+ * uniform location of -1 that the upload silently skips.
+ */
+export const SHADOW_UNIFORMS = Object.freeze({
+    winSize: {name: 'uWinSize', components: 2},
+    radius: {name: 'uRadius', components: 1},
+    shadow1: {name: 'uShadow1', components: 4},
+    shadow2: {name: 'uShadow2', components: 4},
+    shadow3: {name: 'uShadow3', components: 4},
+    pad: {name: 'uPad', components: 2},
+    color: {name: 'uColor', components: 4},
+});
+
+/** How many uShadow<n> layers the shader sums; the declarations above are the only place it is set. */
+export const SHADOW_LAYER_COUNT = 3;

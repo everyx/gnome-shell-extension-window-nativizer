@@ -2,12 +2,10 @@
 
 import Cogl from 'gi://Cogl';
 
-import {DECLARATIONS, CODE} from './shadowShader.generated.js';
+import {CODE, DECLARATIONS, SHADOW_LAYER_COUNT, SHADOW_UNIFORMS} from './shadowShader.generated.js';
 import {SHADOW_PAD, shadowGeometry} from './shadowGeometry.js';
 import {Diagnostic, shadowBakeFailureWarning} from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
-
-const LAYER_COUNT = 3; // shader expects 3 layers
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
@@ -73,6 +71,12 @@ export function setPipelineOpacity(pipeline, opacity) {
     pipeline.set_color(new Cogl.Color({red: 255, green: 255, blue: 255, alpha}));
 }
 
+/** Names and arities come from the shader: a key it does not declare uploads undefined, not -1. */
+function upload(pipeline, key, values) {
+    const {name, components} = SHADOW_UNIFORMS[key];
+    uniform(pipeline, name, components, values);
+}
+
 function bake(context, radius, shadows) {
     const {buffer, window} = shadowGeometry(radius);
 
@@ -88,14 +92,14 @@ function bake(context, radius, shadows) {
     const pipeline = Cogl.Pipeline.new(context);
     pipeline.set_color(opaqueWhite());
     pipeline.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE));
-    uniform(pipeline, 'uWinSize', 2, [window, window]);
-    uniform(pipeline, 'uRadius', 1, [radius]);
-    uniform(pipeline, 'uPad', 2, [SHADOW_PAD, SHADOW_PAD]);
+    upload(pipeline, 'winSize', [window, window]);
+    upload(pipeline, 'radius', [radius]);
+    upload(pipeline, 'pad', [SHADOW_PAD, SHADOW_PAD]);
     const color = styleColor(shadows);
-    uniform(pipeline, 'uColor', 4, [color[0] / 255, color[1] / 255, color[2] / 255, 1]);
-    for (let i = 0; i < LAYER_COUNT; i++) {
+    upload(pipeline, 'color', [color[0] / 255, color[1] / 255, color[2] / 255, 1]);
+    for (let i = 0; i < SHADOW_LAYER_COUNT; i++) {
         const layer = shadows[i] ?? NO_SHADOW;
-        uniform(pipeline, `uShadow${i + 1}`, 4, [layer.blur, layer.spread, layer.alpha, 0]);
+        upload(pipeline, `shadow${i + 1}`, [layer.blur, layer.spread, layer.alpha, 0]);
     }
 
     pipeline.set_layer_texture(0, Cogl.Texture2D.new_with_size(context, 1, 1));
