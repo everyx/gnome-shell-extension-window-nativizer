@@ -3,6 +3,7 @@
 import GLib from 'gi://GLib';
 
 import {isDecoratableWindowType} from './detector.js';
+import {Subscriptions} from './subscriptions.js';
 import {getSurfaceContainer, getWindowActor, getWindowPid, getWindowType}
     from '../platform/window.js';
 
@@ -26,7 +27,7 @@ class TrackedWindow {
         this.decoration = decoration;
         // Read once: a later teardown read can come back empty, leaving no owner to forget it by.
         this.pid = pid;
-        this.signals = [];
+        this.subscriptions = new Subscriptions();
         this.timeout = null;
         this.idleId = null;
         this.firstFrameDone = false;
@@ -78,11 +79,11 @@ export class WindowTracking {
         this._windows.set(win, record);
 
         for (const signal of WINDOW_SIGNALS)
-            this._connect(record, win, signal, () => this.touch(win));
+            record.subscriptions.connect(win, signal, () => this.touch(win), {lenient: true});
 
         // Focus is not debounced: the shadow must start with the animation the user is watching.
-        this._connect(record, win, 'notify::appears-focused', () => this.passNow(win));
-        this._connect(record, win, 'unmanaging', () => this._onGone(win));
+        record.subscriptions.connect(win, 'notify::appears-focused', () => this.passNow(win), {lenient: true});
+        record.subscriptions.connect(win, 'unmanaging', () => this._onGone(win), {lenient: true});
 
         const actor = getWindowActor(win);
         this.observe(win);
@@ -109,9 +110,9 @@ export class WindowTracking {
 
         if (!record.actorWired) {
             record.actorWired = true;
-            this._connect(record, actor, 'notify::allocation', () => this._onAllocation(win, actor));
+            record.subscriptions.connect(actor, 'notify::allocation', () => this._onAllocation(win, actor), {lenient: true});
             for (const signal of ACTOR_SIGNALS)
-                this._connect(record, actor, signal, () => this.touch(win));
+                record.subscriptions.connect(actor, signal, () => this.touch(win), {lenient: true});
         }
 
         // The container's allocation can move (0 -> real, buffer swap) while the actor's does not.
@@ -121,7 +122,7 @@ export class WindowTracking {
             if (record.wiredContainer)
                 this._unwatch(record, record.wiredContainer);
             record.wiredContainer = container;
-            this._connect(record, container, 'notify::allocation', () => this.touch(win));
+            record.subscriptions.connect(container, 'notify::allocation', () => this.touch(win), {lenient: true});
         }
     }
 
@@ -215,32 +216,9 @@ export class WindowTracking {
     }
 
     _unwatch(record, only) {
-        if (only) {
-            const index = record.signals.findIndex(([obj]) => obj === only);
-            if (index >= 0) {
-                this._disconnect(record.signals[index]);
-                record.signals.splice(index, 1);
-            }
-            return;
-        }
-        for (const entry of record.signals)
-            this._disconnect(entry);
-        record.signals.length = 0;
-    }
-
-    /** A failed connect is swallowed: an object torn down mid-subscription must not abort it. */
-    _connect(record, obj, signal, handler) {
-        try {
-            record.signals.push([obj, obj.connect(signal, handler)]);
-        } catch {
-            // A signal on a dead object cannot be tracked; the pass that finds it skips it.
-        }
-    }
-
-    _disconnect([obj, id]) {
-        try {
-            obj.disconnect(id);
-        } catch {
-        }
+        if (only)
+            record.subscriptions.forget(only);
+        else
+            record.subscriptions.disconnectAll();
     }
 }

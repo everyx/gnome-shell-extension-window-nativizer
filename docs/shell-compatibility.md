@@ -193,7 +193,8 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   remains: no connected signals, no actors, no pending sources.
 - **Never instantiate long-lived GObjects at JS module scope.** EGO-X-004 rejects
   module-scope GObjects (e.g. `Gio.Cancellable`); tie their lifecycle strictly to session or instance boundaries.
-- **Signals that may not exist are connected in "safe" mode.** Window- and
+- **Signals that may not exist are connected in "safe" mode.** `Subscriptions.connect` takes
+  `{lenient: true}` and swallows the failure, and only the watcher passes it: window- and
   actor-level signals vary across the audited 50–51 lines, and the object can be unmanaged while we
-  connect, so a failure there is expected and swallowed. A failure on a global
-  signal is not: it means an API assumption is wrong.
+  connect, so a failure there is expected. A failure on a global signal is not: it means an API
+  assumption is wrong, so the manager's connects are not lenient and abort the session.
