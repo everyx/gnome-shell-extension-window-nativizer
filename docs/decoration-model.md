@@ -811,11 +811,14 @@ naming both phases and the window. The container path does not compare: there th
 the transform and the mirror is unused, so a disagreement is not a defect and the check is not
 even read.
 
-The pair is only compared when both reads name the same surface container: `_readPhases` resolves
-the container once and hands it to both readers, and each read carries that actor. A mirror folded
-from one actor and a transform read from another are a phase against a position - the field false
-positive where a window actor's layout position `(-960,-600)` was reported as a phase - so the pair
-is unavailable and takes no part in the comparison. A read whose magnitude exceeds
+The pair is only compared when one surface container exists to read from: `_readPhases` resolves it
+once and hands it to both readers, and a pass that resolved none has no pair at all. That is
+structural rather than checked after the fact - an earlier revision tagged each read with its actor
+and refused a mismatched pair, but the tag was dropped whenever the actor was null, which is
+exactly the case the refusal existed for, so it never fired. Without one container there is nothing
+to compare: a mirror folded from one actor against another's transform is a phase against a
+position, the field false positive where a window actor's layout position `(-960,-600)` was
+reported as a phase. A read whose magnitude exceeds
 `PHASE_MAGNITUDE_BOUND` (2 logical px, far above the sub-one-pixel range of a real phase) is
 likewise unavailable, but the journal still gets the raw value so the misread is visible. The bound
 is generous: Mutter's `surface_container_apply_transform` shifts a layout coordinate to the nearest

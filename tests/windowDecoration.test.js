@@ -516,6 +516,32 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadow.destroyed).toBeTrue();
     });
 
+    it('reads no phase pair at all when the pass supplied no surface container', () => {
+        // A pass whose tracker read no container must not fall back to two independent resolutions:
+        // a mirror folded from one actor against another's transform is a phase against a position,
+        // which is the class the shared-container rule exists to refuse. No pair, not a comparison.
+        const container = {
+            x: 960, y: 600,
+            get_transform: () => ({
+                get_x_translation: () => 0, get_y_translation: () => 0,
+                get_x_scale: () => 1, get_y_scale: () => 1,
+            }),
+        };
+        const actor = makeEffectActor({get_children: () => [container]});
+        const deco = new WindowDecoration({...mockWin, get_compositor_private: () => actor}, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        deco.surfaceContainer = null;
+
+        const {mirror, applied} = deco._readPhases();
+        expect(mirror).toBeNull();
+        expect(applied).toBeNull();
+    });
+
     it('keeps the container the pass supplied, and forgets it when a pass supplies none', () => {
         // The tracker reads the surface-container rule once per pass; the decoration consumes that
         // read so the phase pair names the actor the clip was actually attached to. A pass that

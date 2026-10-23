@@ -129,20 +129,6 @@ describe('phaseAlignmentWarning (the fallback mirror must match Mutter\'s applie
         expect(phaseAlignmentWarning({x: Number.NaN, y: 0}, {x: 1, y: 0}, 'x')).toBeNull();
     });
 
-    it('is silent when the two reads were taken from different actors', () => {
-        // The mirror folds the surface container's layout; the applied read is that same
-        // container's transform. A pair naming different actors compares a phase against a
-        // position - the false positive the field saw as (-960,-600) - so it is unavailable.
-        const container = {name: 'container'};
-        const windowActor = {name: 'windowActor'};
-        expect(phaseAlignmentWarning({x: 0, y: 0, actor: container},
-            {x: -960, y: -600, actor: windowActor}, '"telegram"')).toBeNull();
-        // A pair naming the same actor is still compared.
-        const warning = phaseAlignmentWarning({x: 0, y: 0, actor: container},
-            {x: 1.3, y: 0, actor: container}, '"firefox"');
-        expect(warning).toContain('disagrees');
-    });
-
     it('reports an out-of-bound read as unavailable and keeps the raw numbers', () => {
         // A phase is bounded; -960 is a layout position, not a phase. The message says the read
         // is unavailable and prints both raw values so the journal still shows what was read.
