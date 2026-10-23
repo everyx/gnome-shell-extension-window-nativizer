@@ -51,6 +51,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             return this._actor;
         }
 
+        // The real effect answers for its own state; the mock models the fields it takes part in
+        // and leaves the frame and scale unmodelled, so the reply renders them null.
+        get diagnosticsView() {
+            return {phaseInTransform: true, frame: null, scale: null, suspended: false};
+        }
+
         // The real effect queues its disable on an idle; detaching it has to drop that idle.
         cancelPendingDisable() {
             this.cancelled = (this.cancelled ?? 0) + 1;
