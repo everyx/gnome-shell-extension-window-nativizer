@@ -47,6 +47,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const MUTTER_ACTOR = 'vendor/mutter/meta-window-actor-wayland.c';
 const MUTTER_BOX = 'vendor/mutter/clutter-actor-box.c';
+const MUTTER_STEX = 'vendor/mutter/meta-shaped-texture.c';
 const GSK_RECT = 'vendor/gtk/gskrectprivate.h';
 
 /**
@@ -71,6 +72,9 @@ const SCOPES = {
     meta_window_actor_wayland_init: 'meta_window_actor_wayland_init(MetaWindowActorWayland*self)',
     _clutter_actor_box_enlarge_for_effects:
         '_clutter_actor_box_enlarge_for_effects(ClutterActorBox*box)',
+    do_paint_content:
+        'do_paint_content(MetaShapedTexture*stex,ClutterPaintNode*root_node,'
+        + 'ClutterPaintContext*paint_context,ClutterActorBox*alloc,uint8_topacity)',
 };
 
 /** Drop C comments, then all whitespace: matching is insensitive to formatting, not to tokens. */
@@ -117,6 +121,7 @@ function functionBody(source, signature) {
 
 const MUTTER = normalise(read(MUTTER_ACTOR));
 const MUTTER_BOXED = normalise(read(MUTTER_BOX));
+const MUTTER_TEXTURE = normalise(read(MUTTER_STEX));
 const GSK = normalise(read(GSK_RECT));
 
 const CHECKS = [
@@ -208,6 +213,15 @@ const CHECKS = [
         recheck: 're-check the total the near edge is re-anchored by; the 2/1 split is derived, not copied',
     },
     {
+        label: 'the mask is only consulted on the blended path',
+        haystack: MUTTER_TEXTURE,
+        scope: 'do_paint_content',
+        needle: 'use_opaque_region=stex->opaque_region&&opacity==255;',
+        mirror: 'OverviewDecoration\'s opacity bypass (src/lib/overviewDecoration.js)',
+        recheck: 're-check how a fully opaque actor is made to take the masked pipeline; if this '
+            + 'condition moves, the overview mask silently stops applying',
+    },
+    {
         label: 'gsk_rect_snap_direction',
         haystack: GSK,
         needle: SCOPES.gsk_rect_snap_direction,
@@ -273,7 +287,8 @@ if (failures.length) {
         console.error(`    mirror: ${check.mirror}`);
         console.error(`    ${check.recheck}`);
     }
-    console.error(`[check-upstream-mirrors] Sources: ${MUTTER_ACTOR} (mutter ${commit('vendor/mutter').slice(0, 8)}), `
+    console.error(`[check-upstream-mirrors] Sources: ${MUTTER_ACTOR}, ${MUTTER_BOX}, `
+        + `${MUTTER_STEX} (mutter ${commit('vendor/mutter').slice(0, 8)}), `
         + `${GSK_RECT} (gtk ${commit('vendor/gtk').slice(0, 8)})`);
     process.exit(1);
 }

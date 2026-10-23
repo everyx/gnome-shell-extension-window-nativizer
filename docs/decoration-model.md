@@ -991,7 +991,8 @@ Entering the overview, the manager tells every decoration, which:
   cannot pin the per-byte coverage. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
 - Drops the window's **surface container** — the window actor's child that every preview clone
   paints through — to 254. Mutter consults the mask only on its blended path
-  (`use_opaque_region = stex->opaque_region && opacity == 255`, `meta-shaped-texture.c`), and an
+  (`use_opaque_region = stex->opaque_region && opacity == 255`,
+  `vendor/mutter/meta-shaped-texture.c`, asserted by `tools/check-upstream-mirrors.mjs`), and an
   opaque client declares a full-surface opaque region, so the fast path would paint square
   corners. One step below 255 forces the blended path; the cost is 1/255 of alpha, a single level
   of difference on a 0-255 channel, measured and imperceptible. The actor is the window's own
