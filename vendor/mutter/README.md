@@ -19,6 +19,11 @@ Authoritative source for window management and shadow decorations, vendored from
     function, so a bump that changes either one fails instead of leaving `ENLARGE_ROUNDING_PAD` and
     `ENLARGE_TOTAL_PAD` (src/lib/offscreenBox.js) as stale copies of an extinct rule.
   - `meta-window-actor-x11.c` preserves `has_shadow` decision logic as the basis for window decoration detection.
+  - `meta-shaped-texture.c` preserves the one condition the overview mask depends on: the opaque
+    fast path is taken only while `use_opaque_region` holds, and that is false whenever the actor's
+    opacity is not exactly 255 (`do_paint_content`). `src/lib/overviewDecoration.js` relies on it by
+    setting 254, so `tools/check-upstream-mirrors.mjs` asserts the expression: a bump that widens it
+    would silently keep the mask from ever being applied.
   - `meta-window-actor-wayland.c` (src/compositor) preserves `surface_container_apply_transform`, the
     Wayland subpixel phase, as the basis for `getWindowSubpixelOffset` in `src/platform/window.js`.
     `tools/check-upstream-mirrors.mjs` asserts that arithmetic rather than generating from it.
