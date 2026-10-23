@@ -14,15 +14,23 @@ export function readActorSize(actor) {
     }
 }
 
-/** The window's own size, frame rect else buffer rect; runs on the paint clock, no extra reads. */
+/** A rect a body can be cut from, or null: the projection every size read shares. */
+function sizeOf(rect) {
+    return isPaintableFrame(rect) ? {width: rect.width, height: rect.height} : null;
+}
+
+/** Frame rect, else buffer rect, over a pass's snapshot: both are in hand, so both are read. */
+export function windowSizeFrom(frameRect, bufferRect) {
+    return sizeOf(frameRect) ?? sizeOf(bufferRect);
+}
+
+/**
+ * The window's own size, read live. Both reads stay in the expression rather than behind a
+ * callback: this runs on the paint clock, and a closure per paint is a cost the settlement of a
+ * body does not need.
+ */
 export function readWindowSize(win) {
-    const frame = getWindowFrameRect(win);
-    if (isPaintableFrame(frame))
-        return {width: frame.width, height: frame.height};
-    const buffer = getWindowBufferRect(win);
-    if (isPaintableFrame(buffer))
-        return {width: buffer.width, height: buffer.height};
-    return null;
+    return sizeOf(getWindowFrameRect(win)) ?? sizeOf(getWindowBufferRect(win));
 }
 
 /** The three reads one paint or relayout settles from, taken live. */
