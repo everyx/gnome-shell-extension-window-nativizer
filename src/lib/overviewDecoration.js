@@ -12,6 +12,7 @@ import {
     windowIdentityLabel,
 } from './diagnosticInvariants.js';
 import {ZERO_INSETS} from './frame.js';
+import {readDeclaredIdentity} from './window.js';
 import {journal} from '../platform/journal.js';
 import {Subscriptions} from './subscriptions.js';
 import {WindowClientType} from './mutterRules.generated.js';
@@ -20,7 +21,6 @@ import {getWorkspaceCount} from '../platform/display.js';
 import {
     countSurfaceActorsCoveringBox,
     getWindowActor,
-    getWindowDisplayTitle,
     getWindowFrameRect,
     getOverviewPreviews,
     getWindowSurfaceContainer,
@@ -294,7 +294,9 @@ export class OverviewDecoration {
             this._maskRefusalDiagnostic.check(null);
             return false;
         }
-        const label = windowIdentityLabel({title: getWindowDisplayTitle(this._win)});
+        // Identity, never the title: a title can carry a document name or a chat partner, and this
+        // line goes to the journal. readDeclaredIdentity prefers wmClass and falls back to app ids.
+        const label = windowIdentityLabel({wmClass: readDeclaredIdentity(this._win)});
         this._maskRefusalDiagnostic.check(overviewMaskRefusalWarning(reason, label));
         return false;
     }
