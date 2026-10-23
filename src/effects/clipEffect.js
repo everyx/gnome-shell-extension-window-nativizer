@@ -212,6 +212,17 @@ export const RoundedClipEffect = GObject.registerClass({
         this.queue_repaint();
     }
 
+    /** What this effect knows about itself, for the debug reply; the decoration composes it. */
+    get diagnosticsView() {
+        return {
+            phaseInTransform: this._phaseInTransform,
+            // A copy: the frame is a live uniform array, and no reader may steer the next paint.
+            frame: [...this._frameVec],
+            scale: this._scale,
+            suspended: this._suspended,
+        };
+    }
+
     /** One handoff per decoration pass, in the effect's own order: params then plan, never half. */
     applyPass(pass) {
         this.setParams(clipParamsFrom(pass));
