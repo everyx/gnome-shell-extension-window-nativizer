@@ -17,13 +17,6 @@ import {resolveMonitorBounds, safeRead} from './window.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
 import {getAppliedSubpixelPhase, getSurfaceContainer, getWindowActor, getWindowSubpixelOffset} from '../platform/window.js';
 
-/** Tags a phase read with its actor so a pair from two actors is refused; null stays null. */
-function tagPhase(phase, actor) {
-    if (!phase || !actor)
-        return phase;
-    return {...phase, actor};
-}
-
 /** Owns one window's clip, shadow and resize band; injected options keep it unit-testable. */
 export class WindowDecoration {
     /** Every option is a seam: omit it and the real Shell object is used. */
@@ -433,15 +426,19 @@ export class WindowDecoration {
 
     /** Both phase reads in one seam: the mirror is rebuilt, the applied read comes from Mutter. */
     _readPhases() {
-        // One container for both reads: the pass's when supplied (null included), else its own.
+        // One container for both reads: the pass's when supplied, else the one resolved here.
         let container = this.surfaceContainer;
         if (container === undefined) {
             const actor = getWindowActor(this._win);
             container = actor ? getSurfaceContainer(actor, this._win, this._St) : null;
         }
+        // No container means no pair: handing null down would let each reader resolve its own, and
+        // a mirror folded from one actor against another's transform is a phase against a position.
+        if (!container)
+            return {mirror: null, applied: null};
         return {
-            mirror: tagPhase(getWindowSubpixelOffset(this._win, this._St, container), container),
-            applied: tagPhase(getAppliedSubpixelPhase(this._win, this._St, container), container),
+            mirror: getWindowSubpixelOffset(this._win, this._St, container),
+            applied: getAppliedSubpixelPhase(this._win, this._St, container),
         };
     }
 

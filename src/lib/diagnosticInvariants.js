@@ -79,10 +79,6 @@ export function bufferAllocationWarning(bufferRect, actorBox, label = windowIden
 
 /** Unavailable, not a disagreement, when a read exceeds the bound; fallback path only. */
 export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLabel()) {
-    // Two actors carried two layouts, so the pair is not comparable: unavailable, never a phase.
-    if (mirror?.actor !== undefined && applied?.actor !== undefined && mirror.actor !== applied.actor)
-        return null;
-
     if (!finitePhase(mirror) || !finitePhase(applied))
         return null;
 
