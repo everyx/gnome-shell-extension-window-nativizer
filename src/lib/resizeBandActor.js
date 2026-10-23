@@ -11,6 +11,8 @@ import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
 
+import {Subscriptions} from './subscriptions.js';
+
 import {ZERO_INSETS} from './frame.js';
 import {
     bandParamsInto,
@@ -70,6 +72,7 @@ export const ResizeBand = GObject.registerClass({
 
         this._windowActor = windowActor;
         this._container = container;
+        this._subscriptions = new Subscriptions();
         this._regions = new Map();
         this._childBox = new Clutter.ActorBox();
         this._bands = emptyBands();
@@ -108,7 +111,7 @@ export const ResizeBand = GObject.registerClass({
         // Follow the actor's visibility, so a minimized window leaves no click-catching strip.
         this._visibleBinding = windowActor.bind_property(
             'visible', this, 'visible', GObject.BindingFlags.SYNC_CREATE);
-        this._destroyId = windowActor.connect('destroy', () => this.destroy());
+        this._subscriptions.connect(windowActor, 'destroy', () => this.destroy());
 
         container.insert_child_above(this, windowActor);
     }
@@ -183,14 +186,7 @@ export const ResizeBand = GObject.registerClass({
 
     destroy() {
         this.disconnectObject(this);
-        if (this._destroyId) {
-            try {
-                this._windowActor?.disconnect(this._destroyId);
-            } catch {
-                // Window actor already destroyed.
-            }
-            this._destroyId = 0;
-        }
+        this._subscriptions?.disconnectAll();
         this._visibleBinding?.unbind();
         this._visibleBinding = null;
         this._regions.clear();

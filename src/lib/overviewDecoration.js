@@ -13,6 +13,7 @@ import {
 } from './diagnosticInvariants.js';
 import {ZERO_INSETS} from './frame.js';
 import {journal} from '../platform/journal.js';
+import {Subscriptions} from './subscriptions.js';
 import {WindowClientType} from './mutterRules.generated.js';
 import {isPaintableFrame} from '../effects/clipParams.js';
 import {getWorkspaceCount} from '../platform/display.js';
@@ -48,8 +49,9 @@ export class OverviewDecoration {
         this._maskKey = null;
         this._bypassContainer = null;
         this._savedBypassOpacity = 255;
-        this._sizeId = 0;
-        this._workspaceId = 0;
+        this._hooks = new Subscriptions();
+        // Both hooks or neither: a connect that throws in between must not read as installed.
+        this._hooksInstalled = false;
         this._shadows = [];
 
         // Taken from the last apply(), so a card rebuild can re-read them; nothing else can change them.
@@ -151,31 +153,23 @@ export class OverviewDecoration {
         this._syncHooks();
     }
 
-    /** A workspace move rebuilds the clone's card, a resize moves the mask: both re-install. */
+    /**
+     * A workspace move rebuilds the clone's card, a resize moves the mask: both re-install. They are
+     * one unit, so the retry starts from an empty pair - a connect that failed in between must not
+     * leave the other one looking like a complete install for the rest of the episode.
+     */
     _syncHooks() {
-        if (this._inOverview) {
-            if (!this._sizeId)
-                this._sizeId = this._win.connect('size-changed', () => this._refresh());
-            if (!this._workspaceId)
-                this._workspaceId = this._win.connect('workspace-changed', () => this._refresh());
+        if (!this._inOverview) {
+            this._hooks.disconnectAll();
+            this._hooksInstalled = false;
             return;
         }
-
-        if (this._sizeId) {
-            try {
-                this._win.disconnect(this._sizeId);
-            } catch {
-            }
-            this._sizeId = 0;
-        }
-
-        if (this._workspaceId) {
-            try {
-                this._win.disconnect(this._workspaceId);
-            } catch {
-            }
-            this._workspaceId = 0;
-        }
+        if (this._hooksInstalled)
+            return;
+        this._hooks.disconnectAll();
+        this._hooks.connect(this._win, 'size-changed', () => this._refresh());
+        this._hooks.connect(this._win, 'workspace-changed', () => this._refresh());
+        this._hooksInstalled = true;
     }
 
     _textureBufferKey(stex) {

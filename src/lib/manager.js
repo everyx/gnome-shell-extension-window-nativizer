@@ -11,6 +11,7 @@ import {reconcileOutcome, readWindow} from './window.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
 import {WindowDecoration} from './windowDecoration.js';
 import {WindowTracking} from './windowTracking.js';
+import {Subscriptions} from './subscriptions.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
 import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
@@ -39,7 +40,7 @@ export class Manager {
     constructor(ext) {
         this._settings = ext.getSettings();
         this._tracking = null;      // WindowTracking: the windows this session drives
-        this._signals = [];
+        this._subscriptions = new Subscriptions();
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
         this._lastFocusWindow = null;
@@ -75,17 +76,17 @@ export class Manager {
         this._animationsEnabled = St.Settings.get().enable_animations;
         this._dark = this._isDark();
         // Maintain overview mode across the showing-to-hidden transition.
-        this._connect(this._signals, Main.overview, 'showing', () => this._onOverviewShowing());
-        this._connect(this._signals, Main.overview, 'hidden', () => this._onOverviewHidden());
+        this._subscriptions.connect(Main.overview, 'showing', () => this._setOverviewMode(true));
+        this._subscriptions.connect(Main.overview, 'hidden', () => this._setOverviewMode(false));
 
-        this._connect(this._signals, display, 'window-created', (_, win) => this._trackWindow(win));
-        this._connect(this._signals, display, 'grab-op-end', () => {
+        this._subscriptions.connect(display, 'window-created', (_, win) => this._trackWindow(win));
+        this._subscriptions.connect(display, 'grab-op-end', () => {
             // Mutter drove the cursor through the grab; take the band's back to DEFAULT.
             this._resetBandCursors();
             this._reconcile();
         });
-        this._connect(this._signals, display, 'restacked', () => this._restackActors());
-        this._connect(this._signals, display, 'notify::focus-window', () => {
+        this._subscriptions.connect(display, 'restacked', () => this._restackActors());
+        this._subscriptions.connect(display, 'notify::focus-window', () => {
             this._resetBandCursors();
 
             const previous = this._lastFocusWindow;
@@ -97,37 +98,35 @@ export class Manager {
                 this._reconcileWindow(focusWin);
         });
 
-        this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => {
+        this._subscriptions.connect(St.Settings.get(), 'notify::high-contrast', () => {
             this._highContrast = St.Settings.get().high_contrast;
             this._reconcile();
         });
 
-        this._connect(this._signals, St.Settings.get(), 'notify::enable-animations', () => {
+        this._subscriptions.connect(St.Settings.get(), 'notify::enable-animations', () => {
             this._animationsEnabled = St.Settings.get().enable_animations;
             this._reconcile();
         });
 
         // The tiled border is the one colour upstream takes from the theme rather than baking in.
-        this._connect(this._signals, St.Settings.get(), 'notify::color-scheme', () => {
+        this._subscriptions.connect(St.Settings.get(), 'notify::color-scheme', () => {
             this._dark = this._isDark();
             this._reconcile();
         });
 
         const monitorManager = getMonitorManager();
         if (monitorManager) {
-            this._connect(this._signals, monitorManager, 'monitors-changed', () => {
+            this._subscriptions.connect(monitorManager, 'monitors-changed', () => {
                 invalidateMonitorCache();
                 this._reconcile();
             });
         }
 
-        this._settingsHandlerIds = [];
         for (const key of [SETTINGS_KEY_WINDOW_RULES, 'prefer-crisp-text', 'force-overview-corners']) {
-            const id = this._settings.connect(`changed::${key}`, () => {
+            this._subscriptions.connect(this._settings, `changed::${key}`, () => {
                 this._refreshSettings();
                 this._reconcile();
             });
-            this._settingsHandlerIds.push(id);
         }
         this._refreshSettings();
 
@@ -149,9 +148,7 @@ export class Manager {
         }
         this._tracking = null;
         this._lastFocusWindow = null;
-        this._disconnectSignals(this._signals);
-        this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
-        this._settingsHandlerIds = [];
+        this._subscriptions?.disconnectAll();
         this._rules = null;
         // Sweep after signals gone so no reconcile can re-populate mid-teardown.
         this._tearDownStrays();
@@ -206,29 +203,6 @@ export class Manager {
 
     _isDark() {
         return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
-    }
-
-    _disconnectSignals(signalsList) {
-        if (!Array.isArray(signalsList))
-            return;
-        for (const [obj, id] of signalsList) {
-            try {
-                obj.disconnect(id);
-            } catch {
-                // Object already destroyed.
-            }
-        }
-        signalsList.length = 0;
-    }
-
-    /** [safe] swallows a connect failure: window and actor signals vary across Shell versions. */
-    _connect(list, obj, signal, handler, safe = false) {
-        try {
-            list.push([obj, obj.connect(signal, handler)]);
-        } catch (e) {
-            if (!safe)
-                throw e;
-        }
     }
 
     _trackWindow(win) {
@@ -332,13 +306,9 @@ export class Manager {
         return this._rules;
     }
 
-    _onOverviewShowing() {
-        this._inOverview = true;
-        this._syncOverviewDecos();
-    }
-
-    _onOverviewHidden() {
-        this._inOverview = false;
+    /** One entry point per mode: the overview shows or hides, the windows do not care which. */
+    _setOverviewMode(inOverview) {
+        this._inOverview = inOverview;
         this._syncOverviewDecos();
     }
 

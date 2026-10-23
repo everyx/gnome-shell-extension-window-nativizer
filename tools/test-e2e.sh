@@ -2476,8 +2476,7 @@ FAULT_STATE="$(shell_eval '
     const state = {
         threw,
         windows: manager.trackedCount,
-        globalSignals: manager._signals.length,
-        settingsHandlers: manager._settingsHandlerIds.length,
+        subscriptions: manager._subscriptions.count,
         dropped: ext._manager === null,
     };
     ext.enable();
@@ -2485,7 +2484,7 @@ FAULT_STATE="$(shell_eval '
     return JSON.stringify(state);
 })()
 ')"
-if ! check_fields "$FAULT_STATE" '{"threw": false, "windows": 0, "globalSignals": 0, "settingsHandlers": 0, "dropped": true, "reEnabled": true}'; then
+if ! check_fields "$FAULT_STATE" '{"threw": false, "windows": 0, "subscriptions": 0, "dropped": true, "reEnabled": true}'; then
     echo "!! Teardown did not survive a throwing window: $FAULT_STATE"
     exit 1
 fi

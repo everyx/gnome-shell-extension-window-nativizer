@@ -10,6 +10,7 @@ import {clipTargetReadChanged, settleUndecidedState, shadowBodyWarning, shadowLa
 import {readBodySizes, readActorSize} from './bodyPlan.js';
 import {Diagnostic} from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
+import {Subscriptions} from '../lib/subscriptions.js';
 import {shadowStyleFrom} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
@@ -33,6 +34,7 @@ export const ShadowActor = GObject.registerClass({
         this._windowActor = windowActor;
         this._container = container;
         this._St = St;
+        this._subscriptions = new Subscriptions();
         // Clip's resolved target, adopted by setClipTarget(); its read is the body authority.
         this._clipTarget = null;
         // Read at adoption so an in-place container resize repaints: the bound box cannot move.
@@ -64,12 +66,12 @@ export const ShadowActor = GObject.registerClass({
             property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
         // allocation too: Mutter invalidates its cached surface transform on allocation change.
-        this._geometrySignals = ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y',
-            'pivot-point', 'allocation'].map(prop =>
-            windowActor.connect(`notify::${prop}`, () => this._syncGeometry()));
+        for (const prop of ['x', 'y', 'translation-x', 'translation-y', 'scale-x', 'scale-y',
+            'pivot-point', 'allocation'])
+            this._subscriptions.connect(windowActor, `notify::${prop}`, () => this._syncGeometry());
         this._syncGeometry();
 
-        this._destroyId = windowActor.connect('destroy', () => this.destroy());
+        this._subscriptions.connect(windowActor, 'destroy', () => this.destroy());
 
         container.insert_child_below(this, windowActor);
     }
@@ -314,19 +316,7 @@ export const ShadowActor = GObject.registerClass({
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
-        for (const sid of this._geometrySignals ?? []) {
-            try {
-                this._windowActor?.disconnect?.(sid);
-            } catch {
-                // The actor went away with its signal.
-            }
-        }
-        this._geometrySignals = [];
-        try {
-            this._windowActor.disconnect(this._destroyId);
-        } catch {
-            // Disconnect failed because the window actor is already gone.
-        }
+        this._subscriptions?.disconnectAll();
         try {
             this._container?.remove_child(this);
         } catch {
