@@ -49,6 +49,9 @@ function shadowPipeline(context, radius, shadows) {
     if (cached)
         return cached;
 
+    // No gate: a failed bake is retried by the next paint, which is what Clutter's own
+    // ClutterOffscreenEffect does when its framebuffer cannot be allocated. A shortage clears on
+    // its own, and the diagnostic - one line per episode - is what keeps the retry quiet.
     const pipeline = bake(context, radius, shadows);
     if (pipeline)
         pipelines.set(key, pipeline);
@@ -82,7 +85,11 @@ function bake(context, radius, shadows) {
 
     const texture = Cogl.Texture2D.new_with_size(context, buffer, buffer);
     const framebuffer = Cogl.Offscreen.new_with_texture(texture);
-    if (!framebuffer.allocate()) {
+    // `cogl_framebuffer_allocate` takes a GError, so GJS raises on failure instead of returning
+    // false; the throw has to be caught here or it escapes the actor's paint.
+    try {
+        framebuffer.allocate();
+    } catch {
         // No pass-apart settle here: an allocation either succeeds or not, so one failure speaks.
         bakeDiagnostic.check(shadowBakeFailureWarning(buffer));
         return null;
