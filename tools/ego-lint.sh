@@ -41,6 +41,10 @@ fail() {
     exit 1
 }
 
+# An empty set still prints one blank line through printf, and comm would read that as a finding
+# with no rule, so every producer of these lists goes through here.
+lines() { printf '%s\n' "$1" | grep -v '^$' || true; }
+
 cache_dir() {
     printf '%s/window-nativizer/ego-lint/%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}" "${PIN}"
 }
@@ -171,10 +175,6 @@ if [ ! -f "${BASELINE}" ]; then
 fi
 
 accepted="$(grep -vE '^[[:space:]]*(#|$)' "${BASELINE}" | awk -F' ' 'NF==3 { printf "%s\t%s\t%s\n", $1, $2, $3 }' | sort)"
-
-# An empty set still prints one blank line through printf, and comm would read that as a finding
-# with no rule.
-lines() { printf '%s\n' "$1" | grep -v '^$' || true; }
 
 new="$(comm -13 <(lines "${accepted}") <(lines "${actual}"))"
 stale="$(comm -23 <(lines "${accepted}") <(lines "${actual}"))"
