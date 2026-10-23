@@ -46,6 +46,7 @@ import path from 'node:path';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const MUTTER_ACTOR = 'vendor/mutter/meta-window-actor-wayland.c';
+const MUTTER_BOX = 'vendor/mutter/clutter-actor-box.c';
 const GSK_RECT = 'vendor/gtk/gskrectprivate.h';
 
 /**
@@ -68,6 +69,8 @@ const SCOPES = {
         'surface_container_apply_transform(ClutterActor*actor,graphene_matrix_t*matrix)',
     gsk_rect_snap_direction: 'gsk_rect_snap_direction(float',
     meta_window_actor_wayland_init: 'meta_window_actor_wayland_init(MetaWindowActorWayland*self)',
+    _clutter_actor_box_enlarge_for_effects:
+        '_clutter_actor_box_enlarge_for_effects(ClutterActorBox*box)',
 };
 
 /** Drop C comments, then all whitespace: matching is insensitive to formatting, not to tokens. */
@@ -113,6 +116,7 @@ function functionBody(source, signature) {
 }
 
 const MUTTER = normalise(read(MUTTER_ACTOR));
+const MUTTER_BOXED = normalise(read(MUTTER_BOX));
 const GSK = normalise(read(GSK_RECT));
 
 const CHECKS = [
@@ -186,6 +190,22 @@ const CHECKS = [
         needle: 'g_signal_connect_swapped(self,"notify::allocation",G_CALLBACK(clutter_actor_notify_transform_invalid),self->surface_container);',
         mirror: 'ShadowActor syncs on notify::allocation (src/effects/shadowActor.js)',
         recheck: 're-check that the window actor allocation still invalidates the surface container transform before our own handler runs; if it moves, the shadow reads a stale matrix',
+    },
+    {
+        label: 'enlarge rounding pad',
+        haystack: MUTTER_BOXED,
+        scope: '_clutter_actor_box_enlarge_for_effects',
+        needle: 'box->x2=ceilf(box->x2+0.75f);',
+        mirror: 'enlargeAxis (src/lib/offscreenBox.js), ENLARGE_ROUNDING_PAD',
+        recheck: 're-check the margin the far edge is padded by before its ceil',
+    },
+    {
+        label: 'enlarge total pad',
+        haystack: MUTTER_BOXED,
+        scope: '_clutter_actor_box_enlarge_for_effects',
+        needle: 'box->x1=box->x2-width-3;',
+        mirror: 'enlargeAxis (src/lib/offscreenBox.js), ENLARGE_TOTAL_PAD',
+        recheck: 're-check the total the near edge is re-anchored by; the 2/1 split is derived, not copied',
     },
     {
         label: 'gsk_rect_snap_direction',

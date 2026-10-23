@@ -14,8 +14,10 @@ Authoritative source for window management and shadow decorations, vendored from
     optional `mutter-everyx` package, uses the real resource scale. The checkout this snapshot is
     taken from (`research/mutter`, HEAD `8fe247a2` / 50.4) still has the `ceilf` caller and no
     `!5179` commit, so `src/lib/offscreenBox.js` resolves which caller produced a given FBO from the
-    FBO's own extent rather than assuming one. `tools/check-upstream-mirrors.mjs` asserts the enlarge
-    expression here.
+    FBO's own extent rather than assuming one. `tools/check-upstream-mirrors.mjs` asserts the two
+    literals of that rule - the `0.75f` margin before the `ceilf` and the `- 3` total - scoped to the
+    function, so a bump that changes either one fails instead of leaving `ENLARGE_ROUNDING_PAD` and
+    `ENLARGE_TOTAL_PAD` (src/lib/offscreenBox.js) as stale copies of an extinct rule.
   - `meta-window-actor-x11.c` preserves `has_shadow` decision logic as the basis for window decoration detection.
   - `meta-window-actor-wayland.c` (src/compositor) preserves `surface_container_apply_transform`, the
     Wayland subpixel phase, as the basis for `getWindowSubpixelOffset` in `src/platform/window.js`.
