@@ -374,12 +374,14 @@ export class InspectorService {
         try {
             this._highlight?.destroy();
         } catch {
+            // The highlight went away with the window it outlined; the pick still has to end.
         }
         this._highlight = null;
 
         try {
             this._overlay?.destroy();
         } catch {
+            // Same as the highlight: a destroy that already ran must not strand the modal grab.
         }
         this._overlay = null;
     }
