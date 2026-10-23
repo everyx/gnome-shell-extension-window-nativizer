@@ -4,27 +4,22 @@ import {rectanglesOverlap, rectContains, rectEquals} from './rect.js';
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
 import {getMonitorScale, getMonitorGeometry, getMonitorCount, getDisplay, getStage} from './display.js';
 import {roundHalfAwayFromZero} from './numeric.js';
+import {safeRead} from './read.js';
 
 /** App id from Shell's window tracker; the import stays lazy because prefs has no Shell typelib. */
 export function getTrackedAppId(win) {
-    try {
+    // WindowTracker is unusable while the session is tearing down.
+    return safeRead(() => {
         const Shell = globalThis.imports?.gi?.Shell ?? null;
         return Shell?.WindowTracker?.get_default()?.get_window_app(win)?.get_id?.() ?? '';
-    } catch {
-        // WindowTracker is unusable while the session is tearing down.
-        return '';
-    }
+    }, '');
 }
 
 /** Meta.Window from an actor, trying `meta_window`, `metaWindow`, then `get_meta_window()`. */
 export function getWindowFromActor(actor) {
     if (!actor)
         return null;
-    try {
-        return actor.meta_window ?? actor.metaWindow ?? actor.get_meta_window?.() ?? null;
-    } catch {
-        return null;
-    }
+    return safeRead(() => actor.meta_window ?? actor.metaWindow ?? actor.get_meta_window?.(), null);
 }
 
 export function findMetaWindow(actorOrWin, maxDepth = 8) {
@@ -62,27 +57,15 @@ export function findMetaWindowCached(actor) {
 }
 
 export function isWindowMaximized(win) {
-    try {
-        return Boolean(win?.is_maximized?.());
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.is_maximized?.()), false);
 }
 
 export function isWindowFullscreen(win) {
-    try {
-        return Boolean(win?.is_fullscreen?.());
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.is_fullscreen?.()), false);
 }
 
 export function isWindowMinimized(win) {
-    try {
-        return Boolean(win?.minimized);
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.minimized), false);
 }
 
 export function isWindowTiled(win, options = {}) {
@@ -122,11 +105,7 @@ export function getWindowBufferRect(win, {throwOnError = false} = {}) {
 }
 
 export function getWindowActor(win) {
-    try {
-        return win?.get_compositor_private?.() ?? null;
-    } catch {
-        return null;
-    }
+    return safeRead(() => win?.get_compositor_private?.(), null);
 }
 
 /** Every preview clone paints through this container; a clone overrides only actor opacity. */
@@ -169,43 +148,23 @@ export function getOverviewPreviews(win) {
 }
 
 export function getWindowClientType(win) {
-    try {
-        return win?.get_client_type?.() ?? null;
-    } catch {
-        return null;
-    }
+    return safeRead(() => win?.get_client_type?.(), null);
 }
 
 export function getWindowType(win) {
-    try {
-        return win?.get_window_type?.() ?? WindowType.NORMAL;
-    } catch {
-        return WindowType.NORMAL;
-    }
+    return safeRead(() => win?.get_window_type?.(), WindowType.NORMAL);
 }
 
 export function getWindowPid(win) {
-    try {
-        return win?.get_pid?.() ?? -1;
-    } catch {
-        return -1;
-    }
+    return safeRead(() => win?.get_pid?.(), -1);
 }
 
 export function getWindowTransientFor(win) {
-    try {
-        return win?.get_transient_for?.() ?? null;
-    } catch {
-        return null;
-    }
+    return safeRead(() => win?.get_transient_for?.(), null);
 }
 
 export function isWindowAttachedDialog(win) {
-    try {
-        return Boolean(win?.is_attached_dialog?.());
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.is_attached_dialog?.()), false);
 }
 
 export function isWindowAllowsResize(win) {
@@ -222,43 +181,23 @@ export function isWindowAllowsResize(win) {
 }
 
 export function isWindowHidden(win) {
-    try {
-        return Boolean(win?.is_hidden?.());
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.is_hidden?.()), false);
 }
 
 export function isWindowOnAllWorkspaces(win) {
-    try {
-        return Boolean(win?.is_on_all_workspaces?.());
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.is_on_all_workspaces?.()), false);
 }
 
 export function isWindowLocatedOnWorkspace(win, workspace) {
-    try {
-        return Boolean(win?.located_on_workspace?.(workspace));
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.located_on_workspace?.(workspace)), false);
 }
 
 export function getWindowDisplayTitle(win) {
-    try {
-        return win?.get_title?.() ?? '';
-    } catch {
-        return '';
-    }
+    return safeRead(() => win?.get_title?.(), '');
 }
 
 export function isWindowDecorated(win) {
-    try {
-        return Boolean(win?.decorated);
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.decorated), false);
 }
 
 // Cogl's texture component counts; the detector must not read a Cogl value itself.
@@ -299,35 +238,19 @@ function readBufferAlpha(actor) {
 }
 
 export function isWindowMaximizedHorizontally(win) {
-    try {
-        return Boolean(win?.maximized_horizontally);
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.maximized_horizontally), false);
 }
 
 export function isWindowMaximizedVertically(win) {
-    try {
-        return Boolean(win?.maximized_vertically);
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.maximized_vertically), false);
 }
 
 export function isWindowAppearsFocused(win) {
-    try {
-        return Boolean(win?.appears_focused);
-    } catch {
-        return false;
-    }
+    return safeRead(() => Boolean(win?.appears_focused), false);
 }
 
 export function getWindowTileMatch(win) {
-    try {
-        return win?.get_tile_match?.() ?? null;
-    } catch {
-        return null;
-    }
+    return safeRead(() => win?.get_tile_match?.(), null);
 }
 
 /** Whether an actor is an injected foreign widget (the platform layer may not import `lib/`). */
