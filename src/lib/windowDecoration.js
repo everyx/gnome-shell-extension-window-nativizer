@@ -133,6 +133,8 @@ export class WindowDecoration {
         const hasClip = Boolean(clip);
         const target = safeRead(() => clip?.get_actor?.() ?? this.clipTarget, null);
         const shadow = safeRead(() => this.shadow?.diagnosticsView ?? null, null);
+        // The effect answers for its own fields; this view only composes the answers.
+        const effect = hasClip ? safeRead(() => clip.diagnosticsView ?? null, null) : null;
 
         return {
             clipTargetType: hasClip
@@ -140,13 +142,13 @@ export class WindowDecoration {
                 : null,
             clipTargetName: hasClip ? safeRead(() => target?.name ?? 'unavailable', null) : null,
             phaseInTransform: hasClip
-                ? safeRead(() => Boolean(clip._phaseInTransform ?? this.clipPhaseInTransform), null)
+                ? safeRead(() => Boolean(effect?.phaseInTransform ?? this.clipPhaseInTransform), null)
                 : null,
-            clipFrame: hasClip ? safeRead(() => clip._frameVec ?? null, null) : null,
+            clipFrame: effect?.frame ?? null,
             clipInsets: hasClip ? safeRead(() => this._pass?.ring?.insets ?? null, null) : null,
-            clipScale: hasClip ? safeRead(() => clip._scale ?? null, null) : null,
+            clipScale: effect?.scale ?? null,
             clipEnabled: hasClip ? safeRead(() => Boolean(clip.enabled), null) : null,
-            clipSuspended: hasClip ? safeRead(() => Boolean(clip._suspended), null) : null,
+            clipSuspended: hasClip ? safeRead(() => Boolean(effect?.suspended), null) : null,
             // The target's live box: one pick shows which side moved when shadow and clip disagree.
             containerBox: safeRead(() => target
                 ? {x: target.x, y: target.y, width: target.width, height: target.height}
