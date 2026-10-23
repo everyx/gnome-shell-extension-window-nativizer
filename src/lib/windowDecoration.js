@@ -501,6 +501,11 @@ export class WindowDecoration {
 
         this.overview.destroy();
 
+        // Keeping the visuals keeps the effect, so _removeClipEffect does not run and would leave
+        // its queued disable behind: an idle firing after the actor is gone reaches a disposed one.
+        if (keepVisualsForClose)
+            this.clip?.cancelPendingDisable?.();
+
         if (!keepVisualsForClose) {
             this._removeClipEffect();
             this.clip = null;

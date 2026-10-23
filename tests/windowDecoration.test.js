@@ -1900,6 +1900,25 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadowRef.destroyed).toBeFalse();
     });
 
+    it('drops the queued disable even when it keeps the visuals for the close animation', () => {
+        // _removeClipEffect is what normally cancels it, and this path skips that call: the effect
+        // outlives the pass while its actor does not, so a surviving idle reaches a disposed one.
+        const deco = new WindowDecoration(mockWin, {
+            container: mockContainer,
+            display: mockDisplay,
+            RoundedClipEffect: MockClipEffect,
+            ShadowActor: MockShadowActor,
+            ResizeBand: MockResizeBand,
+        });
+        deco._syncClip(true, mockActor, {left: 10, top: 10, right: 10, bottom: 10});
+        const clip = deco.clip;
+        expect(clip.cancelled ?? 0).toBe(0);
+
+        deco.destroy({keepVisualsForClose: true});
+        expect(deco.hasClip).toBeTrue();
+        expect(clip.cancelled).toBe(1);
+    });
+
     it('provides a stateView snapshot of decoration properties', () => {
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
