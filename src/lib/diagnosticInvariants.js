@@ -106,21 +106,33 @@ export function shadowBakeFailureWarning(buffer) {
     return `Could not allocate a ${buffer}x${buffer} shadow buffer`;
 }
 
-/** Both extents in device px; null when either is unknown or they agree within the tolerance. */
-export function offscreenBoxWarning(derived, target) {
-    if (!finiteExtent(derived) || !finiteExtent(target))
-        return null;
-    // Rounding keeps float residue from reading as a part; the tolerance is one edge's phase.
-    const dx = Math.abs(Math.round(derived.width) - Math.round(target.width));
-    const dy = Math.abs(Math.round(derived.height) - Math.round(target.height));
-    if (dx <= OFFSCREEN_BOX_TOLERANCE && dy <= OFFSCREEN_BOX_TOLERANCE)
-        return null;
-    return `Offscreen box ${extentSummary(derived)} device px disagrees with the ` +
-        `${extentSummary(target)} FBO Clutter allocated beyond ${OFFSCREEN_BOX_TOLERANCE}px`;
+/** One axis may round a little more than the other; two percent is far above the padding's doing. */
+const SCALE_MATCH_TOLERANCE = 0.02;
+
+/** True when the target is this box at another monitor's scale. A ratio that lands on the declared
+ *  scale is drift rather than a transition, because that is the scale the pass already used. */
+function isMonitorTransition(derived, target, declared, scales) {
+    const rx = target.width / derived.width;
+    const ry = target.height / derived.height;
+    if (!(rx > 0) || !(ry > 0) || Math.abs(rx - ry) > Math.max(rx, ry) * SCALE_MATCH_TOLERANCE)
+        return false;
+    const real = rx * declared;
+    if (Math.abs(real - declared) <= declared * SCALE_MATCH_TOLERANCE)
+        return false;
+    return scales.some(scale => Math.abs(real - scale) <= scale * SCALE_MATCH_TOLERANCE);
 }
 
-function finiteExtent(extent) {
-    return Boolean(extent) && Number.isFinite(extent.width) && Number.isFinite(extent.height);
+/** Called only for a pass whose FBO no candidate explained; null when another monitor's did it. */
+export function offscreenBoxWarning(derived, target, context, label = windowIdentityLabel()) {
+    if (!(derived?.width > 0) || !(derived?.height > 0) || !(target?.width > 0) || !(target?.height > 0))
+        return null;
+    const {declared, candidates, scales} = context ?? {};
+    if (scales && isMonitorTransition(derived, target, declared, scales))
+        return null;
+    return `Offscreen box ${extentSummary(derived)} device px is not this box at any monitor ` +
+        `scale, against the ${extentSummary(target)} FBO Clutter allocated beyond ` +
+        `${OFFSCREEN_BOX_TOLERANCE}px for ${label} (scale ${declared}, ` +
+        `candidates ${candidates?.join('|') ?? 'none'})`;
 }
 
 function extentSummary(extent) {

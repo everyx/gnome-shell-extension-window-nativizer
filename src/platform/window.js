@@ -475,6 +475,11 @@ export function resolveWindowMonitorScale(win) {
 }
 
 /** Scales of every monitor the buffer intersects; the FBO is allocated there, ring included. */
+/** Every monitor's scale, from the cached list the frame scan reads. */
+export function getAllMonitorScales() {
+    return readMonitorList()?.map(entry => entry.scale).filter(scale => scale > 0) ?? null;
+}
+
 export function resolveWindowScaleCandidates(win) {
     const buffer = getWindowBufferRect(win);
     if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
