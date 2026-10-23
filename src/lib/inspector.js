@@ -61,21 +61,27 @@ function highlightStyle(outerRadius) {
 export class InspectorService {
     constructor(manager = null) {
         this._manager = manager;
-
-        this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(INSPECTOR_DBUS_IFACE_XML, this);
-        this._dbusImpl.export(Gio.DBus.session, INSPECTOR_DBUS_PATH);
-        this._ownerId = Gio.DBus.session.own_name(
-            INSPECTOR_DBUS_NAME,
-            Gio.BusNameOwnerFlags.REPLACE,
-            null,
-            null
-        );
-
         this._activeGrab = null;
         this._overlay = null;
         this._highlight = null;
         this._pendingInvocation = null;
         this._pendingDiagnostics = false;
+
+        // The export is acquired here, so a failure after it must be undone here: enable() cannot
+        // roll this back, because the object it would call destroy() on does not exist yet.
+        try {
+            this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(INSPECTOR_DBUS_IFACE_XML, this);
+            this._dbusImpl.export(Gio.DBus.session, INSPECTOR_DBUS_PATH);
+            this._ownerId = Gio.DBus.session.own_name(
+                INSPECTOR_DBUS_NAME,
+                Gio.BusNameOwnerFlags.REPLACE,
+                null,
+                null
+            );
+        } catch (e) {
+            this.destroy();
+            throw e;
+        }
     }
 
     destroy() {
