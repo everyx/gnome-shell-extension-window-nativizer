@@ -254,7 +254,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
             // One place decides what a pick is worth; only the words for each reason live here.
             const verdict = pickVerdict(props);
             if (verdict.refusal) {
-                window.add_toast(new Adw.Toast({title: pickRefusalText(verdict.refusal)}));
+                window.add_toast(new Adw.Toast({title: asMarkup(pickRefusalText(verdict.refusal))}));
                 return;
             }
 
@@ -286,7 +286,7 @@ function _setupWindowPickerAction(pickButton, ctx, onRulePicked) {
                 : _('Correction added for %s: %s').format(name, ruleSummaryText(state));
 
             window.add_toast(new Adw.Toast({
-                title: toastTitle,
+                title: asMarkup(toastTitle),
             }));
 
             // A rule outlives transient state, so a pick made mid-state says so.
@@ -322,7 +322,7 @@ function _exportToClipboard(ctx) {
         'Exported %d corrections to clipboard',
         count
     ).format(count);
-    window.add_toast(new Adw.Toast({title}));
+    window.add_toast(new Adw.Toast({title: asMarkup(title)}));
 }
 
 function _importFromClipboard(ctx, scheduleRenderRules) {
@@ -393,7 +393,7 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
                         'Imported %d rules successfully',
                         totalCount
                     ).format(totalCount);
-                    window.add_toast(new Adw.Toast({title}));
+                    window.add_toast(new Adw.Toast({title: asMarkup(title)}));
                 });
                 return;
             }
@@ -416,10 +416,10 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
                 'Imported %d rules successfully',
                 totalCount
             ).format(totalCount);
-            window.add_toast(new Adw.Toast({title}));
+            window.add_toast(new Adw.Toast({title: asMarkup(title)}));
         } catch (err) {
             window.add_toast(new Adw.Toast({
-                title: _('Import failed: %s').format(err.message),
+                title: asMarkup(_('Import failed: %s').format(err.message)),
             }));
         }
     });
