@@ -1,6 +1,6 @@
 The three icons here are for Window Nativizer. They are fill-only paths on the
 GNOME symbolic grid (16x16 viewBox, currentColor), which is what GTK recolors
-to the row's own foreground; see AXIS_ICONS in src/prefs/ruleUi.js.
+to the row's own foreground; see AXIS_ICONS in prefs/ruleUi.js.
 
 - winnativizer-corners-symbolic.svg: one rounded window corner. Drawn for this
   project, GPL-2.0-or-later like the rest of the repository.
@@ -11,7 +11,8 @@ to the row's own foreground; see AXIS_ICONS in src/prefs/ruleUi.js.
   corner with an arrow to the top-left. Path taken from the Adwaita scalable
   nw-resize cursor shipped with gnome-shell (data/cursor-theme), MIT licensed,
   author Jakub Steiner; recolored and scaled to the symbolic grid. MIT is
-  compatible with this project's GPL-2.0-or-later.
+  compatible with this project's GPL-2.0-or-later, and its text is reproduced
+  in LICENSE.MIT beside this file.
 
 Registered on a bare icon-theme search path and named *-symbolic, so GTK treats
 them as symbolic without an index.theme.
