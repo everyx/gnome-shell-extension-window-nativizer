@@ -1180,12 +1180,16 @@ latching it again would move the floor under a drag. The spec
 also fails when a field is added without a declared lifetime, so this is a rule the code enforces
 rather than one a reader has to remember.
 
-**A pass writes its history only once it has drawn.** `apply()` reads the actors, builds the actors it
-needs, pushes the overview's own state and only then writes the state the next pass reads back,
-because every part of that calls into GObject - a lock, an unmanage or a teardown mid-pass throws, and
-so can the clip's resume at the end. The manager swallows that throw, so a
-half-applied pass used to leave the settle's reference points and the ring witness advanced while
-nothing had been drawn, and the next pass compared against a pass that never happened.
+**A pass writes its history only once it has drawn.** `apply()` runs in three phases - `_readPass`,
+`_drawPass`, `_settlePass` - and everything the first one reads travels in one record: the resolved
+target, the phase strategy, the scale, the witness, the plan the settle advances against. The draws
+come next, and only then does the pass write the state the next one reads back. The split is what
+enforces that order now: the reads and the writes cannot be interleaved by editing a line, because
+they are in different methods with a value between them. It used to hold because every part of that
+walk calls into GObject - a lock, an unmanage or a teardown mid-pass throws, and so can the clip's
+resume at the end. The manager swallows that throw, so a half-applied pass used to leave the
+settle's reference points and the ring witness advanced while nothing had been drawn, and the next
+pass compared against a pass that never happened.
 
 That is a bound on the history, not a transaction. An effect the pass attached before a later stage
 threw stays attached, and unwinding a half-attached effect during a teardown would be the worse risk.

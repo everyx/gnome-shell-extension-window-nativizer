@@ -34,8 +34,10 @@ tested without a session; the processes only gather inputs and apply results.
 | `effects/decorationPass.js` | one pass's value for the two cuts, and what each of them reads it as: the clip's parameters, the shadow's style |
 | `effects/overviewMaskBytes.js` | the overview corner mask's A_8 bytes, split from the Cogl upload (pure) |
 | `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
+| `effects/pendingSource.js` | a borrowed GLib source id: queue cancels the previous one, and only the id that is still current is cleared on the way out |
 | `platform/journal.js` | the journal: the one sink every line is written to and the one place the `[window-nativizer]` tag is added (zero-import leaf) |
 | `platform/numeric.js` | the GI-free upstream-numeric primitives the C mirrors share: C `roundf` and GSK's `gsk_rect_snap_direction` (pure) |
+| `platform/read.js` | the guarded read every platform accessor shares: the value, or the fallback when the call throws - `platform`, because `src/lib` may not be imported from here |
 | `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51, plus the shared numeric core |
 
 ## The two processes
