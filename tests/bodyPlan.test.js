@@ -5,7 +5,13 @@
  * Run: pnpm test
  */
 
-import {BodyPlan, readActorSize, readWindowSize, readBodySizes} from '../src/effects/bodyPlan.js';
+import {
+    BodyPlan,
+    readActorSize,
+    readBodySizes,
+    readWindowSize,
+    windowSizeFrom,
+} from '../src/effects/bodyPlan.js';
 import {readWindow} from '../src/lib/window.js';
 import {INVARIANT_STRIKES} from '../src/lib/diagnosticInvariants.js';
 
@@ -60,6 +66,27 @@ describe('readWindowSize', () => {
             },
         };
         expect(readWindowSize(win)).toBeNull();
+    });
+});
+
+describe('windowSizeFrom', () => {
+    it('takes the first source that answers', () => {
+        expect(windowSizeFrom(size(800), size(790))).toEqual(size(800));
+    });
+
+    it('answers null when neither source is paintable', () => {
+        expect(windowSizeFrom(null, null)).toBeNull();
+        expect(windowSizeFrom({width: 0, height: 600}, {width: 800, height: 0})).toBeNull();
+    });
+
+    it('is the rule the snapshot and the live read share, so neither owns it', () => {
+        // A pass snapshot: plain rects, no window and no platform read behind them.
+        const windowSize = windowSizeFrom({x: 0, y: 0, ...size(800)}, {x: 0, y: 0, ...size(790)});
+        const win = {
+            get_frame_rect: () => ({x: 0, y: 0, ...size(800)}),
+            get_buffer_rect: () => ({x: 0, y: 0, ...size(790)}),
+        };
+        expect(windowSize).toEqual(readWindowSize(win));
     });
 });
 

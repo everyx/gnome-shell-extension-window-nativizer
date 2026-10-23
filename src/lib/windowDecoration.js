@@ -1,6 +1,6 @@
 import {resolveClipTarget} from './clipTarget.js';
 import {MIN_DECORABLE_SIZE} from './detector.js';
-import {BodyPlan, readActorSize} from '../effects/bodyPlan.js';
+import {BodyPlan, readActorSize, windowSizeFrom} from '../effects/bodyPlan.js';
 import {decorationPass} from '../effects/decorationPass.js';
 import {insetsMoved, rectEquals} from '../platform/rect.js';
 import {
@@ -22,15 +22,6 @@ function tagPhase(phase, actor) {
     if (!phase || !actor)
         return phase;
     return {...phase, actor};
-}
-
-/** Frame rect, else buffer rect: the independent size a real resize is judged by. */
-function readWindowExtent(inputs) {
-    for (const rect of [inputs?.frameRect, inputs?.bufferRect]) {
-        if (rect && rect.width > 0 && rect.height > 0)
-            return {width: rect.width, height: rect.height};
-    }
-    return null;
 }
 
 /** Owns one window's clip, shadow and resize band; injected options keep it unit-testable. */
@@ -202,7 +193,8 @@ export class WindowDecoration {
         this._checkDiagnosticInvariants(inputs, winActor);
 
         // Hand it the plan, not a body: actors are read live at paint, so the cut tracks the frame.
-        const windowSize = readWindowExtent(inputs);
+        // The same rule as the paint's live read, over this pass's snapshot.
+        const windowSize = windowSizeFrom(inputs?.frameRect, inputs?.bufferRect);
         const passPlan = this.bodyPlan.settle;
 
         // Hold a ring that drifts while nothing else moves: the buffer witnesses it, not the frame.
