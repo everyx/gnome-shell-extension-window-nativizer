@@ -17,6 +17,8 @@ import path from 'node:path';
 
 import { SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA } from '../src/lib/shadowBake.js';
 
+import { uniformManifest } from './shader-uniforms.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GTK_VENDOR = path.join(ROOT, 'vendor', 'gtk');
 const SHADER_SRC = path.join(GTK_VENDOR, 'gskgpuboxshadow.glsl');
@@ -93,15 +95,29 @@ const header = `/**
  */
 `;
 
+// The layer count is written here and nowhere else: the declarations, the compositing and the
+// manifest the extension uploads from all derive from it.
+const LAYER_COUNT = 3;
+const LAYER_COMMENTS = ['(blur, spread, alpha, 0)', '', 'Outline layer (blur=0)'];
+
+const layerDeclarations = Array.from({length: LAYER_COUNT}, (_, i) => {
+    const comment = LAYER_COMMENTS[i] ? `      // ${LAYER_COMMENTS[i]}` : '';
+    return `uniform vec4 uShadow${i + 1};${comment}`;
+}).join('\n');
+
+const layerEvaluations = Array.from({length: LAYER_COUNT}, (_, i) =>
+    `    float a${i + 1} = evalShadowLayer(uShadow${i + 1}, p, winOrigin, uWinSize, uRadius, d);`)
+    .join('\n');
+const layerComplementProduct = Array.from({length: LAYER_COUNT}, (_, i) => `(1.0 - a${i + 1})`)
+    .join(' * ');
+
 const pi = parseDefine(rawCommonGlsl, 'PI');
 const sqrt1_2 = parseDefine(rawCommonGlsl, 'SQRT1_2');
 
 const declarations = `
 uniform vec2 uWinSize;      // Window size (px)
 uniform float uRadius;       // Window corner radius (px)
-uniform vec4 uShadow1;      // (blur, spread, alpha, 0)
-uniform vec4 uShadow2;
-uniform vec4 uShadow3;      // Outline layer (blur=0)
+${layerDeclarations}
 uniform vec2 uPad;          // Shadow actor padding per side (px)
 uniform vec4 uColor;        // Shadow colour, rgb with alpha 1 (upstream passes this as a flat
                             // varying; one quad per bake makes a uniform equivalent).
@@ -199,10 +215,8 @@ const code = `
     }
 
     // Alpha-over compositing across layers prevents linear arithmetic saturation
-    float a1 = evalShadowLayer(uShadow1, p, winOrigin, uWinSize, uRadius, d);
-    float a2 = evalShadowLayer(uShadow2, p, winOrigin, uWinSize, uRadius, d);
-    float a3 = evalShadowLayer(uShadow3, p, winOrigin, uWinSize, uRadius, d);
-    float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
+${layerEvaluations}
+    float a = (1.0 - ${layerComplementProduct}) * clipAlpha;
 
     // Multiply shadow alpha by vertex alpha (cogl_color_in.a) to smoothly follow fade animations
     // Premultiplied, the way upstream's output_color_alpha (_color, alpha) is: a black shadow is
@@ -217,10 +231,28 @@ function toTemplateLiteral(str) {
     return `\`${escaped}\``;
 }
 
+
+const manifest = uniformManifest(declarations)
+    .map(([key, {name, components}]) =>
+        `    ${key}: {name: '${name}', components: ${components}},`)
+    .join('\n');
+
 const outputContent = `${header}
 export const DECLARATIONS = ${toTemplateLiteral(declarations)};
 
 export const CODE = ${toTemplateLiteral(code)};
+
+/**
+ * One entry per uniform DECLARATIONS declares, with the arity its GLSL type gives it. A name that
+ * is not here is not in the shader either, and a misspelt key reads as undefined rather than as a
+ * uniform location of -1 that the upload silently skips.
+ */
+export const SHADOW_UNIFORMS = Object.freeze({
+${manifest}
+});
+
+/** How many uShadow<n> layers the shader sums; the declarations above are the only place it is set. */
+export const SHADOW_LAYER_COUNT = ${LAYER_COUNT};
 `;
 
 if (CHECK) {
