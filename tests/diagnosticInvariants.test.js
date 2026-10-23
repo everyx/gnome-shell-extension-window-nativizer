@@ -161,17 +161,6 @@ describe('overviewMaskRefusalWarning (the square-in-the-overview class)', () => 
 describe('offscreenBoxWarning (the derived box must span the FBO Clutter allocated)', () => {
     const derived = {width: 556, height: 356};
 
-    it('stays silent when the derived device extent is the FBO extent', () => {
-        expect(offscreenBoxWarning(derived, {...derived})).toBeNull();
-        // Float residue from divide-then-multiply is agreement, not a part.
-        expect(offscreenBoxWarning(derived, {width: 556.0000001, height: 356})).toBeNull();
-    });
-
-    it('stays silent for the one device pixel a framebuffer phase may move an edge', () => {
-        expect(offscreenBoxWarning(derived, {width: 557, height: 356})).toBeNull();
-        expect(offscreenBoxWarning(derived, {width: 555, height: 357})).toBeNull();
-    });
-
     it('names both extents when they part beyond the phase an edge may carry', () => {
         const warning = offscreenBoxWarning(derived, {width: 558, height: 356});
         expect(warning).toContain('556.00x356.00');
@@ -183,6 +172,34 @@ describe('offscreenBoxWarning (the derived box must span the FBO Clutter allocat
         expect(offscreenBoxWarning(null, derived)).toBeNull();
         expect(offscreenBoxWarning(derived, null)).toBeNull();
         expect(offscreenBoxWarning(derived, {width: Number.NaN, height: 356})).toBeNull();
+    });
+
+    it('stays silent when the target is this box at another monitor scale', () => {
+        // A window between two monitors: the pass derived at 1.0 and the engine sized the FBO at
+        // 4/3. Holding the derivation already keeps the logical quad right, so this is a transition.
+        const context = {declared: 1.0, candidates: [1.0], scales: [1.0, 4 / 3]};
+        expect(offscreenBoxWarning({width: 1105, height: 715}, {width: 1474, height: 954},
+            context, '"telegram"')).toBeNull();
+        // And the reverse, where the declared scale is the fractional one.
+        expect(offscreenBoxWarning({width: 1449, height: 866}, {width: 1086, height: 649},
+            {...context, declared: 4 / 3}, '"telegram"')).toBeNull();
+    });
+
+    it('reports a ratio that lands back on the declared scale, which is drift and not a move', () => {
+        // 558/556 is within two percent of 1.0, so it is not another monitor: it is the engine and
+        // this pass disagreeing at one scale, which is what the check exists for.
+        const warning = offscreenBoxWarning({width: 556, height: 356}, {width: 558, height: 356},
+            {declared: 1.0, candidates: [1.0], scales: [1.0, 4 / 3]}, '"firefox"');
+        expect(warning).toContain('"firefox"');
+    });
+
+    it('reports a target that is no box at any scale', () => {
+        // Clutter hands a 1x1 target while the actor has no paint volume; the body would then be
+        // sampled from a single texel, so this one is worth a line.
+        const warning = offscreenBoxWarning({width: 2277, height: 1338}, {width: 1, height: 1},
+            {declared: 4 / 3, candidates: [1.0, 2], scales: [1.0, 4 / 3]}, '"telegram"');
+        expect(warning).toContain('"telegram"');
+        expect(warning).toContain('1.00x1.00');
     });
 });
 

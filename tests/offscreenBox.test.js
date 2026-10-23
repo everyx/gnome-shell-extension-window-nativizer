@@ -19,7 +19,6 @@ import {
     offscreenUniformsStale,
     resolveOffscreenScale,
 } from '../src/lib/offscreenBox.js';
-import {offscreenBoxWarning} from '../src/lib/diagnosticInvariants.js';
 import {roundHalfAwayFromZero} from '../src/platform/numeric.js';
 
 const BODY = {width: 441, height: 281};
@@ -335,6 +334,15 @@ describe('offscreenPaintBox: the extent and the origin share the FBO scale', () 
         expect(Math.abs(box.offsetX - offscreenQuad(BODY, 1.0).offsetX)).toBeGreaterThan(0.2);
     });
 
+    it('explains a target one device pixel off, and refuses one two pixels off', () => {
+        // The tolerance is this function's: one edge may carry a phase, two is a different box.
+        // BODY derives a 444x284 device extent at 1.0, so one pixel is still the same box.
+        const exact = offscreenPaintBox(BODY, 1.0, {width: 445, height: 284}, twoMonitors);
+        expect(exact.explained).toBeTrue();
+        const past = offscreenPaintBox(BODY, 1.0, {width: 446, height: 284}, twoMonitors);
+        expect(past.explained).toBeFalse();
+    });
+
     it('holds the derivation, and reports the drift, when no candidate explains the read', () => {
         // Holding the derivation is not "draw nothing": the quad stays the 444x284 box the body
         // needs, so nothing is masked, and the read-vs-derived disagreement still raises the
@@ -345,10 +353,11 @@ describe('offscreenPaintBox: the extent and the origin share the FBO scale', () 
         expect(held.scale).toBe(1.0);
         expect(held.extent).toEqual({width: 444, height: 284});
         expect(held.predicted).toEqual({width: 444, height: 284});
-        expect(offscreenBoxWarning(held.predicted, drifted)).not.toBeNull();
+        // The invariant is reported off this flag: a pass that explained its FBO is agreement.
+        expect(held.explained).toBeFalse();
 
         const picked = offscreenPaintBox(BODY, 1.0, realScaleFbo, twoMonitors);
-        expect(offscreenBoxWarning(picked.predicted, realScaleFbo)).toBeNull();
+        expect(picked.explained).toBeTrue();
     });
 
     it('holds the derivation when a stale candidate set cannot explain the FBO', () => {

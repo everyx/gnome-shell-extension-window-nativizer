@@ -130,6 +130,7 @@ export function offscreenPaintBox(size, scale, target, candidates = null) {
             offsetX: quad.offsetX,
             offsetY: quad.offsetY,
             predicted: offscreenDeviceExtent(size, s),
+            explained: false,
         };
     }
     const fboScale = pick.scale;
@@ -141,5 +142,6 @@ export function offscreenPaintBox(size, scale, target, candidates = null) {
         offsetX: fboQuad.offsetX,
         offsetY: fboQuad.offsetY,
         predicted: {width: fboQuad.width * fboScale, height: fboQuad.height * fboScale},
+        explained: true,
     };
 }

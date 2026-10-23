@@ -9,11 +9,15 @@ import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
 import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
+import {readDeclaredIdentity} from '../lib/window.js';
+import {getAllMonitorScales} from '../platform/window.js';
+
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
 import {clipParamsFrom} from './decorationPass.js';
 import {PendingSource} from './pendingSource.js';
-import {Diagnostic, offscreenBoxWarning} from '../lib/diagnosticInvariants.js';
+import {Diagnostic, offscreenBoxWarning, windowIdentityLabel}
+    from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
 import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
 
@@ -274,7 +278,7 @@ export const RoundedClipEffect = GObject.registerClass({
         // Extent is what Clutter allocated (it beats the derivation); the origin is derived on it.
         const box = offscreenPaintBox(size, scale, target, this._scaleCandidates);
 
-        this._checkOffscreenBox(box.predicted, target);
+        this._checkOffscreenBox(box, target, scale, win);
         const extent = box.extent;
         // Compare the last written pair, not the actor size: a reallocated FBO moves the origin.
         if (changes.size !== undefined || changes.scale !== undefined ||
@@ -319,8 +323,12 @@ export const RoundedClipEffect = GObject.registerClass({
         return {width, height};
     }
 
-    _checkOffscreenBox(derived, target) {
-        this._boxDiagnostic.check(offscreenBoxWarning(derived, target));
+    /** Two stages, because the second reads the display and this runs per paint. */
+    _checkOffscreenBox(box, target, scale, win) {
+        this._boxDiagnostic.check(box.explained ? null
+            : offscreenBoxWarning(box.predicted, target,
+                {declared: scale, candidates: this._scaleCandidates, scales: getAllMonitorScales()},
+                windowIdentityLabel({wmClass: readDeclaredIdentity(win)})));
     }
 
     /** Clears a suspend the reconcile overrode; a still-degenerate target suspends again later. */
