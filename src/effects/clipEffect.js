@@ -231,7 +231,7 @@ export const RoundedClipEffect = GObject.registerClass({
 
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
-        const targetSize = {width: actor?.width ?? 0, height: actor?.height ?? 0};
+        const targetSize = readActorSize(actor);
         // Read live at paint: a container can read 0 while its child still paints, so fall back.
         const win = findMetaWindowCached(actor);
         const windowActorSize = readActorSize(getWindowActor(win));
