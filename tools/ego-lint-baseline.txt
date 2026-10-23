@@ -3,7 +3,6 @@
 # Each line is a decision, so read the diff: a new line accepts a warning for good.
 lifecycle/untracked-timeout	lib/nativeLikeCorners.js	1
 metadata/future-shell-version	-	1
-quality/code-volume	-	1
 quality/destroy-try-catch	lib/inspector.js	2
 quality/destroy-try-catch	lib/manager.js	1
 quality/destroy-try-catch	lib/overviewDecoration.js	1

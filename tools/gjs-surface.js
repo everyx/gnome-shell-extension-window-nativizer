@@ -391,12 +391,26 @@ for (const group of GROUPS) {
 // this file's to pin. Ask each seam what it selected and assert the selection is callable on the
 // typelibs this shell is running - that is the runtime half of the ownership rule, and it is what
 // the deleted per-member arity and parameter tables used to stand in for.
-const PLATFORM = GLib.build_filenamev([ROOT, 'src', 'platform', 'index.js']);
-let platform = null;
-try {
-    platform = await import(GLib.filename_to_uri(PLATFORM, null));
-} catch (e) {
-    fail('src/platform', `the seam module did not load: ${e.message}`);
+// Each seam is imported from the module that owns it, named here rather than re-exported through a
+// barrel: the barrel gave this probe one entry point at the cost of 56 lines that nothing in src/
+// imported, and a name moved between seam modules should move here too.
+const SEAM_EXPORTS = [
+    ['shaderEffect.js', ['ShaderEffect']],
+    ['grabOp.js', ['beginWindowGrabOp', 'getPointerSprite']],
+    ['actorCursor.js', ['setActorCursor']],
+    ['coglContext.js', ['coglContextForBake']],
+];
+const platform = {};
+for (const [file, names] of SEAM_EXPORTS) {
+    let module = null;
+    try {
+        module = await import(GLib.filename_to_uri(
+            GLib.build_filenamev([ROOT, 'src', 'platform', file]), null));
+    } catch (e) {
+        fail(`src/platform/${file}`, `the seam module did not load: ${e.message}`);
+    }
+    for (const name of names)
+        platform[name] = module?.[name];
 }
 if (platform) {
     const seam = (what, value) => {
