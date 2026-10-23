@@ -17,7 +17,7 @@ const NO_PROVIDER = Object.freeze({adwaitaLook: false, gtk4: false});
 /** Bounded so a transient EIO is retried and a persistent EACCES is not hammered. */
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
-/** Async so the read runs in a worker thread; the synchronous API is an EGO finding. */
+/** Async so the read runs off the main loop: a synchronous /proc read stalls the shell. */
 function readMaps(pid, done, cancellable) {
     Gio.File.new_for_path(`/proc/${pid}/maps`).load_contents_async(cancellable, (file, res) => {
         try {

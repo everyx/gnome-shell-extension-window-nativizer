@@ -381,6 +381,13 @@ another file, the history of a decision, or an upstream source to make sense bel
 tables. A pointer at the model is worth one line, and only where the code cannot be read
 without it.
 
+**A comment explains the code, not the tooling.** Anything about a linter, a check, a rule id, a
+test runner or CI belongs to the check that enforces it and finds its own way to complain; in the
+source it is noise the next reader has to skip, and it rots the moment the tool changes. Write the
+fact the code acts on instead: "pure, so the arithmetic can be read as data", not "so a spec can
+assert it". If a comment only makes sense to someone reading the pipeline, it belongs in this file,
+not beside the code.
+
 Moving is not deleting: before dropping a comment, the fact it carries has to be readable
 from the names and structure around it, or already in `docs/` — compress while moving, never
 drop. JSDoc on an export keeps types, what it returns, and when it throws; the reasoning

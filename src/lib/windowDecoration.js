@@ -35,7 +35,7 @@ function readWindowExtent(inputs) {
 
 /** Owns one window's clip, shadow and resize band; injected options keep it unit-testable. */
 export class WindowDecoration {
-    /** Every option is a seam: the default is the real Shell object, a spec injects its own. */
+    /** Every option is a seam: omit it and the real Shell object is used. */
     constructor(win, options = {}) {
         this._win = win;
         this._container = options.container ?? (getWindowGroup() ?? null);

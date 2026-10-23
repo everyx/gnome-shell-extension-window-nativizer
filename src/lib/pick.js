@@ -34,7 +34,7 @@ export {
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/WindowNativizer';
 
-/** Kept as data so a spec can assert the signature without loading the St/Main modules. */
+/** Kept as data, so reading the key needs no St or Main module. */
 export const INSPECTOR_DBUS_IFACE_XML = `
 <node>
   <interface name="${INSPECTOR_DBUS_NAME}">
