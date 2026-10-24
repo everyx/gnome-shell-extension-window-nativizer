@@ -1,6 +1,6 @@
 /** Pure decisions: which uniforms changed, when the frame is stale; the effect only uploads. */
 
-import {rectEquals, sameSize} from '../platform/rect.js';
+import {insetsEqual, rectEquals, sameSize} from '../platform/rect.js';
 import {INVARIANT_STRIKES} from '../lib/diagnosticInvariants.js';
 
 /** Outline as the shader's vec4, 0..255 channels scaled to 0..1; `null` (no outline) is alpha 0. */
@@ -134,11 +134,6 @@ export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan =
         plan?.pairDisagreementStrikes ?? 0);
 }
 
-function sameInsets(a, b) {
-    return Boolean(a) && Boolean(b) &&
-        a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
-}
-
 function sameVector(a, b) {
     return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }
@@ -159,7 +154,7 @@ export function clipParamChanges(prev, next) {
         ? next.candidates : null;
     const candidatesChanged = !prev || !sameCandidates(prev.candidates ?? null, nextCandidates);
 
-    const insetsChanged = !prev || !sameInsets(prev.insets, next.insets);
+    const insetsChanged = !prev || !insetsEqual(prev.insets, next.insets);
     const radiusChanged = !prev || prev.radius !== next.radius;
 
     const nextOutline = outlineVector(next.outline);
