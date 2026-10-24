@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-21 21:59+0800\n"
+"POT-Creation-Date: 2026-10-24 22:01+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -47,8 +47,7 @@ msgstr ""
 msgid "Fixed-size windows have no resize handle"
 msgstr ""
 
-#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:163
-#: src/prefs/conflictDialog.js:168
+#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:194
 msgid "Automatic"
 msgstr ""
 
@@ -139,42 +138,42 @@ msgstr ""
 msgid "%s, %s, %s"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:16
+#: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:47
+#: src/prefs/conflictDialog.js:46
 msgid "Cancel"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:53
+#: src/prefs/conflictDialog.js:52
 msgid "Apply"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:64
+#: src/prefs/conflictDialog.js:63
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs/conflictDialog.js:80
+#: src/prefs/conflictDialog.js:79
 msgid "Keep"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:81
+#: src/prefs/conflictDialog.js:80
 msgid "Keep existing rules for all conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:86
+#: src/prefs/conflictDialog.js:85
 msgid "Replace"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:87
+#: src/prefs/conflictDialog.js:86
 msgid "Replace existing rules with imported rules for all conflicts"
 msgstr ""
 
-#: src/prefs/conflictDialog.js:229
+#: src/prefs/conflictDialog.js:160
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr ""
 
@@ -256,83 +255,83 @@ msgstr[1] ""
 msgid "Clipboard is empty or does not contain text"
 msgstr ""
 
-#: src/prefs.js:383 src/prefs.js:405
+#: src/prefs.js:372 src/prefs.js:394
 msgid "All rules in clipboard are already up to date"
 msgstr ""
 
-#: src/prefs.js:392 src/prefs.js:415
+#: src/prefs.js:381 src/prefs.js:404
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/prefs.js:422
+#: src/prefs.js:411
 #, javascript-format
 msgid "Import failed: %s"
 msgstr ""
 
-#: src/prefs.js:434
+#: src/prefs.js:423
 msgid "Pick window…"
 msgstr ""
 
-#: src/prefs.js:437
+#: src/prefs.js:426
 msgid "The correction applies to every window of its kind"
 msgstr ""
 
-#: src/prefs.js:442
+#: src/prefs.js:431
 msgid "Import from Clipboard"
 msgstr ""
 
-#: src/prefs.js:443
+#: src/prefs.js:432
 msgid "Export to Clipboard"
 msgstr ""
 
-#: src/prefs.js:449 src/prefs.js:452
+#: src/prefs.js:438 src/prefs.js:441
 msgid "More actions"
 msgstr ""
 
-#: src/prefs.js:464
+#: src/prefs.js:453
 msgid "Corrections"
 msgstr ""
 
-#: src/prefs.js:465
+#: src/prefs.js:454
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr ""
 
-#: src/prefs.js:501
+#: src/prefs.js:490
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr ""
 
-#: src/prefs.js:570
+#: src/prefs.js:559
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:576
+#: src/prefs.js:565
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:577
+#: src/prefs.js:566
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:582
+#: src/prefs.js:571
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:583
+#: src/prefs.js:572
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr ""
 
-#: src/prefs.js:589
+#: src/prefs.js:578
 msgid "Force overview corners on every window"
 msgstr ""
 
-#: src/prefs.js:590
+#: src/prefs.js:579
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
