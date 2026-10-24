@@ -104,14 +104,9 @@ export function clipFrameFor(actorSize, insets, scale, phase) {
 }
 
 
-/** Prefers box.init(); a box with neither API is left untouched, so pass a real actor box. */
+/** Writes a Clutter.ActorBox in place, which is the box both call sites hold. */
 export function setActorBox(box, x1, y1, x2, y2) {
-    if (typeof box.init === 'function') {
-        box.init(x1, y1, x2, y2);
-        return;
-    }
-    box.set_origin?.(x1, y1);
-    box.set_size?.(Math.max(0, x2 - x1), Math.max(0, y2 - y1));
+    box.init(x1, y1, x2, y2);
 }
 
 /** Writes x0..x3 then y0..y3; the clamp stops an edge inverting on casts under 2 corners. */

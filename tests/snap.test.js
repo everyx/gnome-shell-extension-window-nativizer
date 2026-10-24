@@ -261,11 +261,7 @@ describe('snapSliceBoxes', () => {
     });
 
     it('mutates boxes in place with zero allocation via snapSliceBoxesInto', () => {
-        const existingBoxes = Array.from({length: 8}, () => ({
-            x: -1, y: -1, width: -1, height: -1,
-            set_origin(x, y) { this.x = x; this.y = y; },
-            set_size(w, h) { this.width = w; this.height = h; },
-        }));
+        const existingBoxes = Array.from({length: 8}, createMockBox);
 
         const cast = {x: 10, y: 20, width: 400, height: 300};
         const returned = snapSliceBoxesInto(existingBoxes, cast, 30, 1.25);
