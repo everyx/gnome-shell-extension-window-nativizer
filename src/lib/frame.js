@@ -1,5 +1,7 @@
 /** Frame geometry: the actor is the client's buffer (body + reserved ring); the body sits in it. */
 
+import {INTEGRAL_EPSILON} from '../platform/numeric.js';
+
 export const ZERO_INSETS = Object.freeze({left: 0, top: 0, right: 0, bottom: 0});
 
 export const FLAT_SAFE_INSET = Object.freeze({left: 1, top: 1, right: 1, bottom: 1});
@@ -10,7 +12,7 @@ export function flatSafeInsets(scale) {
         return FLAT_SAFE_INSET;
     // Normalise before the integer test and the ceil: 1.0005 reads as integer yet would ceil to 2.
     const rounded = Math.round(scale);
-    const fractional = Math.abs(scale - rounded) > 0.001;
+    const fractional = Math.abs(scale - rounded) > INTEGRAL_EPSILON;
     const effective = fractional ? scale : rounded;
     const cover = (Math.ceil(effective) + (fractional ? 1 : 0)) / effective;
     return {left: cover, top: cover, right: cover, bottom: cover};

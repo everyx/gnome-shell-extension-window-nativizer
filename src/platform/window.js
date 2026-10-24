@@ -3,7 +3,7 @@
 import {rectanglesOverlap, rectContains, rectEquals} from './rect.js';
 import {WindowType, WindowClientType} from '../lib/mutterRules.generated.js';
 import {getMonitorScale, getMonitorGeometry, getMonitorCount, getDisplay, getStage} from './display.js';
-import {roundHalfAwayFromZero} from './numeric.js';
+import {INTEGRAL_EPSILON, roundHalfAwayFromZero} from './numeric.js';
 import {safeRead} from './read.js';
 
 /** App id from Shell's window tracker; the import stays lazy because prefs has no Shell typelib. */
@@ -531,7 +531,7 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
         const scale = monitorScaleAt(monitorIndex);
         if (scale === null)
             return null;
-        if (!(scale > 0) || !Number.isFinite(scale) || Math.abs(scale - Math.round(scale)) < 0.001)
+        if (!(scale > 0) || !Number.isFinite(scale) || Math.abs(scale - Math.round(scale)) < INTEGRAL_EPSILON)
             return {x: 0, y: 0};
 
         const geom = monitorGeometryAt(monitorIndex);
@@ -581,7 +581,7 @@ export function getAppliedSubpixelPhase(win, St = null, container = null) {
         // `geometry_scale` is the only writer, so a non-unit scale means the translation has it.
         const scaleX = typeof matrix.get_x_scale === 'function' ? matrix.get_x_scale() : 1;
         const scaleY = typeof matrix.get_y_scale === 'function' ? matrix.get_y_scale() : 1;
-        if (Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001)
+        if (Math.abs(scaleX - 1) > INTEGRAL_EPSILON || Math.abs(scaleY - 1) > INTEGRAL_EPSILON)
             return null;
 
         const x = matrix.get_x_translation() -
