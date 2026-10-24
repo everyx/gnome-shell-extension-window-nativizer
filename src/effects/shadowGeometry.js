@@ -3,6 +3,7 @@
 import {rectEquals, sameSize} from '../platform/rect.js';
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
+import {fmt2} from '../lib/diagnosticInvariants.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
@@ -88,11 +89,6 @@ export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, 
     if (!previousSize || !nextSize)
         return Boolean(previousSize) !== Boolean(nextSize);
     return previousSize.width !== nextSize.width || previousSize.height !== nextSize.height;
-}
-
-/** Two decimals, so a sub-pixel difference shows in the warning. */
-function fmt2(value) {
-    return Number(value).toFixed(2);
 }
 
 /** Actor translation plus the subpixel offset, so the cutout lands on the buffer's phase. */
