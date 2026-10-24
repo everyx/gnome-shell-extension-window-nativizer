@@ -135,6 +135,15 @@ GNOME Shell 51 migration guide lists additional upstream breaking changes that w
 - **`St.ButtonMask` enum renames**: Not used by this extension.
 - **`St.BoxLayout:vertical` property removed** (in 51): Not used by this extension. The migration guide attributes it to `St.Widget`; upstream it is declared on `St.BoxLayout`.
 - **`Gio.DBus.makeProxyWrapper()` returns class needing `new`**: Not used (our IPC uses `Gio.DBusExportedObject` / standard GDBus proxy).
+- **`gl-video-memory-purged` and the graphics-reset status are gone**: 50 carried
+  `ClutterStage::gl-video-memory-purged` - and a second copy on `Meta.Display`, which
+  `meta_compositor_real_after_paint` emitted when `cogl_context_get_graphics_reset_status()`
+  reported a purged context - so effects could drop GPU resources built from memory that no longer
+  held them. 51 registers neither signal, the signal name is absent from the installed libmutter and
+  libmutter-clutter, and `Cogl.Context.get_graphics_reset_status` is no longer introspectable.
+  The baked shadow cache therefore has nothing to mirror: the resources it would drop are ones
+  nothing on 51 observes being invalidated, including Clutter's own `ClutterOffscreenEffect`.
+  Issue #203 was closed on this.
 
 What GJS cannot see at all — the window geometry scale, Mutter's own shadow gates —
 is in [decoration-model.md](decoration-model.md).
