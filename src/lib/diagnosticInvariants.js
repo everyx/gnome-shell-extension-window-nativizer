@@ -1,4 +1,4 @@
-/** Pure predicates plus a strike latch, so a violation speaks once per episode; health is quiet. */
+/** Every diagnostic line: the predicates, the episode latch, and how a message is shaped. */
 
 import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
 
@@ -136,7 +136,7 @@ export function offscreenBoxWarning(derived, target, context, label = windowIden
 }
 
 function extentSummary(extent) {
-    return `${fmt2(extent.width)}x${fmt2(extent.height)}`;
+    return `${twoDecimals(extent.width)}x${twoDecimals(extent.height)}`;
 }
 
 function positiveRect(rect) {
@@ -166,10 +166,10 @@ function boundedPhase(phase) {
 }
 
 function phaseSummary(phase) {
-    return `(${fmt2(phase.x)},${fmt2(phase.y)})`;
+    return `(${twoDecimals(phase.x)},${twoDecimals(phase.y)})`;
 }
 
-/** Two decimals, so a sub-pixel phase stays visible. */
-function fmt2(value) {
+/** Two decimals, so a sub-pixel difference shows in the warning that carries it. */
+export function twoDecimals(value) {
     return Number(value).toFixed(2);
 }

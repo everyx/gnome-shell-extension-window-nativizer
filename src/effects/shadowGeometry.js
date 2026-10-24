@@ -3,6 +3,7 @@
 import {rectEquals, sameSize} from '../platform/rect.js';
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
 import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
+import {twoDecimals} from '../lib/diagnosticInvariants.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
@@ -57,14 +58,14 @@ export function shadowBodyWarning(authority, shadowBox, windowActorBox = null, s
         return null;
 
     const actor = windowActorBox
-        ? ` (window actor ${fmt2(windowActorBox.width)}x${fmt2(windowActorBox.height)})`
+        ? ` (window actor ${twoDecimals(windowActorBox.width)}x${twoDecimals(windowActorBox.height)})`
         : '';
     // Both sides are body extents, so three near-identical numbers need the printed sign.
     const deltaWidth = authority.width - bodyWidth;
     const deltaHeight = authority.height - bodyHeight;
-    return `Shadow body authority ${fmt2(authority.width)}x${fmt2(authority.height)} ` +
-        `disagrees with the shadow body ${fmt2(bodyWidth)}x${fmt2(bodyHeight)}${actor} ` +
-        `by ${fmt2(deltaWidth)}x${fmt2(deltaHeight)}px` +
+    return `Shadow body authority ${twoDecimals(authority.width)}x${twoDecimals(authority.height)} ` +
+        `disagrees with the shadow body ${twoDecimals(bodyWidth)}x${twoDecimals(bodyHeight)}${actor} ` +
+        `by ${twoDecimals(deltaWidth)}x${twoDecimals(deltaHeight)}px` +
         // A hold and spent strikes print the same extents; only this says which the code was in.
         `${state ? ` (${state})` : ''}`;
 }
@@ -88,11 +89,6 @@ export function clipTargetReadChanged(previousTarget, nextTarget, previousSize, 
     if (!previousSize || !nextSize)
         return Boolean(previousSize) !== Boolean(nextSize);
     return previousSize.width !== nextSize.width || previousSize.height !== nextSize.height;
-}
-
-/** Two decimals, so a sub-pixel difference shows in the warning. */
-function fmt2(value) {
-    return Number(value).toFixed(2);
 }
 
 /** Actor translation plus the subpixel offset, so the cutout lands on the buffer's phase. */

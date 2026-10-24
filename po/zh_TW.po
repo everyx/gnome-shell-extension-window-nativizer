@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-21 21:59+0800\n"
+"POT-Creation-Date: 2026-10-24 22:01+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -45,8 +45,7 @@ msgstr "視窗邊框本身已可調整大小"
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的視窗沒有可調整大小的邊緣"
 
-#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:163
-#: src/prefs/conflictDialog.js:168
+#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:194
 msgid "Automatic"
 msgstr "自動"
 
@@ -137,41 +136,41 @@ msgstr "%s，%s，%s，%s"
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
-#: src/prefs/conflictDialog.js:16
+#: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"
 msgstr "解決匯入衝突"
 
-#: src/prefs/conflictDialog.js:47
+#: src/prefs/conflictDialog.js:46
 msgid "Cancel"
 msgstr "取消"
 
-#: src/prefs/conflictDialog.js:53
+#: src/prefs/conflictDialog.js:52
 msgid "Apply"
 msgstr "套用"
 
-#: src/prefs/conflictDialog.js:64
+#: src/prefs/conflictDialog.js:63
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] "%d 條規則存在衝突："
 
-#: src/prefs/conflictDialog.js:80
+#: src/prefs/conflictDialog.js:79
 msgid "Keep"
 msgstr "保留"
 
-#: src/prefs/conflictDialog.js:81
+#: src/prefs/conflictDialog.js:80
 msgid "Keep existing rules for all conflicts"
 msgstr "所有衝突均保留現有規則"
 
-#: src/prefs/conflictDialog.js:86
+#: src/prefs/conflictDialog.js:85
 msgid "Replace"
 msgstr "替換"
 
-#: src/prefs/conflictDialog.js:87
+#: src/prefs/conflictDialog.js:86
 msgid "Replace existing rules with imported rules for all conflicts"
 msgstr "所有衝突均替換為匯入規則"
 
-#: src/prefs/conflictDialog.js:229
+#: src/prefs/conflictDialog.js:160
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "無法套用變更。請檢查您的選擇後重試。"
 
@@ -252,82 +251,82 @@ msgstr[0] "已將 %d 條修正規則匯出至剪貼簿"
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪貼簿為空或不包含文字"
 
-#: src/prefs.js:383 src/prefs.js:405
+#: src/prefs.js:372 src/prefs.js:394
 msgid "All rules in clipboard are already up to date"
 msgstr "剪貼簿中的所有規則已是最新"
 
-#: src/prefs.js:392 src/prefs.js:415
+#: src/prefs.js:381 src/prefs.js:404
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功匯入 %d 條規則"
 
-#: src/prefs.js:422
+#: src/prefs.js:411
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "匯入失敗：%s"
 
-#: src/prefs.js:434
+#: src/prefs.js:423
 msgid "Pick window…"
 msgstr "選取視窗…"
 
-#: src/prefs.js:437
+#: src/prefs.js:426
 msgid "The correction applies to every window of its kind"
 msgstr "這條修正對此類所有視窗生效"
 
-#: src/prefs.js:442
+#: src/prefs.js:431
 msgid "Import from Clipboard"
 msgstr "從剪貼簿匯入"
 
-#: src/prefs.js:443
+#: src/prefs.js:432
 msgid "Export to Clipboard"
 msgstr "匯出至剪貼簿"
 
-#: src/prefs.js:449 src/prefs.js:452
+#: src/prefs.js:438 src/prefs.js:441
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs.js:464
+#: src/prefs.js:453
 msgid "Corrections"
 msgstr "誤判修正"
 
-#: src/prefs.js:465
+#: src/prefs.js:454
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按視窗種類生效；開關修正其中一個軸的自動判斷"
 
-#: src/prefs.js:501
+#: src/prefs.js:490
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
 
-#: src/prefs.js:570
+#: src/prefs.js:559
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:576
+#: src/prefs.js:565
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:577
+#: src/prefs.js:566
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
 
-#: src/prefs.js:582
+#: src/prefs.js:571
 msgid "Prioritize crisp text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:583
+#: src/prefs.js:572
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr "在分數縮放的顯示器上跳過圓角，以保持文字清晰（陰影不受影響）"
 
-#: src/prefs.js:589
+#: src/prefs.js:578
 msgid "Force overview corners on every window"
 msgstr "強制所有視窗顯示概覽圓角"
 
-#: src/prefs.js:590
+#: src/prefs.js:579
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"

@@ -1,7 +1,15 @@
-/** Mutter's and GSK's C rounding rules in one home, so the two mirrors cannot drift apart. */
+/**
+ * The numeric rules this tree shares: how it rounds, and how it decides a float is whole.
+ *
+ * Rounding prefers bit-equality with the C it mirrors over what reads better in JavaScript: these
+ * look like `Math.round` and are not.
+ */
 
 /** `GSK_SNAP_EPSILON` in gskrectprivate.h, as of GTK 4.24. */
 export const SNAP_EPSILON = 0.001;
+
+/** How far a scale may drift from a whole number and still read as one; a scale is float32. */
+export const INTEGRAL_EPSILON = 0.001;
 
 /** Matches GTK's `GskSnapDirection`. */
 export const SnapDirection = Object.freeze({

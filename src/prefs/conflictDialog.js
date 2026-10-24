@@ -9,7 +9,6 @@ import {setupRuleRowHeader, populateAxisIcons, ensureCustomStyles} from './ruleU
 /** Modal dialog that resolves import conflicts between existing rules and imported rules. */
 export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     ensureCustomStyles();
-    const {installedApps, iconTheme} = ctx;
     const {conflicts} = importResult;
 
     const dialog = new Adw.Window({
@@ -115,89 +114,21 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
         }
 
         const total = rowControllers.length;
-        if (keepCount === total) {
-            checkAllKeep.set_inconsistent(false);
-            checkAllKeep.set_active(true);
-            checkAllReplace.set_inconsistent(false);
-            checkAllReplace.set_active(false);
-        } else if (replaceCount === total) {
-            checkAllKeep.set_inconsistent(false);
-            checkAllKeep.set_active(false);
-            checkAllReplace.set_inconsistent(false);
-            checkAllReplace.set_active(true);
-        } else {
-            checkAllKeep.set_inconsistent(true);
-            checkAllKeep.set_active(false);
-            checkAllReplace.set_inconsistent(true);
-            checkAllReplace.set_active(false);
-        }
+        const allKeep = keepCount === total;
+        const allReplace = replaceCount === total;
+        const mixed = !allKeep && !allReplace;
+        checkAllKeep.set_inconsistent(mixed);
+        checkAllKeep.set_active(allKeep);
+        checkAllReplace.set_inconsistent(mixed);
+        checkAllReplace.set_active(allReplace);
 
         syncingHeader = false;
     };
 
     for (const item of conflicts) {
-        const {key, existingState, importedState, existingTitle, importedTitle} = item;
-        const {baseWmClass, properties} = parseRuleKey(key);
-        const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-        const name = appInfo?.name || baseWmClass || key;
-        const sample = existingTitle || importedTitle;
-
-        const row = new Adw.ActionRow();
-        setupRuleRowHeader(row, {
-            name,
-            sampleTitle: sample,
-            properties,
-            appInfo,
-        });
-
-        const caps = keyAxisCapabilities(properties);
-        const existingCorrected = parseRuleState(existingState) ?? new Set();
-        const importedCorrected = parseRuleState(importedState) ?? new Set();
-
-        const tg = new Adw.ToggleGroup({
-            valign: Gtk.Align.CENTER,
-        });
-
-        const keepToggle = new Adw.Toggle();
-        const keepIconBox = new Gtk.Box({spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER});
-        populateAxisIcons(keepIconBox, existingCorrected, caps, iconTheme, _('Automatic'));
-        keepToggle.set_child(keepIconBox);
-
-        const replaceToggle = new Adw.Toggle();
-        const replaceIconBox = new Gtk.Box({spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER});
-        populateAxisIcons(replaceIconBox, importedCorrected, caps, iconTheme, _('Automatic'));
-        replaceToggle.set_child(replaceIconBox);
-
-        tg.add(keepToggle);
-        tg.add(replaceToggle);
-        tg.set_active(1);
-
-        let child = tg.get_first_child();
-        let btnIdx = 0;
-        while (child) {
-            if (child instanceof Gtk.ToggleButton) {
-                if (btnIdx === 0)
-                    keepColGroup.add_widget(child);
-                else
-                    replaceColGroup.add_widget(child);
-                btnIdx++;
-            }
-            child = child.get_next_sibling();
-        }
-
-        tg.connect('notify::active', () => {
-            syncHeaderChecks();
-        });
-
-        row.add_suffix(tg);
+        const {row, controller} = buildConflictRow(item, ctx, syncHeaderChecks);
         group.add(row);
-
-        rowControllers.push({
-            key,
-            setKeep: () => tg.set_active(0),
-            setReplace: () => tg.set_active(1),
-            getChoice: () => tg.get_active() === 0 ? 'existing' : 'imported',
-        });
+        rowControllers.push(controller);
     }
 
     syncHeaderChecks();
@@ -235,4 +166,48 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     });
 
     dialog.present();
+}
+
+/**
+ * One conflict's row: the labels a rule is known by, its two toggle columns, and the choice they
+ * currently hold. The caller owns where the row goes and what its toggles notify.
+ */
+function buildConflictRow(item, {installedApps, iconTheme}, onChoiceChanged) {
+    const {key, existingState, importedState, existingTitle, importedTitle} = item;
+    const {baseWmClass, properties} = parseRuleKey(key);
+    const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+    const name = appInfo?.name || baseWmClass || key;
+
+    const row = new Adw.ActionRow();
+    setupRuleRowHeader(row, {
+        name,
+        sampleTitle: existingTitle || importedTitle,
+        properties,
+        appInfo,
+    });
+
+    const caps = keyAxisCapabilities(properties);
+    const tg = new Adw.ToggleGroup({valign: Gtk.Align.CENTER});
+
+    const toggleFor = corrected => {
+        const box = new Gtk.Box({spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER});
+        populateAxisIcons(box, corrected, caps, iconTheme, _('Automatic'));
+        return new Adw.Toggle({child: box});
+    };
+
+    tg.add(toggleFor(parseRuleState(existingState) ?? new Set()));
+    tg.add(toggleFor(parseRuleState(importedState) ?? new Set()));
+    tg.set_active(1);
+    tg.connect('notify::active', onChoiceChanged);
+
+    row.add_suffix(tg);
+    return {
+        row,
+        controller: {
+            key,
+            setKeep: () => tg.set_active(0),
+            setReplace: () => tg.set_active(1),
+            getChoice: () => tg.get_active() === 0 ? 'existing' : 'imported',
+        },
+    };
 }

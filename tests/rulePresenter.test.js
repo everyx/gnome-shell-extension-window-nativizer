@@ -80,17 +80,17 @@ describe('rulePresenter', () => {
 
     describe('axisUnavailableReason', () => {
         it('returns neverDecorated when window kind cannot be decorated', () => {
-            expect(axisUnavailableReason(RuleAxis.CORNERS, false)).toBe(neverDecorated());
-            expect(axisUnavailableReason(RuleAxis.RESIZE, false)).toBe(neverDecorated());
+            expect(axisUnavailableReason(RuleAxis.CORNERS, {decoratable: false})).toBe(neverDecorated());
+            expect(axisUnavailableReason(RuleAxis.RESIZE, {decoratable: false})).toBe(neverDecorated());
         });
 
         it('explains resize unavailability for SSD frames', () => {
-            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {has_ssd: true});
+            const reason = axisUnavailableReason(RuleAxis.RESIZE, {decoratable: true, properties: {has_ssd: true}});
             expect(reason).toBe('The window frame can already be resized');
         });
 
         it('explains resize unavailability for fixed-size windows', () => {
-            const reason = axisUnavailableReason(RuleAxis.RESIZE, true, {allows_resize: false});
+            const reason = axisUnavailableReason(RuleAxis.RESIZE, {decoratable: true, properties: {allows_resize: false}});
             expect(reason).toBe('Fixed-size windows have no resize handle');
         });
     });

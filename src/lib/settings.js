@@ -179,7 +179,8 @@ export function importRulesJson(existingEntries, jsonText) {
     };
 }
 
-export function applyConflictResolutions(existingEntries, nonConflictingEntries, cleanImported, resolutions) {
+export function applyConflictResolutions(existingEntries, nonConflictingEntries, cleanImported,
+    resolutions = {}) {
     const nextEntries = {...nonConflictingEntries};
     let resolvedUpdatedCount = 0;
 
@@ -200,9 +201,20 @@ export function applyConflictResolutions(existingEntries, nonConflictingEntries,
         }
     }
 
+    // What the reply counts: a key is new, the user chose to import it, or only its title was
+    // filled in. Every input it needs is already here, so the caller is not left to re-derive it.
+    const landedKeys = Object.keys(cleanImported).filter(key => {
+        const existing = existingEntries[key];
+        if (!existing || resolutions[key] === 'imported')
+            return true;
+        return resolutions[key] === undefined &&
+            existing.state === cleanImported[key].state && !existing.title && cleanImported[key].title;
+    });
+
     return {
         nextEntries,
         resolvedUpdatedCount,
+        landedKeys,
     };
 }
 
