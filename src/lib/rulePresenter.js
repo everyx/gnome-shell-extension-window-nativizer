@@ -70,7 +70,7 @@ export function neverDecorated() {
 }
 
 /** Why the axis cannot be configured here; the fixed-size reasons need a decoratable kind. */
-export function axisUnavailableReason(axis, decoratable = true, properties = null) {
+export function axisUnavailableReason(axis, {decoratable = true, properties = null} = {}) {
     // A non-decoratable kind (menus, tooltips) is never about size or frame, even on resize.
     if (decoratable && axis === RuleAxis.RESIZE) {
         if (properties?.has_ssd) {
