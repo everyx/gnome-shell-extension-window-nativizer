@@ -254,9 +254,9 @@ export class WindowDecoration {
             inOverview: this.overview.inOverview,
         });
         this._pass = pass;
-        this.clip?.applyPass?.(pass);
+        this.clip?.applyPass(pass);
         // Both cuts read one phase source and body: a transient disagreement cannot split them.
-        this.shadow?.applyPass?.(pass);
+        this.shadow?.applyPass(pass);
 
         // Presence changes only in _syncClip, so this pass's style is pushed here, and can throw.
         this.setOverviewMode(inOverview);
@@ -335,7 +335,7 @@ export class WindowDecoration {
             }
         } else if (wanted) {
             // Re-pin against the effect's get_actor(): clipTarget already names the new one.
-            if (clipTarget !== (this.clip?.get_actor?.() ?? null)) {
+            if (clipTarget !== (this.clip?.get_actor() ?? null)) {
                 this._removeClipEffect();
                 this.clipTarget = clipTarget;
                 this.clipTarget?.add_effect?.(this.clip);
@@ -363,7 +363,7 @@ export class WindowDecoration {
                     ? new ShadowClass(winActor, this._container, this._St, {journal: this._journal})
                     : null;
             } else {
-                this.shadow?.destroy?.();
+                this.shadow?.destroy();
                 this.shadow = null;
             }
         }
@@ -371,7 +371,7 @@ export class WindowDecoration {
 
     _syncResizeBand(want, inputs, insets, actor = null) {
         if (!want) {
-            this.resizeBand?.destroy?.();
+            this.resizeBand?.destroy();
             this.resizeBand = null;
             return;
         }
@@ -397,7 +397,7 @@ export class WindowDecoration {
             maximizedVertically: inputs?.maximizedVertically,
         });
 
-        this.resizeBand?.setGeometry?.({
+        this.resizeBand?.setGeometry({
             insets: insets ?? null,
             bounds,
             // Null bounds is unknown, not unclipped: full strips swallow the next monitor's clicks.
@@ -450,11 +450,11 @@ export class WindowDecoration {
         if (this.shadow && this._container)
             setActorBelowSibling(this.shadow, winActor, this._container);
 
-        this.resizeBand?.restack?.();
+        this.resizeBand?.restack();
     }
 
     resetBandCursor() {
-        this.resizeBand?.resetCursor?.();
+        this.resizeBand?.resetCursor();
     }
 
     undecorate() {
@@ -493,7 +493,7 @@ export class WindowDecoration {
     /** Phased teardown; a close animation may keep the visuals, the manager keeps the signals. */
     destroy({keepVisualsForClose = false} = {}) {
         try {
-            this.resizeBand?.destroy?.();
+            this.resizeBand?.destroy();
         } catch {
             // The band may already be destroyed.
         }
@@ -504,7 +504,7 @@ export class WindowDecoration {
         // Keeping the visuals keeps the effect, so _removeClipEffect does not run and would leave
         // its queued disable behind: an idle firing after the actor is gone reaches a disposed one.
         if (keepVisualsForClose)
-            this.clip?.cancelPendingDisable?.();
+            this.clip?.cancelPendingDisable();
 
         if (!keepVisualsForClose) {
             this._removeClipEffect();
@@ -512,7 +512,7 @@ export class WindowDecoration {
             this.clipTarget = null;
 
             try {
-                this.shadow?.destroy?.();
+                this.shadow?.destroy();
             } catch {
                 // The shadow may already be gone.
             }
