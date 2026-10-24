@@ -480,3 +480,58 @@ an `import` or a call chain may run past it - a width forced there would be won 
 nobody wants to read. No rule here is machine-checked on purpose: `check-style.sh` holds the
 three that can be (`docs/` pointers, `@param {type}`, a hand-written `.disconnect(`), and a fourth
 grep for prose would only teach the tree to write around it.
+
+## Code conventions (代码约定)
+
+The lint config fixes formatting - braces, quotes, indentation. What it cannot see is what this
+section records: the decisions the tree already makes consistently, which a newcomer would otherwise
+make by taste. The ratios below were counted when this was written; they are evidence, not totals.
+
+**Shape.** A module exports names, not a default. The only two defaults are the entry classes GNOME
+requires (`extension.js`, `prefs.js`). A named function is a `function` declaration; an arrow is a
+callback and nothing else. A single-statement `if` takes no braces, which is every one of them.
+
+**Absence.** `null` means there is no value: a read that could not answer. `undefined` means the
+caller passed nothing, or the property does not exist. Nothing returns `undefined` - a function that
+cannot answer says so with `null`. Code crossing a boundary (parsed JSON, a D-Bus reply, a GObject
+property) tests both, because either can arrive there. A fallback is `??`, not `||`: `||` also
+swallows `0` and the empty string.
+
+**Vocabulary.** The verb is the contract:
+
+| Verb | Contract |
+|---|---|
+| `get*` | a raw accessor: it may throw, and it may answer something unusable |
+| `read*` | answers `null` instead of throwing, always |
+| `resolve*` | several inputs in, one decided value out |
+| `is*` | a predicate on a value it is handed |
+| a domain prefix (`offscreen*`, `shadow*`, `clip*`, `snap*`) | pure arithmetic in that domain |
+
+**Parameters.** Positional on a per-frame path, a record past three arguments on a path that runs
+when state changes. The split is not readability: a record is an allocation, and one per frame in a
+paint path is the thing `clipEffect.js` already goes out of its way to avoid.
+
+**Allocation.** A writer on a per-frame path takes its output container as the first argument and
+returns nothing (`bandParamsInto`, `snapSliceBoxesInto`, `clipValuesInto`). Everything else returns
+a new record. Both forms exist on purpose, and the pair is deliberate, not an unfinished refactor.
+
+**Lifetime.** A class when something owns a lifetime, a signal or a resource; a function in `lib/`
+when it is a derivation. Five classes are `GObject.registerClass`, where the Shell supplies the
+lifetime; the rest are the extension's own state holders.
+
+**Control flow.** A guard at the top returns, and `else` is the exception - under a tenth of the
+`if`s in the tree have one. An exception is thrown only where the caller cannot go on; everything
+else answers `null`. A `catch` that swallows says why in a comment beside it.
+
+**Specs.** A spec name states the behaviour in the third person - `prefers the frame rect over the
+buffer rect` - and never opens with `should`. The name is the claim; the expectations beneath it are
+its evidence.
+
+Deliberately not regulated, because a rule would cost more than it returns:
+
+| Left alone | Why |
+|---|---|
+| file length | a file ends where its responsibility does, whatever line that lands on |
+| short local names | `const s = usableScale(scale)` reads better than `scale` twice in twenty lines |
+| export comments | most exports carry one; the rest are upstream constants and self-evident predicates |
+| comment density | `comment-density` in ego-lint is already a signal, and a second opinion would not be |
