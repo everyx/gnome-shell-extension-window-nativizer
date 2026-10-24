@@ -126,8 +126,7 @@ both would only make the second run slow, so the split follows what a check guar
   both arms and the guard reads it the same.
 
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
-the same checks twice on every push. Either hook can be skipped the same way when that is what you
-mean.
+the same checks twice on every push. Either hook can be skipped the same way.
 
 A check's output goes to a file rather than straight to the terminal, so that the one that fails can
 be printed whole. A failure or an interrupt keeps that file and names its path, because a hook that
@@ -238,8 +237,8 @@ Things about it that cost time to find:
   session. Use it for geometry, state and framebuffer sizes, and use
   `gnome-shell --devkit --wayland --unsafe-mode` (a nested shell with a real GL path,
   where `Eval` and `Screenshot` both work) for anything visual.
-- **Screenshots are in physical pixels, rects are logical.**
-  `Meta.Window.get_frame_rect()` answers in logical pixels while the screenshot is
+- **Screenshots are in device px, rects are logical.**
+  `Meta.Window.get_frame_rect()` answers in logical px while the screenshot is
   `logical x global.display.get_monitor_scale(monitor)`. On a fractional-scale display
   that is a 4/3 difference here, enough to sample the wrong place entirely and conclude
   that nothing is drawn.
@@ -268,8 +267,7 @@ so two screenshots of one session are comparable.
 ```
 
 `./tools/dev.sh xapp <cmd>` runs the same client as an XWayland window instead, which is
-what exercises the XWayland clip target; it resolves the nested XWayland's display and authority for
-you.
+what exercises the XWayland clip target; it resolves the nested XWayland's display and authority.
 
 With `WINDOW_NATIVIZER_BACKDROP=1` the same script becomes a uniform white surface to measure a
 shadow against, under a separate application id so it can run beside the subject, and
@@ -279,7 +277,7 @@ something outside the session under test.
 
 `WINDOW_NATIVIZER_BODY=#rrggbb` paints the window body a known colour. Against the white backdrop
 and a black shadow the three channels then separate the body, the 1px outline and the shadow
-in one profile, and a missing corner clip becomes visible — none of which can be seen when
+in one profile, and a missing corner clip becomes visible - none of which can be seen when
 the window and the background are both white.
 
 Prototype actors must be destroyed and any `GLib` sources removed before
@@ -299,7 +297,7 @@ It exists for the live question that needs shell-side state on a real session wi
 unsafe mode: why a window briefly shrinks in width when a popup closes. **The boolean is required.**
 `false` is exactly the old pick: an interactive crosshair pick that returns the public fields only
 and touches no extra state. `true` is the same interactive pick with the diagnostics-only fields
-added to the reply. There is no non-interactive path — the diagnostics still require the click, and
+added to the reply. There is no non-interactive path - the diagnostics still require the click, and
 that gesture is the user's authorisation to read the state. There is one knob, so a map would add
 parsing rules without adding meaning.
 
@@ -331,13 +329,13 @@ default arguments, and a stale caller must fail loudly.
 The reply is one `a{ss}` map, so every value is a string. Fields that cannot be read from the
 live objects say `unavailable` explicitly rather than being omitted.
 
-**Public — present in both modes**, so a script that passes `false` keeps working unchanged:
+**Public - present in both modes**, so a script that passes `false` keeps working unchanged:
 
 `wmClass`, `windowTitle`, `width`, `height`, `clientType`, `hasRing`, `hasSsd`, `isMaximized`,
 `isFullscreen`, `hasTileMatch`, `allowsResize`, `isAttachedDialog`, `hasParent`, `windowType`,
 `suggestedState`, `suggestedStateWouldChange`.
 
-**Diagnostics-only — present only when `debug` is `true`**:
+**Diagnostics-only - present only when `debug` is `true`**:
 
 | Group | Fields |
 |---|---|
@@ -377,7 +375,7 @@ line unreadable or easy to misread: what an otherwise arbitrary condition select
 window-type test), which entry of a literal array means
 what (the slice table in the shadow texture), a unit, an endpoint. Anything that needs
 another file, the history of a decision, or an upstream source to make sense belongs in
-`docs/` — measured numbers and their evidence, trade-offs, rejected alternatives, case
+`docs/` - measured numbers and their evidence, trade-offs, rejected alternatives, case
 tables. A pointer at the model is worth one line, and only where the code cannot be read
 without it.
 
@@ -389,7 +387,7 @@ assert it". If a comment only makes sense to someone reading the pipeline, it be
 not beside the code.
 
 Moving is not deleting: before dropping a comment, the fact it carries has to be readable
-from the names and structure around it, or already in `docs/` — compress while moving, never
+from the names and structure around it, or already in `docs/` - compress while moving, never
 drop. JSDoc on an export keeps types, what it returns, and when it throws; the reasoning
 goes to `docs/`. The concern is that comment density rots: `comment-density` in ego-lint
 (over 50% of a file, ignoring its first ten lines) is a signal, not the goal.
@@ -422,3 +420,63 @@ An introspectable fact written in markdown is merely an unverified, rotting cach
 3. **Architecture & decision layer (`docs/*.md`)**: Low churn, macro scope. Records cross-module
    interactions, rationale for chosen designs over rejected alternatives, and alignment with GNOME/Mutter.
    Never duplicates volatile micro-implementation details (variable names, parameter lists, or internal thresholds).
+
+### House style (行文风格)
+
+The rules below are the ones the doctrine above does not decide. They exist because one fact
+written two ways reads as two facts; each line here had a majority form already, and the rest were
+the minority that got aligned to it.
+
+**Terminology.** One concept, one noun. The code's vocabulary wins over prose's:
+
+| Term | Means | Not |
+|---|---|---|
+| `logical px` | Clutter's unit, what an actor's allocation is in | logical pixel |
+| `device px` | a pixel of the composited output, which is what a screenshot holds - as opposed to an FBO's own grid | physical px, physical pixel, screen px, device pixel |
+| `physical` | an adjective for device space: `physical grid`, `physical phase`, `physical scale` | never a unit on its own |
+| pass | one decoration recompute, the unit a signal wakes | frame |
+| frame | one rendered output of the stage | pass |
+| `FBO` | the offscreen allocation Clutter gives an effect | offscreen buffer |
+| `quad` | the four-vertex geometry a paint writes | rect |
+| `extent` | a box's size in one space, the thing a read is compared against | size |
+
+`physical` survives as an adjective because `physical grid` and `physical phase` name device space
+rather than a unit - a distinction `device px` cannot carry on its own.
+
+**Typography.** English prose uses one aside marker, in `docs/` and in comments alike:
+
+| Mark | Use | Count before this rule |
+|---|---|---|
+| ` - ` | an aside inside a sentence, a label followed by its gloss | 300 |
+| `–` | a numeric or version range only: `50–51`, `9–16` | 55 |
+| `—` | retired | 106 |
+| `:` | a heading's subtitle: `## Effects: the rounded clip` | - |
+
+The em dash is retired rather than allowed in `docs/` and banned in `src/`: `slop/no-em-dash`
+already rejects it in a comment, so keeping it in prose would make the same author punctuate the
+same sentence differently depending on the file. `README.zh-CN.md` follows Chinese punctuation
+(`——`, `、`) and is not covered by this row.
+
+Spelling is British throughout - `colour`, `behaviour`, `centre`, `cancelled`, `normalise` - which
+is what the tree already used; `color` only ever appears inside a code identifier such as
+`color-scheme`. Scale factors are written `1.25x`, not `1.25×`; `×` stays for multiplication and
+dimensions (`440 × 1.333333`, `550×524`, `4.0×4.0`).
+
+**Voice.** `we` is the maintainers, and it is the default for a decision or a measurement: *we hold
+the derivation*. `the extension` is the running process: *the extension connects once*. A document
+describing runtime behaviour does not say "we" for it, and `docs/` does not address a `you` - the
+reader is whoever maintains the file. `README.md` is the exception: it is read by users, so it keeps
+its second person.
+
+**Length.** A sentence carries one claim and stays under about 40 words; a paragraph carries one
+argument and stays under about 120. The tree before this rule sat at a median of 27 words per
+sentence and a 90th percentile of 52, with paragraphs at 66 and 176 - the long tail is where a
+claim and its evidence got fused into one sentence and became hard to check.
+
+**Code.** Formatting is `eslint-config-gnome`'s, not this document's: 4 spaces, single quotes,
+semicolons. Private members are `_method` and `_field`, which is what the GJS tree around this
+extension does: 77 `_method` declarations, and not one `#field`. Lines aim at 100 characters, and
+an `import` or a call chain may run past it - a width forced there would be won back by an alias
+nobody wants to read. No rule here is machine-checked on purpose: `check-style.sh` holds the
+three that can be (`docs/` pointers, `@param {type}`, a hand-written `.disconnect(`), and a fourth
+grep for prose would only teach the tree to write around it.

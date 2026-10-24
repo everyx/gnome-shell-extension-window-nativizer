@@ -2,7 +2,7 @@
 
 import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
 
-/** One device pixel, the subpixel phase an edge may carry; the geometry module owns the number. */
+/** One device px, the subpixel phase an edge may carry; the geometry module owns the number. */
 export {OFFSCREEN_BOX_TOLERANCE};
 
 /** Violating passes before speaking: a geometry change and its allocation settle a pass apart. */
@@ -10,7 +10,7 @@ export const INVARIANT_STRIKES = 2;
 
 export const BUFFER_ACTOR_TOLERANCE = 0.5;
 
-/** The misalignment seen is a whole physical pixel; this sits far below it, above float residue. */
+/** The misalignment seen is a whole device px; this sits far below it, above float residue. */
 export const PHASE_ALIGNMENT_TOLERANCE = 0.05;
 
 /** A real phase is under `1 / scale` logical px: Mutter snaps to the grid, so more is a position. */

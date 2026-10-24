@@ -34,7 +34,7 @@ For example:
   buffer, the other fell back to the totals and answered anyway - so a window in that state had a
   rule written under one key and looked up under the other, and the rule could never match.
 - **Backward compatibility**: none. The key and the state grammar are the current
-  shape only — an older key or an older state is dropped rather than migrated, which is
+  shape only - an older key or an older state is dropped rather than migrated, which is
   what an unreleased model may do.
 - **`has_ssd=<bool>` names a kind the compositor frames itself**: Mutter's own
   `Meta.Window.decorated` is a policy flag - the best reading the GJS side has, not proof of a
@@ -42,8 +42,8 @@ For example:
   the client, runs the resize grab. The flag is part of the key so the preferences window can
   tell the kind apart and not offer a resize axis it could never act on. An application that
   switches decoration mode becomes a different kind.
-- An **attached dialog always has a parent** — Mutter only attaches a transient whose
-  parent exists (`meta_window_should_attach_to_parent()`) — so `has_parent` and
+- An **attached dialog always has a parent** - Mutter only attaches a transient whose
+  parent exists (`meta_window_should_attach_to_parent()`) - so `has_parent` and
   `attached_dialog` cannot vary independently: `attached_dialog=true` implies
   `has_parent=true`. That is why the prefs sentence can fold both into one phrase
   without losing a case.
@@ -75,7 +75,7 @@ master switch is gone too: the band is the resize axis, reversed per kind like t
 ## State grammar: the axes a rule reverses
 
 A rule exists because the automatic decision is wrong for one window kind. Its state
-names the axes to **reverse** — the runtime flips its own reading on each of them — in
+names the axes to **reverse** - the runtime flips its own reading on each of them - in
 canonical order, e.g. `corners,shadow`. An axis that is not named follows the automatic
 decision, and a state naming nothing is the same as no rule, so it is never stored.
 `rules.js` is the only place this grammar is spelled out, so the settings layer, the
@@ -85,7 +85,7 @@ Single principle: the user's disagreement beats the decision, wherever they disa
 Each axis has exactly one decision and one way to overrule it, so a rule can never
 record a no-op: naming an axis always changes something. Capability is not priority:
 structural facts (window type, maximized/fullscreen, unresizable windows, SSD frames)
-decide what *can* be done, and a reversal never overrides them — an axis the runtime
+decide what *can* be done, and a reversal never overrides them - an axis the runtime
 could not act on is not offered in the first place.
 
 Why a reversal rather than a value: the automatic decision is fixed for a kind, so an
@@ -134,25 +134,25 @@ There is no direction any more, and so no collision inside the model: one kind h
 and that row names the axes to reverse (or follows the decision). An import can still collide
 with that row for the same kind (same key, different state), which the import-conflict dialog
 resolves. A reversal overrides
-the inferred baseline on its axis and nothing else — never the structural facts (window
-type, maximized/fullscreen), never transient window state (tiled, tile-matched — the
+the inferred baseline on its axis and nothing else - never the structural facts (window
+type, maximized/fullscreen), never transient window state (tiled, tile-matched - the
 rule outlives it and applies again on restore), never a user preference, never a policy. The same
 direction guides the override layers themselves: we overrule the user only where
-honouring the request would be meaningless — a structural disqualifier, a window state
-(maximized, tiled, matched), or a window the user cannot see — never where the request
+honouring the request would be meaningless - a structural disqualifier, a window state
+(maximized, tiled, matched), or a window the user cannot see - never where the request
 is merely imperfect. See [decoration-model.md](decoration-model.md).
 
 ## Identity
 
 A rule is only as stable as the identity in its key. Resolution order:
 
-1. what the window declares — `get_wm_class()` → `get_sandboxed_app_id()` →
+1. what the window declares - `get_wm_class()` → `get_sandboxed_app_id()` →
    `get_gtk_application_id()`;
-2. a **sibling of the same pid** — a popup shares its parent application, so the main
+2. a **sibling of the same pid** - a popup shares its parent application, so the main
    window's WM_CLASS describes both. This keeps the identity stable across restarts
    without reading `/proc` or guessing toolkits;
 3. `Shell.WindowTracker`'s app id, **rejecting** the `window:<n>` placeholders that
-   Shell invents for windows it cannot attribute — they embed a session-local
+   Shell invents for windows it cannot attribute - they embed a session-local
    sequence number;
 4. `pid-<pid>` as a last resort. It is session-scoped, so a rule keyed on it stops
    matching after a restart.
@@ -202,12 +202,12 @@ the width. The entry goes when the rule goes.
 
 ### Normalization and safety
 
-The suggestion follows the window's **kind** — the transient state (maximized, tiled,
+The suggestion follows the window's **kind** - the transient state (maximized, tiled,
 fullscreen) is normalized away, because a rule outlives transient states.
 
 The guess is safe and ergonomic because:
 1. **Never a no-op**: the suggestion names every axis the kind can be corrected on, and the
-   pre-flight below refuses any state that would change nothing — a kind already corrected
+   pre-flight below refuses any state that would change nothing - a kind already corrected
    this way, or one whose remaining axes the runtime gates (fractional scale with crisp
    text, for the corners).
 2. **Cheap to adjust**: The newly added/updated row in preferences is automatically focused

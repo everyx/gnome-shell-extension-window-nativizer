@@ -17,7 +17,7 @@ Two things are drawn, and they have different mechanisms:
 | Part | Where it lives | Notes |
 | --- | --- | --- |
 | Rounded clip + inner outline | a rounded clip effect on the window actor (surface actor on XWayland) | skipped entirely under some settings, see below |
-| Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it — bare XWayland keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
+| Shadow | our shadow actor, a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice (why eight describe the shape: `decoration-model.md`); only where we paint it - bare XWayland keeps Mutter's, while SSD takes over the frames-client square shadow with our 15px rounded shadow |
 
 Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
 can never contain the shadow. Only a full-desktop screenshot shows both. The clip, on the
@@ -50,7 +50,7 @@ separate three things in one profile: body, outline, shadow.
 window through libadwaita as the reference.
 
 Profiles must step **outward** on all four sides (top and left step negative) and must be
-read in **physical** pixels: a screenshot is `logical x ceil-less resource scale` — on a
+read in **device** px: a screenshot is `logical x ceil-less resource scale` - on a
 1.3333 display a 1280x800 monitor yields a 1707x1067 image.
 
 ### A native window's edge looks like this
@@ -68,7 +68,7 @@ style says 7%). `0` is the anti-aliased body edge. `+1` and beyond is the shadow
 shadow pixel is a 1px border ring (`0 0 0 1px rgba(0,0,0,0.05)`, a zero-blur 1px spread at
 5% alpha).
 
-## The band you can grab is narrower than the shadow you can see
+## The grabbable band is narrower than the visible shadow
 
 A native GNOME window is grabbable only in a band hugging the window itself; the rest of its
 shadow is click-through:
@@ -181,17 +181,17 @@ gdbus call --dest org.gnome.Shell --object-path /org/gnome/Shell \
   a 171 grey-level difference that had nothing to do with the decoration.
 - A `ClutterOffscreenEffect`'s offscreen is not the actor's box: Clutter enlarges it to a
   stable size, `_clutter_actor_box_enlarge_for_effects` (`clutter-actor-box.c:505`) gives
-  three pixels per axis split around the actor — two on the left/top and one on the
-  right/bottom for an integer position — and then scales that box by a resource scale and
+  three pixels per axis split around the actor - two on the left/top and one on the
+  right/bottom for an integer position - and then scales that box by a resource scale and
   rounds each edge onto the device grid (`clutter-offscreen-effect.c`). Two callers exist, and
   this extension targets a plain GNOME Shell: the unpatched upstream caller of 50.4/51.1
-  multiplies by `ceilf (resource_scale)` — **2** on a 1.3333 monitor — while upstream MR !5179,
+  multiplies by `ceilf (resource_scale)` - **2** on a 1.3333 monitor - while upstream MR !5179,
   which is **unmerged** and only carried by the optional `mutter-everyx` package, multiplies by
   the real resource scale. `lib/offscreenBox.js` resolves which caller produced a given FBO from
   the FBO's own extent, so the cut holds under either.
   Measured with `Clutter.OffscreenEffect.get_target_size()` on `mutter-everyx` for a 441x281 body:
-  444x284 device px at 1.0, 556x356 at 1.25 and 593x379 at 4/3 — the real-scale rule, against the
-  888x568 the `ceil` rule would allocate at 4/3. One shader unit is therefore one logical pixel
+  444x284 device px at 1.0, 556x356 at 1.25 and 593x379 at 4/3 - the real-scale rule, against the
+  888x568 the `ceil` rule would allocate at 4/3. One shader unit is therefore one logical px
   only when the quad is derived per paint from that box (`lib/offscreenBox.js`); a constant
   cannot express it, and the constants that stood in for it read 1.2522 device px per unit at 1.25.
 - **The FBO's scale and the phase's scale are read from two different rects.** The offscreen FBO
@@ -227,7 +227,7 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
 ### 1. Right-edge highlight asymmetry (G=133)
 
 - **The cause**: On a 1.3333 fractional scale display, a 440px wide window maps to
-  `440 × 1.333333 = 586.6667` physical pixels. The right boundary lands on a fractional
+  `440 × 1.333333 = 586.6667` device px. The right boundary lands on a fractional
   phase (`0.67`), so the rasterizer samples across the boundary between the window body
   and background/shadow, producing an anti-aliasing blend (`G=133`). On the left edge,
   `x=0` is integer-aligned (`G=0`).
@@ -238,7 +238,7 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   fractional blitting.
 - **Trade-off & Grid Snapping**: When `prefer-crisp-text` is enabled, the rounded clip is deliberately omitted
   under fractional scaling to avoid resampling blur on client window content. When the clip runs, its boundary
-  snaps to the physical device pixel grid with the same rounding rule the shadow cutlines use, so the body
+  snaps to the device grid with the same rounding rule the shadow cutlines use, so the body
   is not expanded outward and adjacent 8-slice shadow quads keep their cutlines on identical physical coordinates
   to eliminate subpixel seams.
 
@@ -263,13 +263,13 @@ than native's ~199). Two factors contributed to this:
 Fractional scaling under window drag revealed a critical limitation: as actor coordinates
 shift across subpixel boundaries (e.g. 1.33x or 1.25x scale), two phenomena emerged:
 1. Bilinear texture filtering across any high-frequency 1px border line baked into the 8-slice
-   texture alternated between landing on a single physical pixel and splitting across two pixels,
+   texture alternated between landing on a single device px and splitting across two pixels,
    producing 1px/2px jumping and flickering.
 2. The clip effect's outward growth rule expanded the clip rect outward by up
-   to 0.5 logical pixels. On non-native windows declaring client shadow insets (such as Meld / GTK3
+   to 0.5 logical px. On non-native windows declaring client shadow insets (such as Meld / GTK3
    CSD), this outward expansion inadvertently captured the obsolete 1px dark border drawn by the
    client in the outer decoration ring (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`), while
-   the shadow slices were snapped to the physical grid, causing a 1-physical-pixel phase conflict
+   the shadow slices were snapped to the physical grid, causing a one-device-px phase conflict
    and asymmetric dark borders.
 
 To solve this at the root:
@@ -292,12 +292,12 @@ To solve this at the root:
    an offscreen effect on the container paints its local content and the hard straight-edge cut is
    computed in the same coordinates as the buffer. Clipping the window actor instead leaves the
    phase in a child transform, which the offscreen FBO's box rounding cannot keep; at 1.25x the cut
-   then fell a full physical pixel inside the frame and the backdrop showed through as a bright
+   then fell a full device px inside the frame and the backdrop showed through as a bright
    hairline between the clip's cut and the shadow's cutout. `clipFrameFor` in `lib/snap.js` is the
    one derivation of both local edges, and the shadow actor carries the phase as its own
    translation. On this container path, this guarantees:
    - Zero phase drift between the clip mask and the 8-slice shadow cutout across all monitor DPI scales;
-   - The clip's cut and the shadow's cutout land on one physical pixel, with no hairline between them;
+   - The clip's cut and the shadow's cutout land on one device px, with no hairline between them;
    - Obsolete client-drawn border rings outside the client frame are strictly excluded
      from the clipped body without fractional outward expansion;
    - Concentric, subpixel-exact, 100% four-way symmetric corners under both static display and dynamic drag.
@@ -322,8 +322,8 @@ To solve this at the root:
    from the container's place in its parent while `offscreenQuad` derives it from an actor-local
    `[0, length]`, and the two only agree on the boxes it admits. What the constants could not
    express was the *scale*: they scaled the box by an integer, so at 1.25x one shader unit was
-   1.2522 device px, the corner arc drifted up to half a physical pixel off the pixel-snapped
-   straight edge, and at 4/3 a float32 fencepost cut the bottom edge a device pixel short.
+   1.2522 device px, the corner arc drifted up to half a device px off the pixel-snapped
+   straight edge, and at 4/3 a float32 fencepost cut the bottom edge a device px short.
 3. **Alpha-Over Compositing**: Multi-layer shadows are composited with alpha-over in the shadow bake.
 4. **Physical Grid Snapping**: The small inward bleed of the shadow mesh is retained to prevent
    subpixel seams, and slice boxes
@@ -336,7 +336,7 @@ To solve this at the root:
    - **Decision (A vs B)**: option A was to adopt GSK's raw-value epsilon exactly. Rejected - it
      changes desktop rendering on negative coordinates with no bug behind it, and gives up the
      origin-odd symmetry. Option B (documented deviation) is in force. Reopen A only if a visible
-     1-physical-pixel artifact appears at negative coordinates.
+     one-device-px artifact appears at negative coordinates.
 5. **Symmetric Physical Margin Snapping**:
    GTK3 CSD windows (e.g. Meld) render a 1px border stroke (`box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.23)`).
    Because Cairo strokes 1px lines using half-pixel centering (0.5px outside, 0.5px inside), independent
@@ -402,7 +402,7 @@ and 100% four-way symmetry.
 
 Measured on a `--virtual-monitor 1920x1080` session moved to scale 1.3333 via
 `ApplyMonitorsConfig`, all three windows **unfocused** over the white backdrop, body
-`#ff0000`, 440x280, G channel outward from the last body row (physical px):
+`#ff0000`, 440x280, G channel outward from the last body row (device px):
 
 | Offset | ① native libadwaita | ② ours, GTK3+adw-gtk3 | ③ ours, bare (no ring) | client alone, extension off |
 | :---: | :---: | :---: | :---: | :---: |
@@ -416,7 +416,7 @@ Measured on a `--virtual-monitor 1920x1080` session moved to scale 1.3333 via
 | +8 | 246 | 246 | 246 | 242 |
 
 At scale 1.0 the same pair of columns for ② minus ① is `-2 -4 -3 -2 -1 0 +2 +3`;
-at 1.3333 it is `-10 -10 -4 -3 -4 -3 -2 0`. The first two physical pixels are the
+at 1.3333 it is `-10 -10 -4 -3 -4 -3 -2 0`. The first two device px are the
 whole difference, and fractional scaling roughly doubles it.
 
 What the numbers settle:
@@ -443,7 +443,7 @@ What the numbers settle:
   doubled, offscreen origin scaled with them) leaves every profile above unchanged.
 
 The last two bullets are why the fractional profile is not byte-identical to native.
-The magnitude is a handful of grey levels on the first two physical pixels (about 1.5
+The magnitude is a handful of grey levels on the first two device px (about 1.5
 logical px); whether that reads as a heavier shadow depends on the sub-pixel phase the
 window happens to land on, so two windows on the same monitor can differ by ~5/255
 purely from where their edges fall.
@@ -452,14 +452,14 @@ purely from where their edges fall.
 
 Ours is not drawn by the client: the 1px inner outline is the shader's coverage ramp, and its
 strength is where that ramp sits relative to the pixel grid. With the ramp centred on the
-body boundary, the innermost body pixel — the only one whose centre can fall
-inside a ring that is one pixel wide — came out at half coverage: G **9** against native's
+body boundary, the innermost body pixel - the only one whose centre can fall
+inside a ring that is one pixel wide - came out at half coverage: G **9** against native's
 **18**, at every edge and every scale where the boundary lands on a whole pixel. Centring
 the ring half a pixel inside the body instead
 puts that pixel centre at full coverage, and the two agree exactly at 1.0.
 
-Measured as in the profile above — innermost body rows per edge, G channel, red body over
-white backdrop — for four window positions one logical pixel apart, which is four sub-pixel
+Measured as in the profile above - innermost body rows per edge, G channel, red body over
+white backdrop - for four window positions one logical px apart, which is four sub-pixel
 phases per edge:
 
 | scale |  | before | after | native |
@@ -479,14 +479,14 @@ What the numbers say:
   anti-aliased body boundary against the shadow, which native has too.
 - **The phase spread is older than this change.** At 1.3333 the four edges of one window sit
   at four different sub-pixel phases; one can read 18 while another reads 0, and moving the
-  window one logical pixel moves the ink between edges. Before the change the same sweep read
+  window one logical px moves the ink between edges. Before the change the same sweep read
   7/2/0/0, so the fix raises the level and leaves the spread; native spreads the same way
-  (across the same four positions its per-edge reading moves between 12 and 49 — one row of 12
+  (across the same four positions its per-edge reading moves between 12 and 49 - one row of 12
   up to 37 + 12). Closing that
-  last gap means drawing the outline at the physical resolution — as a clipped actor like the
-  shadow rather than a coverage term in the offscreen pass — and is not what this changed.
+  last gap means drawing the outline at the physical resolution - as a clipped actor like the
+  shadow rather than a coverage term in the offscreen pass - and is not what this changed.
 - **High contrast scales with it.** At 1.0 the 30% tier reads 76 after the change where it read
-  38 before, against the 7% tier's 18 — the two tiers keep their 30/7 ratio, and both are still
+  38 before, against the 7% tier's 18 - the two tiers keep their 30/7 ratio, and both are still
   one pixel.
 
 ### Automated benchmark tool
@@ -586,7 +586,7 @@ to the physical grid but does not re-derive the span from two independently snap
 has to be exactly `cornerPx` or the corner/edge texture is rescaled instead of mapped 1:1 - up to
 about 0.6% at 1.25x, 1.5x and 1.75x.
 
-**The flat safe inset's spare device pixel.** `flatSafeInsets` covers a 1-logical-px client border
+**The flat safe inset's spare device px.** `flatSafeInsets` covers a 1-logical-px client border
 with `ceil(scale)` device px plus one spare on fractional scales. The geometric cut was verified
 live to be exact on all four sides at every scale (`uFrame` read back off the effect matches the
 snap math to float precision), yet at 4/3 the bottom edge kept one full border row at every subpixel
@@ -619,7 +619,7 @@ we composite into.** The clip's cut and the shadow's cutout derive from one func
 physical phase (`clipFrameFor`), and that invariant held while both edges were wrong relative to
 the FBO's rasterisation. What has to hold is "our edge lands where the compositor rasterises it",
 and it has to be checked per subpixel phase **and per scale**: the defect was invisible at 4/3,
-whose phase steps never reach ±0.5 physical px, and visible at 1.25, a stock preset. Two things
+whose phase steps never reach ±0.5 device px, and visible at 1.25, a stock preset. Two things
 follow. A scale set is part of the test surface, not a sample of it. And a guard that only rejects
 one direction of artefact is half a guard - the straight-edge probe asserted only a downward
 threshold, so a seam brighter than the shadow passed unseen.

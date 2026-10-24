@@ -39,11 +39,11 @@ Non-native apps often feel out of place on a modern GNOME desktop. Window Nativi
 - **Compiled from upstream**: Curves and metrics come straight from GNOME's own sources
 
 ### 🖱️ Effortless Drag-to-Resize Ergonomics
-Visual rounding is only half the story — non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
+Visual rounding is only half the story - non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
 - **No pixel hunting**: Expands 0~1px borders into a comfortable invisible grab area aligned with GTK's native input region
 - **Smooth Corner Reach**: Follows GTK's corner coordinate heuristics, so diagonal resizing doesn't slip
 - **Native Mutter Grab-Ops**: Triggers compositor-level resize grabs and dynamic 8-way directional cursors without lag
-- **Non-Intrusive**: Only covers the outer perimeter — never intercepts client titlebar drags, window buttons, or tab clicks
+- **Non-Intrusive**: Only covers the outer perimeter - never intercepts client titlebar drags, window buttons, or tab clicks
 
 ### ⚡ Smooth GPU Shaders
 - **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
@@ -55,7 +55,7 @@ Visual rounding is only half the story — non-native windows often have paper-t
 
 ### 🛡️ Smart & Non-Invasive
 - **Leaves native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
-- **No stacked shadows**: Where a shadow already exists — Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours — we leave it alone instead of adding ours
+- **No stacked shadows**: Where a shadow already exists - Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours - we leave it alone instead of adding ours
 - **Round and sharp overview previews**: Rounded and sharp at once, because the corners come from the window's own surface rather than an extra offscreen pass (see [**Display & Rendering**](#display--rendering) below)
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
 
@@ -67,8 +67,8 @@ Sharpness gives way to picture quality wherever the decoration would cost it. A 
 
 Windows that paint their own rounded surface need no offscreen pass, so nothing softens: the overview preview takes its corners from that surface directly, and stays as sharp as the window.
 
-- **Certain loss — the overview**: XWayland windows, and the few Wayland windows whose corners another surface paints, keep a square, sharp preview. **Force overview corners on every window** (Preferences › Display & Rendering, off by default) rounds them too, at the price of a blurrier thumbnail. Overview only
-- **Possible loss — fractional scaling**: on a 125% or 150% monitor the rounded pass resamples the whole window, so text may read a little soft. **Prioritize crisp text** (Preferences › Display & Rendering, off by default) keeps that monitor square instead, and the shadow is unaffected. Per monitor
+- **Certain loss - the overview**: XWayland windows, and the few Wayland windows whose corners another surface paints, keep a square, sharp preview. **Force overview corners on every window** (Preferences › Display & Rendering, off by default) rounds them too, at the price of a blurrier thumbnail. Overview only
+- **Possible loss - fractional scaling**: on a 125% or 150% monitor the rounded pass resamples the whole window, so text may read a little soft. **Prioritize crisp text** (Preferences › Display & Rendering, off by default) keeps that monitor square instead, and the shadow is unaffected. Per monitor
 
 Both switches are off by default, but their default behaviour pulls opposite ways on purpose: a square preview costs less than a smeared one, and a monitor that may soften text still keeps its corners.
 
@@ -90,7 +90,7 @@ Both switches are off by default, but their default behaviour pulls opposite way
 
 Window Nativizer automatically handles most applications, but you can correct its judgement per window kind:
 
-Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose automatic decision is wrong for that window kind, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
+Each correction names the axes - **Corners**, **Shadow**, **Resize** - whose automatic decision is wrong for that window kind, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
 
 | Corrected axis | Typical Use Case |
 | :--- | :--- |
@@ -101,8 +101,8 @@ Each correction names the axes — **Corners**, **Shadow**, **Resize** — whose
 
 To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
 
-- **Stored per window kind**: the app plus Wayland or XWayland, window type, size, shadow margins — a fixed-size kind may add a size suffix. The **Corrections** row shows that kind and the title the window was picked from
-- **Moving corrections between machines**: the menu beside **Pick window…** — **Export to Clipboard** copies them, **Import from Clipboard** merges them back
+- **Stored per window kind**: the app plus Wayland or XWayland, window type, size, shadow margins - a fixed-size kind may add a size suffix. The **Corrections** row shows that kind and the title the window was picked from
+- **Moving corrections between machines**: the menu beside **Pick window…** - **Export to Clipboard** copies them, **Import from Clipboard** merges them back
 - **Resolving import conflicts**: **Resolve Import Conflicts** handles each conflict, defaulting to **Replace**, or **Keep**/**Replace** for all at once
 - **From a script**: `PickWindow(b debug)` on `org.gnome.Shell.Extensions.WindowNativizer` raises the same picker; since 0.11.0 the boolean is required, so pass `false` for the ordinary pick ([development.md](docs/development.md) has the `gdbus` line)
 
@@ -119,8 +119,8 @@ Each correction reverses the judgement for one window kind. Two things are not j
 
 Shadow ownership and the small-window floor are judgements, so a **Shadow** or **Corners** correction reverses them.
 
-- **The small-window floor**: a window whose shorter edge is at or under ~38 logical pixels — read on its first stable size — gets no decoration at all, because at that size the corners read as a pill and the shadow swallows the window body. A **Corners** correction on that kind brings it back
-- **Mutter's shadow outside an opaque bare X11 window**: no correction clears it. **Shadow** only stacks ours on top — two shadows, which is what you want during the focus fade — and **Corners** alone leaves the square shadow beside our rounded body
+- **The small-window floor**: a window whose shorter edge is at or under ~38 logical px - read on its first stable size - gets no decoration at all, because at that size the corners read as a pill and the shadow swallows the window body. A **Corners** correction on that kind brings it back
+- **Mutter's shadow outside an opaque bare X11 window**: no correction clears it. **Shadow** only stacks ours on top - two shadows, which is what you want during the focus fade - and **Corners** alone leaves the square shadow beside our rounded body
 - **An alpha buffer that declares every pixel opaque**: it can leave Mutter's shadow beside ours too; the **Shadow** axis retracts ours and leaves Mutter's
 
 [rule-model.md](docs/rule-model.md) is the full model; [decoration-model.md](docs/decoration-model.md) § Known boundaries has the reasoning.
@@ -165,15 +165,15 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 ### In-App Theming
 
-This extension only fixes the window frame. What's inside — title bar, buttons, menus — comes from
+This extension only fixes the window frame. What's inside - title bar, buttons, menus - comes from
 the app's own theme, and no window decoration can change it. For that:
 
-- **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** for GTK3 apps — an unofficial GTK3 port of
+- **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** for GTK3 apps - an unofficial GTK3 port of
   libadwaita, whose README keeps a [list](https://github.com/lassekongo83/adw-gtk3#related-projects)
   of the projects covering Electron, Wine, Java and GTK4 apps that aren't libadwaita.
 - **[Legacy Theme Scheme Auto Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/)**
   so GTK3 apps follow dark mode.
-- **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** for Qt apps — Adwaita-style
+- **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** for Qt apps - Adwaita-style
   title bars.
 
 ### Patched Mutter
@@ -198,10 +198,10 @@ sudo pacman -S mutter-everyx
 ## Architecture & Documentation
 
 For low-level implementation details, design decisions, and benchmarks:
-- [Decoration & Shader Architecture](docs/decoration-model.md) — GPU meshes, pipeline hooks, and memory budgets
-- [Pixel Alignment & Accuracy](docs/decoration-alignment.md) — Upstream Libadwaita curve matching and regression tests
-- [Rule System](docs/rule-model.md) — Process heuristics, window types, and rule precedence
-- [Development & Testing Guide](docs/development.md) — Environment setup and test suite execution
+- [Decoration & Shader Architecture](docs/decoration-model.md) - GPU meshes, pipeline hooks, and memory budgets
+- [Pixel Alignment & Accuracy](docs/decoration-alignment.md) - Upstream Libadwaita curve matching and regression tests
+- [Rule System](docs/rule-model.md) - Process heuristics, window types, and rule precedence
+- [Development & Testing Guide](docs/development.md) - Environment setup and test suite execution
 
 ---
 
