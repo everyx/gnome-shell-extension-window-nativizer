@@ -367,6 +367,43 @@ describe('applyConflictResolutions', () => {
         expect(res.nextEntries[keyWechat]).toEqual(existingEntries[keyWechat]);
         expect(res.nextEntries[keyFirefox]).toEqual(nonConflicting[keyFirefox]);
     });
+
+    // The reply tells the user how many rules landed, so the pass has to name them: a key that is
+    // new, one the user chose to import, and one that only gained a title all count as landed.
+    it('names every key the pass lands, and none it does not', () => {
+        const keyNew = buildRuleKey('gedit');
+        const keyChosen = buildRuleKey('chrome');
+        const keyKept = buildRuleKey('vivaldi');
+        const keyTitled = buildRuleKey('telegram');
+        const keyUnchanged = buildRuleKey('signal');
+
+        const res = applyConflictResolutions(
+            {
+                [keyChosen]: {state: 'corners', title: 'Chrome'},
+                [keyKept]: {state: 'corners', title: 'Vivaldi'},
+                [keyTitled]: {state: 'shadow', title: ''},
+                [keyUnchanged]: {state: 'shadow', title: 'Signal'},
+            },
+            {[keyNew]: {state: 'shadow', title: 'gedit'}},
+            {
+                [keyNew]: {state: 'shadow', title: 'gedit'},
+                [keyChosen]: {state: 'corners,shadow', title: 'Chrome'},
+                [keyKept]: {state: 'corners,shadow', title: 'Vivaldi'},
+                [keyTitled]: {state: 'shadow', title: 'Telegram'},
+                [keyUnchanged]: {state: 'shadow', title: 'Signal'},
+            },
+            {[keyChosen]: 'imported', [keyKept]: 'existing'}
+        );
+
+        expect(res.landedKeys).toEqual([keyNew, keyChosen, keyTitled]);
+    });
+
+    it('lands nothing when every rule was already there and nothing changed', () => {
+        const key = buildRuleKey('wechat');
+        const entries = {[key]: {state: 'corners', title: 'WeChat'}};
+        const res = applyConflictResolutions(entries, {}, {[key]: {state: 'corners', title: 'WeChat'}}, {});
+        expect(res.landedKeys).toEqual([]);
+    });
 });
 
 describe('setWindowRule storage purity', () => {
