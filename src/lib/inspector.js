@@ -175,14 +175,14 @@ export class InspectorService {
     /** Diagnostics fields are added only when asked; nothing here is printed or journaled. */
     _buildReply(win, diagnostics) {
         // With no manager the dictionary is still truthful; prefs refuses a pick it cannot judge.
-        const answer = this._manager?.pickAnswer?.(win) ?? null;
+        const answer = this._manager?.pickAnswer(win) ?? null;
         const properties = {
             ...answer?.properties ?? extractWindowProperties(win, resolveWindowIdentity(win)),
         };
 
         if (diagnostics) {
             Object.assign(properties, extractDiagnosticProperties(
-                win, this._manager?.decorationFor?.(win) ?? null, null, St));
+                win, this._manager?.decorationFor(win) ?? null, null, St));
             // Cache only: a diagnostic must not start the probe it observes; `unknown` = uncached.
             properties.nativeLikeCorners = cachedNativeLikeCorners(
                 this._manager?.classifier, getWindowPid(win));
@@ -209,7 +209,7 @@ export class InspectorService {
             isFullscreen: reading.isFullscreen,
             isMaximized: reading.isMaximized,
             isTiled: reading.tiled,
-            isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped?.(win)),
+            isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped(win)),
             // The read may not have landed; the highlight lives a frame and keeps the old default.
             hasNativeLikeCorners: reading.nativeLikeCorners ?? true,
             hasSsd: reading.hasSsd,

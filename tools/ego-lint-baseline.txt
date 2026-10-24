@@ -7,5 +7,6 @@ metadata/future-shell-version	-	1
 quality/destroy-try-catch	lib/inspector.js	2
 quality/destroy-try-catch	lib/manager.js	1
 quality/destroy-try-catch	lib/overviewDecoration.js	1
+quality/destroy-try-catch	lib/windowDecoration.js	2
 quality/private-api	lib/manager.js	1
 schema-usage/unused-key	-	1
