@@ -145,7 +145,7 @@ GNOME Shell 51 migration guide lists additional upstream breaking changes that w
   nothing on 51 observes being invalidated, including Clutter's own `ClutterOffscreenEffect`.
   Issue #203 was closed on this.
 
-What GJS cannot see at all — the window geometry scale, Mutter's own shadow gates —
+What GJS cannot see at all - the window geometry scale, Mutter's own shadow gates -
 is in [decoration-model.md](decoration-model.md).
 
 ## Known upstream log noise

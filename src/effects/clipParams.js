@@ -29,7 +29,7 @@ export function resolveClipSize(targetSize, windowActorSize) {
     return null;
 }
 
-/** One logical pixel: above the `buffer / scale` residue, below the whole-pixel defects. */
+/** One logical px: above the `buffer / scale` residue, below the whole-pixel defects. */
 export const BODY_SETTLE_TOLERANCE = 1.0;
 
 /** Integer rects, so `!==` is a whole-pixel test; an unreadable size on either side is no move. */

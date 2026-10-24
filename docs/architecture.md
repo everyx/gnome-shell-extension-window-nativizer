@@ -131,7 +131,7 @@ clip's body are computed from the actor's live size at paint time, so a resize n
 geometry the actor has already left.
 
 To prevent fractional-scaling subpixel seams and blurring, both the shadow tiles and the clip
-boundary align to GTK 4.24's physical device-pixel grid:
+boundary align to GTK 4.24's device-pixel grid:
 
 - **Physical scale resolution**: two rects decide two scales, and the decoration reads both. The
   engine sizes an actor's offscreen FBO by `clutter_actor_get_real_resource_scale`, which scans the
@@ -164,7 +164,7 @@ window actor's visibility so a minimized window leaves no strip behind, and it i
 the close animation - a band that outlived its window would go on taking clicks. See
 `decoration-model.md` § The resize band for why it exists and what it costs.
 
-## Effects — the rounded clip
+## Effects: the rounded clip
 
 **Clip the body, not the actor.** A CSD actor is the body plus the shadow ring the client
 painted, so the effect stores that ring as per-side insets and computes the body at paint time
@@ -184,7 +184,7 @@ pixel inside the body, and a zero alpha disables it - which is how overview supp
 Clutter enlarges the offscreen and offsets the actor by fixed amounts, derived from Mutter's
 `_clutter_actor_box_enlarge_for_effects` (`vendor/mutter/clutter-actor-box.c`) rather than typed
 by hand. The clip body is snapped to the physical grid with the same rule the shadow cutlines
-use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which requires the phase of the frame it derives. The clip targets the Wayland surface container (see `lib/clipTarget.js`), whose own transform carries the buffer's subpixel phase, so its local frame is phase-free; the shadow actor passes zero and carries the same phase as its translation. That keeps the phase out of the offscreen FBO's box rounding, where clipping the window actor used to leave the hard straight-edge cut a physical pixel inside the frame at 1.25x. The target and its phase strategy are one report (`resolveClipTarget`, `lib/clipTarget.js`); its window-actor fallback folds the phase back into the clip's geometry, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md` owns the model, that residual limitation and the measurements, plus § Five rules this work generalised. Under fractional scaling, the fragment
+use, so the two stay in phase across fractional scales. The clip's cut and the shadow's cutout are the same body edge, and this extension owns both, so a gap between them is a defect rather than a rounding artefact. The edge is derived twice - here per paint, in the shadow actor per relayout - but both go through `clipFrameFor` in `lib/snap.js`, which requires the phase of the frame it derives. The clip targets the Wayland surface container (see `lib/clipTarget.js`), whose own transform carries the buffer's subpixel phase, so its local frame is phase-free; the shadow actor passes zero and carries the same phase as its translation. That keeps the phase out of the offscreen FBO's box rounding, where clipping the window actor used to leave the hard straight-edge cut a device px inside the frame at 1.25x. The target and its phase strategy are one report (`resolveClipTarget`, `lib/clipTarget.js`); its window-actor fallback folds the phase back into the clip's geometry, where the FBO's box rounding can still part the two cuts. `decoration-alignment.md` owns the model, that residual limitation and the measurements, plus § Five rules this work generalised. Under fractional scaling, the fragment
 shader pushes texture sampling coordinates inward along the boundary normal
 (`max(0.0, d + inset)`), preventing hardware bilinear filtering from
 sampling external stroke bleed on both straight edges and corner arcs.
@@ -199,7 +199,7 @@ surface paints, and the fallback cases are the admitted squares, all in `decorat
 During a window's close transition, Clutter property bindings keep the shadow actor in step with
 the window actor until it is destroyed.
 
-## Effects — shadow baking and slicing
+## Effects: shadow baking and slicing
 
 Why eight slices describe a shadow, and why the middle stays empty, is the model in
 `decoration-model.md`. One baked texture per style is shared by every window of that style, and
@@ -235,7 +235,7 @@ driver texture is not zeroed, and the hollow mask skips interior writes, so uncl
 would show through the rounded corners - draws and flushes, then wraps the texture in a drawing
 pipeline. The GJS uniform setter is probed once per session for the two signatures it ships.
 
-## Effects — the shadow actor
+## Effects: the shadow actor
 
 One shadow actor per drawn shadow, a sibling below the window actor in the window group. Clutter
 bindings carry the map/close/minimize animations and a bind constraint keeps its padded size on the

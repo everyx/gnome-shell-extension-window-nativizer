@@ -45,7 +45,7 @@ shadow: who paints one?    declared margin, SSD frame, Mutter's X11 shadow   ─
 corners: do they
 already look like ours?    the Adwaita look                                  ── yes ─▶ skip
 
-your rules?                per window kind: which axes the user reversed
+a rule?                    per window kind: which axes the user reversed
 any policy?                tiled neighbour, crisp text on fractional scaling
 rounding them?             the client's own ring is cleared exactly when the ring we draw is ours
                            └───────────────────────────────▶ draw
@@ -60,12 +60,12 @@ rounding them?             the client's own ring is cleared exactly when the rin
    - **Shadows** are a *reading*, not an observation: the window declares a margin
      (`buffer_rect - frame_rect`), Mutter says whether it drew the frame instead (SSD),
      and Mutter paints the shadow of a bare XWayland window unless one of `has_shadow()`'s
-     gates excludes it — for a bare window the gate this reading consults is the buffer's own
+     gates excludes it - for a bare window the gate this reading consults is the buffer's own
      alpha channel (*Where we deliberately differ from Mutter*). A declared margin
      is read the way Mutter reads it, as the boolean `has_custom_frame_extents`: **any**
      declared margin is a ring, on one axis or both, 1px as much as 40px. That is why
-     the reading is a pure positivity check — any declared margin on either axis, no SSD
-     frame — carrying the measured margin but no threshold: a 4.0×4.0 margin
+     the reading is a pure positivity check - any declared margin on either axis, no SSD
+     frame - carrying the measured margin but no threshold: a 4.0×4.0 margin
      reads as a ring exactly as a 40px one does. A radius cannot
      answer this question: GTK4 floors a CSD window's margin at 12 logical px
      (`vendor/gtk/gtkwindow.c`: `shadow_width = MAX(css_extents, RESIZE_HANDLE_SIZE)`), so no
@@ -77,12 +77,12 @@ rounding them?             the client's own ring is cleared exactly when the rin
      the ring (*Rounding a window takes its shadow over*) or a rule.
    - **Rounded corners** are *not* observable: a surface never reports whether it is
      already rounded, and Mutter has no concept of it at all. This axis therefore rests
-     on an inference — the Adwaita look implies the Adwaita radius (*When a window's
-     corners already look like ours*) — and it is the only axis with nothing but
+     on an inference - the Adwaita look implies the Adwaita radius (*When a window's
+     corners already look like ours*) - and it is the only axis with nothing but
      inference to go on: the shadow axis at least has the window's own declaration.
      Everything else is rounded to our radius, whether the client rounded itself or not
      (*Which rectangle the clip lands on*).
-3. **User rules** — `src/lib/rules.js`. One state per window kind names the axes
+3. **User rules** - `src/lib/rules.js`. One state per window kind names the axes
    (corners, shadow, resize) whose decision the user reversed. The only layer that may
    overturn an inference.
 4. **State modifiers**. Applied last, on top of
@@ -151,23 +151,23 @@ and all of them are visible in the same place:
 |---|---|
 | libadwaita, libhandy | the process maps `libadwaita-1.so` / `libhandy-1.so` |
 
-> **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 — cleared ring + our shadow + 15px four corners — with the expected top 12px vs 15px delta and the other two corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
+> **QAdwaitaDecorations** (`wayland-decoration-client/libqadwaitadecorations.so`, FedoraQt/QAdwaitaDecorations) is **not** a provider: its `qadwaitadecorations.cpp` rounds only the top two corners (`ceCornerRadius=12`, `arcTo` on `topLeft`/`topRight`), so it cannot supply four-corner Adwaita look. Such windows are now nativized like plain GTK3 - cleared ring + our shadow + 15px four corners - with the expected top 12px vs 15px delta and the other two corners unified by us. Not yet verified on real hardware (requires AUR `qadwaitadecorations`, not installed on Arch dev machine).
 
-> **Qt 6 built-in Adwaita decoration** (`wayland-decoration-client/libadwaita.so`, `qt/qtwayland` `src/plugins/decorations/adwaita/qwaylandadwaitadecoration.cpp`) is **not** a provider: `QWaylandAdwaitaDecoration::paint` (`ceCornerRadius=12`, `arcTo` only on `topLeft`/`topRight`, bottom edge is `lineTo`) and `QWaylandAdwaitaDecoration::margins` (`ceShadowsWidth=10`) show it rounds only the top two corners — bottom two stay square — so it cannot supply four-corner Adwaita look and is nativized the same way (verified against `dev` and `6.8`; cached at `/tmp/qt_qwaylandadwaitadecoration.cpp`).
+> **Qt 6 built-in Adwaita decoration** (`wayland-decoration-client/libadwaita.so`, `qt/qtwayland` `src/plugins/decorations/adwaita/qwaylandadwaitadecoration.cpp`) is **not** a provider: `QWaylandAdwaitaDecoration::paint` (`ceCornerRadius=12`, `arcTo` only on `topLeft`/`topRight`, bottom edge is `lineTo`) and `QWaylandAdwaitaDecoration::margins` (`ceShadowsWidth=10`) show it rounds only the top two corners - bottom two stay square - so it cannot supply four-corner Adwaita look and is nativized the same way (verified against `dev` and `6.8`; cached at `/tmp/qt_qwaylandadwaitadecoration.cpp`).
 
-A GTK **theme** that copies libadwaita's stylesheet — adw-gtk3 and its variants — is
+A GTK **theme** that copies libadwaita's stylesheet - adw-gtk3 and its variants - is
 deliberately not a provider, and cannot be one. GTK3 draws a window's decoration in its
 own `decoration` node, which does not cover the bottom of the window: the same block
 carries the top-only `border-radius` and the `box-shadow` GTK3 reads as the shadow
 width, so a plain GTK3 program keeps a square bottom contour no theme can round. The one
 way a GTK3 program gets four rounded corners is libhandy's `window.csd.unified`, and such
 a program maps `libhandy-1.so`, already caught above. A theme name could therefore only
-ever have *skipped* the bottom two corners of a window that needs them — the bright wedge
+ever have *skipped* the bottom two corners of a window that needs them - the bright wedge
 with a square shadow shoulder at the bottom corners. The theme branch that used to read
 `gtk-theme` was removed for exactly that reason.
 
 The probe reads the process, not the window, so a process that maps libadwaita and
-also opens a window without client-side decoration — a splash, or one forced to SSD —
+also opens a window without client-side decoration - a splash, or one forced to SSD -
 is skipped along with the rest. Both ways of being wrong are harmless: a window we skip
 when we should not keeps the corners its toolkit drew, and a window we clip when we
 need not costs one offscreen pass and comes out identical.
@@ -226,7 +226,7 @@ where the decision left the shadow with the client, reversing it clears the ring
 ours; where the decision drew ours, reversing it retracts. The clip follows the corners, not
 the shadow: a shadow-only reversal leaves the clip at the style radius (the corners are still
 ours), while a radius-0 clip is attached only where a ring has to be cleared without our
-corners. Our shadow is then cast for the body the corners decision leaves —
+corners. Our shadow is then cast for the body the corners decision leaves:
 square when a rule left the corners theirs.
 
 | What the ring holds | Shadow ours? | What happens |
@@ -280,12 +280,12 @@ reaches it (`rule-model.md`).
   wedge between the rounded body and the square shadow shoulder.
   For a floating SSD window the invisible border ring exists and is within reach: measured
   `frame 500×474 / buffer 550×524` (`_GTK_FRAME_EXTENTS=25,25,25,25` on the frame window,
-  `actor 550×524`, first child `550×524`) — `mutter-x11-frames` draws its shadow into that
+  `actor 550×524`, first child `550×524`) - `mutter-x11-frames` draws its shadow into that
   ring, clipping the window takes it over (the ring is ours, so it is cleared, and our shadow
   replaces it), and the shadow actor casts our 15px four-corner rounded shadow around the body.
   When Mutter reports zero insets the ring does not exist: maximized SSD reports
   `buffer 1920×1051 == frame 1920×1051`, `_GTK_FRAME_EXTENTS=0,0,0,0`, `actor 1920×1051`,
-  first child `1920×1051` — actor and child are equal to the frame, no ring to clear, so
+  first child `1920×1051` - actor and child are equal to the frame, no ring to clear, so
   no fallback assumption is made (the surface is the frame). Such windows are also
   structurally ineligible (`maximized/fullscreen`). For a bare XWayland window (no SSD, no
   extents), who paints the shadow is the next bullet.
@@ -299,7 +299,7 @@ reaches it (`rule-model.md`).
   the choice is never "remove it", only "add ours or not". Five of the six gates have a reading
   here: maximized/fullscreen, the tile match and the SSD frame are window state,
   `has_custom_frame_extents` is the declared ring, and the non-opaque test shows as the
-  compositing buffer's own format — four components is RGBA, three is RGB
+  compositing buffer's own format - four components is RGBA, three is RGB
   (`getWindowBufferAlpha` in `src/platform/window.js`). Only the X shape is out of reach.
   A **bare** X11 window (no SSD frame, no declared ring) is therefore split by that reading, and
   the buffer is read only there: a depth-24 client wrapped in a depth-32 SSD frame reports the
@@ -393,7 +393,7 @@ Three things about the extent:
   shadow grabbable is a different proposal, and it was rejected: the gain over 12px is small,
   the swallowed clicks are not, and Mutter moved the other way on purpose
   ([decoration-alignment.md](decoration-alignment.md) has the measurements and the issues).
-- **It is logical pixels at every scale.** `frame_rect` and actor coordinates are both stage
+- **It is logical px at every scale.** `frame_rect` and actor coordinates are both stage
   (logical) units and GTK's 12 is logical too, so the monitor scale cancels out. It is passed
   into the geometry so a caller that cannot report a positive one gets no band, never as a
   multiplier.
@@ -611,7 +611,7 @@ the reading being one-sided; the last is simply not verified yet.
   The margin reading answers null when the frame does not fit inside the buffer at all, and a null
   reading is read as *flat*: the clip is attached at `flatSafeInsets(scale)` instead of at a ring the
   window never declared, so the ring is never cut where it cannot be placed and the corners are
-  still ours, one logical pixel inside. The guess is deliberate rather than a leftover: in the
+  still ours, one logical px inside. The guess is deliberate rather than a leftover: in the
   desktop state a wrong one is recoverable, because a rule can correct the axes it names for that
   kind, so the choice is to read the margin as the case that is most often behind an unreadable one -
   a client that painted to the actor edge - and keep the corners, rather than leave the window square.
@@ -636,7 +636,7 @@ the reading being one-sided; the last is simply not verified yet.
   when we are in fact drawing one, so an SSD frame or a window that does not allow resizing keeps its
   own.
 - **XWayland with HiDPI: the units of the margin reading are unverified.** On Wayland the
-  margin is already in logical pixels and answers "declared or not" directly (*The
+  margin is already in logical px and answers "declared or not" directly (*The
   margins, and the scale question*); whether an XWayland window on a scaled
   monitor reads the same way has not been checked.
 
@@ -647,15 +647,15 @@ two-sided totals as a fallback). MetaWindow scales both
 rectangles by the same window geometry scale, so their difference is the margin the
 client declared. That scale is 1 whenever the logical monitor layout is LOGICAL,
 and the native backend always reports that
-(`meta-window-wayland.c`, `get_window_geometry_scale_for_logical_monitor`) — so on
-Wayland the margin is already in logical pixels, and the predicate only asks whether
+(`meta-window-wayland.c`, `get_window_geometry_scale_for_logical_monitor`) - so on
+Wayland the margin is already in logical px, and the predicate only asks whether
 either axis is positive.
 
 A backend that lays monitors out physically scales the margin by the integer
 monitor scale instead. GJS cannot read that scale:
 `meta_backend_is_stage_views_scaled()` is private, and the layout mode is not in
 the GIR. The margin is therefore left as it comes, which on such a backend reads
-larger than it is — never smaller.
+larger than it is - never smaller.
 
 On the shadow axis that cannot change an answer: the reading only asks whether a
 side is positive, and inflating a non-negative reading keeps a declared margin declared and a
@@ -677,11 +677,11 @@ The result is the resolved style: the corner radius, up to three shadow layers, 
 libadwaita paints around a decorated window - plus, since a style change is not always a shadow
 change, whether that change animates and whether the window is drawing the tiled ring. The style
 resolver in `src/lib/style.js` is what returns it and `tools/gen-style.mjs` is where its fields come from. Fullscreen and maximized windows get neither outline nor
-shadows — they are flush with the screen edge, where a shadow would be a line on it.
+shadows - they are flush with the screen edge, where a shadow would be a line on it.
 Tiled windows drop the outline and rounded corners (radius 0); the 1px tiled ring is still
 drawn on every edge, so the client's own ring is cleared for ours to replace. A tile match only
 drops the shadow decision, never the ring we draw.
-High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
+High contrast - upstream's `@media (prefers-contrast: more)` - replaces the shadow set
 and deepens the outline from 7% to 30%.
 Flat ringless windows (`hasRing=false`, `ring.clear=false`, such as WeChat) apply a device-derived safe inward inset (`flatSafeInsets`: `ceil(scale)` device px for the 1px client border plus one spare device px on fractional scales, exactly `FLAT_SAFE_INSET` at integer scales) to excise client-drawn rectangular borders outside the clip body. With the client's rigid rectangular stroke excised, the window receives the native Adwaita inner white outline and box shadow across its entire perimeter, eliminating double-line stroke artifacts, corner seam gaps, and cut-point white fringes.
 
@@ -710,7 +710,7 @@ sessions read 0.514-0.681, and a failure inside the 0.06 marginal band exits 2 s
 once more before it fails.
 
 That per-window cost is what `nativeLikeCorners.js` exists to avoid paying where the
-clip would be an identity — a window already drawn with libadwaita's radius.
+clip would be an identity - a window already drawn with libadwaita's radius.
 
 The shadow's buffer is small because a shadow is a blurred rounded rectangle: its pixels
 depend on the window's size only through the length of its straight edges, so four corners
@@ -822,8 +822,8 @@ reported as a phase. A read whose magnitude exceeds
 `PHASE_MAGNITUDE_BOUND` (2 logical px, far above the sub-one-pixel range of a real phase) is
 likewise unavailable, but the journal still gets the raw value so the misread is visible. The bound
 is generous: Mutter's `surface_container_apply_transform` shifts a layout coordinate to the nearest
-physical grid line, so a real phase is smaller than half a physical pixel - below `1 / scale`
-logical px, strictly under one logical pixel at any monitor scale - while a layout position or a
+physical grid line, so a real phase is smaller than half a device px - below `1 / scale`
+logical px, strictly under one logical px at any monitor scale - while a layout position or a
 transform read from the wrong actor is hundreds of pixels.
 
 **The ordering that keeps the read fresh is an assumption, not something we own.**
@@ -833,7 +833,7 @@ allocation in the actor's init, before the extension connects; the vendored
 `meta-window-actor-wayland.c` shows that order, and `tools/check-upstream-mirrors.mjs` asserts the
 wiring so a bump that moves it fails the style gate. It is a recorded boundary: if the wiring
 moves, or we connect earlier, the shadow's cutout trails the clip's cut by one frame - up to one
-physical pixel, the hairline the straight-edge probe caught at 1.25x when the read lagged a
+device px, the hairline the straight-edge probe caught at 1.25x when the read lagged a
 position. The fix, if it ever fires, is a settled-transform trigger on the surface container plus
 a `ShadowActor` harness that exercises the ordering; neither is built while the assertion holds.
 
@@ -865,7 +865,7 @@ scoped to this resolver; the helpers keep their defaults for every other caller.
 **The mirror's snap is `roundf`, not `Math.round`.** `Math.round` sends an exact half toward
 +Infinity while `roundf` sends it away from zero, so on a negative half they differ by one snapped
 integer: at 1.25, `relX = -2` gives `-2.5`, where `roundf` snaps to `-3` and `Math.round` stays at
-`-2` - 0.8 logical px, one physical pixel of offset. An earlier revision claimed this could not
+`-2` - 0.8 logical px, one device px of offset. An earlier revision claimed this could not
 happen; that holds on the 4/3 path, where an integer times 4/3 never ends in .5, but not in general:
 on a 1.25 monitor the negative halves are reachable whenever `relX ≡ 2 (mod 4)`, and likewise at 1.5.
 `roundHalfAwayFromZero` (`platform/numeric.js`) encodes `roundf`'s rule and leaves the 4/3 path
@@ -971,8 +971,8 @@ issue #7903).
 ### Retaining rounded corners through the shaped-texture mask
 
 The FBO has no mipmaps, so the fix is to not use one in the overview at all. Mutter exposes
-`Meta.ShapedTexture.set_mask_texture()` — the A_8 alpha mask it already uses for shaped X11
-windows — and its paint path samples that mask as a second layer of the *same* Cogl pipeline
+`Meta.ShapedTexture.set_mask_texture()` - the A_8 alpha mask it already uses for shaped X11
+windows - and its paint path samples that mask as a second layer of the *same* Cogl pipeline
 as the window colour (`get_masked_pipeline()` in `src/compositor/meta-shaped-texture.c`),
 under the same `LINEAR_MIPMAP_NEAREST` minification the mipmap tower gets. Rounding therefore
 rides Mutter's native hardware mipmapping: the thumbnail is rounded and exactly as sharp as an
@@ -982,15 +982,15 @@ Entering the overview, the manager tells every decoration, which:
 
 - Suspends the desktop clip effect, unless the window falls back to it (see below). It is the FBO
   that blurs, so it must not stay attached while the mask or the square path is in use.
-- Builds a rounded A_8 mask matching the clip's body geometry — insets and radius scaled from
-  logical pixels into the client's buffer pixels — and installs it with `set_mask_texture()`.
+- Builds a rounded A_8 mask matching the clip's body geometry - insets and radius scaled from
+  logical px into the client's buffer pixels - and installs it with `set_mask_texture()`.
   Alpha is 255 over the body, carries the corner coverage in the four corner squares, and is
   255 outside the body unless the ring is cleared (flat windows): the same coverage the desktop
   shader computes. `tools/test-e2e.sh` checks the preview corner's 50% contour against the same
   corner on the desktop and against a live libadwaita window's preview; at preview resolution it
   cannot pin the per-byte coverage. `set_auto_mipmap(true)` keeps it valid under the mipmap filter.
-- Drops the window's **surface container** — the window actor's child that every preview clone
-  paints through — to 254. Mutter consults the mask only on its blended path
+- Drops the window's **surface container** - the window actor's child that every preview clone
+  paints through - to 254. Mutter consults the mask only on its blended path
   (`use_opaque_region = stex->opaque_region && opacity == 255`,
   `vendor/mutter/meta-shaped-texture.c`, asserted by `tools/check-upstream-mirrors.mjs`), and an
   opaque client declares a full-surface opaque region, so the fast path would paint square
@@ -1079,7 +1079,7 @@ XWayland, for the window whose corners another surface paints, and for the fallb
 mask cannot be built: rounded, and blurrier. The clip never touches the mask slot, so the desktop
 is left exactly as Mutter had it either way.
 
-Upstream has no native window rounded-clip to fall back on —
+Upstream has no native window rounded-clip to fall back on:
 `Meta.BackgroundContent.set_rounded_clip_radius` is a deliberately non-generic background-only
 implementation (MR !1717) and the Clutter rounded-corner-clipping roadmap item (issue #2087) is
 still open.
@@ -1087,9 +1087,9 @@ still open.
 **Cost.** The mask is one byte per texel, generated once per window per overview entry and rebuilt
 when the mask key moves - the buffer, its scale, the resolved insets, radius, erase or monitor
 scale (only the four corner squares are computed; the body is a memset) - and released on exit. Its
-resolution is the largest preview the overview can draw — Shell's `WINDOW_PREVIEW_MAXIMUM_SCALE`
+resolution is the largest preview the overview can draw - Shell's `WINDOW_PREVIEW_MAXIMUM_SCALE`
 (0.95, js/ui/workspace.js) applied to the window at the monitor's scale, expressed in buffer
-texels as `0.95 * monitorScale / bufferScale` — with a hard ceiling of 2560 texels on the
+texels as `0.95 * monitorScale / bufferScale` - with a hard ceiling of 2560 texels on the
 longest side. The ceiling is calibrated against rendered corners: the arc turns visibly
 polygonal below roughly 0.7 mask texels per screen pixel and is indistinguishable from a
 full-resolution mask at 1.0, so 2560 keeps a 4K window's arc above that threshold and degrades
@@ -1153,7 +1153,7 @@ recomputing matrices per frame, and the clone is a plain scene-graph child of th
 
 The clip and the shadow describe the same body, so they read it from the same call. The authority is chosen by `resolveBodyAuthority(targetRead, windowActorRead, resizeInFlight)`: the clip target's own read - the surface container - in steady state, and the window actor's read while a resize is in flight, because the actor takes its new size a frame or two before the container's allocation follows, so the actor is the fresh one and the cut must track the frame the user is dragging rather than the older, smaller box. The other read stays the fallback when the preferred one has no extent, exactly as `resolveClipSize` had it. The two body reads and the window's own size are taken live at paint (`resolvePaintBody`): `WindowDecoration` hands both cuts one plan - the reference points the hold compares against (`previousBody`, `previousAuthority`, `previousWindowSize`) and the consecutive pair-disagreement count that bounds the hold, owned by `BodyPlan` (`src/effects/bodyPlan.js`) and handed over as the pass found it, before it advances; the insets, scale and phase strategy travel through the setters as before - and the clip's `vfunc_paint_target` and the shadow's `_relayout` each settle the body from the live reads there, so the cast and its eight slices derive from the same body the cut is drawing that frame. The plan decides no body: it is the pass's data, and the geometry clock is the frame the compositor paints. Reading the window's own size live (`frameRect`, else `bufferRect`) matters because it is what separates a resize from a body that moved on its own, and a resize must be seen on the frame it starts rather than 50 ms later; only its previous value stays on the pass clock. Healthy agreement (`frameRect == bufferRect == windowActorAllocation`) produces a byte-identical cast, so nothing changes in the ordinary case.
 
-A disagreement the settle *decided* is not a defect and is not reported. When the two reads disagree, the window's own size usually confirms one of them (`resolveBodyAuthority` above), and the authority being the other one is the settle doing its job: comparing that rejected read with the shadow's bound box would flag every resize that ends with a container a frame behind, which is exactly the state the settle exists to absorb. So the WARNING speaks only while the settle is **undecided** — holding its previous body, or out of strikes with no confirmation — which is `settleUndecided(unsettled, pairDisagreementStrikes)` and needs both signals the settle already returns. Then one WARNING per episode names the authority, the shadow's own body and the window actor with the signed delta, each with two decimals (agreement re-arms it). The tolerance is one logical pixel rather than the old half: at a fractional monitor scale the container's logical body is `buffer / scale` while the window actor's allocation is an integer, so the two differ by a sub-pixel residue by construction, and half a pixel sat below that and false-positived on ordinary windows. Health means it never fires — the e2e log audit treats an unexpected WARNING as a failure — and on a real machine it is what leaves the evidence when nothing the settle knows can explain a disagreement.
+A disagreement the settle *decided* is not a defect and is not reported. When the two reads disagree, the window's own size usually confirms one of them (`resolveBodyAuthority` above), and the authority being the other one is the settle doing its job: comparing that rejected read with the shadow's bound box would flag every resize that ends with a container a frame behind, which is exactly the state the settle exists to absorb. So the WARNING speaks only while the settle is **undecided** - holding its previous body, or out of strikes with no confirmation - which is `settleUndecided(unsettled, pairDisagreementStrikes)` and needs both signals the settle already returns. Then one WARNING per episode names the authority, the shadow's own body and the window actor with the signed delta, each with two decimals (agreement re-arms it). The tolerance is one logical px rather than the old half: at a fractional monitor scale the container's logical body is `buffer / scale` while the window actor's allocation is an integer, so the two differ by a sub-pixel residue by construction, and half a pixel sat below that and false-positived on ordinary windows. Health means it never fires - the e2e log audit treats an unexpected WARNING as a failure - and on a real machine it is what leaves the evidence when nothing the settle knows can explain a disagreement.
 
 **An unsettled body is not acted on.** The settle runs on the paint clock, but it holds the previous settled body while the pair is uncertain. When the container's read and the window actor disagree by more than `BODY_SETTLE_TOLERANCE` (1.0) logical px and no resize is in flight, at least one of the two reads is stale. The window's own size (`frameRect`, else `bufferRect`) is the independent reading that resolves it: whichever of the two reads matches it within the tolerance is the fresh one and is acted on, if exactly one does. When neither or both match, the disagreement is held, but not indefinitely - `WindowDecoration` counts consecutive passes and after `INVARIANT_STRIKES` (2) the window actor, the documented fallback for an unusable read, is preferred over holding forever. When the pair agrees but the body moved by `BODY_SETTLE_TOLERANCE` or more since the previous pass while the window's own size did not, the pair is stale together - a focus hand-off can leave both trailing by the same whole pixel, which the pair comparison reads as agreement - and the window's own size separates a moving body from a resizing window; when the window resized too, the body is genuinely new and is used. A resize in flight is the case the pair disagreement is already resolved: the window actor is the fresh read by construction, so the lagging container is expected and the actor is acted on instead of held. A decoration episode boundary drops the reference points (`BodyPlan.reset()`): the reads a hold compares against belonged to the episode that ended, so a hold that outlived the gap would draw the clip and the cast at the body they had before it - the same reason the ring hold drops its buffer witness. While a body is held the geometry path keeps the previous settled body: the clip's cut and the shadow's cast both keep the geometry they had, and the visible decoration does not shift. The fresh authority is still returned, and a hold is one of the two states the body-authority warning above speaks for, so a hold that outlives its episode still leaves a record; the between-pass hold re-reads the live quantities, so once the body stops moving the fresh body is acted on. A degenerate target read is the documented window-actor fallback, not a disagreement, and does not defer.
 
@@ -1204,9 +1204,9 @@ A line from them means an invariant was violated, never that the decoration was 
 
 **The shadow is not resized to match; only its cast follows the authority.** That is deliberate, and it was verified rather than assumed: driving the authority larger than the shadow actor's own allocation in a nested session at 1.3333 (control 700×500; +28 ⇒ +28.5 logical px of visible shadow; +120 ⇒ +120) showed the added area is painted. `ShadowActor` overrides no paint volume, so a custom paint node is not clipped by the allocation, and the extra slices appear.
 
-**A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip — which re-reads its size at paint — moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
+**A target read that changes in place must schedule a relayout.** `setClipTarget()` compares not only the target reference but the read it was given: the same container resized is a change, and an unknown↔known read is a change too. Without that comparison the shadow kept a stale cast while the clip - which re-reads its size at paint - moved its cut, which is exactly the "shadow edge shifts" symptom on a window whose target resized without the window actor following.
 
-**The pass's own two reads must agree.** The body-authority warning above only fires when the authority has already moved away from the actor, so it is blind to the transient where *the authority itself* is briefly wrong: a Wayland window whose buffer rect lags its window actor allocation (or the reverse) has both cuts faithfully following a body that is 2px narrower, and nothing in the authority comparison can say which of the two reads was behind. Every pass that assembles a decoration reading therefore compares the window's `bufferRect` with the window actor's allocation (`bufferAllocationWarning`, `src/lib/diagnosticInvariants.js`): they are equal in health (`frameRect == bufferRect == windowActorAllocation`), so a disagreement names both extents and the window in one `[window-nativizer]` WARNING. Only the extents are compared — origins may legitimately differ by an animation's translation — and one pass is *not* enough: a resize in flight shows the buffer and the allocation settling one pass apart, so the latch requires `INVARIANT_STRIKES = 2` consecutive violating passes and re-arms on agreement. That keeps a real lagging read (which survives the next pass) loud and every resize silent.
+**The pass's own two reads must agree.** The body-authority warning above only fires when the authority has already moved away from the actor, so it is blind to the transient where *the authority itself* is briefly wrong: a Wayland window whose buffer rect lags its window actor allocation (or the reverse) has both cuts faithfully following a body that is 2px narrower, and nothing in the authority comparison can say which of the two reads was behind. Every pass that assembles a decoration reading therefore compares the window's `bufferRect` with the window actor's allocation (`bufferAllocationWarning`, `src/lib/diagnosticInvariants.js`): they are equal in health (`frameRect == bufferRect == windowActorAllocation`), so a disagreement names both extents and the window in one `[window-nativizer]` WARNING. Only the extents are compared - origins may legitimately differ by an animation's translation - and one pass is *not* enough: a resize in flight shows the buffer and the allocation settling one pass apart, so the latch requires `INVARIANT_STRIKES = 2` consecutive violating passes and re-arms on agreement. That keeps a real lagging read (which survives the next pass) loud and every resize silent.
 
 **Reusing a reading is only sound where the consumers accept the same inputs.** Two resolvers in
 one pass can name the same actor and still answer different questions: the clip's target resolution
@@ -1220,9 +1220,9 @@ conditions differ, the second resolution is not duplication but a different ques
 
 The container is not introspectable, so it is identified structurally, by one rule shared by the clip resolver and both phase readers (they take the same `St`, so `isForeignWidget` uses the live `instanceof St.Widget` branch everywhere instead of a global or a constructor-name guess):
 
-1. exactly one non-foreign child of the window actor — that child, unchanged;
-2. any non-foreign child without an allocation — return it, and the resolver defers, keeping the last good target (it may be the container waiting for its first buffer);
-3. otherwise exactly one non-foreign child whose box passes `isCompatibleSurfaceGeometry` — that child, the container path;
-4. none, more than one, or another child that is buffer-sized but off the buffer origin — null, and the clip falls back to the window actor.
+1. exactly one non-foreign child of the window actor - that child, unchanged;
+2. any non-foreign child without an allocation - return it, and the resolver defers, keeping the last good target (it may be the container waiting for its first buffer);
+3. otherwise exactly one non-foreign child whose box passes `isCompatibleSurfaceGeometry` - that child, the container path;
+4. none, more than one, or another child that is buffer-sized but off the buffer origin - null, and the clip falls back to the window actor.
 
-Branch 3 is what separates Mutter's own fullscreen backing actor (a plain `Clutter.Actor`, non-foreign by type, monitor-sized, inserted by `do_sync_geometry` for a letterboxed fullscreen window) from the buffer-sized container. In the opaque-fullscreen shape both are monitor-sized, so two candidates pass and branch 4 falls back rather than guess. The residual, recorded rather than hidden: when a container is buffer-sized but off the buffer origin and another child is compatible, geometry cannot separate them, so that reconcile stays on the window-actor fallback — the known-worse phase path, where the two cuts can briefly part by the fractional-scale hairline. That is an appearance difference, never a deformation, and the next reconcile re-resolves.
+Branch 3 is what separates Mutter's own fullscreen backing actor (a plain `Clutter.Actor`, non-foreign by type, monitor-sized, inserted by `do_sync_geometry` for a letterboxed fullscreen window) from the buffer-sized container. In the opaque-fullscreen shape both are monitor-sized, so two candidates pass and branch 4 falls back rather than guess. The residual, recorded rather than hidden: when a container is buffer-sized but off the buffer origin and another child is compatible, geometry cannot separate them, so that reconcile stays on the window-actor fallback - the known-worse phase path, where the two cuts can briefly part by the fractional-scale hairline. That is an appearance difference, never a deformation, and the next reconcile re-resolves.

@@ -29,10 +29,10 @@ uniform float uRadius;    // Corner radius in px
 uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disables
 uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
-uniform float uScale;       // Screen px per shader unit, not FBO px
+uniform float uScale;       // Device px per shader unit, not FBO px
 // The FBO's oversampling is averaged on the blit into the monitor-sized allocation, so the outline
 // ring, the clear-stroke inset and the AA ramp convert with the monitor scale. The FBO's scale
-// instead draws a 1px outline at 1/scale units: 0.5 logical px, 0.625 screen px, where unpatched
+// instead draws a 1px outline at 1/scale units: 0.5 logical px, 0.625 device px, where unpatched
 // mutter allocates ceilf (1.25) = 2.
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
@@ -72,7 +72,7 @@ const CODE = `
     float inSquare = 1.0 - max(beyond.x, beyond.y);
 
     if (uOutline.a > 0.0) {
-        // Physical 1px outline centred half a physical pixel inside the body:
+        // A 1px outline at device resolution, centred half a device px inside the body:
         float m = clamp((d + 0.5) * uScale + 1.0, 0.0, 1.0) * inSquare * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
@@ -273,7 +273,7 @@ export const RoundedClipEffect = GObject.registerClass({
             this._paint.scale = changes.scale;
         }
 
-        // Never cached: it makes one unit one logical pixel; a stale box drew the arc off edge.
+        // Never cached: it makes one unit one logical px; a stale box drew the arc off edge.
         const target = this._readTargetSize();
         // Extent is what Clutter allocated (it beats the derivation); the origin is derived on it.
         const box = offscreenPaintBox(size, scale, target, this._scaleCandidates);
