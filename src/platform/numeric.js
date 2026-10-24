@@ -3,6 +3,9 @@
 /** `GSK_SNAP_EPSILON` in gskrectprivate.h, as of GTK 4.24. */
 export const SNAP_EPSILON = 0.001;
 
+/** How far a scale may drift from a whole number and still read as one; upstream holds scales as float32. */
+export const INTEGRAL_EPSILON = 0.001;
+
 /** Matches GTK's `GskSnapDirection`. */
 export const SnapDirection = Object.freeze({
     FLOOR: 1,

@@ -11,6 +11,7 @@ import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
 import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
+import {INTEGRAL_EPSILON} from '../platform/numeric.js';
 
 /** 2× the radius: below it the corner arcs overlap, so no rounded rect fits a 1×1 helper. */
 export const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
@@ -135,7 +136,7 @@ export function clientDeclaredRing({
 export function isFractionalScale(scale) {
     if (scale === null || scale === undefined || !Number.isFinite(scale) || scale <= 0)
         return false;
-    return Math.abs(scale - Math.round(scale)) > 0.001;
+    return Math.abs(scale - Math.round(scale)) > INTEGRAL_EPSILON;
 }
 
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
