@@ -494,22 +494,27 @@ callback and nothing else. A single-statement `if` takes no braces, which is eve
 **Absence.** `null` means there is no value: a read that could not answer. `undefined` means the
 caller passed nothing, or the property does not exist. Nothing returns `undefined` - a function that
 cannot answer says so with `null`. Code crossing a boundary (parsed JSON, a D-Bus reply, a GObject
-property) tests both, because either can arrive there. A fallback is `??`, not `||`: `||` also
-swallows `0` and the empty string.
+property) tests both, because either can arrive there. A fallback is `??`, not `||`, except where
+swallowing `0`, `''` or `false` is the intent: a divisor guard (`bufferScale || 1`), an empty title
+(`title || existing?.title`), a boolean turned into `null`.
 
 **Vocabulary.** The verb is the contract:
 
 | Verb | Contract |
 |---|---|
-| `get*` | a raw accessor: it may throw, and it may answer something unusable |
-| `read*` | answers `null` instead of throwing, always |
+| `get*` | the platform value, with the fallback its caller chose: `strict` asks for `null`, otherwise a safe default |
+| `read*` | a value built from one or more reads; never throws, and its failure answer cannot be mistaken for data |
 | `resolve*` | several inputs in, one decided value out |
 | `is*` | a predicate on a value it is handed |
 | a domain prefix (`offscreen*`, `shadow*`, `clip*`, `snap*`) | pure arithmetic in that domain |
 
-**Parameters.** Positional on a per-frame path, a record past three arguments on a path that runs
-when state changes. The split is not readability: a record is an allocation, and one per frame in a
-paint path is the thing `clipEffect.js` already goes out of its way to avoid.
+**Parameters.** Positional, including past three, while the arguments are of different kinds and
+read at the call site. A record appears for one of two reasons: several optional values travelling
+together (`{wmClassOverride, classifier}`, `{animate, nowMs}`, `{strict}`), or a call site that
+would otherwise be a row of same-shaped values (`declaredSides`'s five numbers,
+`chooseWindowIdentity`'s four strings). One optional argument does not earn a record; it stays a
+trailing `= null`. A per-frame path is positional without exception, because a record is an
+allocation.
 
 **Allocation.** A writer on a per-frame path takes its output container as the first argument and
 returns nothing (`bandParamsInto`, `snapSliceBoxesInto`, `clipValuesInto`). Everything else returns

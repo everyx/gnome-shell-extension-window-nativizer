@@ -11,7 +11,7 @@ const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
 const CLEAR_COLOR_BUFFER = 1; // Cogl BUFFER_BIT_COLOR (GIR omits enum)
 
-const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
+const OPAQUE_WHITE = new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
 let destroyed = false; // sealed after destroy()
@@ -97,7 +97,7 @@ function bake(context, radius, shadows) {
     bakeDiagnostic.check(null);
 
     const pipeline = Cogl.Pipeline.new(context);
-    pipeline.set_color(opaqueWhite());
+    pipeline.set_color(OPAQUE_WHITE);
     pipeline.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE));
     upload(pipeline, 'winSize', [window, window]);
     upload(pipeline, 'radius', [radius]);
@@ -117,7 +117,7 @@ function bake(context, radius, shadows) {
     context.flush();
 
     const drawing = Cogl.Pipeline.new(context);
-    drawing.set_color(opaqueWhite());
+    drawing.set_color(OPAQUE_WHITE);
     drawing.set_layer_texture(0, texture);
     return drawing;
 }
