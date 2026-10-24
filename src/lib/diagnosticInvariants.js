@@ -169,7 +169,7 @@ function phaseSummary(phase) {
     return `(${fmt2(phase.x)},${fmt2(phase.y)})`;
 }
 
-/** Two decimals, so a sub-pixel phase stays visible. */
-function fmt2(value) {
+/** Two decimals, so a sub-pixel difference shows in the warning that carries it. */
+export function fmt2(value) {
     return Number(value).toFixed(2);
 }
