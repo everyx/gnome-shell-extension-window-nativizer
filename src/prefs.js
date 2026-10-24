@@ -203,7 +203,7 @@ function _buildRuleRow(rowData, ctx, onRefresh) {
                 title: asMarkup(axisName(axis)),
                 sensitive: false,
             });
-            const reason = axisUnavailableReason(axis, decoratable, properties);
+            const reason = axisUnavailableReason(axis, {decoratable, properties});
             const reasonLabel = new Gtk.Label({
                 label: reason,
                 css_classes: ['dim-label'],
@@ -358,7 +358,7 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
                     if (!isWindowAlive())
                         return;
 
-                    const {nextEntries} = applyConflictResolutions(
+                    const {nextEntries, landedKeys} = applyConflictResolutions(
                         existing,
                         importResult.nonConflictingEntries,
                         importResult.cleanImported,
@@ -366,18 +366,7 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
                     );
                     setAllRuleEntries(settings, nextEntries);
 
-                    const actuallyImportedKeys = [];
-                    for (const [k, entry] of Object.entries(importResult.cleanImported)) {
-                        const existingEntry = existing[k];
-                        if (!existingEntry)
-                            actuallyImportedKeys.push(k);
-                        else if (resolutions[k] === 'imported')
-                            actuallyImportedKeys.push(k);
-                        else if (resolutions[k] === undefined && existingEntry.state === entry.state && !existingEntry.title && entry.title)
-                            actuallyImportedKeys.push(k);
-                    }
-
-                    if (actuallyImportedKeys.length === 0) {
+                    if (landedKeys.length === 0) {
                         scheduleRenderRules();
                         window.add_toast(new Adw.Toast({
                             title: _('All rules in clipboard are already up to date'),
@@ -385,9 +374,9 @@ function _importFromClipboard(ctx, scheduleRenderRules) {
                         return;
                     }
 
-                    scheduleRenderRules({importedKeys: actuallyImportedKeys});
+                    scheduleRenderRules({importedKeys: landedKeys});
 
-                    const totalCount = actuallyImportedKeys.length;
+                    const totalCount = landedKeys.length;
                     const title = ngettext(
                         'Imported %d rule successfully',
                         'Imported %d rules successfully',
