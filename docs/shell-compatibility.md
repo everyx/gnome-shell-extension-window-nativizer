@@ -98,7 +98,7 @@ of the two lines share which shape is in the table above, computed rather than r
 ## Re-checking the mirrored monitor scan on a Mutter bump
 
 `tools/check-upstream-mirrors.mjs` pins the phase arithmetic to the vendored
-`meta-window-actor-wayland.c`, but `resolveHighestScaleMonitorIndex` (`src/platform/window.js`) also
+`meta-window-actor-wayland.c`, but `resolveHighestScaleMonitorIndex` (`src/platform/monitor.js`) also
 re-runs the monitor-selection rule behind `meta_window_get_highest_scale_monitor`: max scale over
 the logical monitors whose layout rect intersects the window frame. That rule lives in
 `meta_monitor_manager_get_highest_scale_monitor_from_rect` (`meta-monitor-manager.c`), which is not

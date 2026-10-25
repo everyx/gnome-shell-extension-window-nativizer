@@ -4,8 +4,8 @@ import GLib from 'gi://GLib';
 
 import {isDecoratableWindowType} from './detector.js';
 import {Subscriptions} from './subscriptions.js';
-import {getSurfaceContainer, getWindowActor, getWindowPid, getWindowType}
-    from '../platform/window.js';
+import {getSurfaceContainer} from '../platform/surfaceContainer.js';
+import {getWindowActor, getWindowPid, getWindowType} from '../platform/window.js';
 
 /** A drag delivers its signals in bursts; the geometry path is designed for one pass per burst. */
 export const RECONCILE_DEBOUNCE_MS = 50;

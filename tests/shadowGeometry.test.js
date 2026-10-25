@@ -7,7 +7,7 @@ import {clipTargetReadChanged, settleUndecidedState, shadowBodyWarning, shadowCa
     from '../src/effects/shadowGeometry.js';
 import {clipFrameFor, snapActorBodyFrame, snapSliceRects} from '../src/lib/snap.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
-import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/window.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/windowPhase.js';
 import {resolveClipPhase} from '../src/lib/clipTarget.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {checkDecorationEligibility} from '../src/lib/detector.js';

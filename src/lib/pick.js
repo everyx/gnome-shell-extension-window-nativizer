@@ -12,14 +12,8 @@ import {
     readWindow,
     isWindowReading,
 } from './window.js';
-import {
-    getWindowSubpixelOffset,
-    getAppliedSubpixelPhase,
-    getWindowClientType,
-    getWindowFrameRect,
-    getWindowBufferRect,
-    getWindowActor,
-} from '../platform/window.js';
+import {getWindowActor, getWindowBufferRect, getWindowClientType, getWindowFrameRect} from '../platform/window.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/windowPhase.js';
 
 export {WindowClientType};
 

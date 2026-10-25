@@ -18,15 +18,8 @@ import {Subscriptions} from './subscriptions.js';
 import {WindowClientType} from './mutterRules.generated.js';
 import {isPaintableFrame} from '../effects/clipParams.js';
 import {getWorkspaceCount} from '../platform/display.js';
-import {
-    countSurfaceActorsCoveringBox,
-    getWindowActor,
-    getWindowFrameRect,
-    getOverviewPreviews,
-    getWindowSurfaceContainer,
-    getWindowClientType,
-    isWindowOnAllWorkspaces,
-} from '../platform/window.js';
+import {countSurfaceActorsCoveringBox, getWindowSurfaceContainer} from '../platform/surfaceContainer.js';
+import {getOverviewPreviews, getWindowActor, getWindowClientType, getWindowFrameRect, isWindowOnAllWorkspaces} from '../platform/window.js';
 
 /** Thumbnails never scale past this fraction, which bounds the resolution the mask needs. */
 const OVERVIEW_PREVIEW_MAX_SCALE = 0.95;

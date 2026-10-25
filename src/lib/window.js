@@ -8,34 +8,10 @@ import {
 } from './rules.js';
 import {insetsFromRects} from './frame.js';
 import {clientDeclaredRing} from './detector.js';
-import {
-    isWindowMaximized,
-    isWindowFullscreen,
-    isWindowTiled,
-    getWindowFrameRect,
-    getWindowBufferRect,
-    getWindowClientType,
-    getWindowType,
-    getWindowPid,
-    getWindowTransientFor,
-    isWindowAttachedDialog,
-    isWindowAllowsResize,
-    isWindowDecorated,
-    getWindowBufferAlpha,
-    isWindowMaximizedHorizontally,
-    isWindowMaximizedVertically,
-    isWindowAppearsFocused,
-    getWindowTileMatch,
-    getWindowFromActor,
-    findMetaWindow,
-    getTrackedAppId,
-} from '../platform/window.js';
-import {
-    getPhysicalMonitorScale,
-    getWindowScaleCandidates,
-    resolveMonitorBounds,
-    getWindowActors,
-} from '../platform/display.js';
+import {getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowTiled} from '../platform/window.js';
+import {findMetaWindow, getTrackedAppId, getWindowFromActor} from '../platform/windowActor.js';
+import {resolveMonitorBounds, getWindowActors} from '../platform/display.js';
+import {getPhysicalMonitorScale, getWindowScaleCandidates} from '../platform/monitor.js';
 import {safeRead, readWindowString} from '../platform/read.js';
 import {offscreenScaleCandidates} from './offscreenBox.js';
 

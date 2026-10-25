@@ -1,14 +1,9 @@
 /** The clip target and the phase strategy it implies: the surface container, else the actor. */
 
 import {WindowClientType} from './mutterRules.generated.js';
-import {
-    getSurfaceContainer,
-    getWindowClientType,
-    getWindowSubpixelOffset,
-    isCompatibleSurfaceGeometry,
-    isForeignWidget,
-    isUnallocatedSurfaceBox,
-} from '../platform/window.js';
+import {getSurfaceContainer, isCompatibleSurfaceGeometry, isForeignWidget, isUnallocatedSurfaceBox} from '../platform/surfaceContainer.js';
+import {getWindowClientType} from '../platform/window.js';
+import {getWindowSubpixelOffset} from '../platform/windowPhase.js';
 import {clipFrameFor, ZERO_PHASE} from './snap.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;

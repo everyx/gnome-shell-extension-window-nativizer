@@ -6,7 +6,7 @@ import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
 import {twoDecimals} from '../lib/diagnosticInvariants.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
-import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/window.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/windowPhase.js';
 
 export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 

@@ -15,7 +15,7 @@ import {shadowStyleFrom} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
-import {findMetaWindowCached} from '../platform/window.js';
+import {findMetaWindowCached} from '../platform/windowActor.js';
 import {ShadowFadeStateMachine} from './shadowFade.js';
 
 const SYNCED_PROPERTIES = [

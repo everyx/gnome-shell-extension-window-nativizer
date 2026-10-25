@@ -1,4 +1,3 @@
-import {findMetaWindow, resolveWindowMonitorScale, resolveWindowScaleCandidates} from './window.js';
 
 export function getDisplay(customDisplay = null) {
     return customDisplay ?? globalThis.global?.display ?? null;
@@ -66,24 +65,6 @@ export function getMonitorGeometry(monitorIndex) {
         return null;
     }
     return null;
-}
-
-/** Highest scale the frame intersects, Mutter's real_resource_scale rule, not get_monitor(). */
-export function getPhysicalMonitorScale(actorOrWin) {
-    if (!actorOrWin)
-        return null;
-
-    const win = findMetaWindow(actorOrWin);
-    return win ? resolveWindowMonitorScale(win) : null;
-}
-
-/** The candidate scales the clip picks the FBO's scale from, so no paint re-reads the display. */
-export function getWindowScaleCandidates(actorOrWin) {
-    if (!actorOrWin)
-        return null;
-
-    const win = findMetaWindow(actorOrWin);
-    return win ? resolveWindowScaleCandidates(win) : null;
 }
 
 /** Bounds win.get_monitor() against the count: a stale index outruns the list after an unplug. */

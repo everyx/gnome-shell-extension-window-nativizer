@@ -159,7 +159,7 @@ same place.
 ## actor_get_transform
 
 `actor.get_transform()` - reads back the transform Clutter cached on an actor. The extension calls
-it in `platform/window.js` (`getAppliedSubpixelPhase`) as the subpixel phase source on the clip's
+it in `platform/windowPhase.js` (`getAppliedSubpixelPhase`) as the subpixel phase source on the clip's
 container path: the clip's target carries the phase in its own transform and the shadow reads the
 same transform back, while the mirrored `getWindowSubpixelOffset` is the fallback. The pick reply
 shows the applied phase beside the mirror, which `docs/decoration-model.md` records. The C
