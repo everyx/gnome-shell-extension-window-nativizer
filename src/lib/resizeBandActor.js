@@ -17,7 +17,7 @@ import {ZERO_INSETS} from './frame.js';
 import {
     bandParamsInto,
     computeResizeBandsInto,
-    edgeForPoint,
+    edgeForStagePoint,
     emptyBands,
     normalizeConstrainedEdges,
     RESIZE_BAND,
@@ -210,11 +210,8 @@ export const ResizeBand = GObject.registerClass({
     _directionForEvent(event) {
         if (!this._frame)
             return null;
-        const [x, y] = event.get_coords();
-        const [originX, originY] = this.get_transformed_position();
-        return edgeForPoint(this._frame, x - originX, y - originY, {
-            constrainedEdges: this._geometry.constrainedEdges,
-        });
+        return edgeForStagePoint(this._frame, event.get_coords(), this.get_transformed_position(),
+            this._geometry.constrainedEdges);
     }
 
     _applyCursor(region, event) {

@@ -25,6 +25,13 @@ export function normalizeConstrainedEdges({
     };
 }
 
+/** A stage point as the band sees it: the actor's own origin removed, then the ring decides. */
+export function edgeForStagePoint(frame, coords, origin, constrainedEdges = null) {
+    const [x, y] = coords ?? [];
+    const [originX, originY] = origin ?? [];
+    return edgeForPoint(frame, x - originX, y - originY, {constrainedEdges});
+}
+
 /** Body points are the client's; a constrained edge yields null, its corner the free edge. */
 export function edgeForPoint(frame, x, y, {
     constrainedEdges = null,

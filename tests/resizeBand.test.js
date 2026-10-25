@@ -10,6 +10,7 @@ import {
     computeResizeBands,
     computeResizeBandsInto,
     edgeForPoint,
+    edgeForStagePoint,
     MIN_BAND_WINDOW,
     normalizeConstrainedEdges,
     RESIZE_BAND,
@@ -156,6 +157,37 @@ function assertOracleAgreement(frame) {
         .withContext(`oracle disagreement on ${frame.x},${frame.y} ${frame.width}x${frame.height}`)
         .toEqual([]);
 }
+
+describe('edgeForStagePoint (the pointer arrives in stage coordinates)', () => {
+    // The band's frame lives in its container's coordinates, but a Clutter event carries stage
+    // ones. Without the subtraction a band anywhere but the stage origin reads the wrong pixel -
+    // and on a maximized window it reads inside the body, so no strip answers at all.
+    const FRAME = rect(0, 0, 400, 300);
+
+    it('finds the left strip for a band sitting at the stage origin', () => {
+        // local (-6, 150): the left strip is the 12px ring just outside the body
+        expect(edgeForStagePoint(FRAME, [-6, 150], [0, 0])).toBe('w');
+    });
+
+    it('removes the actor origin, so a moved band resolves the same strip', () => {
+        // the band is at stage (100, 50); stage (94, 200) is local (-6, 150)
+        expect(edgeForStagePoint(FRAME, [94, 200], [100, 50])).toBe('w');
+    });
+
+    it('resolves nothing for the unsubtracted point, which is the bug this guards', () => {
+        // stage (94, 200) read as if local lands inside the body, where no strip lives
+        expect(edgeForPoint(FRAME, 94, 200)).toBeNull();
+    });
+
+    it('resolves nothing before any arithmetic when no frame was laid out yet', () => {
+        expect(edgeForStagePoint(null, [0, 0], [0, 0])).toBeNull();
+    });
+
+    it('passes the constrained edges through, so a maximized side still yields null', () => {
+        const constrained = {left: true, top: false, right: false, bottom: false};
+        expect(edgeForStagePoint(FRAME, [-6, 150], [0, 0], constrained)).toBeNull();
+    });
+});
 
 describe('edgeForPoint', () => {
     // The core defence: on regular windows, on a side shorter than two corner reaches
