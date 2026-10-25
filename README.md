@@ -4,7 +4,7 @@
 
 # Window Nativizer
 
-**Seamlessly nativize non-native applications into the GNOME desktop.**
+**Give GNOME-native decoration and resize handling to applications that aren't.**
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -15,7 +15,7 @@
 </p>
 
 <p>
-Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard resize ergonomics to non-conforming windows (Qt, GTK3, Wine, custom CSD applications, etc.).
+Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard resize ergonomics to applications that aren't GNOME-native (Qt, Electron, GTK3, Wine, and other apps that draw their own frame).
 </p>
 
 <img src="assets/preview.webp" alt="Before and after: a square window next to the same window with rounded corners and a shadow" width="560">
@@ -31,7 +31,7 @@ Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard re
 ## Key Features
 
 ### 🎯 Authentic Libadwaita Styling
-Non-native apps often feel out of place on a modern GNOME desktop. Window Nativizer brings them in line with official styling:
+Applications that aren't GNOME-native often feel out of place on a modern GNOME desktop. Window Nativizer brings them in line with official styling:
 - **Standard Adwaita corners** with subtle inner outline highlights
 - **Multi-layer Gaussian shadows** matching libadwaita layer for layer
 - **Every native window state**: Rounded and shadowed when focused, the lighter backdrop shadow when unfocused, a hairline ring in the theme's colour when tiled, nothing when maximized or fullscreen
@@ -39,7 +39,7 @@ Non-native apps often feel out of place on a modern GNOME desktop. Window Nativi
 - **Compiled from upstream**: Curves and metrics come straight from GNOME's own sources
 
 ### 🖱️ Effortless Drag-to-Resize Ergonomics
-Visual rounding is only half the story - non-native windows often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
+Visual rounding is only half the story - windows that aren't GNOME-native often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
 - **No pixel hunting**: Expands 0~1px borders into a comfortable invisible grab area aligned with GTK's native input region
 - **Smooth Corner Reach**: Follows GTK's corner coordinate heuristics, so diagonal resizing doesn't slip
 - **Native Mutter Grab-Ops**: Triggers compositor-level resize grabs and dynamic 8-way directional cursors without lag
@@ -54,7 +54,7 @@ Visual rounding is only half the story - non-native windows often have paper-thi
 - **Low resource footprint**: The GPU draws the corners and shadow in one pass, adding almost nothing to CPU and memory
 
 ### 🛡️ Smart & Non-Invasive
-- **Leaves native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
+- **Leaves GNOME-native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
 - **No stacked shadows**: Where a shadow already exists - Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours - we leave it alone instead of adding ours
 - **Round and sharp overview previews**: Rounded and sharp at once, because the corners come from the window's own surface rather than an extra offscreen pass (see [**Display & Rendering**](#display--rendering) below)
 - **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
@@ -79,7 +79,7 @@ Both switches are off by default, but their default behaviour pulls opposite way
 | Feature | [Rounded Window Corners (Reborn)](https://github.com/flexagoon/rounded-window-corners) | Window Nativizer |
 | :--- | :--- | :--- |
 | **Primary Goal** | Desktop theming & custom aesthetics | GNOME / Adwaita native consistency |
-| **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates non-native windows only; leaves native apps untouched |
+| **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates only windows that aren't GNOME-native; leaves GNOME-native apps untouched |
 | **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Authentic curvature matching official Libadwaita |
 | **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Adds GTK-standard grab margins outside the window, with 8-way directional cursors |
 | **Shadow Pipeline** | Corners cut by a CSS node the Shell re-lays-out | Shadow and corners baked once into a GPU texture |
