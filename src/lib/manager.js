@@ -4,7 +4,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {evaluateWindowActions} from './detector.js';
 import {suggestedRuleState, suggestedRuleWouldChange} from './pickSuggestion.js';
-import {extractWindowProperties} from './pick.js';
+import {extractWindowProperties} from './pickProperties.js';
 import {journal} from '../platform/journal.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {reconcileOutcome, readWindow} from './window.js';
