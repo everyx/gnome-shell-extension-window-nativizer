@@ -125,7 +125,11 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     };
 }
 
-/** Body one paint acts on: settle's rules, reads live at paint, previous values from the pass. */
+/**
+ * Body one paint acts on: settle's rules, reads live at paint, previous values from the pass.
+ * Null only when neither the target nor the window actor is paintable, which is also the case the
+ * paint's own size gate has already returned on - so a paint that got this far always has a body.
+ */
 export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan = null) {
     return settleClipBody(targetSize, windowActorSize,
         plan?.previousBody ?? null, plan?.previousAuthority ?? null,
