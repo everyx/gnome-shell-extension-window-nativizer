@@ -79,51 +79,35 @@ export function importFromClipboard(ctx, scheduleRenderRules) {
                         resolutions
                     );
                     setAllRuleEntries(settings, nextEntries);
-
-                    if (landedKeys.length === 0) {
-                        scheduleRenderRules();
-                        window.add_toast(new Adw.Toast({
-                            title: _('All rules in clipboard are already up to date'),
-                        }));
-                        return;
-                    }
-
-                    scheduleRenderRules({importedKeys: landedKeys});
-
-                    const totalCount = landedKeys.length;
-                    const title = ngettext(
-                        'Imported %d rule successfully',
-                        'Imported %d rules successfully',
-                        totalCount
-                    ).format(totalCount);
-                    window.add_toast(new Adw.Toast({title: asMarkup(title)}));
+                    reportImport(window, landedKeys, scheduleRenderRules);
                 });
                 return;
             }
 
             const {nextEntries, addedCount, updatedCount, importedKeys} = importResult;
-            const changedCount = addedCount + updatedCount;
-            if (changedCount === 0) {
-                window.add_toast(new Adw.Toast({
-                    title: _('All rules in clipboard are already up to date'),
-                }));
-                return;
-            }
-
-            setAllRuleEntries(settings, nextEntries);
-            scheduleRenderRules({importedKeys});
-
-            const totalCount = importedKeys.length;
-            const title = ngettext(
-                'Imported %d rule successfully',
-                'Imported %d rules successfully',
-                totalCount
-            ).format(totalCount);
-            window.add_toast(new Adw.Toast({title: asMarkup(title)}));
+            const changed = addedCount + updatedCount > 0;
+            if (changed)
+                setAllRuleEntries(settings, nextEntries);
+            reportImport(window, changed ? importedKeys : [], scheduleRenderRules);
         } catch (err) {
             window.add_toast(new Adw.Toast({
                 title: asMarkup(_('Import failed: %s').format(err.message)),
             }));
         }
     });
+}
+
+/** The line an import ends on, whether or not the payload had conflicts to resolve. */
+function reportImport(window, keys, scheduleRenderRules) {
+    if (keys.length === 0) {
+        scheduleRenderRules();
+        window.add_toast(new Adw.Toast({
+            title: _('All rules in clipboard are already up to date'),
+        }));
+        return;
+    }
+    scheduleRenderRules({importedKeys: keys});
+    const title = ngettext('Imported %d rule successfully', 'Imported %d rules successfully',
+        keys.length).format(keys.length);
+    window.add_toast(new Adw.Toast({title: asMarkup(title)}));
 }
