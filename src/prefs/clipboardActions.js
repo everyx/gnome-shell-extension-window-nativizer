@@ -40,12 +40,12 @@ export function exportToClipboard(ctx) {
 }
 
 export function importFromClipboard(ctx, scheduleRenderRules) {
-    const {window, settings, isWindowAlive} = ctx;
+    const {window, settings, windowCancellable, isWindowAlive} = ctx;
     const clipboard = window.get_clipboard() ?? Gdk.Display.get_default()?.get_clipboard();
     if (!clipboard)
         return;
 
-    clipboard.read_text_async(null, (_clip, res) => {
+    clipboard.read_text_async(windowCancellable, (_clip, res) => {
         if (!isWindowAlive())
             return;
 

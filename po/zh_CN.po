@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 11:28+0800\n"
+"POT-Creation-Date: 2026-10-25 12:53+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -136,33 +136,33 @@ msgstr "%s，%s，%s，%s"
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
-#: src/prefs.js:40
+#: src/prefs.js:41
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:46
+#: src/prefs.js:47
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:47
+#: src/prefs.js:48
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "控制窗口在不同显示器缩放下的装饰方式"
 
-#: src/prefs.js:52
+#: src/prefs.js:53
 msgid "Prioritize crisp text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:53
+#: src/prefs.js:54
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr "在分数缩放的显示器上跳过圆角，以保持文字清晰（阴影不受影响）"
 
-#: src/prefs.js:59
+#: src/prefs.js:60
 msgid "Force overview corners on every window"
 msgstr "强制所有窗口显示概览圆角"
 
-#: src/prefs.js:60
+#: src/prefs.js:61
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
@@ -240,8 +240,8 @@ msgstr "无法应用更改。请检查您的选择后重试。"
 msgid "Revert to the automatic decision"
 msgstr "还原为自动判断"
 
-#: src/prefs/rulePage.js:171
 #
+#: src/prefs/rulePage.js:171
 msgid "Pick window…"
 msgstr "选取窗口…"
 
@@ -265,8 +265,8 @@ msgstr "更多操作"
 msgid "Corrections"
 msgstr "误判修正"
 
-#: src/prefs/rulePage.js:202
 #
+#: src/prefs/rulePage.js:202
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
@@ -309,8 +309,8 @@ msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 msgid "Window Pick Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs/windowPicker.js:73
 #
+#: src/prefs/windowPicker.js:73
 msgid "A window is already being picked"
 msgstr "窗口选取正在进行"
 
