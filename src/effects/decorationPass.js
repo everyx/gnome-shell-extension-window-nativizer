@@ -31,3 +31,19 @@ export function clipParamsFrom(pass) {
 export function shadowStyleFrom(pass) {
     return {...pass.style, radius: pass.drawClip ? pass.style.radius : 0};
 }
+
+/** One handoff per pass, in the clip's own order: params then plan, never half. */
+export function applyPassToClip(effect, pass) {
+    effect.setParams(clipParamsFrom(pass));
+    effect.setBodyPlan(pass.bodyPlan);
+}
+
+/** Setter order is the actor's invariant: phase, target, plan, scale, then style last. */
+export function applyPassToShadow(actor, pass) {
+    actor.setPhaseInTransform(pass.phaseInTransform);
+    actor.setClipTarget(pass.clipTarget);
+    actor.setBodyPlan(pass.bodyPlan);
+    actor.setScale(pass.scale);
+    actor.setShadowInsets(pass.ring?.insets ?? null);
+    actor.setShadowStyle(shadowStyleFrom(pass));
+}

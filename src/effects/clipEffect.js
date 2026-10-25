@@ -15,7 +15,7 @@ import {getAllMonitorScales} from '../platform/monitor.js';
 
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
-import {clipParamsFrom} from './decorationPass.js';
+import {applyPassToClip} from './decorationPass.js';
 import {PendingSource} from './pendingSource.js';
 import {Diagnostic, offscreenBoxWarning, windowIdentityLabel}
     from '../lib/diagnosticInvariants.js';
@@ -228,10 +228,9 @@ export const RoundedClipEffect = GObject.registerClass({
         };
     }
 
-    /** One handoff per decoration pass, in the effect's own order: params then plan, never half. */
+    /** One handoff per decoration pass; the order is `applyPassToClip`'s invariant. */
     applyPass(pass) {
-        this.setParams(clipParamsFrom(pass));
-        this.setBodyPlan(pass.bodyPlan);
+        applyPassToClip(this, pass);
     }
 
     vfunc_paint_target(node, paintContext) {

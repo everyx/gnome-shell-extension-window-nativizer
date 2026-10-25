@@ -1,7 +1,7 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {Journal} from '../src/platform/journal.js';
 import {resolvePaintBody} from '../src/effects/clipParams.js';
-import {clipParamsFrom, decorationPass, shadowStyleFrom} from '../src/effects/decorationPass.js';
+import {applyPassToClip, applyPassToShadow, decorationPass} from '../src/effects/decorationPass.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -39,12 +39,11 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.bodyPlan = plan;
         }
 
-        // Mirrors the real effect's handoff: the recorded parameters come from the same derivation the
-        // effect uses, so the fake cannot disagree with it about what a pass means.
+        // Calls the same handoff the real effect calls, so the fake cannot disagree with it
+        // about what a pass means; only the recorded `pass` is the fake's own.
         applyPass(pass) {
             this.pass = pass;
-            this.setParams(clipParamsFrom(pass));
-            this.setBodyPlan(pass.bodyPlan);
+            applyPassToClip(this, pass);
         }
 
         get_actor() {
@@ -75,8 +74,10 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.clipTarget = null;
         }
 
+        // Same guard as the real actor: a scale that is not a usable number leaves the last one.
         setScale(scale) {
-            this.scale = scale;
+            if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale))
+                this.scale = scale;
         }
 
         setClipTarget(clipTarget) {
@@ -104,17 +105,15 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.style = style;
         }
 
-        // Mirrors the real actor's handoff, in the same order: a scale that is not a usable number
-        // leaves the previous one in place, as `setScale` does.
+        setPhaseInTransform(phaseInTransform) {
+            this.phaseInTransform = phaseInTransform;
+        }
+
+        // Calls the same handoff the real actor calls: the setter order is production's, not the
+        // fake's, so a change there fails here rather than only in e2e.
         applyPass(pass) {
             this.pass = pass;
-            this.phaseInTransform = pass.phaseInTransform;
-            this.clipTarget = pass.clipTarget;
-            this.bodyPlan = pass.bodyPlan;
-            if (typeof pass.scale === 'number' && pass.scale > 0)
-                this.scale = pass.scale;
-            this.setShadowInsets(pass.ring?.insets ?? null);
-            this.setShadowStyle(shadowStyleFrom(pass));
+            applyPassToShadow(this, pass);
         }
 
         destroy() {
