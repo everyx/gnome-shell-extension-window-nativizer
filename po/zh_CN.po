@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 12:53+0800\n"
+"POT-Creation-Date: 2026-10-25 17:05+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -183,20 +183,20 @@ msgstr[0] "已将 %d 条修正规则导出到剪贴板"
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪贴板为空或不包含文本"
 
-#: src/prefs/clipboardActions.js:86 src/prefs/clipboardActions.js:108
+#: src/prefs/clipboardActions.js:94
+#, javascript-format
+msgid "Import failed: %s"
+msgstr "导入失败：%s"
+
+#: src/prefs/clipboardActions.js:105
 msgid "All rules in clipboard are already up to date"
 msgstr "剪贴板中的所有规则已是最新"
 
-#: src/prefs/clipboardActions.js:95 src/prefs/clipboardActions.js:118
+#: src/prefs/clipboardActions.js:110
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功导入 %d 条规则"
-
-#: src/prefs/clipboardActions.js:125
-#, javascript-format
-msgid "Import failed: %s"
-msgstr "导入失败：%s"
 
 #: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"

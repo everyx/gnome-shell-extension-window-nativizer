@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 12:53+0800\n"
+"POT-Creation-Date: 2026-10-25 17:05+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -185,21 +185,21 @@ msgstr[1] ""
 msgid "Clipboard is empty or does not contain text"
 msgstr ""
 
-#: src/prefs/clipboardActions.js:86 src/prefs/clipboardActions.js:108
+#: src/prefs/clipboardActions.js:94
+#, javascript-format
+msgid "Import failed: %s"
+msgstr ""
+
+#: src/prefs/clipboardActions.js:105
 msgid "All rules in clipboard are already up to date"
 msgstr ""
 
-#: src/prefs/clipboardActions.js:95 src/prefs/clipboardActions.js:118
+#: src/prefs/clipboardActions.js:110
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] ""
 msgstr[1] ""
-
-#: src/prefs/clipboardActions.js:125
-#, javascript-format
-msgid "Import failed: %s"
-msgstr ""
 
 #: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"
