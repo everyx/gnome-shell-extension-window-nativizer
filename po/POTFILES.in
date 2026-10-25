@@ -1,4 +1,7 @@
 src/lib/rulePresenter.js
-src/prefs/conflictDialog.js
-src/prefs/ruleUi.js
 src/prefs.js
+src/prefs/clipboardActions.js
+src/prefs/conflictDialog.js
+src/prefs/rulePage.js
+src/prefs/ruleUi.js
+src/prefs/windowPicker.js

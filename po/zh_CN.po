@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-24 22:01+0800\n"
+"POT-Creation-Date: 2026-10-25 11:28+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -136,6 +136,68 @@ msgstr "%s，%s，%s，%s"
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
+#: src/prefs.js:40
+msgid "General"
+msgstr "常规"
+
+#: src/prefs.js:46
+msgid "Display & Rendering"
+msgstr "显示与渲染"
+
+#: src/prefs.js:47
+msgid "Control how windows are decorated at different monitor scales"
+msgstr "控制窗口在不同显示器缩放下的装饰方式"
+
+#: src/prefs.js:52
+msgid "Prioritize crisp text"
+msgstr "优先保证文字清晰"
+
+#: src/prefs.js:53
+msgid ""
+"Skip rounded corners on monitors with fractional scaling to keep text sharp "
+"(the shadow is unaffected)"
+msgstr "在分数缩放的显示器上跳过圆角，以保持文字清晰（阴影不受影响）"
+
+#: src/prefs.js:59
+msgid "Force overview corners on every window"
+msgstr "强制所有窗口显示概览圆角"
+
+#: src/prefs.js:60
+msgid ""
+"Round XWayland and the few Wayland windows left square for sharpness (they "
+"come out blurrier)"
+msgstr ""
+"为清晰而保持直角的 XWayland 及极少数 Wayland 窗口也画上圆角（代价是更模糊）"
+
+#: src/prefs/clipboardActions.js:23
+msgid "No corrections to export"
+msgstr "没有可导出的修正规则"
+
+#: src/prefs/clipboardActions.js:35
+#, javascript-format
+msgid "Exported %d correction to clipboard"
+msgid_plural "Exported %d corrections to clipboard"
+msgstr[0] "已将 %d 条修正规则导出到剪贴板"
+
+#: src/prefs/clipboardActions.js:61
+msgid "Clipboard is empty or does not contain text"
+msgstr "剪贴板为空或不包含文本"
+
+#: src/prefs/clipboardActions.js:86 src/prefs/clipboardActions.js:108
+msgid "All rules in clipboard are already up to date"
+msgstr "剪贴板中的所有规则已是最新"
+
+#: src/prefs/clipboardActions.js:95 src/prefs/clipboardActions.js:118
+#, javascript-format
+msgid "Imported %d rule successfully"
+msgid_plural "Imported %d rules successfully"
+msgstr[0] "成功导入 %d 条规则"
+
+#: src/prefs/clipboardActions.js:125
+#, javascript-format
+msgid "Import failed: %s"
+msgstr "导入失败：%s"
+
 #: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"
 msgstr "解决导入冲突"
@@ -174,6 +236,46 @@ msgstr "所有冲突均替换为导入规则"
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "无法应用更改。请检查您的选择后重试。"
 
+#: src/prefs/rulePage.js:88
+msgid "Revert to the automatic decision"
+msgstr "还原为自动判断"
+
+#: src/prefs/rulePage.js:171
+#
+msgid "Pick window…"
+msgstr "选取窗口…"
+
+#: src/prefs/rulePage.js:174
+msgid "The correction applies to every window of its kind"
+msgstr "这条修正对此类所有窗口生效"
+
+#: src/prefs/rulePage.js:179
+msgid "Import from Clipboard"
+msgstr "从剪贴板导入"
+
+#: src/prefs/rulePage.js:180
+msgid "Export to Clipboard"
+msgstr "导出到剪贴板"
+
+#: src/prefs/rulePage.js:186 src/prefs/rulePage.js:189
+msgid "More actions"
+msgstr "更多操作"
+
+#: src/prefs/rulePage.js:201
+msgid "Corrections"
+msgstr "误判修正"
+
+#: src/prefs/rulePage.js:202
+#
+msgid ""
+"Corrections apply per window kind; a switch corrects the automatic decision "
+"for one axis"
+msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
+
+#: src/prefs/rulePage.js:238
+msgid "Use the button above to pick a window that is decorated incorrectly"
+msgstr "点击上方按钮，选取装饰不正确的窗口"
+
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
 #: src/prefs/ruleUi.js:96
 msgid "Turn on to correct the automatic decision for this window kind"
@@ -184,151 +286,52 @@ msgstr "开启后修正此类窗口的自动判断"
 msgid "Picked from the window “%s”"
 msgstr "选取自窗口“%s”"
 
-#: src/prefs.js:52
+#. Translators: Closes the error dialog.
+#: src/prefs/ruleUi.js:136
+msgid "Close"
+msgstr "关闭"
+
+#: src/prefs/windowPicker.js:18
 msgid "No correction added: this window could not be identified"
 msgstr "未添加修正：无法识别这个窗口"
 
-#: src/prefs.js:56
+#: src/prefs/windowPicker.js:22
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "未添加修正：扩展没有响应——请重启会话后重新选取"
 
-#: src/prefs.js:58
+#: src/prefs/windowPicker.js:24
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
 
-#. Translators: Closes the error dialog.
-#: src/prefs.js:93
-msgid "Close"
-msgstr "关闭"
-
-#: src/prefs.js:151
-msgid "Revert to the automatic decision"
-msgstr "还原为自动判断"
-
-#: src/prefs.js:243
+#: src/prefs/windowPicker.js:71
 msgid "Window Pick Failed"
 msgstr "窗口选取失败"
 
-#: src/prefs.js:245
+#: src/prefs/windowPicker.js:73
+#
 msgid "A window is already being picked"
 msgstr "窗口选取正在进行"
 
-#: src/prefs.js:246
-msgid "Could not connect to the Window Nativizer extension — it is not enabled"
-msgstr "无法连接到 Window Nativizer 扩展——该扩展未启用"
+#: src/prefs/windowPicker.js:74
+msgid "Could not connect to the Window Nativizer extension: it is not enabled"
+msgstr "无法连接到 Window Nativizer 扩展：该扩展未启用"
 
-#: src/prefs.js:273
+#: src/prefs/windowPicker.js:101
 msgid "No correction added: it could not be saved"
 msgstr "未添加修正：修正未能保存"
 
-#: src/prefs.js:285
+#: src/prefs/windowPicker.js:113
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs.js:286
+#: src/prefs/windowPicker.js:114
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs.js:296
+#: src/prefs/windowPicker.js:124
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口还原后修正生效"
-
-#: src/prefs.js:309
-msgid "No corrections to export"
-msgstr "没有可导出的修正规则"
-
-#: src/prefs.js:321
-#, javascript-format
-msgid "Exported %d correction to clipboard"
-msgid_plural "Exported %d corrections to clipboard"
-msgstr[0] "已将 %d 条修正规则导出到剪贴板"
-
-#: src/prefs.js:347
-msgid "Clipboard is empty or does not contain text"
-msgstr "剪贴板为空或不包含文本"
-
-#: src/prefs.js:372 src/prefs.js:394
-msgid "All rules in clipboard are already up to date"
-msgstr "剪贴板中的所有规则已是最新"
-
-#: src/prefs.js:381 src/prefs.js:404
-#, javascript-format
-msgid "Imported %d rule successfully"
-msgid_plural "Imported %d rules successfully"
-msgstr[0] "成功导入 %d 条规则"
-
-#: src/prefs.js:411
-#, javascript-format
-msgid "Import failed: %s"
-msgstr "导入失败：%s"
-
-#: src/prefs.js:423
-msgid "Pick window…"
-msgstr "选取窗口…"
-
-#: src/prefs.js:426
-msgid "The correction applies to every window of its kind"
-msgstr "这条修正对此类所有窗口生效"
-
-#: src/prefs.js:431
-msgid "Import from Clipboard"
-msgstr "从剪贴板导入"
-
-#: src/prefs.js:432
-msgid "Export to Clipboard"
-msgstr "导出到剪贴板"
-
-#: src/prefs.js:438 src/prefs.js:441
-msgid "More actions"
-msgstr "更多操作"
-
-#: src/prefs.js:453
-msgid "Corrections"
-msgstr "误判修正"
-
-#: src/prefs.js:454
-msgid ""
-"Corrections apply per window kind; a switch corrects the automatic decision "
-"for one axis"
-msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
-
-#: src/prefs.js:490
-msgid "Use the button above to pick a window that is decorated incorrectly"
-msgstr "点击上方按钮，选取装饰不正确的窗口"
-
-#: src/prefs.js:559
-msgid "General"
-msgstr "常规"
-
-#: src/prefs.js:565
-msgid "Display & Rendering"
-msgstr "显示与渲染"
-
-#: src/prefs.js:566
-msgid "Control how windows are decorated at different monitor scales"
-msgstr "控制窗口在不同显示器缩放下的装饰方式"
-
-#: src/prefs.js:571
-msgid "Prioritize crisp text"
-msgstr "优先保证文字清晰"
-
-#: src/prefs.js:572
-msgid ""
-"Skip rounded corners on monitors with fractional scaling to keep text sharp "
-"(the shadow is unaffected)"
-msgstr "在分数缩放的显示器上跳过圆角，以保持文字清晰（阴影不受影响）"
-
-#: src/prefs.js:578
-msgid "Force overview corners on every window"
-msgstr "强制所有窗口显示概览圆角"
-
-#: src/prefs.js:579
-msgid ""
-"Round XWayland and the few Wayland windows left square for sharpness (they "
-"come out blurrier)"
-msgstr ""
-"为清晰而保持直角的 XWayland 及极少数 Wayland 窗口也画上圆角（代价是更模糊）"

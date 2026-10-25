@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-24 22:01+0800\n"
+"POT-Creation-Date: 2026-10-25 11:28+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -138,6 +138,69 @@ msgstr ""
 msgid "%s, %s, %s"
 msgstr ""
 
+#: src/prefs.js:40
+msgid "General"
+msgstr ""
+
+#: src/prefs.js:46
+msgid "Display & Rendering"
+msgstr ""
+
+#: src/prefs.js:47
+msgid "Control how windows are decorated at different monitor scales"
+msgstr ""
+
+#: src/prefs.js:52
+msgid "Prioritize crisp text"
+msgstr ""
+
+#: src/prefs.js:53
+msgid ""
+"Skip rounded corners on monitors with fractional scaling to keep text sharp "
+"(the shadow is unaffected)"
+msgstr ""
+
+#: src/prefs.js:59
+msgid "Force overview corners on every window"
+msgstr ""
+
+#: src/prefs.js:60
+msgid ""
+"Round XWayland and the few Wayland windows left square for sharpness (they "
+"come out blurrier)"
+msgstr ""
+
+#: src/prefs/clipboardActions.js:23
+msgid "No corrections to export"
+msgstr ""
+
+#: src/prefs/clipboardActions.js:35
+#, javascript-format
+msgid "Exported %d correction to clipboard"
+msgid_plural "Exported %d corrections to clipboard"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/prefs/clipboardActions.js:61
+msgid "Clipboard is empty or does not contain text"
+msgstr ""
+
+#: src/prefs/clipboardActions.js:86 src/prefs/clipboardActions.js:108
+msgid "All rules in clipboard are already up to date"
+msgstr ""
+
+#: src/prefs/clipboardActions.js:95 src/prefs/clipboardActions.js:118
+#, javascript-format
+msgid "Imported %d rule successfully"
+msgid_plural "Imported %d rules successfully"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/prefs/clipboardActions.js:125
+#, javascript-format
+msgid "Import failed: %s"
+msgstr ""
+
 #: src/prefs/conflictDialog.js:15
 msgid "Resolve Import Conflicts"
 msgstr ""
@@ -177,6 +240,44 @@ msgstr ""
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr ""
 
+#: src/prefs/rulePage.js:88
+msgid "Revert to the automatic decision"
+msgstr ""
+
+#: src/prefs/rulePage.js:171
+msgid "Pick window…"
+msgstr ""
+
+#: src/prefs/rulePage.js:174
+msgid "The correction applies to every window of its kind"
+msgstr ""
+
+#: src/prefs/rulePage.js:179
+msgid "Import from Clipboard"
+msgstr ""
+
+#: src/prefs/rulePage.js:180
+msgid "Export to Clipboard"
+msgstr ""
+
+#: src/prefs/rulePage.js:186 src/prefs/rulePage.js:189
+msgid "More actions"
+msgstr ""
+
+#: src/prefs/rulePage.js:201
+msgid "Corrections"
+msgstr ""
+
+#: src/prefs/rulePage.js:202
+msgid ""
+"Corrections apply per window kind; a switch corrects the automatic decision "
+"for one axis"
+msgstr ""
+
+#: src/prefs/rulePage.js:238
+msgid "Use the button above to pick a window that is decorated incorrectly"
+msgstr ""
+
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
 #: src/prefs/ruleUi.js:96
 msgid "Turn on to correct the automatic decision for this window kind"
@@ -187,152 +288,51 @@ msgstr ""
 msgid "Picked from the window “%s”"
 msgstr ""
 
-#: src/prefs.js:52
+#. Translators: Closes the error dialog.
+#: src/prefs/ruleUi.js:136
+msgid "Close"
+msgstr ""
+
+#: src/prefs/windowPicker.js:18
 msgid "No correction added: this window could not be identified"
 msgstr ""
 
-#: src/prefs.js:56
+#: src/prefs/windowPicker.js:22
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr ""
 
-#: src/prefs.js:58
+#: src/prefs/windowPicker.js:24
 msgid "No correction added: it would have no effect on a window of this kind"
 msgstr ""
 
-#. Translators: Closes the error dialog.
-#: src/prefs.js:93
-msgid "Close"
-msgstr ""
-
-#: src/prefs.js:151
-msgid "Revert to the automatic decision"
-msgstr ""
-
-#: src/prefs.js:243
+#: src/prefs/windowPicker.js:71
 msgid "Window Pick Failed"
 msgstr ""
 
-#: src/prefs.js:245
+#: src/prefs/windowPicker.js:73
 msgid "A window is already being picked"
 msgstr ""
 
-#: src/prefs.js:246
-msgid "Could not connect to the Window Nativizer extension — it is not enabled"
+#: src/prefs/windowPicker.js:74
+msgid "Could not connect to the Window Nativizer extension: it is not enabled"
 msgstr ""
 
-#: src/prefs.js:273
+#: src/prefs/windowPicker.js:101
 msgid "No correction added: it could not be saved"
 msgstr ""
 
-#: src/prefs.js:285
+#: src/prefs/windowPicker.js:113
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr ""
 
-#: src/prefs.js:286
+#: src/prefs/windowPicker.js:114
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr ""
 
-#: src/prefs.js:296
+#: src/prefs/windowPicker.js:124
 msgid "The correction takes effect once the window is restored"
-msgstr ""
-
-#: src/prefs.js:309
-msgid "No corrections to export"
-msgstr ""
-
-#: src/prefs.js:321
-#, javascript-format
-msgid "Exported %d correction to clipboard"
-msgid_plural "Exported %d corrections to clipboard"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/prefs.js:347
-msgid "Clipboard is empty or does not contain text"
-msgstr ""
-
-#: src/prefs.js:372 src/prefs.js:394
-msgid "All rules in clipboard are already up to date"
-msgstr ""
-
-#: src/prefs.js:381 src/prefs.js:404
-#, javascript-format
-msgid "Imported %d rule successfully"
-msgid_plural "Imported %d rules successfully"
-msgstr[0] ""
-msgstr[1] ""
-
-#: src/prefs.js:411
-#, javascript-format
-msgid "Import failed: %s"
-msgstr ""
-
-#: src/prefs.js:423
-msgid "Pick window…"
-msgstr ""
-
-#: src/prefs.js:426
-msgid "The correction applies to every window of its kind"
-msgstr ""
-
-#: src/prefs.js:431
-msgid "Import from Clipboard"
-msgstr ""
-
-#: src/prefs.js:432
-msgid "Export to Clipboard"
-msgstr ""
-
-#: src/prefs.js:438 src/prefs.js:441
-msgid "More actions"
-msgstr ""
-
-#: src/prefs.js:453
-msgid "Corrections"
-msgstr ""
-
-#: src/prefs.js:454
-msgid ""
-"Corrections apply per window kind; a switch corrects the automatic decision "
-"for one axis"
-msgstr ""
-
-#: src/prefs.js:490
-msgid "Use the button above to pick a window that is decorated incorrectly"
-msgstr ""
-
-#: src/prefs.js:559
-msgid "General"
-msgstr ""
-
-#: src/prefs.js:565
-msgid "Display & Rendering"
-msgstr ""
-
-#: src/prefs.js:566
-msgid "Control how windows are decorated at different monitor scales"
-msgstr ""
-
-#: src/prefs.js:571
-msgid "Prioritize crisp text"
-msgstr ""
-
-#: src/prefs.js:572
-msgid ""
-"Skip rounded corners on monitors with fractional scaling to keep text sharp "
-"(the shadow is unaffected)"
-msgstr ""
-
-#: src/prefs.js:578
-msgid "Force overview corners on every window"
-msgstr ""
-
-#: src/prefs.js:579
-msgid ""
-"Round XWayland and the few Wayland windows left square for sharpness (they "
-"come out blurrier)"
 msgstr ""
