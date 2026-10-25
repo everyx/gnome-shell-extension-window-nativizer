@@ -256,8 +256,10 @@ export const RoundedClipEffect = GObject.registerClass({
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
         // Body settles live each paint from the plan, so the cut tracks the actor between passes.
+        // No fallback: the size gate above passes only when the target or the actor is paintable,
+        // and either one is enough for settle to answer a body.
         const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
-            this._bodyPlan).body ?? size;
+            this._bodyPlan).body;
         const frame = clipFrameForTarget(bodySize, this._insets, scale,
             {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase, this._St);
         // Backstop: a body still degenerate after all that suspends rather than erasing the window.
