@@ -357,6 +357,22 @@ describe('resolvePaintBody (the paint clock)', () => {
         previousWindowSize = size(800),
     } = {}) => ({previousBody, previousAuthority, previousWindowSize});
 
+    it('answers a body whenever the paint got past its own size gate', () => {
+        // The clip's paint suspends unless resolveClipSize found an extent, and that gate passes
+        // exactly when the target or the window actor is paintable. Every such combination has an
+        // authority, so a settled body is never null while the paint is still running. The paint
+        // used to carry a `?? size` fallback for the case that cannot happen; this pins the reason
+        // it could go.
+        const bad = {width: 0, height: 0};
+        const ok = size(800);
+        for (const [target, actor] of [[ok, ok], [bad, ok], [ok, bad], [null, ok]]) {
+            expect(resolveClipSize(target, actor)).withContext('paint is still running')
+                .not.toBeNull();
+            const settled = resolvePaintBody(target, actor, ok, plan());
+            expect(settled.body).withContext('body is answered, never null').not.toBeNull();
+        }
+    });
+
     it('tracks the live window actor at every paint while a drag is in flight', () => {
         // The manager resolves once per debounced pass, so the plan is fixed with the reference
         // points from before; the window's own size and the actor grow every paint while the target
