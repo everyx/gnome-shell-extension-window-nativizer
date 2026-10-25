@@ -94,7 +94,7 @@ export function ruleSummaryText(state) {
     return names.length > 0 ? names.join(', ') : _('Automatic');
 }
 
-// Same thunk reason as above.
+// Thunked for the same reason as the axis names: built at import time, before prefs binds gettext.
 const WINDOW_TYPE_NOUNS = Object.freeze({
     // Translators: A dialog window.
     [WindowType.DIALOG]: () => _('dialog'),
