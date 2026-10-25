@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.11.2](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.1...v0.11.2) (2026-10-25)
+
+
+### Bug Fixes
+
+* **decoration:** cancel a queued disable when the close keeps the visuals ([96661b4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/96661b4d811bd98765fa64a3b7601e617df7f130))
+* **diagnostics:** compare a phase pair only when one container was resolved ([194cb97](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/194cb97a92740e11391db39823a4e09f3fcfd15e))
+* **diagnostics:** make the offscreen-box invariant say something actionable ([57ac674](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/57ac6740ae5578b5f3999f44fe4de93d9bfdfd98))
+* **diagnostics:** name a window by its class, never by its title ([8ca8095](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8ca809562f8346b25d90c2151e9ac2c7bb0a1005))
+* **e2e:** release the client's timeline on a signal, not a delay ([ce2796f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ce2796f5a9bf6570538e37cad32486473699d46c))
+* **effects:** read the paint's target size the guarded way ([c2da797](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c2da7976b600c416a1d1da634f4c34570ba63729))
+* **inspector:** unwind the D-Bus export when the constructor throws ([0501f39](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0501f396400e4f4f47c720cb1248669a3b0ac9bb))
+* **lifecycle:** keep the re-entrant release, and never orphan the queued disable ([6abd3f1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6abd3f144395f28bc7cf8d5baafec27e60e9e9fd))
+* **overview:** pad the preview shadow from the container's box, not its own ([42fb8a6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/42fb8a64d73859c619b7b167baa807ffaae4a4c5))
+* **prefs:** cancel the clipboard read when the preferences window closes ([ab131fb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ab131fba649f4b35c53e3e6cc4b2bb9b4bfb4da7))
+* **prefs:** escape the toast text Pango parses as markup ([a6fa48c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a6fa48c8d11bc6b50b428291cd6af5c336f144e3))
+* **shadow:** catch a failed allocation instead of testing its return value ([7c0f162](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/7c0f162fd99d17ac6e3b4220bb22fbb0ef0e164e))
+* **tools:** define the line helper before the mode that uses it ([a907930](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a9079300bf31ff27d956e512e8f5efb25e490d01))
+
+
+### Documentation
+
+* **clip:** say where the body can be null, not that the fallback is gone ([196d57e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/196d57ed3dcc7ab8973b5124dee567b4476a6732))
+* **compatibility:** record that the GL purge signal left in 51 ([ae4ba4e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/ae4ba4e9213761925663ade23c3e353a3decb157))
+* keep tooling out of code comments, and drop what was there ([95cab4e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/95cab4ef866b0fb27cf7e5664e26fd61ae03a121))
+* list the modules the last few refactors added ([d285ff1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/d285ff1342da9cb80d487157143a74f4a6dc4016))
+* **metadata:** call the applications GNOME-native, and stop overselling what we do ([a923281](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a92328162479ccfca81f47852444e2005782d095))
+* **metadata:** say why /proc is read, and what is actually stored ([e570596](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e5705964674ae2e1e83a4887d0f600a298997d0f))
+* **prefs:** restate the thunk reason where the second table needs it ([8abadde](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8abaddea65c429357dc852f4bc5b9af94d2fca16))
+* record the code conventions the lint config cannot see ([6e9530f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6e9530f3fa46d9135b80742a776db2ba87422c16))
+* write down the house style, and align the prose to it ([4b82c18](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4b82c18dac3f0718c8de59919d9850e3cb0cb98f))
+
 ## [0.11.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.0...v0.11.1) (2026-10-21)
 
 
