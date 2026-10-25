@@ -11,7 +11,7 @@ import {readBodySizes, readActorSize} from './bodyPlan.js';
 import {Diagnostic} from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
 import {Subscriptions} from '../lib/subscriptions.js';
-import {shadowStyleFrom} from './decorationPass.js';
+import {applyPassToShadow} from './decorationPass.js';
 import {setPipelineOpacity, shadowPipelineFor, styleKey} from './shadowTexture.js';
 import {snapSliceBoxesInto} from '../lib/snap.js';
 import {coglContextForBake} from '../platform/coglContext.js';
@@ -194,14 +194,9 @@ export const ShadowActor = GObject.registerClass({
         this.queue_redraw();
     }
 
-    /** Setter order is the actor's invariant: target, phase, then plan and scale, style last. */
+    /** One handoff per decoration pass; the setter order is `applyPassToShadow`'s invariant. */
     applyPass(pass) {
-        this.setPhaseInTransform(pass.phaseInTransform);
-        this.setClipTarget(pass.clipTarget);
-        this.setBodyPlan(pass.bodyPlan);
-        this.setScale(pass.scale);
-        this.setShadowInsets(pass.ring?.insets ?? null);
-        this.setShadowStyle(shadowStyleFrom(pass));
+        applyPassToShadow(this, pass);
     }
 
     vfunc_paint_node(node, paintContext) {
