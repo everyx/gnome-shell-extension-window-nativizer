@@ -19,12 +19,13 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
         const iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         registerIconThemePath(iconTheme);
 
-        // The reply may arrive after close: guard UI touches, and cancel to free the widgets.
+        // Every async this window starts shares one cancellable, cancelled when it closes: a reply
+        // that arrives after close is dropped by `isWindowAlive`, and a read in flight is stopped.
         let windowAlive = true;
-        const pickCancellable = new Gio.Cancellable();
+        const windowCancellable = new Gio.Cancellable();
         window.connect('destroy', () => {
             windowAlive = false;
-            pickCancellable.cancel();
+            windowCancellable.cancel();
         });
 
         const ctx = Object.freeze({
@@ -32,7 +33,7 @@ export default class WindowNativizerPreferences extends ExtensionPreferences {
             settings,
             installedApps,
             iconTheme,
-            pickCancellable,
+            windowCancellable,
             isWindowAlive: () => windowAlive,
         });
 

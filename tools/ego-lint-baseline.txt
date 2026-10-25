@@ -1,7 +1,6 @@
 # Findings this repository accepts, one line per rule and file: <rule> <path> <count>.
 # A path is "-" when the finding names no file. Regenerate with: pnpm run lint:ego -- --update
 # Each line is a decision, so read the diff: a new line accepts a warning for good.
-async/missing-cancellable	-	1
 lifecycle/signal-balance	-	1
 lifecycle/untracked-timeout	lib/nativeLikeCorners.js	1
 metadata/future-shell-version	-	1

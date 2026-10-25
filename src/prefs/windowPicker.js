@@ -54,8 +54,8 @@ function inspectWindow(callback, cancellable = null) {
 }
 
 export function setupWindowPickerAction(pickButton, ctx, onRulePicked) {
-    const {window, settings, installedApps, pickCancellable, isWindowAlive} = ctx;
-    const pickWindow = callback => inspectWindow(callback, pickCancellable);
+    const {window, settings, installedApps, windowCancellable, isWindowAlive} = ctx;
+    const pickWindow = callback => inspectWindow(callback, windowCancellable);
     pickButton.connect('clicked', () => {
         window.set_visible(false);
         pickWindow((err, props) => {

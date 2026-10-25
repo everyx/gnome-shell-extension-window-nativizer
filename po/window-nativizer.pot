@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 11:28+0800\n"
+"POT-Creation-Date: 2026-10-25 12:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -138,33 +138,33 @@ msgstr ""
 msgid "%s, %s, %s"
 msgstr ""
 
-#: src/prefs.js:40
+#: src/prefs.js:41
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:46
+#: src/prefs.js:47
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:47
+#: src/prefs.js:48
 msgid "Control how windows are decorated at different monitor scales"
 msgstr ""
 
-#: src/prefs.js:52
+#: src/prefs.js:53
 msgid "Prioritize crisp text"
 msgstr ""
 
-#: src/prefs.js:53
+#: src/prefs.js:54
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr ""
 
-#: src/prefs.js:59
+#: src/prefs.js:60
 msgid "Force overview corners on every window"
 msgstr ""
 
-#: src/prefs.js:60
+#: src/prefs.js:61
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
