@@ -15,8 +15,8 @@ const sourceConfig = gnome.configs.recommended.map(config => ({
  * and new code is held to it. The word budget is the one the comment/docs split already uses - a
  * comment that outgrows it is carrying knowledge that belongs in `docs/` or in the code.
  *
- * `no-em-dash` reads comments only, so the user-facing translated strings keep their own
- * typography: changing one would change a msgid and drop its translation.
+ * `no-em-dash` reads the whole file, string literals included, so a msgid cannot carry one: the
+ * lint runs on recent lines, and a moved string arrives as a new line.
  */
 const slopConfig = createSlopConfig({inspection: {mode: 'recent-changes', tracebackCommits: 5}})
     .map(config => ({...config, files: ['src/**/*.js']}));

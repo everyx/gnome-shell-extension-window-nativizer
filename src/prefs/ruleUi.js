@@ -128,3 +128,11 @@ export function setupRuleRowHeader(row, options) {
         ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
         : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
 }
+
+/** An error the user has to read before anything else; one shape for both callers. */
+export function showError(parentWindow, heading, body) {
+    const dialog = new Adw.AlertDialog({heading, body});
+    // Translators: Closes the error dialog.
+    dialog.add_response('ok', _('Close'));
+    dialog.present(parentWindow);
+}
