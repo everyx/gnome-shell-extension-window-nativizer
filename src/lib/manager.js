@@ -152,6 +152,7 @@ export class Manager {
         this._tearDownStrays();
         this._classifier?.destroy();
         this._classifier = null;
+        this._settings = null;
         // The phase mirror caches monitors per display; a stale list would outlive this session.
         invalidateMonitorCache();
         shadowTexture.destroy();
