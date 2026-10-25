@@ -15,7 +15,9 @@ import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
 import {resolveMonitorBounds, safeRead} from './window.js';
 import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
-import {getAppliedSubpixelPhase, getSurfaceContainer, getWindowActor, getWindowSubpixelOffset} from '../platform/window.js';
+import {getSurfaceContainer} from '../platform/surfaceContainer.js';
+import {getWindowActor} from '../platform/window.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/windowPhase.js';
 
 /** Owns one window's clip, shadow and resize band; injected options keep it unit-testable. */
 export class WindowDecoration {

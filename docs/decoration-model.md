@@ -749,7 +749,7 @@ geometry instead, where the FBO's box rounding can still part the two cuts. `dec
 owns that limitation and the model behind it.
 
 **How the container is identified.** The container's type (`MetaSurfaceContainerActorWayland`) is
-private and unreachable from GJS, so `getSurfaceContainer` (`src/platform/window.js`) infers it from
+private and unreachable from GJS, so `getSurfaceContainer` (`src/platform/surfaceContainer.js`) infers it from
 the window actor's children: a sole non-foreign child is the container, an unallocated one is
 returned so the resolver defers on it, and otherwise the unique non-foreign child whose box passes
 `isCompatibleSurfaceGeometry` - origin at (0,0), dimensions equal to the buffer, the same predicate
@@ -778,7 +778,7 @@ reconcile, and the clip never attaches to an actor the container path would reje
 deforms the window.
 
 **Where the phase comes from.** On the container path the phase is read back from the transform
-Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform/window.js`),
+Mutter cached on the surface container (`getAppliedSubpixelPhase`, `src/platform/windowPhase.js`),
 because the clip's local frame is phase-free and the shadow actor is a sibling that must translate
 by that same value explicitly. Both cuts then follow one source. Both phase readers
 (`getAppliedSubpixelPhase` and the mirror `getWindowSubpixelOffset`) identify the container through
@@ -1042,7 +1042,7 @@ which holds two live `560x315` surfaces at `(0,0)`: the mask installed, the cont
 from GJS (`MetaSurfaceActor.content` is a private `MetaSurfaceContent`, and
 `Meta.SurfaceActor.get_texture()` and `Meta.WindowActor.get_image()` are not in the introspection
 data), but the surface actors are not: `meta_window_actor_wayland_rebuild_surface_tree()` hangs
-them on the container, and `countSurfaceActorsCoveringBox` (`src/platform/window.js`) counts the
+them on the container, and `countSurfaceActorsCoveringBox` (`src/platform/surfaceContainer.js`) counts the
 ones whose box covers the container's own. Two covering actors is the reading that the corners are
 not the mask's to round - the criterion behind the `force-overview-corners` routing below. Measured
 in a nested session: a single-surface window reads 1, a small subsurface reads 1, a full-box

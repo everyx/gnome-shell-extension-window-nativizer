@@ -4,7 +4,7 @@
  * JavaScript mirror reproduces has changed shape.
  *
  * Three review rounds found three separate divergences in one such mirror
- * (`getWindowSubpixelOffset` in src/platform/window.js: a wrong monitor rule, a wrong coordinate
+ * (`getWindowSubpixelOffset` in src/platform/windowPhase.js: a wrong monitor rule, a wrong coordinate
  * space, and `Math.round` where C uses `roundf`), each a visible one-physical-pixel artifact.
  * The repo already pins upstream sources under vendor/ and re-derives constants from them with
  * `tools/gen-*.mjs`; the arithmetic that cannot be generated - only transliterated - had no
@@ -57,7 +57,7 @@ const GSK_RECT = 'vendor/gtk/gskrectprivate.h';
  */
 const UNGUARDED_RULE = {
     name: 'meta_monitor_manager_get_highest_scale_monitor_from_rect',
-    mirror: 'resolveHighestScaleMonitorIndex (src/platform/window.js)',
+    mirror: 'resolveHighestScaleMonitorIndex (src/platform/monitor.js)',
     recheck: 'docs/shell-compatibility.md',
 };
 
@@ -129,7 +129,7 @@ const CHECKS = [
         label: 'surface_container_apply_transform',
         haystack: MUTTER,
         needle: SCOPES.surface_container_apply_transform,
-        mirror: 'getWindowSubpixelOffset (src/platform/window.js)',
+        mirror: 'getWindowSubpixelOffset (src/platform/windowPhase.js)',
         recheck: 're-read the upstream phase function and update the mirror term for term',
     },
     {
@@ -137,7 +137,7 @@ const CHECKS = [
         haystack: MUTTER,
         scope: 'surface_container_apply_transform',
         needle: 'meta_window_get_highest_scale_monitor(window)',
-        mirror: 'resolveHighestScaleMonitorIndex / getWindowSubpixelOffset (src/platform/window.js)',
+        mirror: 'resolveHighestScaleMonitorIndex / getWindowSubpixelOffset (src/platform/windowPhase.js)',
         recheck: 're-check which monitor the phase is measured against',
     },
     {
@@ -161,7 +161,7 @@ const CHECKS = [
         haystack: MUTTER,
         scope: 'surface_container_apply_transform',
         needle: 'abs_x=clutter_actor_get_x(parent)+clutter_actor_get_x(actor)',
-        mirror: 'getWindowSubpixelOffset (src/platform/window.js)',
+        mirror: 'getWindowSubpixelOffset (src/platform/windowPhase.js)',
         recheck: 're-check which actor the phase is read from (window actor vs surface container)',
     },
     {
@@ -169,7 +169,7 @@ const CHECKS = [
         haystack: MUTTER,
         scope: 'surface_container_apply_transform',
         needle: 'rel_x=abs_x-monitor_rect.x',
-        mirror: 'getWindowSubpixelOffset (src/platform/window.js)',
+        mirror: 'getWindowSubpixelOffset (src/platform/windowPhase.js)',
         recheck: 're-check the coordinate space the phase is measured in',
     },
     {
@@ -185,7 +185,7 @@ const CHECKS = [
         haystack: MUTTER,
         scope: 'surface_container_apply_transform',
         needle: 'x_off=adj_rel_x-rel_x',
-        mirror: 'getWindowSubpixelOffset (src/platform/window.js)',
+        mirror: 'getWindowSubpixelOffset (src/platform/windowPhase.js)',
         recheck: 're-check the sign of the translation folded into the shadow',
     },
     {

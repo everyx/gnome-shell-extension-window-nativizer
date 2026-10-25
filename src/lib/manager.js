@@ -26,10 +26,8 @@ import {
     getTabList,
     getWindowActors,
 } from '../platform/display.js';
-import {
-    getWindowActor,
-    invalidateMonitorCache,
-} from '../platform/window.js';
+import {invalidateMonitorCache} from '../platform/monitor.js';
+import {getWindowActor} from '../platform/window.js';
 
 
 function gtypeName(object) {

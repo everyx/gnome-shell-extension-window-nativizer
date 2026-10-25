@@ -23,7 +23,8 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
-import {getWindowFromActor, isWindowAllowsResize} from '../platform/window.js';
+import {isWindowAllowsResize} from '../platform/window.js';
+import {getWindowFromActor} from '../platform/windowActor.js';
 import {setActorBox} from './snap.js';
 
 export const RESIZE_BAND_G_TYPE = 'WindowNativizerResizeBand';

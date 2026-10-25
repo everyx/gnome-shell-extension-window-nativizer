@@ -8,39 +8,11 @@ import {CursorShape, setActorCursor, cursorTypeFor} from '../src/platform/actorC
 import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../src/platform/grabOp.js';
 import {resolveUniformLocation} from '../src/platform/uniformLocation.js';
 import {coglContextForBake} from '../src/platform/coglContext.js';
-import {
-    isWindowMaximized,
-    isWindowFullscreen,
-    isWindowTiled,
-    isWindowMinimized,
-    isWindowDecorated,
-    getWindowBufferAlpha,
-    isWindowMaximizedHorizontally,
-    isWindowMaximizedVertically,
-    isWindowAppearsFocused,
-    getWindowTileMatch,
-    getWindowFrameRect,
-    getWindowBufferRect,
-    getWindowActor,
-    getWindowClientType,
-    getWindowType,
-    getWindowPid,
-    getWindowTransientFor,
-    isWindowAttachedDialog,
-    isWindowAllowsResize,
-    isWindowHidden,
-    isWindowOnAllWorkspaces,
-    isWindowLocatedOnWorkspace,
-    getWindowDisplayTitle,
-    getWindowFromActor,
-    findMetaWindow,
-    findMetaWindowCached,
-    getSurfaceContainer,
-    countSurfaceActorsCoveringBox,
-    getWindowSubpixelOffset,
-    getAppliedSubpixelPhase,
-    invalidateMonitorCache
-} from '../src/platform/window.js';
+import {getPhysicalMonitorScale, invalidateMonitorCache} from '../src/platform/monitor.js';
+import {countSurfaceActorsCoveringBox, getSurfaceContainer} from '../src/platform/surfaceContainer.js';
+import {getWindowActor, getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowDisplayTitle, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowHidden, isWindowLocatedOnWorkspace, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowMinimized, isWindowOnAllWorkspaces, isWindowTiled} from '../src/platform/window.js';
+import {findMetaWindow, findMetaWindowCached, getWindowFromActor} from '../src/platform/windowActor.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/windowPhase.js';
 import {
     getDisplay,
     getFocusWindow,
@@ -49,7 +21,6 @@ import {
     getMonitorCount,
     getMonitorScale,
     getMonitorGeometry,
-    getPhysicalMonitorScale,
     resolveMonitorBounds,
     getTabList,
     focusWindow,

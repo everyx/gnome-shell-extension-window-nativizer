@@ -11,7 +11,7 @@
  *        (global.display, global.stage, global.workspace_manager, globalThis.global).
  *      - Business directories MUST NOT make direct raw calls to Meta.Window methods or properties
  *        (is_maximized, get_tile_match, get_frame_rect, decorated, appears_focused, etc.);
- *        all window queries and operations must go through src/platform/window.js.
+ *        all window queries and operations must go through src/platform/.
  *   2. Seam Ownership:
  *      - Members whose declarations vary across GNOME lines (from tools/shell-api.json)
  *        must be owned by src/platform/, or protected by a call-site probe.
@@ -181,7 +181,7 @@ const RAW_WINDOW_OPERATIONS = [
 
 const RAW_WINDOW_PATTERNS = RAW_WINDOW_OPERATIONS.map(op => ({
     pattern: new RegExp(`\\bwin\\??\\.${op}\\b`),
-    desc: `raw Meta.Window.${op} access (must use src/platform/window.js)`,
+    desc: `raw Meta.Window.${op} access (must use src/platform/)`,
 }));
 
 for (const {file, text} of businessFiles) {

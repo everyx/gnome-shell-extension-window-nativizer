@@ -8,9 +8,10 @@ import {ShaderEffect} from '../platform/shaderEffect.js';
 import {ZERO_INSETS} from '../lib/frame.js';
 import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
-import {findMetaWindowCached, getWindowActor} from '../platform/window.js';
+import {getWindowActor} from '../platform/window.js';
+import {findMetaWindowCached} from '../platform/windowActor.js';
 import {readDeclaredIdentity} from '../lib/window.js';
-import {getAllMonitorScales} from '../platform/window.js';
+import {getAllMonitorScales} from '../platform/monitor.js';
 
 import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';

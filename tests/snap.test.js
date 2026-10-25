@@ -16,7 +16,7 @@ import {
     getPhysicalMonitorScale,
     resolveMonitorBounds,
 } from '../src/lib/window.js';
-import {getWindowScaleCandidates} from '../src/platform/display.js';
+import {getWindowScaleCandidates} from '../src/platform/monitor.js';
 import {snapDirection, SNAP_EPSILON} from '../src/platform/numeric.js';
 
 function createMockBox() {
