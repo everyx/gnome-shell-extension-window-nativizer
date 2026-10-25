@@ -12,7 +12,7 @@ import {
 import {evaluateWindowActions} from '../src/lib/detector.js';
 import {ProcessClassifier} from '../src/lib/nativeLikeCorners.js';
 import {buildRuleKeyFromProperties} from '../src/lib/rules.js';
-import {extractWindowProperties} from '../src/lib/pick.js';
+import {extractWindowProperties} from '../src/lib/pickProperties.js';
 import {WindowType, WindowClientType} from '../src/lib/mutterRules.generated.js';
 
 describe('window inspection (readWindow)', () => {

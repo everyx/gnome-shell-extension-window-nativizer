@@ -9,11 +9,11 @@ import {
 import {
     chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/rules.js';
-import {
-    WindowClientType, buildRuleKeyFromProperties, extractWindowProperties, extractPhaseProperties,
-    extractDiagnosticProperties, cachedNativeLikeCorners, parseDebugFlag,
-    DIAGNOSTIC_DECORATION_KEYS, INSPECTOR_DBUS_IFACE_XML,
-} from '../src/lib/pick.js';
+import {WindowClientType} from '../src/lib/mutterRules.generated.js';
+import {buildRuleKeyFromProperties} from '../src/lib/rules.js';
+import {extractWindowProperties, extractPhaseProperties} from '../src/lib/pickProperties.js';
+import {extractDiagnosticProperties, cachedNativeLikeCorners, DIAGNOSTIC_DECORATION_KEYS} from '../src/lib/pickDiagnostics.js';
+import {parseDebugFlag, INSPECTOR_DBUS_IFACE_XML} from '../src/lib/pickWire.js';
 
 /** The exact TypeError GJS raises for a MetaWindow string backed by non-UTF-8 bytes. */
 const INVALID_UTF8 = 'String from C value is invalid UTF-8 and cannot be safely stored';

@@ -8,7 +8,7 @@ import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions
 import {parseRuleKey} from '../lib/rules.js';
 import {asMarkup, neverDecorated, ruleSummaryText} from '../lib/rulePresenter.js';
 import {findAppInfoByWmClass} from '../lib/appInfo.js';
-import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH} from '../lib/pick.js';
+import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH} from '../lib/pickWire.js';
 import {PickRefusal, pickVerdict} from '../lib/pickAnswer.js';
 import {readEntries, setWindowRule} from '../lib/settings.js';
 import {showError} from './ruleUi.js';

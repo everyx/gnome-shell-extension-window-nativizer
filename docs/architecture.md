@@ -14,7 +14,9 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
 | `lib/overviewDecoration.js` | the overview's own decoration: the shaped-texture corner mask, the preview opacity bypass, and the shadow clone |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
-| `lib/pick.js` | the picker's bus name/path and property dictionary |
+| `lib/pickWire.js` | the picker's D-Bus wire format: bus name/path, the interface XML, and the flag that selects the debug reply |
+| `lib/pickProperties.js` | the picker's window dictionary: what a window reports about itself, and the two phase reads |
+| `lib/pickDiagnostics.js` | the picker's debug reply: the decoration fields, the process classification, and the field-by-field guarding |
 | `lib/pickTarget.js` | the picker's hit test as a pure function of candidate readings |
 | `lib/pickSuggestion.js` | what a pick should correct: the axes a kind can be corrected on, the suggestion, and whether it would change anything (pure) |
 | `lib/pickHighlight.js` | the picker highlight's geometry: the border's outset box, its concentric corner, and the radius the window is expected to show (pure) |

@@ -25,15 +25,9 @@ import {
     isWindowLocatedOnWorkspace,
 } from '../platform/window.js';
 
-import {
-    INSPECTOR_DBUS_NAME,
-    INSPECTOR_DBUS_PATH,
-    INSPECTOR_DBUS_IFACE_XML,
-    extractWindowProperties,
-    extractDiagnosticProperties,
-    cachedNativeLikeCorners,
-    parseDebugFlag,
-} from './pick.js';
+import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH, INSPECTOR_DBUS_IFACE_XML, parseDebugFlag} from './pickWire.js';
+import {extractWindowProperties} from './pickProperties.js';
+import {extractDiagnosticProperties, cachedNativeLikeCorners} from './pickDiagnostics.js';
 import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {HIGHLIGHT_BG_TRANSPARENTIZE} from './inspectorStyle.generated.js';
