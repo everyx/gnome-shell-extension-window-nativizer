@@ -1,29 +1,35 @@
 name: CI Image
 
-# The image the four CI jobs run in. Built here rather than on every run: installing `gnome-shell`
-# took 84s, 72s and 723s on three consecutive runs, and the variance was the network, not the work.
+# The image the jobs run in, built once rather than installed on every run: `gnome-shell` alone took
+# 84s, 72s and 723s on three consecutive runs, and the variance was the network, not the work.
 #
-# `v1` moves, so the jobs pick up a rebuilt toolchain without a second commit. The `sha-<short>` tag
-# alongside it is the pin: point a job at that tag when a rebuild needs to be deliberate, or when a
-# toolchain regression has to be bisected.
+# `ci.yml` calls this as its first job, so a pull request that changes `.github/docker/**` runs its
+# jobs in the image it just built - `container.image` accepts a `needs` context, and the tag carries
+# the Dockerfile's own hash. Without that call a reviewer had to land the Dockerfile alone and wait
+# for master to publish it before the consuming change could be tested at all.
 #
-# A pull request builds the image but does not publish it, so a broken Dockerfile fails review rather
-# than a later master push; only master, the schedule and a manual dispatch publish.
+# A request that leaves `.github/docker/**` untouched publishes nothing: `v1` is already that image,
+# and the call returns in seconds without a build.
+#
+# `v1` moves, so the jobs pick up a rebuilt toolchain without a second commit. The `sha-` and
+# `docker-` tags alongside it are pins: point a job at one when a rebuild needs to be deliberate, or
+# when a toolchain regression has to be bisected.
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - '.github/docker/**'
-      - '.github/workflows/ci-image.yml'
-  pull_request:
-    paths:
-      - '.github/docker/**'
-      - '.github/workflows/ci-image.yml'
-  # Monthly, so Ubuntu security updates reach the toolchain without anyone remembering.
+  # The monthly rebuild is what carries Ubuntu security updates into the toolchain without anyone
+  # remembering to; `workflow_dispatch` is how a bisect gets an image for a specific commit.
   schedule:
     - cron: '0 6 1 * *'
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      ref:
+        description: The image reference the caller's jobs should run in.
+        value: ${{ jobs.build.outputs.ref }}
+
+permissions:
+  contents: read
+  packages: write
 
 concurrency:
   group: ci-image-${{ github.ref }}
@@ -33,39 +39,68 @@ jobs:
   build:
     name: Build and push
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      ref: ${{ steps.decide.outputs.ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # The decide step diffs against the base, which it fetches for itself at depth 1.
+          fetch-depth: 1
+
+      - name: Decide which image this run needs
+        id: decide
+        run: |
+          set -euo pipefail
+          published="ghcr.io/${{ github.repository_owner }}/window-nativizer-ci:v1"
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            # master, the schedule and a manual run all publish the moving tag.
+            echo "ref=${published}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          if git diff --quiet FETCH_HEAD -- .github/docker/; then
+            echo "::notice::.github/docker is unchanged, so the jobs run in ${published}"
+            echo "ref=${published}" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "::error::This pull request changes .github/docker but comes from a fork, so its image cannot be published. Land the Dockerfile change separately, or open the pull request from a branch in this repository."
+            exit 1
+          fi
+
+          # Keyed on the Dockerfile's content: the same file is the same image, so a second pull
+          # request that makes the same change pushes no new layers.
+          hash="$(sha256sum .github/docker/Dockerfile | cut -c1-12)"
+          echo "ref=ghcr.io/${{ github.repository_owner }}/window-nativizer-ci:docker-${hash}" >> "$GITHUB_OUTPUT"
+          echo "build=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
+        if: steps.decide.outputs.build == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: steps.decide.outputs.build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Image tags and labels
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/window-nativizer-ci
-          tags: |
-            type=raw,value=v1
-            type=sha,format=short
-
       - name: Build and push
+        if: steps.decide.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .github/docker
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          tags: ${{ steps.decide.outputs.ref }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

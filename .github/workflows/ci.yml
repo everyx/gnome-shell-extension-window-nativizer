@@ -6,18 +6,30 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  image:
+    name: CI Image
+    # Built here rather than in its own workflow, because a pull request that changes the Dockerfile
+    # has to run its jobs in the image it just built; `needs` is the only ordering Actions offers.
+    uses: ./.github/workflows/ci-image.yml
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+
   lint:
     name: Code Quality & Style
     runs-on: ubuntu-latest
+    needs: image
     container:
       # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
-      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
-      image: ghcr.io/everyx/window-nativizer-ci:v1
+      # and 723s on three consecutive runs, and the variance was the network. ci-image.yml builds it.
+      image: ${{ needs.image.outputs.ref }}
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -50,10 +62,11 @@ jobs:
   ego-lint:
     name: EGO Reviewer Compliance
     runs-on: ubuntu-latest
+    needs: image
     container:
       # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
-      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
-      image: ghcr.io/everyx/window-nativizer-ci:v1
+      # and 723s on three consecutive runs, and the variance was the network. ci-image.yml builds it.
+      image: ${{ needs.image.outputs.ref }}
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -83,10 +96,11 @@ jobs:
   test:
     name: Unit Tests (GJS + Jasmine)
     runs-on: ubuntu-latest
+    needs: image
     container:
       # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
-      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
-      image: ghcr.io/everyx/window-nativizer-ci:v1
+      # and 723s on three consecutive runs, and the variance was the network. ci-image.yml builds it.
+      image: ${{ needs.image.outputs.ref }}
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
       - name: Checkout repository
@@ -110,10 +124,11 @@ jobs:
   pack:
     name: Extension Package Build
     runs-on: ubuntu-latest
+    needs: image
     container:
       # The system dependencies live here, not in an apt step: installing gnome-shell took 84s, 72s
-      # and 723s on three consecutive runs, and the variance was the network. Built by ci-image.yml.
-      image: ghcr.io/everyx/window-nativizer-ci:v1
+      # and 723s on three consecutive runs, and the variance was the network. ci-image.yml builds it.
+      image: ${{ needs.image.outputs.ref }}
     permissions:
       contents: read
       pull-requests: write
