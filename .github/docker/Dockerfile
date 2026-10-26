@@ -1,9 +1,9 @@
 # The system half of this repository's CI, built once instead of installed on every run.
 #
 # `Install packaging tools` was measured at 84s, 72s and 723s across three runs: the variance is the
-# network, not the work, and it is the single longest step in the pipeline. Everything the four jobs
-# need lives here instead, including jasmine-gjs, which the unit tests used to clone and compile on
-# every run.
+# network, not the work, and it is the single longest step in the pipeline. Everything the jobs need
+# lives here instead, including jasmine-gjs, which the unit tests used to clone and compile on every
+# run.
 #
 # The base is pinned to the Ubuntu release `ubuntu-latest` currently points at. That also walls off
 # the announced switch of `ubuntu-latest` to 26.04 in November 2026: a toolchain change should be a
@@ -14,12 +14,14 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # gnome-shell brings `gnome-extensions`, which is what `pnpm run build` packs with; gjs runs the
-# unit tests; glib-compile-schemas and msgfmt come from libglib2.0-dev-bin and gettext.
+# unit tests; glib-compile-schemas and msgfmt come from libglib2.0-dev-bin and gettext. `gh` uploads
+# the release asset: the hosted runner preinstalls it, a container does not.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         gettext \
+        gh \
         git \
         gir1.2-graphene-1.0 \
         gjs \
