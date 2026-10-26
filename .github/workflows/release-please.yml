@@ -28,6 +28,10 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
+    container:
+      # The same image the CI jobs pack in, so the released zip is built by the toolchain the
+      # package job already verified rather than by whatever apt resolves on release day.
+      image: ghcr.io/everyx/window-nativizer-ci:v1
     steps:
       - name: Checkout tagged code
         uses: actions/checkout@v7
@@ -42,11 +46,6 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
-
-      - name: Install packaging tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnome-shell gettext libglib2.0-dev-bin
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
