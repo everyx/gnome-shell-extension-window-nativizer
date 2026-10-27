@@ -8,17 +8,11 @@ import {clipFrameFor, ZERO_PHASE} from './snap.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;
 
-// Re-exported: the phase readers need these too, and platform may not import from lib/.
-export {isCompatibleSurfaceGeometry, isForeignWidget};
-
 /** The first child is not automatically the surface: an extension can inject an St.Widget ahead. */
 export function getX11SurfaceChild(actor, St = null) {
     const children = actor?.get_children?.() ?? [];
     return children.find(child => !isForeignWidget(child, St)) ?? null;
 }
-
-/** Re-exported from the platform seam, so the resolver's wait case cannot drift from that rule. */
-export {isUnallocatedSurfaceBox};
 
 /** The container comes from `getSurfaceContainer`, so clip and phase mirror name one actor. */
 export function resolveClipTarget(win, actor, St = null, surfaceContainer = undefined) {

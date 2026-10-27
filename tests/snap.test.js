@@ -11,11 +11,9 @@ import {
     snapSliceBoxesInto,
     snapSliceRects,
 } from '../src/lib/snap.js';
-import {
-    findMetaWindow,
-    getPhysicalMonitorScale,
-    resolveMonitorBounds,
-} from '../src/lib/window.js';
+import {resolveMonitorBounds} from '../src/lib/window.js';
+import {findMetaWindow} from '../src/platform/windowActor.js';
+import {getPhysicalMonitorScale} from '../src/platform/monitor.js';
 import {getWindowScaleCandidates} from '../src/platform/monitor.js';
 import {snapDirection, SNAP_EPSILON} from '../src/platform/numeric.js';
 

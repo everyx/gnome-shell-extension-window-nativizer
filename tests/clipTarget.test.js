@@ -9,11 +9,13 @@ import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {
     clipFrameForTarget,
     getX11SurfaceChild,
-    isForeignWidget,
-    isCompatibleSurfaceGeometry,
     isIntegerAlignedSurfaceBox,
     resolveClipTarget,
 } from '../src/lib/clipTarget.js';
+import {
+    isForeignWidget,
+    isCompatibleSurfaceGeometry,
+} from '../src/platform/surfaceContainer.js';
 
 const CLIP_SIZE = {width: 500, height: 400};
 const CLIP_INSETS = {left: 8, top: 8, right: 8, bottom: 8};

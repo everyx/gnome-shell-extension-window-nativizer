@@ -9,15 +9,13 @@ import {
 import {insetsFromRects} from './frame.js';
 import {clientDeclaredRing} from './detector.js';
 import {getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowTiled} from '../platform/window.js';
-import {findMetaWindow, getTrackedAppId, getWindowFromActor} from '../platform/windowActor.js';
+import {getTrackedAppId, getWindowFromActor} from '../platform/windowActor.js';
 import {resolveMonitorBounds, getWindowActors} from '../platform/display.js';
 import {getPhysicalMonitorScale, getWindowScaleCandidates} from '../platform/monitor.js';
 import {safeRead, readWindowString} from '../platform/read.js';
 import {offscreenScaleCandidates} from './offscreenBox.js';
 
-export {getPhysicalMonitorScale, resolveMonitorBounds, getWindowFromActor, findMetaWindow};
-
-export {safeRead, readWindowString};
+export {resolveMonitorBounds, safeRead};
 
 /** First non-blank source wins; a whitespace-only XWayland class is no identity nor rule key. */
 export function readDeclaredIdentity(win) {
