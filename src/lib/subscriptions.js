@@ -1,9 +1,8 @@
 /**
  * The signals one owner holds: connect through it, hand them all back in one call at teardown.
  *
- * Two shapes were written four times over - a list of `[object, id]` pairs, a connect that may
- * swallow, and a disconnect that always does. The pair is what makes teardown correct: the id
- * alone cannot be disconnected from, and the object alone cannot say which id to drop.
+ * The pair is what makes teardown correct: the id alone cannot be disconnected from, and the
+ * object alone cannot say which id to drop.
  */
 
 export class Subscriptions {
