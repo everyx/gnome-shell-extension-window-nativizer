@@ -22,7 +22,6 @@ gnome-extensions pack src \
   --extra-source=prefs \
   --extra-source=effects \
   --extra-source=icons \
-  --extra-source=stylesheet.css \
   --extra-source=locale \
   --extra-source=LICENSE \
   --out-dir=dist
