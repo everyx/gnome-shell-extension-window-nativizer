@@ -38,11 +38,8 @@ import {
     highlightBoundingBox,
     highlightOuterRadius,
 } from './pickHighlight.js';
-import {
-    getWindowFromActor,
-    readWindow,
-    resolveWindowIdentity,
-} from './window.js';
+import {readWindow, resolveWindowIdentity} from './window.js';
+import {getWindowFromActor} from '../platform/windowActor.js';
 
 // Highlight styling mirrors upstream Shell's pickers.
 
@@ -60,7 +57,6 @@ export class InspectorService {
         this._highlight = null;
         this._pendingInvocation = null;
         this._pendingDiagnostics = false;
-
         // The export is acquired here, so a failure after it must be undone here: enable() cannot
         // roll this back, because the object it would call destroy() on does not exist yet.
         try {
