@@ -92,10 +92,13 @@ export class InspectorService {
         }
 
         if (this._dbusImpl) {
-            this._dbusImpl.unexport();
-            // `wrapJSObject`'s handlers form a cycle GJS never collects: disconnect them too.
-            GObject.signal_handlers_destroy(this._dbusImpl);
-            this._dbusImpl = null;
+            try {
+                this._dbusImpl.unexport();
+            } finally {
+                // `wrapJSObject`'s handlers form a cycle GJS never collects: disconnect them too.
+                GObject.signal_handlers_destroy(this._dbusImpl);
+                this._dbusImpl = null;
+            }
         }
     }
 

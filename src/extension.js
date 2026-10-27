@@ -20,12 +20,14 @@ export default class WindowNativizerExtension extends Extension {
     }
 
     disable() {
+        // The manager's teardown does not wait on the inspector's: leaving `_manager` set would
+        // make enable() return early from then on.
         try {
             this._inspector?.destroy();
         } finally {
             this._inspector = null;
+            this._manager.disable();
+            this._manager = null;
         }
-        this._manager.disable();
-        this._manager = null;
     }
 }
