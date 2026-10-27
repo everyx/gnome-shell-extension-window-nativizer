@@ -301,6 +301,24 @@ added to the reply. There is no non-interactive path - the diagnostics still req
 that gesture is the user's authorisation to read the state. There is one knob, so a map would add
 parsing rules without adding meaning.
 
+**Who may call it: any local process.** The click is the gate, not the caller's identity. The
+method takes a modal grab and answers with the picked window's title, so a caller can freeze input
+until the user clicks or presses Escape, and then learn that one title. That is the whole of what an
+unwanted caller gets, and it is worth being explicit about why nothing narrower is in place.
+
+A session bus cannot tell two processes of one user apart: unique names change per connection,
+`GetConnectionUnixProcessID` proves a pid and nothing about what the process is, and the file it
+could be asked to read is readable by the caller too. The candidates left are worse than the
+problem. A well-known name the preferences window owns is a capability rather than an identity -
+whoever claims it first is trusted, and claiming it costs one call - so it filters out exactly the
+callers that would never have called. An allowlist of names baked in at build time has nothing
+stable to name.
+
+The model the platform already uses is installation, not invocation: an extension is JavaScript
+running inside the shell process, so anything that could get past a check here can call
+`Meta.Window.get_title()` directly. Installing an extension, or running a program, is the user's
+trust decision; a method that needs a click on a window is not the place to re-take it.
+
 The reply is a **read-only** observation of the live window, its actor and its decoration: it does
 not mutate the window or its decoration, does not start a probe, and prints nothing to the journal.
 Even the process classification is read from the cache (`nativeLikeCorners`); the reply never
@@ -322,7 +340,8 @@ gdbus call --address "$BUS" --dest "$IFACE" --object-path "$OBJ" \
 ```
 
 A call with no argument is rejected with `InvalidArgs` rather than read as `false`: D-Bus has no
-default arguments, and a stale caller must fail loudly.
+default arguments, and a stale caller must fail loudly. Nothing else is required - no unsafe mode,
+no name to claim - because the click already gates it.
 
 ### Field split
 
