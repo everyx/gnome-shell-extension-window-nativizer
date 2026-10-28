@@ -403,7 +403,8 @@ test runner or CI belongs to the check that enforces it and finds its own way to
 source it is noise the next reader has to skip, and it rots the moment the tool changes. Write the
 fact the code acts on instead: "pure, so the arithmetic can be read as data", not "so a spec can
 assert it". If a comment only makes sense to someone reading the pipeline, it belongs in this file,
-not beside the code.
+not beside the code. The two halves of that a grep can hold - a rule id, and the name of a checker
+or a script - are in `check-style.sh`; the rest is left to the reader.
 
 Moving is not deleting: before dropping a comment, the fact it carries has to be readable
 from the names and structure around it, or already in `docs/` - compress while moving, never
@@ -496,9 +497,10 @@ claim and its evidence got fused into one sentence and became hard to check.
 semicolons. Private members are `_method` and `_field`, which is what the GJS tree around this
 extension does: 77 `_method` declarations, and not one `#field`. Lines aim at 100 characters, and
 an `import` or a call chain may run past it - a width forced there would be won back by an alias
-nobody wants to read. No rule here is machine-checked on purpose: `check-style.sh` holds the
-three that can be (`docs/` pointers, `@param {type}`, a hand-written `.disconnect(`), and a fourth
-grep for prose would only teach the tree to write around it.
+nobody wants to read. Formatting is not machine-checked here on purpose, but five lexical rules
+are, in `check-style.sh`: a `docs/` pointer, `@param {type}`, a hand-written `.disconnect(`, a
+comment naming a rule id, and a comment naming a checker. Those five are names, not prose - a grep
+for how a comment reads would only teach the tree to write around it.
 
 ## Code conventions (代码约定)
 
