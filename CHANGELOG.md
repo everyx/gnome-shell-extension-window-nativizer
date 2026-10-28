@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.3](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.2...v0.11.3) (2026-10-28)
+
+
+### Bug Fixes
+
+* **license:** ship the GPL-2 text unmodified ([4664f0d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4664f0d821e602ec4776c6899bc8465c2e5f49c9))
+* **metadata:** say what the extension actually does with a client's data ([189e0eb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/189e0ebcbfedf2a4a8863ba51a5fc971757b4626))
+* **teardown:** finish the rest of a cleanup when one step fails ([dd913e3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dd913e337bbc805bf9259b9dfab7b4af6eecf1db))
+
+
+### Documentation
+
+* **dev:** say why the picker answers any local process ([854f690](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/854f6907305320348d72c1d9e3c6868e64fd9b32))
+
 ## [0.11.2](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.1...v0.11.2) (2026-10-25)
 
 
