@@ -335,10 +335,10 @@ export class InspectorService {
     _cancelInteractivePick() {
         this._pendingDiagnostics = false;
         if (this._pendingInvocation) {
-            const inv = this._pendingInvocation;
+            const invocation = this._pendingInvocation;
             this._pendingInvocation = null;
             try {
-                inv.return_value(new GLib.Variant('(a{ss})', [{}]));
+                invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
             } catch {
                 // The invocation is already gone.
             }

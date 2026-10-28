@@ -34,7 +34,7 @@ function styleColor(shadows) {
 }
 
 export function styleKey(radius, shadows) {
-    // Include color in key to prevent collision between light and dark theme bakes.
+    // Include colour in the key, so a light and a dark bake cannot collide.
     const layers = shadows.map(s => `${s.blur},${s.spread},${s.alpha},${(s.color ?? [0, 0, 0]).join(',')}`);
     return `${radius}|${layers.join(';')}`;
 }
