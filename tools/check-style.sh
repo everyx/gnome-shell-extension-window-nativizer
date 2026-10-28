@@ -38,3 +38,20 @@ if grep -rnE '^[[:space:]]*(//|\*|/\*)' src --include='*.js' \
     echo "[check-style] A src comment points at documentation: a comment must stand on its own." >&2
     exit 1
 fi
+
+# The one prose-adjacent rule that is lexical enough to grep: a comment may not name the machinery
+# that judges the code - a rule id, a lint tool, a script, a test runner. Those belong to the check
+# that enforces them, and they rot the moment the tool is renamed. This is narrower than "watch the
+# prose", which no grep can do; it only matches names, never style.
+if grep -rnE '^[[:space:]]*(//|\*|/\*)' src --include='*.js' \
+        | grep -v '\.generated\.js' \
+        | grep -E '\bR[0-9]{1,2}\b|\bEGO(-[A-Z]-[0-9]{3})?\b'; then
+    echo "[check-style] A src comment cites a rule id: write the fact the code acts on instead." >&2
+    exit 1
+fi
+if grep -rniE '^[[:space:]]*(//|\*|/\*)' src --include='*.js' \
+        | grep -v '\.generated\.js' \
+        | grep -E '\b(reviewers?|linters?|eslint|shexli|ego-lint|check-style|check-package|lint-zip|pnpm|specs?)\b'; then
+    echo "[check-style] A src comment names a checker, a script or a spec: that belongs beside the check." >&2
+    exit 1
+fi
