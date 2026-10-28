@@ -209,8 +209,7 @@ export const RoundedClipEffect = GObject.registerClass({
     /** Hands the paint the reference sizes it settles against; the shadow gets the same plan. */
     setBodyPlan(plan) {
         const next = plan ?? null;
-        const previous = this._bodyPlan;
-        if (previous === next)
+        if (this._bodyPlan === next)
             return;
         this._bodyPlan = next;
         // Only a paint nothing else queued could miss the moved edge; the repaint is not redundant.

@@ -12,7 +12,7 @@ export function styleForWindow(winState) {
     if (winState.maximized)
         return {...window.maximized, outline: null};
     if (winState.tiled) {
-        // Tiled border approximates upstream currentColor mix using system color scheme.
+        // Tiled border approximates upstream's currentColor mix using the system colour scheme.
         const color = winState.dark ? [255, 255, 255] : [0, 0, 0];
         return {
             ...window.tiled,
