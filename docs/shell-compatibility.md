@@ -186,6 +186,36 @@ defect that fires on a normal path has to be dealt with here rather than worked 
   from Mutter when pinging a client window that has unmapped or severed its Wayland connection during stress
   tests. Counted and reported.
 
+## Diagnostic lines that describe a transient
+
+Three lines we print ourselves name a state that clears on its own. They are latched per episode -
+one line per run of violating passes, re-armed by a pass that agrees - so the question a repeated
+line asks is not what it means but whether it cleared. All three were measured on a live session
+before anything was changed.
+
+- **`Offscreen box WxH device px is not this box at any monitor scale, against the WxH FBO Clutter
+  allocated`**. The clip paints through an offscreen target, and this says the FBO still has the
+  extent of an earlier, larger actor - 383x718 against 407x718 for a window that had just narrowed,
+  fifteen times in one boot across five applications, with each episode clearing within seconds.
+  The paint goes ahead and Clutter's blit compresses the window for those frames. Suspending
+  instead would trade a one-frame compression for a one-frame blank plus a corner that switches
+  back, which is worse for something this short, so the line stays as it is: it is the only signal
+  that the extent was ever wrong.
+
+- **`Window buffer WxH at (x,y) disagrees with the window actor allocation`** and
+  **`Shadow body authority WxH disagrees with the shadow body`**. The clip's body is settled once
+  per pass and kept in `BodyPlan`; both cuts then recompute from that plan every paint, without
+  advancing the strike count that ends a disagreement. A window that has stopped moving sends no
+  signal, so nothing produced the second pass that lets the settle give up, and the wrong body
+  stayed until something unrelated woke it - a WPS print dialog that only a drag could fix. The
+  pass that cannot decide now asks for the one that can, which bounds the episode at two passes.
+
+- **`Fallback subpixel phase unavailable: mirror (x,y) applied (x,y) exceeds 2px`**. The applied
+  phase is read from a container's matrix translation minus its own layout origin, and for one
+  window that subtraction did not remove the offset: `(-960,-600)` against a 1920x1200 monitor is
+  the layout origin, not a phase. The rule that rejects it now lives in the reader rather than in
+  this report, so the read answers null and every caller falls back to the mirror.
+
 ## Working rules
 
 - **The decisions and queries are pure (Command-Query Separation).** Everything that decides
