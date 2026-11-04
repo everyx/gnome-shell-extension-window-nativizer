@@ -12,7 +12,7 @@ import {getPhysicalMonitorScale, invalidateMonitorCache} from '../src/platform/m
 import {countSurfaceActorsCoveringBox, getSurfaceContainer} from '../src/platform/surfaceContainer.js';
 import {getWindowActor, getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowDisplayTitle, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowHidden, isWindowLocatedOnWorkspace, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowMinimized, isWindowOnAllWorkspaces, isWindowTiled} from '../src/platform/window.js';
 import {findMetaWindow, findMetaWindowCached, getWindowFromActor} from '../src/platform/windowActor.js';
-import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../src/platform/windowPhase.js';
+import {getAppliedSubpixelPhase, getWindowSubpixelOffset, PHASE_MAGNITUDE_BOUND} from '../src/platform/windowPhase.js';
 import {
     getDisplay,
     getFocusWindow,
@@ -1373,6 +1373,26 @@ describe('platform', () => {
             const win = waylandWin([container, other]);
             expect(getAppliedSubpixelPhase(win)).toBeNull();
             expect(getAppliedSubpixelPhase(win, null, container)).toEqual({x: 0.25, y: 0.25});
+        });
+
+        it('refuses a transform carrying a layout offset instead of a phase', () => {
+            // From a live session: one container's matrix translated by the layout origin while its
+            // own x and translation_x read 0, so the subtraction left (-960,-600) against a
+            // 1920x1200 monitor. Past the subpixel range that is a position, not a phase; returning
+            // it would displace the shadow by the whole offset, so the read answers null and the
+            // callers fall back to the mirror - which is what the warning already described.
+            const container = {
+                x: 0, y: 0, translation_x: 0, translation_y: 0,
+                get_transform: () => matrix({tx: -960, ty: -600}),
+            };
+            expect(getAppliedSubpixelPhase(waylandWin([container]))).toBeNull();
+
+            // The bound itself is still a phase: two logical px at most, on either axis.
+            const atBound = {
+                x: 0, y: 0, get_transform: () => matrix({tx: PHASE_MAGNITUDE_BOUND, ty: -PHASE_MAGNITUDE_BOUND}),
+            };
+            expect(getAppliedSubpixelPhase(waylandWin([atBound])))
+                .toEqual({x: PHASE_MAGNITUDE_BOUND, y: -PHASE_MAGNITUDE_BOUND});
         });
 
         it('answers null for a non-Wayland client', () => {

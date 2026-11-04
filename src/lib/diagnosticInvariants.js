@@ -1,6 +1,7 @@
 /** Every diagnostic line: the predicates, the episode latch, and how a message is shaped. */
 
 import {OFFSCREEN_BOX_TOLERANCE} from './offscreenBox.js';
+import {isSubpixelPhase, PHASE_MAGNITUDE_BOUND} from '../platform/windowPhase.js';
 
 /** One device px, the subpixel phase an edge may carry; the geometry module owns the number. */
 export {OFFSCREEN_BOX_TOLERANCE};
@@ -13,8 +14,8 @@ export const BUFFER_ACTOR_TOLERANCE = 0.5;
 /** The misalignment seen is a whole device px; this sits far below it, above float residue. */
 export const PHASE_ALIGNMENT_TOLERANCE = 0.05;
 
-/** A real phase is under `1 / scale` logical px: Mutter snaps to the grid, so more is a position. */
-export const PHASE_MAGNITUDE_BOUND = 2;
+/** The read's own bound, so the reporter and the reader cannot disagree about what a phase is. */
+export {PHASE_MAGNITUDE_BOUND};
 
 export function freshInvariantState() {
     return {strikes: 0, warned: false};
@@ -83,7 +84,7 @@ export function phaseAlignmentWarning(mirror, applied, label = windowIdentityLab
         return null;
 
     // Past the subpixel range a read is a position or stale transform: unavailable, with raw values.
-    if (!boundedPhase(mirror) || !boundedPhase(applied)) {
+    if (!isSubpixelPhase(mirror) || !isSubpixelPhase(applied)) {
         return `Fallback subpixel phase unavailable for ${label}: mirror ` +
             `${phaseSummary(mirror)} applied ${phaseSummary(applied)} exceeds ` +
             `${PHASE_MAGNITUDE_BOUND}px`;
@@ -156,13 +157,6 @@ function rectSummary(rect) {
 
 function finitePhase(phase) {
     return Boolean(phase) && Number.isFinite(phase.x) && Number.isFinite(phase.y);
-}
-
-/** False is out of the subpixel range on an axis: a position or stale transform, not a phase. */
-function boundedPhase(phase) {
-    return finitePhase(phase) &&
-        Math.abs(phase.x) <= PHASE_MAGNITUDE_BOUND &&
-        Math.abs(phase.y) <= PHASE_MAGNITUDE_BOUND;
 }
 
 function phaseSummary(phase) {

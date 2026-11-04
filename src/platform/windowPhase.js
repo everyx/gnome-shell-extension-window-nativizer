@@ -6,6 +6,16 @@ import {getSurfaceContainer} from './surfaceContainer.js';
 import {monitorGeometryAt, monitorScaleAt, resolveFrameMonitorIndex} from './monitor.js';
 import {getWindowActor, getWindowClientType} from './window.js';
 
+/** A real phase is under `1 / scale` logical px: Mutter snaps to the grid, so more is a position. */
+export const PHASE_MAGNITUDE_BOUND = 2;
+
+/** False on either axis is a position or a stale transform, which no caller may act on. */
+export function isSubpixelPhase(phase) {
+    return Boolean(phase) && Number.isFinite(phase.x) && Number.isFinite(phase.y) &&
+        Math.abs(phase.x) <= PHASE_MAGNITUDE_BOUND &&
+        Math.abs(phase.y) <= PHASE_MAGNITUDE_BOUND;
+}
+
 /** Mirror of Mutter's subpixel phase: `roundf` snaps away from zero, `Math.round` does not. */
 export function getWindowSubpixelOffset(win, St = null, container = null) {
     if (!win)
@@ -89,8 +99,10 @@ export function getAppliedSubpixelPhase(win, St = null, container = null) {
         // A torn-down container hands back NaN, and assigning that to a translation is a critical.
         if (!Number.isFinite(x) || !Number.isFinite(y))
             return null;
-
-        return {x, y};
+        // The subtraction assumes the transform is position plus translation plus phase. A container
+        // that carries a layout offset instead is not a reading: null sends the caller to the mirror.
+        const phase = {x, y};
+        return isSubpixelPhase(phase) ? phase : null;
     } catch {
         return null;
     }
