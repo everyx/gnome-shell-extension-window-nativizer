@@ -2804,6 +2804,7 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
         _RoundedClipEffect: 'session',
         _ShadowActor: 'session',
         _ResizeBand: 'session',
+        _requestPass: 'session',
         overview: 'window',
         clip: 'resource',
         shadow: 'resource',
@@ -2883,5 +2884,51 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
 
         expect(deco.clip).toBeNull();
         expect(deco.resizeBand).toBeNull();
+    });
+});
+
+describe('WindowDecoration settle (a body the settle does not believe)', () => {
+    // The settle gives up on a disagreement only after INVARIANT_STRIKES passes, and a paint cannot
+    // advance that count: `resolvePaintBody` runs per paint, but the plan is written only here.
+    // That makes this call the whole recovery path for a window that sends no more signals.
+    const quiet = new Journal({warn: () => {}});
+    const box = (width, height = 600) => ({width, height});
+    const makeDeco = requestPass => new WindowDecoration(null,
+        {container: {}, display: {}, journal: quiet, requestPass});
+
+    const settlePass = (deco, {target, actor, window}) => deco._settlePass(
+        {clipTarget: box(target), windowSize: box(window), buffer: null, ringNow: null},
+        box(actor));
+
+    it('asks once for another pass while the hold lasts, then stops asking', () => {
+        const requestPass = jasmine.createSpy('requestPass');
+        const deco = makeDeco(requestPass);
+        // A confirmed first pass, so the pair below has a window size to be measured against.
+        deco.bodyPlan.next({targetSize: box(800), windowActorSize: box(800), windowSize: box(800)});
+
+        // 796 against 804 with the window at 800: neither is confirmed, which is the hold.
+        settlePass(deco, {target: 796, actor: 804, window: 800});
+        expect(requestPass).toHaveBeenCalledTimes(1);
+
+        // The second pass spends the strike budget and settles on the actor: nothing to ask.
+        settlePass(deco, {target: 796, actor: 804, window: 800});
+        expect(requestPass).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for nothing when the pair agrees', () => {
+        const requestPass = jasmine.createSpy('requestPass');
+        const deco = makeDeco(requestPass);
+        deco.bodyPlan.next({targetSize: box(800), windowActorSize: box(800), windowSize: box(800)});
+
+        settlePass(deco, {target: 800, actor: 800, window: 800});
+
+        expect(requestPass).not.toHaveBeenCalled();
+    });
+
+    it('settles without a requestPass at all, so the option stays optional', () => {
+        const deco = makeDeco(undefined);
+        deco.bodyPlan.next({targetSize: box(800), windowActorSize: box(800), windowSize: box(800)});
+
+        expect(() => settlePass(deco, {target: 796, actor: 804, window: 800})).not.toThrow();
     });
 });

@@ -32,6 +32,7 @@ export class WindowDecoration {
         this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
         this._journal = options.journal ?? journal;
+        this._requestPass = options.requestPass ?? null;
 
         // The overview's decoration owns its lifecycle; the desktop reads its mode, nothing more.
         this.overview = new OverviewDecoration(win, {
@@ -266,11 +267,16 @@ export class WindowDecoration {
 
     /** Written last: a throw must not advance the episode, though an attached effect stays. */
     _settlePass(read, winActor) {
-        this.bodyPlan.next({
+        const settled = this.bodyPlan.next({
             targetSize: readActorSize(read.clipTarget),
             windowActorSize: readActorSize(winActor),
             windowSize: read.windowSize,
         });
+        // A settle that kept a body it does not believe needs another pass to give up on it, and
+        // nothing else asks for one: without this the body stays on the losing read until an
+        // unrelated signal arrives, which for a stopped window means never.
+        if (settled.unsettled)
+            this._requestPass?.();
         this._witness = {buffer: read.buffer, ring: read.ringNow};
     }
 
