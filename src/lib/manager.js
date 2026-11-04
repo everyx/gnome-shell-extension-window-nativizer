@@ -217,6 +217,8 @@ export class Manager {
             OverviewMask: overviewMask,
             OverviewShadow,
             St,
+            // `touch` debounces, so a burst of undecided settles is still one pass.
+            requestPass: () => this._tracking?.touch(win),
         });
         this._tracking.add(win, deco);
     }
