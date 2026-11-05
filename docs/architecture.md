@@ -291,6 +291,7 @@ group-with-a-suffix pattern): a pick is the primary way a rule comes into being,
 from the clipboard is the other. Rows destroy themselves from inside their own signal handlers,
 so the rebuild is deferred to an idle - one pending idle is enough because it reads the rules
 when it runs. The prefs window may be hidden for the modal picker and still be closed, so a
-liveness guard backs the D-Bus reply; an empty reply is a cancelled pick and is silent, while a
-missing suggestion (a shell that has not reloaded since an update) is refused with its own toast
-because there is no correction to apply. Writes are verified before success is claimed.
+liveness guard backs the D-Bus reply; a reply with no rule key is a cancelled pick or a window
+that could not be read at that instant - silent when it is empty, and refused with its own toast
+when the title made it non-empty - while a missing suggestion (a shell that has not reloaded since
+an update) is refused with its own toast because there is no correction to apply. Writes are verified before success is claimed.

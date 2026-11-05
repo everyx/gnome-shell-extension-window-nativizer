@@ -2,7 +2,6 @@ import {
     readWindow,
     readDeclaredIdentity,
     safeRead,
-    isWindowReading,
     isClassificationPending,
     reconcileOutcome,
 } from '../src/lib/window.js';
@@ -104,16 +103,6 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasParent).toBeFalse();
         expect(reading.isAttachedDialog).toBeFalse();
         expect(reading.allowsResize).toBeTrue();
-    });
-
-    it('supports wmClassOverride option', () => {
-        const win = {
-            get_buffer_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
-            get_frame_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
-            get_wm_class: () => 'original_class',
-        };
-        const reading = readWindow(win, {wmClassOverride: 'custom_override'});
-        expect(reading.wmClass).toBe('custom_override');
     });
 
     it('carries an unreadable monitor scale as null, not the 1.0 identity', () => {
@@ -405,7 +394,7 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeNull();
     });
 
-    it('handles throwing identity resolvers while respecting wmClassOverride chaining', () => {
+    it('survives identity resolvers that throw, and reads no identity at all', () => {
         const throwingIdentityWin = {
             get_buffer_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
             get_frame_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
@@ -423,13 +412,9 @@ describe('window inspection (readWindow)', () => {
             },
         };
 
-        const overrideReading = readWindow(throwingIdentityWin, {wmClassOverride: 'explicit_override'});
-        expect(overrideReading).not.toBeNull();
-        expect(overrideReading.wmClass).toBe('explicit_override');
-
-        const fallbackReading = readWindow(throwingIdentityWin);
-        expect(fallbackReading).not.toBeNull();
-        expect(fallbackReading.wmClass).toBe('');
+        const reading = readWindow(throwingIdentityWin);
+        expect(reading).not.toBeNull();
+        expect(reading.wmClass).toBe('');
     });
 
     it('passes pid fallback -1 to classifier.hasGtk4Client when win.get_pid throws', () => {
@@ -588,23 +573,6 @@ describe('safeRead', () => {
         expect(safeRead(() => {
             throw new Error('finalized');
         }, false)).toBeFalse();
-    });
-});
-
-describe('isWindowReading', () => {
-    it('returns true for valid WindowReading objects', () => {
-        expect(isWindowReading({
-            clientTypeToken: 'wayland',
-            frameRect: {x: 0, y: 0, width: 800, height: 600},
-        })).toBeTrue();
-    });
-
-    it('returns false for raw Meta.Window or non-reading objects', () => {
-        expect(isWindowReading(null)).toBeFalse();
-        expect(isWindowReading(undefined)).toBeFalse();
-        expect(isWindowReading({})).toBeFalse();
-        expect(isWindowReading({get_frame_rect: () => ({})})).toBeFalse();
-        expect(isWindowReading({clientTypeToken: 123})).toBeFalse();
     });
 });
 

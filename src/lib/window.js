@@ -70,7 +70,7 @@ export function resolveWindowIdentity(win) {
 }
 
 /** Full snapshot, or null when the window is inaccessible; C-boundary throws are absorbed. */
-export function readWindow(win, {wmClassOverride = null, classifier = null} = {}) {
+export function readWindow(win, {classifier = null} = {}) {
     if (!win)
         return null;
 
@@ -116,7 +116,7 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
     const allowsResize = safeRead(() => isWindowAllowsResize(win), true);
 
     const declaredWmClass = safeRead(() => readDeclaredIdentity(win), '');
-    const wmClass = wmClassOverride || declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
+    const wmClass = declaredWmClass || safeRead(() => resolveWindowIdentity(win), '');
 
     // Null while read is pending or if classifier fails during teardown.
     const nativeLikeCorners = safeRead(() => {
@@ -167,16 +167,6 @@ export function readWindow(win, {wmClassOverride = null, classifier = null} = {}
         tiled,
         pid,
     };
-}
-
-/** Snapshot rather than a raw Meta.Window: it carries a client type token and a frame rect. */
-export function isWindowReading(value) {
-    return Boolean(
-        value &&
-        typeof value === 'object' &&
-        typeof value.clientTypeToken === 'string' &&
-        'frameRect' in value
-    );
 }
 
 /** Null means in flight, not "no": both classifier fields are tri-state. */

@@ -26,7 +26,6 @@ import {
 } from '../platform/window.js';
 
 import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH, INSPECTOR_DBUS_IFACE_XML, parseDebugFlag} from './pickWire.js';
-import {extractWindowProperties} from './pickProperties.js';
 import {extractDiagnosticProperties, cachedNativeLikeCorners} from './pickDiagnostics.js';
 import {pickTarget} from './pickTarget.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
@@ -38,7 +37,7 @@ import {
     highlightBoundingBox,
     highlightOuterRadius,
 } from './pickHighlight.js';
-import {readWindow, resolveWindowIdentity} from './window.js';
+import {readWindow} from './window.js';
 import {getWindowFromActor} from '../platform/windowActor.js';
 
 // Highlight styling mirrors upstream Shell's pickers.
@@ -50,7 +49,7 @@ function highlightStyle(outerRadius) {
 }
 
 export class InspectorService {
-    constructor(manager = null) {
+    constructor(manager) {
         this._manager = manager;
         this._activeGrab = null;
         this._overlay = null;
@@ -77,7 +76,7 @@ export class InspectorService {
     destroy() {
         // Guarded: `_cleanupPickUI` touches actors that may already be gone at shell shutdown.
         try {
-            this._cancelInteractivePick();
+            this._finishInteractivePick(null);
         } catch (e) {
             journal.failure(e, 'Failed to tear down the window picker');
         }
@@ -127,7 +126,7 @@ export class InspectorService {
         } catch (e) {
             // Answer even on failure, or the invocation stays pending and every later pick is BUSY.
             journal.failure(e, 'Failed to start the window picker');
-            this._cancelInteractivePick();
+            this._finishInteractivePick(null);
         }
     }
 
@@ -167,18 +166,16 @@ export class InspectorService {
 
     /** Diagnostics fields are added only when asked; nothing here is printed or journaled. */
     _buildReply(win, diagnostics) {
-        // With no manager the dictionary is still truthful; prefs refuses a pick it cannot judge.
-        const answer = this._manager?.pickAnswer(win) ?? null;
-        const properties = {
-            ...answer?.properties ?? extractWindowProperties(win, resolveWindowIdentity(win)),
-        };
+        // The manager owns the reading; a window it cannot read answers no fields, but keeps its title.
+        const answer = this._manager.pickAnswer(win);
+        const properties = {...answer?.properties ?? {}};
 
         if (diagnostics) {
             Object.assign(properties, extractDiagnosticProperties(
-                win, this._manager?.decorationFor(win) ?? null, null, St));
+                win, this._manager.decorationFor(win), null, St));
             // Cache only: a diagnostic must not start the probe it observes; `unknown` = uncached.
             properties.nativeLikeCorners = cachedNativeLikeCorners(
-                this._manager?.classifier, getWindowPid(win));
+                this._manager.classifier, getWindowPid(win));
         }
 
         // Display only, not used in rule identity matching.
@@ -194,7 +191,7 @@ export class InspectorService {
     }
 
     _getExpectedWindowRadius(win) {
-        const reading = readWindow(win, {classifier: this._manager?.classifier});
+        const reading = readWindow(win, {classifier: this._manager.classifier});
         if (!reading)
             return 0;
 
@@ -202,7 +199,7 @@ export class InspectorService {
             isFullscreen: reading.isFullscreen,
             isMaximized: reading.isMaximized,
             isTiled: reading.tiled,
-            isActivelyClipped: Boolean(this._manager?.isWindowActivelyClipped(win)),
+            isActivelyClipped: Boolean(this._manager.isWindowActivelyClipped(win)),
             // The read may not have landed; the highlight lives a frame and keeps the old default.
             hasNativeLikeCorners: reading.nativeLikeCorners ?? true,
             hasSsd: reading.hasSsd,
@@ -300,50 +297,39 @@ export class InspectorService {
         }
     }
 
+    /** The one exit: answer whatever is pending, then release the overlay however that went. */
     _finishInteractivePick(win) {
         const invocation = this._pendingInvocation;
         const diagnostics = this._pendingDiagnostics;
         this._pendingInvocation = null;
         this._pendingDiagnostics = false;
 
-        this._cleanupPickUI();
-
-        if (!invocation)
-            return;
-
-        if (!win) {
-            invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
-            return;
-        }
-
         try {
-            // Diagnostics stay behind the debug argument; the quiet reply is unchanged.
-            const properties = this._buildReply(win, diagnostics);
-            invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
-        } catch (e) {
-            // A pick is one-shot, so a journal line costs nothing; the empty reply still goes out.
-            journal.failure(e, 'Failed to answer the pick');
-            // The invocation itself may be gone too, so its throw must not escape into the handler.
-            try {
-                invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
-            } catch {
-                // The invocation is already gone.
-            }
+            if (invocation)
+                this._answerPick(invocation, win, diagnostics);
+        } finally {
+            // A reply that failed must not strand a reactive overlay holding the modal grab.
+            this._cleanupPickUI();
         }
     }
 
-    _cancelInteractivePick() {
-        this._pendingDiagnostics = false;
-        if (this._pendingInvocation) {
-            const invocation = this._pendingInvocation;
-            this._pendingInvocation = null;
-            try {
-                invocation.return_value(new GLib.Variant('(a{ss})', [{}]));
-            } catch {
-                // The invocation is already gone.
-            }
+    /** One reply per invocation: the properties when the window reads, an empty dictionary if not. */
+    _answerPick(invocation, win, diagnostics) {
+        const encode = properties => new GLib.Variant('(a{ss})', [properties]);
+        let variant;
+        try {
+            // Diagnostics stay behind the debug argument; the quiet reply is unchanged.
+            variant = encode(win ? this._buildReply(win, diagnostics) : {});
+        } catch (e) {
+            // A pick is one-shot, so a journal line costs nothing; the empty reply still goes out.
+            journal.failure(e, 'Failed to answer the pick');
+            variant = encode({});
         }
-        this._cleanupPickUI();
+        try {
+            invocation.return_value(variant);
+        } catch {
+            // The invocation is already gone; there is no second one to answer.
+        }
     }
 
     _cleanupPickUI() {
