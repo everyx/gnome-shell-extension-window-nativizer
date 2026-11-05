@@ -3,17 +3,15 @@
 import {WindowClientType} from './mutterRules.generated.js';
 
 import {boolString, fingerprintProperties} from './rules.js';
-import {readWindow, isWindowReading} from './window.js';
+
 import {getWindowClientType} from '../platform/window.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/windowPhase.js';
 
-export function extractWindowProperties(winOrReading, wmClassOverride = null) {
-    if (!winOrReading)
-        return {};
-
-    const reading = isWindowReading(winOrReading)
-        ? winOrReading
-        : readWindow(winOrReading, {wmClassOverride});
+/**
+ * `reading` is the snapshot `readWindow` returns, never a Meta.Window: a raw window has none of
+ * these fields, and the fallbacks below would fill a dictionary that looks real.
+ */
+export function extractWindowProperties(reading, wmClassOverride = null) {
     if (!reading)
         return {};
 

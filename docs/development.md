@@ -531,7 +531,7 @@ swallowing `0`, `''` or `false` is the intent: a divisor guard (`bufferScale || 
 
 **Parameters.** Positional, including past three, while the arguments are of different kinds and
 read at the call site. A record appears for one of two reasons: several optional values travelling
-together (`{wmClassOverride, classifier}`, `{animate, nowMs}`, `{strict}`), or a call site that
+together (`{preferCrispText, scale}`, `{animate, nowMs}`, `{strict}`), or a call site that
 would otherwise be a row of same-shaped values (`declaredSides`'s five numbers,
 `chooseWindowIdentity`'s four strings). One optional argument does not earn a record; it stays a
 trailing `= null`. A per-frame path is positional without exception, because a record is an

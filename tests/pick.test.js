@@ -12,6 +12,7 @@ import {
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {buildRuleKeyFromProperties} from '../src/lib/rules.js';
 import {extractWindowProperties, extractPhaseProperties} from '../src/lib/pickProperties.js';
+import {readWindow} from '../src/lib/window.js';
 import {extractDiagnosticProperties, cachedNativeLikeCorners, DIAGNOSTIC_DECORATION_KEYS} from '../src/lib/pickDiagnostics.js';
 import {parseDebugFlag, INSPECTOR_DBUS_IFACE_XML} from '../src/lib/pickWire.js';
 
@@ -31,7 +32,7 @@ describe('extractWindowProperties', () => {
             allows_resize: () => false,
             is_attached_dialog: () => false,
         };
-        expect(extractWindowProperties(mockWin)).toEqual({
+        expect(extractWindowProperties(readWindow(mockWin))).toEqual({
             wmClass: 'com.tencent.wechat',
             clientType: 'wayland',
             windowType: String(WindowType.NORMAL),
@@ -55,7 +56,7 @@ describe('extractWindowProperties', () => {
             allows_resize: () => true,
             is_attached_dialog: () => true,
         };
-        expect(extractWindowProperties(x11Win)).toEqual({
+        expect(extractWindowProperties(readWindow(x11Win))).toEqual({
             wmClass: 'wechat',
             clientType: 'x11',
             windowType: String(WindowType.MODAL_DIALOG),
@@ -82,7 +83,7 @@ describe('extractWindowProperties', () => {
             allows_resize: () => true,
             is_attached_dialog: () => false,
         };
-        expect(extractWindowProperties(ringedWin).hasRing).toBe('true');
+        expect(extractWindowProperties(readWindow(ringedWin)).hasRing).toBe('true');
 
         // Borderless video surface (PiP): buffer_rect matches frame_rect
         const pipWin = {
@@ -96,7 +97,7 @@ describe('extractWindowProperties', () => {
             allows_resize: () => true,
             is_attached_dialog: () => false,
         };
-        expect(extractWindowProperties(pipWin).hasRing).toBe('false');
+        expect(extractWindowProperties(readWindow(pipWin)).hasRing).toBe('false');
     });
 
     it('carries the SSD flag, so the key can tell an SSD kind from a bare one', () => {
@@ -109,7 +110,7 @@ describe('extractWindowProperties', () => {
             allows_resize: () => true,
             is_attached_dialog: () => false,
         };
-        const props = extractWindowProperties(ssdWin);
+        const props = extractWindowProperties(readWindow(ssdWin));
         expect(props.hasSsd).toBe('true');
         // The same window without the frame is a different kind.
         expect(buildRuleKeyFromProperties(props)).toContain('has_ssd=true');
@@ -123,7 +124,7 @@ describe('extractWindowProperties', () => {
             get_transient_for: () => null,
             allows_resize: () => true,
         };
-        expect(extractWindowProperties(flatpakWin).wmClass).toBe('org.signal.Signal');
+        expect(extractWindowProperties(readWindow(flatpakWin)).wmClass).toBe('org.signal.Signal');
     });
 
     it('accepts a pre-resolved wmClass override (Shell.WindowTracker fallback for WM_CLASS-less windows)', () => {
@@ -131,7 +132,7 @@ describe('extractWindowProperties', () => {
             get_wm_class: () => null,
             get_transient_for: () => null,
         };
-        expect(extractWindowProperties(noWmClassWin, 'wechat').wmClass).toBe('wechat');
+        expect(extractWindowProperties(readWindow(noWmClassWin), 'wechat').wmClass).toBe('wechat');
     });
 
     it('handles null and undefined safely', () => {
@@ -149,8 +150,8 @@ describe('extractWindowProperties', () => {
             allows_resize: () => true,
             is_attached_dialog: () => false,
         };
-        expect(() => extractWindowProperties(win)).not.toThrow();
-        expect(extractWindowProperties(win)).toEqual({
+        expect(() => extractWindowProperties(readWindow(win))).not.toThrow();
+        expect(extractWindowProperties(readWindow(win))).toEqual({
             wmClass: 'org.example.Wechat',
             clientType: 'x11',
             windowType: String(WindowType.NORMAL),
@@ -173,7 +174,7 @@ describe('extractWindowProperties', () => {
             is_fullscreen: () => false,
             get_tile_match: () => ({}),
         };
-        const props = extractWindowProperties(win);
+        const props = extractWindowProperties(readWindow(win));
         expect(props.isMaximized).toBe('true');
         expect(props.isFullscreen).toBe('false');
         expect(props.hasTileMatch).toBe('true');
@@ -186,7 +187,7 @@ describe('extractWindowProperties', () => {
             get_gtk_application_id: throwInvalidUtf8,
             get_transient_for: () => null,
         };
-        expect(extractWindowProperties(win).wmClass).toBe('');
+        expect(extractWindowProperties(readWindow(win)).wmClass).toBe('');
     });
 });
 
