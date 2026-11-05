@@ -6,21 +6,21 @@ import Cogl from 'gi://Cogl';
 import {ShaderEffect} from '../platform/shaderEffect.js';
 
 import {ZERO_INSETS} from '../lib/frame.js';
-import {clipFrameForTarget, resolveClipPhase} from '../lib/clipTarget.js';
+import {resolveClipPhase} from '../lib/clipTarget.js';
 import {ZERO_PHASE} from '../lib/snap.js';
 import {getWindowActor} from '../platform/window.js';
 import {findMetaWindowCached} from '../platform/windowActor.js';
 import {readDeclaredIdentity} from '../lib/window.js';
 import {getAllMonitorScales} from '../platform/monitor.js';
 
-import {clipGeometryChanges, clipParamChanges, isPaintableFrame, resolveClipSize, resolvePaintBody} from './clipParams.js';
+import {clipGeometryChanges, clipParamChanges, paintPlan} from './clipParams.js';
 import {readActorSize, readWindowSize} from './bodyPlan.js';
 import {applyPassToClip} from './decorationPass.js';
 import {PendingSource} from './pendingSource.js';
 import {Diagnostic, offscreenBoxWarning, windowIdentityLabel}
     from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
-import {offscreenPaintBox, offscreenUniformsStale} from '../lib/offscreenBox.js';
+import {offscreenUniformsStale} from '../lib/offscreenBox.js';
 
 const DECLARATIONS = `
 uniform vec2 uQuadSize;   // Offscreen FBO extent in logical px: what cogl_tex_coord0_in spans
@@ -234,36 +234,35 @@ export const RoundedClipEffect = GObject.registerClass({
 
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
-        const targetSize = readActorSize(actor);
-        // Read live at paint: a container can read 0 while its child still paints, so fall back.
         const win = findMetaWindowCached(actor);
-        const windowActorSize = readActorSize(getWindowActor(win));
-        const size = isPaintableFrame(targetSize)
-            ? targetSize
-            : resolveClipSize(targetSize, windowActorSize);
-        if (!size) {
-            this._suspend();
-            return;
-        }
-        this.resume();
-
-        const scale = this._scale ?? 1.0;
         // Phase comes from the resolved target: in-transform on Wayland, into geometry otherwise.
         const phaseWin = this._phaseInTransform ? null : win;
         // Unreadable fallback phase: keep the last good one, as the shadow does, so cuts agree.
         const resolvedPhase = resolveClipPhase({phaseInTransform: this._phaseInTransform}, phaseWin, this._St);
-        if (resolvedPhase)
-            this._lastPhase = resolvedPhase;
-        // Body settles live each paint from the plan, so the cut tracks the actor between passes.
-        const bodySize = resolvePaintBody(targetSize, windowActorSize, readWindowSize(win),
-            this._bodyPlan).body;
-        const frame = clipFrameForTarget(bodySize, this._insets, scale,
-            {phaseInTransform: this._phaseInTransform}, phaseWin, this._lastPhase, this._St);
-        // Backstop: a body still degenerate after all that suspends rather than erasing the window.
-        if (!isPaintableFrame(frame)) {
+
+        const scale = this._scale ?? 1.0;
+        const fbo = this._readTargetSize();
+        const plan = paintPlan({
+            targetSize: readActorSize(actor),
+            windowActorSize: readActorSize(getWindowActor(win)),
+            windowSize: readWindowSize(win),
+            fbo,
+            scale,
+            candidates: this._scaleCandidates,
+            insets: this._insets,
+            phase: resolvedPhase ?? this._lastPhase,
+            bodyPlan: this._bodyPlan,
+        });
+        if (plan.suspend) {
             this._suspend();
             return;
         }
+        // Stored only by a paint that draws: a suspended one says nothing about the phase.
+        if (resolvedPhase)
+            this._lastPhase = resolvedPhase;
+        this.resume();
+
+        const {size, frame, box} = plan;
         const changes = clipGeometryChanges(this._paint, {scale, width: size.width, height: size.height, frame});
 
         if (changes.scale !== undefined) {
@@ -273,11 +272,7 @@ export const RoundedClipEffect = GObject.registerClass({
         }
 
         // Never cached: it makes one unit one logical px; a stale box drew the arc off edge.
-        const target = this._readTargetSize();
-        // Extent is what Clutter allocated (it beats the derivation); the origin is derived on it.
-        const box = offscreenPaintBox(size, scale, target, this._scaleCandidates);
-
-        this._checkOffscreenBox(box, target, scale, win);
+        this._checkOffscreenBox(box, fbo, scale, win);
         const extent = box.extent;
         // Compare the last written pair, not the actor size: a reallocated FBO moves the origin.
         if (changes.size !== undefined || changes.scale !== undefined ||

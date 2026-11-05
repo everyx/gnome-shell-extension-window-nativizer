@@ -4,12 +4,12 @@
  */
 
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
-import {isPaintableFrame, resolveClipSize} from '../src/effects/clipParams.js';
+import {isPaintableFrame, paintPlan} from '../src/effects/clipParams.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
 import {
-    clipFrameForTarget,
     getX11SurfaceChild,
     isIntegerAlignedSurfaceBox,
+    resolveClipPhase,
     resolveClipTarget,
 } from '../src/lib/clipTarget.js';
 import {
@@ -17,7 +17,6 @@ import {
     isCompatibleSurfaceGeometry,
 } from '../src/platform/surfaceContainer.js';
 
-const CLIP_SIZE = {width: 500, height: 400};
 const CLIP_INSETS = {left: 8, top: 8, right: 8, bottom: 8};
 const CLIP_SCALE = 1.25;
 
@@ -446,47 +445,31 @@ describe('clipTarget', () => {
         });
     });
 
-    describe('clipFrameForTarget (the actual frame the effect computes, per phase strategy)', () => {
-        it('uses the plain snapped frame when the target carries the phase in its transform', () => {
-            withDisplay(CLIP_SCALE, () => {
-                const win = phaseWindow({actorX: 0.5});
-                const target = resolveClipTarget(win, win.get_compositor_private(), mockSt);
-                expect(target.phaseInTransform).toBe(true);
+    describe('resolveClipPhase (which phase a frame is cut with)', () => {
+        const phase = (target, win) => resolveClipPhase(target, win);
 
-                // The container path ignores the window phase: the actor's own transform applies it
-                // outside the offscreen FBO. 0.5 * 1.25 rounds to 1 physical px, so the phase would
-                // be 0.3 logical px were it folded in - it is deliberately not.
-                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, target, win);
-                expect(frame).toEqual({x: 8, y: 8, width: 484, height: 384});
+        it('answers zero when the container carries the phase in its transform', () => {
+            // The actor's own transform applies the phase outside the offscreen FBO, so folding it
+            // in as well would cut the frame twice.
+            expect(phase({phaseInTransform: true}, phaseWindow({actorX: 0.5}))).toEqual({x: 0, y: 0});
+        });
+
+        // 0.5 logical px at 1.25 snaps to 1 device px, so the mirror is 0.8 - 0.5 = 0.3.
+        const expectMirror = result => {
+            expect(result.y).toBe(0);
+            expect(result.x).toBeCloseTo(0.3, 5);
+        };
+
+        it('answers the window mirror when the phase goes into the geometry', () => {
+            withDisplay(CLIP_SCALE, () => {
+                expectMirror(phase({phaseInTransform: false}, phaseWindow({actorX: 0.5})));
             });
         });
 
-        it('folds the window subpixel offset when the target does not carry the phase', () => {
+        it('reads the mirror when the target never resolved, rather than answering zero', () => {
+            // `target?.phaseInTransform` on a null target is undefined, so the geometry path runs.
             withDisplay(CLIP_SCALE, () => {
-                // A size-mismatched container still identifies the phase term for
-                // getWindowSubpixelOffset, but fails the clip geometry check, so the clip falls back
-                // to the window actor - the path that must fold the offset into its own geometry.
-                const win = phaseWindow({
-                    actorX: 0.5,
-                    container: {x: 0, y: 0, width: 476, height: 376},
-                });
-                const target = resolveClipTarget(win, win.get_compositor_private(), mockSt);
-                expect(target.phaseInTransform).toBe(false);
-
-                // actor.x = 0.5, scale 1.25 -> 0.625 rounds to 1 -> 0.8 - 0.5 = 0.3 logical px.
-                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, target, win);
-                expect(frame.x).toBeCloseTo(8.3, 6);
-                expect(frame.y).toBeCloseTo(8, 6);
-                expect(frame.width).toBe(484);
-                expect(frame.height).toBe(384);
-            });
-        });
-
-        it('treats a missing target as the fallback path', () => {
-            withDisplay(CLIP_SCALE, () => {
-                const win = phaseWindow({actorX: 0.5});
-                const frame = clipFrameForTarget(CLIP_SIZE, CLIP_INSETS, CLIP_SCALE, null, win);
-                expect(frame.x).toBeCloseTo(8.3, 6);
+                expectMirror(phase(null, phaseWindow({actorX: 0.5})));
             });
         });
     });
@@ -511,25 +494,28 @@ describe('clipTarget', () => {
         it('paints a positive body for every positive actor, whatever the insets', () => {
             for (const insets of insetsCases) {
                 for (const size of sizes) {
-                    // The container path (phase zero): the decision is exactly the derived body.
-                    const frame = clipFrameForTarget(size, insets, CLIP_SCALE,
-                        {phaseInTransform: true}, null);
-                    expect(isPaintableFrame(frame))
+                    const plan = paintPlan({targetSize: size, windowActorSize: size, windowSize: size,
+                        fbo: size, scale: CLIP_SCALE, candidates: [CLIP_SCALE], insets,
+                        phase: {x: 0, y: 0}});
+                    expect(plan.suspend)
                         .withContext(`size ${JSON.stringify(size)} insets ${JSON.stringify(insets)}`)
-                        .toBeTrue();
+                        .toBeNull();
+                    expect(isPaintableFrame(plan.frame)).toBeTrue();
                 }
             }
         });
 
-        it('suspends rather than painting when the target has no extent', () => {
+        it('suspends rather than painting when nothing can be measured', () => {
             for (const size of [
                 {width: 0, height: 0},
                 {width: 0, height: 400},
                 {width: 500, height: 0},
                 {width: -1, height: 400},
-            ])
-                expect(isPaintableFrame(size)).withContext(JSON.stringify(size)).toBeFalse();
-            expect(isPaintableFrame(null)).toBeFalse();
+            ]) {
+                const plan = paintPlan({targetSize: size, windowActorSize: null, insets: CLIP_INSETS,
+                    scale: CLIP_SCALE, phase: {x: 0, y: 0}});
+                expect(plan.suspend).withContext(JSON.stringify(size)).toBe('no-size');
+            }
         });
     });
 
@@ -539,20 +525,23 @@ describe('clipTarget', () => {
         // surface child still paints at full size; the window actor is the authority then, and the
         // clip must still cut an inset, rounded body rather than leaving the whole actor square.
         const windowActor = {width: 825, height: 960};
-        const size = resolveClipSize({width: 0, height: 0}, windowActor);
-        const frame = clipFrameForTarget(size, FLAT_SAFE_INSET, CLIP_SCALE,
-            {phaseInTransform: true}, null);
+        const plan = () => paintPlan({
+            targetSize: {width: 0, height: 0}, windowActorSize: windowActor,
+            windowSize: windowActor, fbo: windowActor, scale: CLIP_SCALE, candidates: [CLIP_SCALE],
+            insets: FLAT_SAFE_INSET, phase: {x: 0, y: 0},
+        });
 
         it('derives the body from the window actor, not the empty container read', () => {
-            expect(size).toEqual(windowActor);
+            expect(plan().size).toEqual(windowActor);
         });
 
         it('leaves a positive, inset body rather than the whole square actor', () => {
-            expect(isPaintableFrame(frame)).toBeTrue();
+            const {suspend, frame} = plan();
+            expect(suspend).toBeNull();
             expect(frame.x).toBeGreaterThan(0);
             expect(frame.y).toBeGreaterThan(0);
-            expect(frame.width).toBeLessThan(size.width);
-            expect(frame.height).toBeLessThan(size.height);
+            expect(frame.width).toBeLessThan(windowActor.width);
+            expect(frame.height).toBeLessThan(windowActor.height);
         });
     });
 });

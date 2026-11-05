@@ -4,7 +4,7 @@ import {WindowClientType} from './mutterRules.generated.js';
 import {getSurfaceContainer, isCompatibleSurfaceGeometry, isForeignWidget, isUnallocatedSurfaceBox} from '../platform/surfaceContainer.js';
 import {getWindowClientType} from '../platform/window.js';
 import {getWindowSubpixelOffset} from '../platform/windowPhase.js';
-import {clipFrameFor, ZERO_PHASE} from './snap.js';
+import {ZERO_PHASE} from './snap.js';
 
 const CLIENT_TYPE_X11 = WindowClientType.X11;
 
@@ -52,12 +52,4 @@ export function resolveClipPhase(target, win, St = null) {
     if (target?.phaseInTransform)
         return ZERO_PHASE;
     return getWindowSubpixelOffset(win, St);
-}
-
-/** `lastPhase` stands in when the scan cannot complete; never substitute a zero phase. */
-export function clipFrameForTarget(actorSize, insets, scale, target, win, lastPhase = null, St = null) {
-    const phase = resolveClipPhase(target, win, St) ?? lastPhase;
-    if (!phase)
-        return null;
-    return clipFrameFor(actorSize, insets, scale, phase);
 }
