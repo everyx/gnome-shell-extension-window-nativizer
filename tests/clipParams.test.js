@@ -3,7 +3,7 @@
  * Run: pnpm test
  */
 
-import {BODY_SETTLE_TOLERANCE, clipGeometryChanges, clipParamChanges, outlineVector, resolveBodyAuthority, resolveClipSize, resolvePaintBody, settleClipBody, windowResizedSince} from '../src/effects/clipParams.js';
+import {BODY_SETTLE_TOLERANCE, clipGeometryChanges, clipParamChanges, outlineVector, paintPlan, resolveBodyAuthority, resolveClipSize, resolvePaintBody, settleClipBody, windowResizedSince} from '../src/effects/clipParams.js';
 
 const insets = (left, top, right, bottom) => ({left, top, right, bottom});
 
@@ -465,5 +465,65 @@ describe('clipGeometryChanges', () => {
         expect(changes.scale).toBe(2);
         expect(changes.size).toEqual([810, 600]);
         expect(changes.frame).toBeUndefined();
+    });
+});
+
+describe('paintPlan (what one paint acts on, decided as values)', () => {
+    const box = (width, height) => ({width, height});
+    const PHASE = {x: 0, y: 0};
+    const pane = {left: 8, top: 8, right: 8, bottom: 8};
+    const reads = (over = {}) => ({
+        targetSize: box(400, 300), windowActorSize: box(400, 300), windowSize: box(400, 300),
+        fbo: box(403, 303), scale: 1, candidates: [1], insets: pane, phase: PHASE,
+        bodyPlan: null, ...over,
+    });
+
+    it('suspends when neither the target nor the window actor can be measured', () => {
+        expect(paintPlan(reads({targetSize: null, windowActorSize: null})))
+            .toEqual({suspend: 'no-size'});
+        // A zero-extent target is unmeasured, not an empty window.
+        expect(paintPlan(reads({targetSize: box(0, 300), windowActorSize: null})))
+            .toEqual({suspend: 'no-size'});
+    });
+
+    it('stands the window actor in for a target that reads 0, as Clutter paints it', () => {
+        const plan = paintPlan(reads({targetSize: box(0, 0)}));
+        expect(plan.suspend).toBeNull();
+        expect(plan.size).toEqual({width: 400, height: 300});
+    });
+
+    it('suspends rather than erasing the window when there is no phase to cut with', () => {
+        // Insets larger than the body clamp to it rather than degenerating the frame, so a missing
+        // phase is the only way to reach this gate in practice.
+        expect(paintPlan(reads({phase: null}))).toEqual({suspend: 'no-frame'});
+        expect(paintPlan(reads({insets: {left: 300, top: 300, right: 300, bottom: 300}}))
+            .frame.width).toBeGreaterThan(0);
+    });
+
+    it('folds the phase into the frame, so a half-pixel lands on the physical grid', () => {
+        // The one property that ties the plan to the shader: 8px of inset at 1.25 plus the 0.3
+        // logical px Mutter snapped to is 8.3, and that is what uFrame must carry.
+        const wide = {targetSize: box(500, 400), windowActorSize: box(500, 400),
+            windowSize: box(500, 400), fbo: box(504, 404), scale: 1.25, candidates: [1.25]};
+        expect(paintPlan(reads({...wide, phase: {x: 0.3, y: 0}})).frame)
+            .toEqual({x: 8.3, y: 8, width: 484, height: 384});
+        expect(paintPlan(reads({...wide, phase: {x: 0, y: 0}})).frame)
+            .toEqual({x: 8, y: 8, width: 484, height: 384});
+    });
+
+    it('hands back the size, the frame and the box when everything is readable', () => {
+        const plan = paintPlan(reads());
+        expect(plan.suspend).toBeNull();
+        expect(plan.size).toEqual({width: 400, height: 300});
+        expect(plan.frame).toEqual(jasmine.objectContaining({x: 8, y: 8, width: 384, height: 284}));
+        expect(plan.box.explained).toBeTrue();
+    });
+
+    it('still plans a paint for a box no scale explains: that is a diagnostic, not a gate', () => {
+        // An FBO allocated for another size compresses one frame. Suspending would blank that frame
+        // and switch the corners back, so the paint goes ahead and the caller journals the read.
+        const plan = paintPlan(reads({fbo: box(460, 303)}));
+        expect(plan.suspend).toBeNull();
+        expect(plan.box.explained).toBeFalse();
     });
 });

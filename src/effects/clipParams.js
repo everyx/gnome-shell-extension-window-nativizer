@@ -2,6 +2,8 @@
 
 import {insetsEqual, rectEquals, sameSize} from '../platform/rect.js';
 import {INVARIANT_STRIKES} from '../lib/diagnosticInvariants.js';
+import {offscreenPaintBox} from '../lib/offscreenBox.js';
+import {clipFrameFor} from '../lib/snap.js';
 
 /** Outline as the shader's vec4, 0..255 channels scaled to 0..1; `null` (no outline) is alpha 0. */
 export function outlineVector(outline) {
@@ -195,4 +197,25 @@ export function clipGeometryChanges(prev, next) {
     if (!rectEquals(prev?.frame, frame))
         changes.frame = [frame.x, frame.y, frame.width, frame.height];
     return changes;
+}
+
+/**
+ * What one paint acts on, decided as values: the settle, the frame it cuts, the box it draws into.
+ * `phase` and `fbo` come from the caller, where the live actor is read. `box.explained` is not a
+ * gate: an FBO from another size compresses one frame, and suspending would blank it instead.
+ */
+export function paintPlan({
+    targetSize = null, windowActorSize = null, windowSize = null, fbo = null,
+    scale = 1.0, candidates = null, insets = null, phase = null, bodyPlan = null,
+} = {}) {
+    // A container can read 0 while its child still paints, so the window actor stands in for it.
+    const size = isPaintableFrame(targetSize) ? targetSize : resolveClipSize(targetSize, windowActorSize);
+    if (!size)
+        return {suspend: 'no-size'};
+    // The insets clamp to the body, so only a missing phase leaves nothing to cut.
+    const body = resolvePaintBody(targetSize, windowActorSize, windowSize, bodyPlan).body;
+    const frame = phase ? clipFrameFor(body, insets, scale, phase) : null;
+    if (!isPaintableFrame(frame))
+        return {suspend: 'no-frame'};
+    return {suspend: null, size, frame, box: offscreenPaintBox(size, scale, fbo, candidates)};
 }
