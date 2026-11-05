@@ -269,11 +269,15 @@ export class Manager {
         this._tracking.learnPid(win);
         this._classifier?.probeAdwaitaLook(record.pid);
 
-        const inputs = this._decorationInputs(win);
+        const reading = readWindow(win, {classifier: this._classifier});
         // The branch lives in the reading module, so it is a pure function of the reading.
-        const outcome = reconcileOutcome(inputs);
+        const outcome = reconcileOutcome(reading);
         if (outcome === 'defer')
             return;
+        // Latch only on an apply pass: one that defers or read no extent is not a frame to judge.
+        if (outcome === 'apply')
+            record.decoration.latchInitialFrameSize(reading);
+        const inputs = this._inputsFrom(reading, record.decoration);
         const actions = outcome === 'apply' ? evaluateWindowActions(inputs) : null;
 
         // Guard only the decoration's calls: actors do throw while Mutter tears a window down.
@@ -333,22 +337,14 @@ export class Manager {
             record.decoration.resetBandCursor();
     }
 
-    /** Inputs for evaluateWindowActions, shared with pickAnswer() so one reading serves both. */
-    _decorationInputs(win) {
-        // No catch: readWindow answers null instead of throwing, so a throw here is our bug.
-        return win ? this._collectDecorationInputs(win) : null;
-    }
-
-    _collectDecorationInputs(win) {
-        const reading = readWindow(win, {classifier: this._classifier});
+    /**
+     * The reading plus what the session decides, and nothing of its own: no read, no write. The
+     * pick reply and a pass both consume it, so it must not be able to change what it describes.
+     */
+    _inputsFrom(reading, deco = null) {
         // Null stays null: a window we cannot read is not a window that is gone.
         if (!reading)
             return null;
-
-        // Latch only on an apply pass: one that defers or read no extent is not a frame to judge.
-        const deco = this._tracking?.get(win)?.decoration ?? null;
-        if (reconcileOutcome(reading) === 'apply')
-            deco?.latchInitialFrameSize(reading);
         const initial = deco?.initialFrameSize ?? null;
 
         return {
@@ -366,7 +362,8 @@ export class Manager {
 
     /** One reading's properties, suggested rule state, and whether that would change it. */
     pickAnswer(win) {
-        const inputs = this._decorationInputs(win);
+        const deco = this._tracking?.get(win)?.decoration ?? null;
+        const inputs = this._inputsFrom(readWindow(win, {classifier: this._classifier}), deco);
         if (!inputs)
             return null;
 
