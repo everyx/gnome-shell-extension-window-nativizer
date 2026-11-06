@@ -35,6 +35,15 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run gen:code` | regenerates all transpiled shaders, styling constants, and upstream bindings |
 | `pnpm run gen:preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
 
+**What the unit suite cannot load.** `src/effects/clipEffect.js` and `src/lib/inspector.js` import
+GI namespaces at module scope, and the suite runs on bare gjs - no `St`, `Cogl` or `Main`, and no
+`resource:///` shell modules. Neither file is imported by any spec, so their control flow is covered
+by the e2e checks above and by reading, not by `pnpm test`: the clip's paint sequence and the
+picker's reply/teardown ordering live there. A spec for either would need those imports to become
+lazy; until then, the safe move is to push the decision out into a pure function beside them -
+`paintPlan()` in `clipParams.js` is that, which is why the gates it holds are spec'd while the
+callback that calls it is not.
+
 ## What an extensions.gnome.org review rejects
 
 The [guidelines](https://gjs.guide/extensions/review-guidelines/review-guidelines.html) allow AI as a
