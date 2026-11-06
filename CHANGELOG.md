@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.11.3](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.2...v0.11.3) (2026-11-06)
+
+
+### Bug Fixes
+
+* **license:** ship the GPL-2 text unmodified ([4664f0d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4664f0d821e602ec4776c6899bc8465c2e5f49c9))
+* **metadata:** say what the extension actually does with a client's data ([189e0eb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/189e0ebcbfedf2a4a8863ba51a5fc971757b4626))
+* **phase:** refuse a transform that carries a position instead of a phase ([53f7280](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/53f7280d730b32cc242e8a7f42640c0cf470fbc4))
+* **settle:** ask for the pass that lets a held body give up ([23d2008](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/23d20083ccf4e1f1702784e6cab268b98afb7521))
+* **teardown:** finish the rest of a cleanup when one step fails ([dd913e3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dd913e337bbc805bf9259b9dfab7b4af6eecf1db))
+
+
+### Documentation
+
+* **dev:** say which two modules the unit suite cannot load ([c154102](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c154102bc67a72baefcc9aa4563ebe86ea797313))
+* **dev:** say why the picker answers any local process ([854f690](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/854f6907305320348d72c1d9e3c6868e64fd9b32))
+* **shell:** name the three diagnostic lines that describe a transient ([f86775a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f86775adb6290da95d7490c5943018b385cf5b0f))
+
 ## [0.11.2](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.1...v0.11.2) (2026-10-25)
 
 
