@@ -87,6 +87,7 @@ export function inferDecorationBaseline({
     hasSsd = false,
     bufferAlpha = null,
     nativeLikeCorners = false,
+    allowsResize = true,
 }) {
     const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
@@ -114,6 +115,17 @@ export function inferDecorationBaseline({
     } else if (declaresOwnShadow({hasSsd, sideW, sideH})) {
         shadow = false;
         reason = `has-csd(${insets})`;
+    }
+
+    // A fixed size means the application sized itself, and one that does so usually paints its own
+    // frame inside the buffer, which no read here can see: our arc would be a second arc, and our
+    // square shadow would show at a rounded corner. It outranks the native-like reading.
+    if (!allowsResize) {
+        return {
+            shadow: false,
+            corners: false,
+            reason: `fixed-size${nativeLikeCorners ? '; native-like-corners' : ''}; shadow: ${reason}`,
+        };
     }
 
     if (nativeLikeCorners)
@@ -243,7 +255,7 @@ export function evaluateWindowActions({
     const visuallyFloored = eligibility.reversible === true;
     const baseline = visuallyFloored
         ? {corners: false, shadow: false, reason: eligibility.reason}
-        : inferDecorationBaseline({isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners});
+        : inferDecorationBaseline({isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, allowsResize});
 
     // `clientDeclaredRing` stays a pure question; clearing the SSD ring is strategy, handled here.
     const clientOwnRing = clientDeclaredRing({hasSsd, insets, bufferWidth, bufferHeight, frameWidth, frameHeight});

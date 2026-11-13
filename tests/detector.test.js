@@ -267,6 +267,43 @@ describe('inferDecorationBaseline', () => {
         expect(declared.shadow).toBeFalse(); // its own declared CSD shadow
     });
 
+    it('fixed-size outranks native-like corners, so the shadow stands down with them', () => {
+        // Both readings are true of a libadwaita dialog that cannot be resized. A client that rounds
+        // its own corners is the one most likely to have painted its own shadow under them, so the
+        // fixed-size answer has to win on the shadow axis as well as the corner axis.
+        const both = inferDecorationBaseline({
+            nativeLikeCorners: true, allowsResize: false,
+            ...marginsFromRects(800, 600, 800, 600),
+        });
+        expect(both.corners).toBeFalse();
+        expect(both.shadow).toBeFalse();
+        expect(both.reason).toContain('fixed-size');
+        expect(both.reason).toContain('native-like-corners');
+
+        // A resizable native-like window keeps the reading that lets the shadow follow its margins.
+        const resizable = inferDecorationBaseline({
+            nativeLikeCorners: true, allowsResize: true,
+            ...marginsFromRects(800, 600, 800, 600),
+        });
+        expect(resizable.corners).toBeFalse();
+        expect(resizable.shadow).toBeTrue();
+        expect(resizable.reason).not.toContain('fixed-size');
+    });
+
+    it('a window that cannot be resized stands both axes down, and a rule reverses it', () => {
+        // An application that fixes its own size usually draws its own frame inside the buffer, so
+        // our arc would be a second arc and our square shadow would show at a rounded corner.
+        const fixed = inferDecorationBaseline({allowsResize: false, ...marginsFromRects(800, 600, 800, 600)});
+        expect(fixed.corners).toBeFalse();
+        expect(fixed.shadow).toBeFalse();
+        expect(fixed.reason).toContain('fixed-size');
+
+        // Resizable is the default reading, and it still rounds.
+        const resizable = inferDecorationBaseline({allowsResize: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(resizable.corners).toBeTrue();
+        expect(resizable.shadow).toBeTrue();
+    });
+
     it('XWayland with a small declared margin -> the client owns that shadow, baseline still rounds', () => {
         const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(808, 604, 800, 600)});
         expect(r.shadow).toBeFalse();
@@ -622,6 +659,19 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('no-csd');
     });
 
+    it('a fixed-size native-like window draws nothing once the decisions are composed', () => {
+        // The baseline is not the last word: the ring takeover can put a shadow back when the clip
+        // is on. With both readings standing the axes down there is no clip, so nothing to take
+        // over, and the window is left entirely alone.
+        const res = evaluateWindowActions({
+            ...baseWin, allowsResize: false, nativeLikeCorners: true,
+        });
+        expect(res.drawClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawResize).toBeFalse();
+        expect(res.reason).toContain('fixed-size');
+    });
+
     it('corners that already look like ours, with a declared margin: both axes left alone', () => {
         const res = evaluateWindowActions({
             ...baseWin,
@@ -874,10 +924,10 @@ describe('evaluateWindowActions', () => {
 
     it('rule for one window kind leaves other kinds of the same app decorated', () => {
         const rules = {
-            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: 'corners,shadow',
+            [buildRuleKey('wechat', {hasParent: true, allowsResize: true})]: 'corners,shadow',
         };
 
-        // Main window (top-level, resizable) is a different kind -> untouched
+        // Main window (top-level) is a different kind -> untouched
         const mainWin = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
@@ -887,34 +937,37 @@ describe('evaluateWindowActions', () => {
         });
         expect(mainWin.drawShadow).toBeTrue();
         expect(mainWin.drawClip).toBeTrue();
+        expect(mainWin.reason).not.toContain('rule-applied');
 
-        // Fixed child dialog matches the rule
+        // Child dialog matches the rule
         const dialogWin = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'wechat',
-            hasParent: true,
-            allowsResize: false,
-            rules,
-        });
-        expect(dialogWin.drawShadow).toBeFalse();
-        expect(dialogWin.drawClip).toBeFalse();
-        expect(dialogWin.reason).toContain('rule-applied');
-
-        // Resizable child of the same app is a different kind -> untouched
-        const resizableChild = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
             hasParent: true,
             allowsResize: true,
             rules,
         });
-        expect(resizableChild.drawShadow).toBeTrue();
-        expect(resizableChild.drawClip).toBeTrue();
+        expect(dialogWin.drawShadow).toBeFalse();
+        expect(dialogWin.drawClip).toBeFalse();
+        expect(dialogWin.reason).toContain('rule-applied');
+
+        // A fixed-size child is a different kind again: the rule does not reach it, and its own
+        // default already stands both axes down.
+        const fixedChild = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            hasParent: true,
+            allowsResize: false,
+            rules,
+        });
+        expect(fixedChild.drawClip).toBeFalse();
+        expect(fixedChild.reason).not.toContain('rule-applied');
+        expect(fixedChild.reason).toContain('fixed-size');
     });
 
     it('client type is part of the window kind: an XWayland window does not match a Wayland rule', () => {
         const rules = {
-            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'corners,shadow',
+            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: true})]: 'corners,shadow',
         };
 
         const waylandChild = evaluateWindowActions({
@@ -922,7 +975,7 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             isX11: false,
             hasParent: true,
-            allowsResize: false,
+            allowsResize: true,
             rules,
         });
         expect(waylandChild.drawShadow).toBeFalse();
@@ -936,7 +989,7 @@ describe('evaluateWindowActions', () => {
             bufferWidth: 408,
             bufferHeight: 304,
             hasParent: true,
-            allowsResize: false,
+            allowsResize: true,
             rules,
         });
         expect(x11Child.drawShadow).toBeTrue();
@@ -1014,10 +1067,10 @@ describe('evaluateWindowActions', () => {
             wmClass: 'multi-dlg-app',
             rules,
         });
-        // The QR dialog's rule reverses the shadow, which retracts the takeover; the
-        // toolbar's reverses the corners, which drops the clip and the takeover with it.
-        expect(qrWin.drawClip).toBeTrue();
-        expect(qrWin.drawShadow).toBeFalse();
+        // Both kinds are fixed-size, so both start with no corners and no shadow; the rule is what
+        // puts one axis back, and the size specifier is what keeps the two apart.
+        expect(qrWin.drawClip).toBeFalse();
+        expect(qrWin.drawShadow).toBeTrue();
 
         const toolbarWin = evaluateWindowActions({
             ...ringedWindow,
@@ -1027,8 +1080,9 @@ describe('evaluateWindowActions', () => {
             wmClass: 'multi-dlg-app',
             rules,
         });
-        expect(toolbarWin.drawClip).toBeFalse();
-        expect(toolbarWin.drawShadow).toBeFalse();
+        // Rounding its corners takes its ring over, which is where its shadow comes back from.
+        expect(toolbarWin.drawClip).toBeTrue();
+        expect(toolbarWin.drawShadow).toBeTrue();
     });
 
     it('erases a client\'s ring only when the tiled style draws one', () => {
