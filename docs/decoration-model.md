@@ -128,6 +128,18 @@ splash, a collapsed panel - and grows it afterwards is judged on that tiny frame
 decoration it should have had. The exit is a rule on that window kind, which is why the floor is
 reversible.
 
+A third reading stands both axes down: a window that **cannot be resized** (`allows_resize`
+false). An application that fixes its own size is usually one that draws its own frame *inside its
+buffer* - a rounded corner painted in pixels, not declared as an extent - and no read here can see
+that. Two failures follow: our clip cuts a second arc over the client's own, which shows as two
+arcs, and our square shadow's corners peek out around a rounded client. Both axes therefore answer
+off (`fixed-size; shadow: ...`), and a rule naming an axis reverses it, exactly like the visual
+floor. It is a reading rather than a capability because the correlation is a heuristic: a fixed-size
+window that does not round itself loses a decoration it could have carried, and re-decorating it is
+what the reversal is for. The correlation is strong in practice - every fixed-size window that
+needed a correction here was a non-native application painting its own frame - and the cost of
+being wrong is a square corner on a dialog, against two arcs on every such window.
+
 The shadow can be the reason to abstain too, and there a *reading* decides. Where a bare X11
 window's buffer cannot be read, the compositor's own shadow and ours cannot be told apart, and a
 second shadow is worse than none, so both axes abstain (`x11-shadow-unknown`). Where the same
