@@ -519,6 +519,19 @@ describe('paintPlan (what one paint acts on, decided as values)', () => {
         expect(plan.box.explained).toBeTrue();
     });
 
+    it('predicts the box from the paint volume, not the actor, when a margin is reserved', () => {
+        // An effect that enlarges the paint volume gets a bigger FBO from Clutter, so the predicted
+        // extent has to include the margin; with margin 0 nothing about the derivation moves.
+        const bare = paintPlan(reads());
+        const padded = paintPlan(reads({fbo: box(463, 363), margin: 30}));
+        expect(padded.box.predicted.width).toBe(bare.box.predicted.width + 60);
+        expect(padded.box.predicted.height).toBe(bare.box.predicted.height + 60);
+        expect(padded.box.explained).toBeTrue();
+        // The body and the frame stay in actor coordinates: the margin only moves the FBO origin.
+        expect(padded.frame).toEqual(bare.frame);
+        expect(padded.size).toEqual(bare.size);
+    });
+
     it('still plans a paint for a box no scale explains: that is a diagnostic, not a gate', () => {
         // An FBO allocated for another size compresses one frame. Suspending would blank that frame
         // and switch the corners back, so the paint goes ahead and the caller journals the read.

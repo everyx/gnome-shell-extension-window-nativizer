@@ -207,6 +207,7 @@ export function clipGeometryChanges(prev, next) {
 export function paintPlan({
     targetSize = null, windowActorSize = null, windowSize = null, fbo = null,
     scale = 1.0, candidates = null, insets = null, phase = null, bodyPlan = null,
+    margin = 0,
 } = {}) {
     // A container can read 0 while its child still paints, so the window actor stands in for it.
     const size = isPaintableFrame(targetSize) ? targetSize : resolveClipSize(targetSize, windowActorSize);
@@ -217,5 +218,10 @@ export function paintPlan({
     const frame = phase ? clipFrameFor(body, insets, scale, phase) : null;
     if (!isPaintableFrame(frame))
         return {suspend: 'no-frame'};
-    return {suspend: null, size, frame, box: offscreenPaintBox(size, scale, fbo, candidates)};
+    // The paint volume a shadow lives in is wider than the actor by `margin` on every side; the box
+    // has to be predicted from that extent or the FBO read can never be explained.
+    const extent = margin > 0
+        ? {width: size.width + 2 * margin, height: size.height + 2 * margin}
+        : size;
+    return {suspend: null, size, frame, box: offscreenPaintBox(extent, scale, fbo, candidates)};
 }
