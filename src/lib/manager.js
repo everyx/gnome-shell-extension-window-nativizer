@@ -14,10 +14,10 @@ import {WindowTracking} from './windowTracking.js';
 import {Subscriptions} from './subscriptions.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 import {ROUNDED_CLIP_G_TYPE, RoundedClipEffect} from '../effects/clipEffect.js';
-import {SHADOW_ACTOR_G_TYPE, ShadowActor} from '../effects/shadowActor.js';
 import * as overviewMask from '../effects/overviewMask.js';
 import {OverviewShadow} from '../effects/overviewShadow.js';
 import {RESIZE_BAND_G_TYPE, ResizeBand} from './resizeBandActor.js';
+import {ShadowVolume} from '../effects/shadowVolume.js';
 import {
     getDisplay,
     getFocusWindow,
@@ -167,7 +167,7 @@ export class Manager {
 
     _tearDownStrays() {
         for (const actor of getWindowGroup()?.get_children?.() ?? []) {
-            if (gtypeName(actor) !== SHADOW_ACTOR_G_TYPE && gtypeName(actor) !== RESIZE_BAND_G_TYPE)
+            if (gtypeName(actor) !== RESIZE_BAND_G_TYPE)
                 continue;
             try {
                 actor.destroy();
@@ -212,8 +212,8 @@ export class Manager {
             container: getWindowGroup(),
             display: getDisplay(),
             RoundedClipEffect,
-            ShadowActor,
             ResizeBand,
+            ShadowVolume,
             OverviewMask: overviewMask,
             OverviewShadow,
             St,

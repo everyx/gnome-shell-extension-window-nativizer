@@ -1,7 +1,7 @@
 import {WindowDecoration} from '../src/lib/windowDecoration.js';
 import {Journal} from '../src/platform/journal.js';
 import {resolvePaintBody} from '../src/effects/clipParams.js';
-import {applyPassToClip, applyPassToShadow, decorationPass} from '../src/effects/decorationPass.js';
+import {applyPassToClip, decorationPass} from '../src/effects/decorationPass.js';
 import {OverviewDecoration} from '../src/lib/overviewDecoration.js';
 import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {FLAT_SAFE_INSET} from '../src/lib/frame.js';
@@ -35,6 +35,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             this.params = params;
         }
 
+        setShadowStyle(style) {
+            this.shadowStyle = style;
+        }
+
+        setShadowInsets(insets) {
+            this.shadowInsets = insets;
+        }
+
         setBodyPlan(plan) {
             this.bodyPlan = plan;
         }
@@ -53,7 +61,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // The real effect answers for its own state; the mock models the fields it takes part in
         // and leaves the frame and scale unmodelled, so the reply renders them null.
         get diagnosticsView() {
-            return {phaseInTransform: true, frame: null, scale: null, suspended: false};
+            return {
+                phaseInTransform: true, frame: null, scale: null, suspended: false,
+                shadowDiagnostics: {
+                    width: 824, height: 624, cast: {x: 0, y: 0, width: 824, height: 624},
+                },
+            };
         }
 
         // The real effect queues its disable on an idle; detaching it has to drop that idle.
@@ -62,64 +75,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         }
     }
 
-    class MockShadowActor {
-        constructor(actor, container, St = null) {
-            this.actor = actor;
-            this.container = container;
-            this.St = St;
-            this.destroyed = false;
-            this.insets = null;
-            this.style = null;
-            this.scale = 1;
-            this.clipTarget = null;
-        }
-
-        // Same guard as the real actor: a scale that is not a usable number leaves the last one.
-        setScale(scale) {
-            if (typeof scale === 'number' && scale > 0 && Number.isFinite(scale))
-                this.scale = scale;
-        }
-
-        setClipTarget(clipTarget) {
-            this.clipTarget = clipTarget;
-        }
-
-        setBodyPlan(plan) {
-            this.bodyPlan = plan;
-        }
-
-        get diagnosticsView() {
-            return {
-                width: 824,
-                height: 624,
-                cast: {x: 0, y: 0, width: 824, height: 624},
-                rightBand: {x1: 812, y1: 0, x2: 824, y2: 624},
-            };
-        }
-
-        setShadowInsets(insets) {
-            this.insets = insets;
-        }
-
-        setShadowStyle(style) {
-            this.style = style;
-        }
-
-        setPhaseInTransform(phaseInTransform) {
-            this.phaseInTransform = phaseInTransform;
-        }
-
-        // Calls the same handoff the real actor calls: the setter order is production's, not the
-        // fake's, so a change there fails here rather than only in e2e.
-        applyPass(pass) {
-            this.pass = pass;
-            applyPassToShadow(this, pass);
-        }
-
-        destroy() {
-            this.destroyed = true;
-        }
-    }
 
     class MockResizeBand {
         constructor(actor, container) {
@@ -369,7 +324,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
             OverviewMask,
             OverviewShadow: FakeOverviewShadow,
@@ -439,7 +393,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -463,7 +416,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -495,24 +447,19 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
-        // Add shadow
-        deco._syncShadow(true, mockActor);
+        // The effect draws it, so the decoration only records the decision.
+        deco._syncShadow(true);
         expect(deco.hasShadow).toBeTrue();
-        const shadow = deco.shadow;
-        expect(shadow.actor).toBe(mockActor);
+        expect(deco.stateView.hasShadow).toBeTrue();
 
-        // Idempotent sync
-        deco._syncShadow(true, mockActor);
-        expect(deco.shadow).toBe(shadow);
+        deco._syncShadow(true);
+        expect(deco.hasShadow).toBeTrue();
 
-        // Remove shadow
-        deco._syncShadow(false, mockActor);
+        deco._syncShadow(false);
         expect(deco.hasShadow).toBeFalse();
-        expect(shadow.destroyed).toBeTrue();
     });
 
     it('reads no phase pair at all when the pass supplied no surface container', () => {
@@ -531,7 +478,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         deco.surfaceContainer = null;
@@ -549,7 +495,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -582,7 +527,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             display: mockDisplay,
             St,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -590,7 +534,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(true, mockActor);
 
         expect(deco.clip.St).toBe(St);
-        expect(deco.shadow.St).toBe(St);
+        expect(deco.clip.St).toBe(St);
     });
 
     it('manages resize band lifecycle and geometry updates in _syncResizeBand', () => {
@@ -598,7 +542,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -637,7 +580,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -653,14 +595,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         deco.apply({actions, inputs: {insets, monitorScale: 1.5}, actor: mockActor});
         expect(deco.clip.params.scale).toBe(1.5);
-        expect(deco.shadow.scale).toBe(1.5);
+        expect(deco.clip.pass.scale).toBe(1.5);
         expect(deco.resizeBand.geometry.scale).toBe(1.5);
 
         // The scale read fails. The clip cut, shadow cutout and band keep the scale the display
         // was built at rather than jumping to 1.0, which would move a correct fractional display.
         deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
         expect(deco.clip.params.scale).toBe(1.5);
-        expect(deco.shadow.scale).toBe(1.5);
+        expect(deco.clip.pass.scale).toBe(1.5);
         expect(deco.resizeBand.geometry.scale).toBe(1.5);
     });
 
@@ -672,7 +614,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -690,7 +631,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         expect(deco._resolveScale({monitorScale: null})).toBe(1.25);
         expect(deco.clip.params.scale).toBe(1.25);
-        expect(deco.shadow.scale).toBe(1.25);
+        expect(deco.clip.pass.scale).toBe(1.25);
         expect(deco.resizeBand.geometry.scale).toBe(1.25);
     });
 
@@ -703,7 +644,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -721,7 +661,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco._resolveScale({monitorScale: null})).toBeNull();
         // The pass itself still laid out at 1.0: the shadow cut took the substitute, while the
         // clip records the unread null and falls back to 1.0 at paint.
-        expect(deco.shadow.scale).toBe(1);
+        expect(deco.clip.pass.scale).toBe(1);
         expect(deco.clip.params.scale).toBeNull();
 
         // A later readable pass stores the reading, and a failing pass after that keeps it.
@@ -729,7 +669,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco._scale).toBe(1.25);
         deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
         expect(deco._resolveScale({monitorScale: null})).toBe(1.25);
-        expect(deco.shadow.scale).toBe(1.25);
+        expect(deco.clip.pass.scale).toBe(1.25);
     });
 
     it('commits the episode only after the pass has drawn, so a throw cannot advance it', () => {
@@ -745,7 +685,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: ThrowingClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
             journal: new Journal({warn: () => {}}),
         });
@@ -778,21 +717,21 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // from the shadow, after the clip exists, so it also pins what the commit does NOT promise -
         // the actor the pass already attached stays attached, because unwinding a half-attached effect
         // during a teardown would be worse than finishing the next pass from there.
+        // The handoff is one call now, so that is where a later stage throws from.
         let throwsOnce = true;
-        class FlakyShadowActor extends MockShadowActor {
-            constructor(...args) {
+        class FlakyClipEffect extends MockClipEffect {
+            applyPass(pass) {
                 if (throwsOnce) {
                     throwsOnce = false;
                     throw new Error('Mutter is tearing down');
                 }
-                super(...args);
+                super.applyPass(pass);
             }
         }
         const deco = new WindowDecoration(mockWin, {
             container: mockContainer,
             display: mockDisplay,
-            RoundedClipEffect: MockClipEffect,
-            ShadowActor: FlakyShadowActor,
+            RoundedClipEffect: FlakyClipEffect,
             ResizeBand: MockResizeBand,
             journal: new Journal({warn: () => {}}),
         });
@@ -816,7 +755,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(pass).toThrow();
         expect(deco.bodyPlan.settle).toEqual(before);
         expect(deco._witness).toBeNull();
-        // Not a rollback: the clip the pass attached before the shadow threw is still here.
+        // Not a rollback: the clip the pass attached before the handoff threw is still here.
         expect(deco.clip).not.toBeNull();
 
         // The recovery the guarantee is really about: the next pass settles from the history it had,
@@ -824,7 +763,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         pass();
         expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
         expect(deco._witness).not.toBeNull();
-        expect(deco.shadow).not.toBeNull();
     });
 
     it('keeps the history still when the overview sync throws, which is the last thing it does', () => {
@@ -846,7 +784,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: ThrowingResumeClip,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
             journal: new Journal({warn: () => {}}),
         });
@@ -890,7 +827,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
             journal: new Journal({warn}),
         });
@@ -939,7 +875,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
             journal: new Journal({warn}),
         });
@@ -983,7 +918,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1002,7 +936,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 target: {actor: mockActor, phaseInTransform},
             });
             expect(deco.clip.pass.phaseInTransform).toBe(phaseInTransform);
-            expect(deco.shadow.pass.phaseInTransform).toBe(phaseInTransform);
+            expect(deco.clip.pass.phaseInTransform).toBe(phaseInTransform);
         }
     });
 
@@ -1019,7 +953,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const insets = {left: 8, top: 8, right: 8, bottom: 8};
@@ -1040,7 +973,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const insets = {left: 8, top: 8, right: 8, bottom: 8};
@@ -1071,7 +1003,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1124,7 +1055,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1165,7 +1095,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1205,7 +1134,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1248,7 +1176,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1266,7 +1193,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clipTarget).toBe(mockActor);
         expect(deco.clip.get_actor()).toBe(mockActor);
         expect(deco.clipPhaseInTransform).toBeFalse();
-        expect(deco.shadow.clipTarget).toBe(mockActor);
+        expect(deco.clipTarget).toBe(mockActor);
         expect(container.effects).not.toContain(deco.clip);
 
         // The backing goes away: the container is the unique non-foreign child, so the later
@@ -1276,7 +1203,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clipTarget).toBe(container);
         expect(deco.clip.get_actor()).toBe(container);
         expect(deco.clipPhaseInTransform).toBeTrue();
-        expect(deco.shadow.clipTarget).toBe(container);
+        expect(deco.clipTarget).toBe(container);
         expect(mockActor.effects).not.toContain(deco.clip);
     });
 
@@ -1285,7 +1212,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1315,8 +1241,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasResizeBand).toBeTrue();
         expect(deco.clip.params.radius).toBe(12);
         expect(deco.clip.params.scale).toBe(1);
-        expect(deco.shadow.style.radius).toBe(12);
-        expect(deco.shadow.scale).toBe(1);
+        expect(deco.clip.shadowStyle.radius).toBe(12);
+        expect(deco.clip.pass.scale).toBe(1);
     });
 
     it('points the shadow at the clip target and reports the live body for diagnostics', () => {
@@ -1328,7 +1254,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         deco.apply({
@@ -1345,14 +1270,15 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         });
 
         // The shadow's body authority is the same target the clip attached to...
-        expect(deco.shadow.clipTarget).toBe(container);
+        expect(deco.clipTarget).toBe(container);
         // ...and the read-only view exposes the clip's container box plus the shadow's live box,
         // cast and snapped right band for one debug pick during the glitch.
         expect(deco.diagnosticsView.containerBox).toEqual({x: 0, y: 0, width: 800, height: 600});
         expect(deco.diagnosticsView.shadowWidth).toBe(824);
         expect(deco.diagnosticsView.shadowHeight).toBe(624);
         expect(deco.diagnosticsView.shadowCast).toEqual({x: 0, y: 0, width: 824, height: 624});
-        expect(deco.diagnosticsView.shadowRightBand).toEqual({x1: 812, y1: 0, x2: 824, y2: 624});
+        // The snapped slice boxes belonged to the actor; the effect reports the cast only.
+        expect(deco.diagnosticsView.shadowRightBand).toBeNull();
     });
 
     it('holds the one settled body across a target/actor disagreement so both cuts stay put', () => {
@@ -1362,7 +1288,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1383,7 +1308,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         // A healthy pass: the resolved target and the window actor agree.
         deco.apply({actions, inputs, actor: mockActor, target});
-        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(deco.clip.bodyPlan).toBe(deco.clip.bodyPlan);
         expect(bodyNow()).toEqual({width: 800, height: 600});
 
         // The container read lags the window actor by 2px: both cuts keep the previous body.
@@ -1405,7 +1330,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1438,7 +1362,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         mockActor.width = 802;
         deco.apply({actions, inputs: withFrame({x: 0, y: 0, width: 802, height: 600}),
             actor: mockActor, target});
-        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(deco.clip.bodyPlan).toBe(deco.clip.bodyPlan);
         expect(bodyNow()).toEqual({width: 802, height: 600});
     });
 
@@ -1452,7 +1376,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         const actions = {
@@ -1485,7 +1408,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         container.width = 798;
         mockActor.width = 798;
         deco.apply({actions, inputs, actor: mockActor, target});
-        expect(deco.shadow.bodyPlan).toBe(deco.clip.bodyPlan);
+        expect(deco.clip.bodyPlan).toBe(deco.clip.bodyPlan);
         expect(bodyNow()).toEqual({width: 800, height: 600});
 
         // A genuine resize moves the body and the window's own frame together: the fresh body is
@@ -1558,8 +1481,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
                 container: mockContainer,
                 display: mockDisplay,
                 RoundedClipEffect: MockClipEffect,
-                ShadowActor: MockShadowActor,
-                ResizeBand: MockResizeBand,
+                    ResizeBand: MockResizeBand,
             });
         }
 
@@ -1655,15 +1577,14 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             expect(deco.bodyPlan.settle.previousBody).not.toBeNull();
             // The actors this pass built go too. `_syncShadow` needs the window actor to answer, so this
             // one is only reachable with one behind the decoration, which the harness provides.
-            expect(deco.shadow).not.toBeNull();
-
+    
             deco.undecorate();
             expect(deco._witness).toBeNull();
             expect(deco.bodyPlan.settle).toEqual(jasmine.objectContaining({
                 previousBody: null, previousAuthority: null, previousWindowSize: null,
             }));
             expect(deco._pass).toBeNull();
-            expect(deco.shadow).toBeNull();
+            expect(deco.hasShadow).toBeFalse();
         });
 
         it('skips the hold and drops the witness when this pass cannot read a ring', () => {
@@ -1699,7 +1620,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1739,7 +1659,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1769,7 +1688,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.stateView.ring.erase).toBeTrue();
         expect(deco.diagnosticsView.clipInsets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.insets).toEqual(FLAT_SAFE_INSET);
-        expect(deco.shadow.insets).toEqual(FLAT_SAFE_INSET);
+        expect(deco.clip.shadowInsets).toEqual(FLAT_SAFE_INSET);
         expect(deco.clip.params.erase).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeFalse();
         expect(deco.clip.params.outline).toEqual(outline);
@@ -1780,7 +1699,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1807,7 +1725,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.stateView.ring.insets).toEqual(cover);
         expect(deco.diagnosticsView.clipInsets).toEqual(cover);
         expect(deco.clip.params.insets).toEqual(cover);
-        expect(deco.shadow.insets).toEqual(cover);
+        expect(deco.clip.shadowInsets).toEqual(cover);
     });
 
     it('keeps the clip body on the declared frame so it matches the shadow body', () => {
@@ -1815,7 +1733,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1841,7 +1758,7 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.clip.params.insets).toEqual(declaredInsets);
         expect(deco.clip.params.erase).toBeTrue();
         expect(deco.clip.params.clearStroke).toBeTrue();
-        expect(deco.shadow.insets).toEqual(declaredInsets);
+        expect(deco.clip.shadowInsets).toEqual(declaredInsets);
     });
 
     it('performs clean phased teardown in destroy()', () => {
@@ -1849,7 +1766,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1858,7 +1774,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
-        const shadowRef = deco.shadow;
         const bandRef = deco.resizeBand;
 
         deco.destroy();
@@ -1866,7 +1781,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.hasClip).toBeFalse();
         expect(deco.hasShadow).toBeFalse();
         expect(deco.hasResizeBand).toBeFalse();
-        expect(shadowRef.destroyed).toBeTrue();
         expect(bandRef.destroyed).toBeTrue();
     });
 
@@ -1875,7 +1789,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1884,7 +1797,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         deco._syncShadow(true, mockActor);
         deco._syncResizeBand(true, {monitorScale: 1}, insets, mockActor);
 
-        const shadowRef = deco.shadow;
         const bandRef = deco.resizeBand;
 
         deco.destroy({keepVisualsForClose: true});
@@ -1896,7 +1808,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         // Visuals are preserved for window close animation
         expect(deco.hasClip).toBeTrue();
         expect(deco.hasShadow).toBeTrue();
-        expect(shadowRef.destroyed).toBeFalse();
     });
 
     it('drops the queued disable even when it keeps the visuals for the close animation', () => {
@@ -1906,7 +1817,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
         deco._syncClip(true, mockActor, {left: 10, top: 10, right: 10, bottom: 10});
@@ -1923,7 +1833,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -1964,7 +1873,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
             container: mockContainer,
             display: mockDisplay,
             RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
             ResizeBand: MockResizeBand,
         });
 
@@ -2021,7 +1929,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         // restack
         deco.restack(mockActor);
-        expect(mockContainer.set_child_below_sibling).toHaveBeenCalledWith(deco.shadow, mockActor);
         expect(deco.resizeBand.restacked).toBeTrue();
 
         // resetBandCursor
@@ -2620,7 +2527,8 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
     it('gives the overview shadow to a window that has no clip (prefer-crisp-text)', () => {
         const {shadowClones, deco} = setupMaskHarness({drawClip: false, drawShadow: true});
-        expect(deco.hasClip).toBeFalse();
+        // The effect carries the shadow, so one is attached; it cuts nothing.
+        expect(deco.isActivelyClipped).toBeFalse();
         expect(deco.hasShadow).toBeTrue();
 
         deco.setOverviewMode(true);
@@ -2658,14 +2566,12 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(shadowClones.length).toBe(1);
         const first = shadowClones[0];
 
-        deco.shadow.destroy();
-        const replacement = new MockShadowActor(mockActor, mockContainer);
-        deco.shadow = replacement;
+        // The source is the style now: a different radius is a different bake.
+        deco._pass = {...deco._pass, style: {...deco._pass.style, radius: 9}};
         deco.setOverviewMode(true);
 
         expect(shadowClones.length).toBe(2);
         expect(first.destroyed).toBeTrue();
-        expect(shadowClones[1].source).toBe(replacement);
         expect(shadowClones[1].destroyed).toBeFalse();
     });
 
@@ -2802,12 +2708,13 @@ describe('WindowDecoration state lifetimes (what an episode boundary must clear)
         _St: 'session',
         _journal: 'session',
         _RoundedClipEffect: 'session',
-        _ShadowActor: 'session',
         _ResizeBand: 'session',
         _requestPass: 'session',
         overview: 'window',
         clip: 'resource',
-        shadow: 'resource',
+        _shadowOn: 'pass',
+        _volume: 'resource',
+        _ShadowVolume: 'session',
         resizeBand: 'resource',
         clipTarget: 'pass',
         clipPhaseInTransform: 'pass',

@@ -21,6 +21,9 @@ import {Diagnostic, offscreenBoxWarning, windowIdentityLabel}
     from '../lib/diagnosticInvariants.js';
 import {journal} from '../platform/journal.js';
 import {offscreenUniformsStale} from '../lib/offscreenBox.js';
+import {ShadowFadeStateMachine} from './shadowFade.js';
+import {SHADOW_PAD, shadowCastRectForBody, shadowGeometry, shadowSampling} from './shadowGeometry.js';
+import {shadowTextureFor, styleKey} from './shadowTexture.js';
 
 const DECLARATIONS = `
 uniform vec2 uQuadSize;   // Offscreen FBO extent in logical px: what cogl_tex_coord0_in spans
@@ -31,10 +34,25 @@ uniform vec4 uOutline;    // Inner outline r,g,b in [0,1], a in [0,1]; a=0 disab
 uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ring
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
 uniform float uScale;       // Device px per shader unit, not FBO px
+uniform vec4 uShadowCast;    // Cast rect in actor coords: x, y, w, h
+uniform vec4 uShadowT0;      // Texture stops per axis: near, innerNear, innerFar, outerFar
+uniform vec4 uShadowT1;      // edge, strip, clamped slice width
+uniform vec2 uShadowW;       // Weights for A and B
+uniform float uShadowOn;
 // The FBO's oversampling is averaged on the blit into the monitor-sized allocation, so the outline
 // ring, the clear-stroke inset and the AA ramp convert with the monitor scale. The FBO's scale
 // instead draws a 1px outline at 1/scale units: 0.5 logical px, 0.625 device px, where unpatched
 // mutter allocates ceilf (1.25) = 2.
+
+// The bake's nine slices are one separable map per axis: corner, middle strip, far corner.
+float shadowAxis(float t, float extent) {
+    float c = max(uShadowT1.z, 0.0001);
+    if (t < c)
+        return mix(uShadowT0.x, uShadowT0.y, t / c);
+    if (t > extent - c)
+        return mix(uShadowT0.z, uShadowT0.w, (t - (extent - c)) / c);
+    return mix(uShadowT1.x, uShadowT1.x + uShadowT1.y, (t - c) / max(extent - 2.0 * c, 1.0));
+}
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -85,6 +103,17 @@ const CODE = `
     float straight = mix(1.0, inSquare, uErase);
     float edgeFactor = isCorner ? mix(keep, corner, uErase) : straight;
     cogl_color_out *= edgeFactor;
+
+    if (uShadowOn > 0.5) {
+        vec2 rel = p - uFboOffset - uShadowCast.xy;
+        vec2 uv = vec2(shadowAxis(rel.x, uShadowCast.z), shadowAxis(rel.y, uShadowCast.w));
+        vec4 shadow = texture2D(cogl_sampler1, uv) * uShadowW.x +
+            texture2D(cogl_sampler2, uv) * uShadowW.y;
+        // The bake is premultiplied, and black by default: adding it would add zero. Composite it
+        // the way the blend the actor used did, outside the cut body only.
+        cogl_color_out = mix(cogl_color_out, shadow + cogl_color_out * (1.0 - shadow.a),
+            step(0.0, d));
+    }
 `;
 
 export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
@@ -136,6 +165,11 @@ export const RoundedClipEffect = GObject.registerClass({
         // Two readings of one extent, one line per episode; rebuilt per episode, nothing to reset.
         this._boxDiagnostic = new Diagnostic(options.journal ?? journal, 1);
 
+        // The shadow rides in this effect: its fade, the style it draws and the cast it covers.
+        this._shadowFade = new ShadowFadeStateMachine();
+        this._shadowInsets = null;
+        this._shadowCast = null;
+
         this._quadVec = [0, 0];
         this._offsetVec = [0, 0];
         this._frameVec = [0, 0, 0, 0];
@@ -143,6 +177,77 @@ export const RoundedClipEffect = GObject.registerClass({
         this._radiusVec = [0];
         this._eraseVec = [0];
         this._clearStrokeVec = [0];
+    }
+
+    /** The shadow's style, or null for none; a change cross-fades exactly as the actor did. */
+    setShadowStyle(style) {
+        if (!style) {
+            if (!this._shadowFade.style)
+                return;
+            this._shadowFade.reset();
+            this._shadowCast = null;
+            this.queue_repaint();
+            return;
+        }
+        const key = styleKey(style.radius, style.shadows);
+        if (this._shadowFade.style?.key === key)
+            return;
+        this._shadowFade.setStyle({...style, key}, {animate: style.animate ?? false});
+        this.queue_repaint();
+    }
+
+    setShadowInsets(insets) {
+        this._shadowInsets = insets ?? null;
+    }
+
+    /** What the pick reply reads about the shadow, which used to be the actor's own view. */
+    get shadowDiagnostics() {
+        const cast = this._shadowCast;
+        if (!this._shadowFade.style || !cast)
+            return null;
+        return {width: cast.width, height: cast.height, cast: {...cast}};
+    }
+
+    /** Both styles the paint draws, their weights, and the geometry they share. */
+    _shadowLayers(context, body) {
+        const style = this._shadowFade.style;
+        if (!style || !body || !context)
+            return null;
+        const incoming = shadowTextureFor(context, style.radius, style.shadows);
+        if (!incoming)
+            return null;
+
+        const outgoing = this._shadowFade.outgoing;
+        const fading = Boolean(outgoing) && this._shadowFade.progress < 1;
+        const previous = fading
+            ? shadowTextureFor(context, outgoing.style.radius, outgoing.style.shadows)
+            : null;
+        const cast = shadowCastRectForBody(body, this._shadowInsets, this._scale ?? 1);
+        this._shadowCast = cast;
+
+        return {
+            cast,
+            sampling: shadowSampling(shadowGeometry(style.radius), cast.width, cast.height),
+            incoming,
+            previous: previous ?? incoming,
+            weightA: fading ? this._shadowFade.outgoingWeight : 0,
+            weightB: this._shadowFade.incomingWeight,
+        };
+    }
+
+    /** Layers 1 and 2 carry the two bakes; the shader samples them with the same stops. */
+    _bindShadow(shadow) {
+        const pipeline = shadow ? this.get_pipeline?.() ?? null : null;
+        if (pipeline) {
+            pipeline.set_layer_texture(1, shadow.previous);
+            pipeline.set_layer_texture(2, shadow.incoming);
+            this.set_uniform_float('uShadowCast', 4,
+                [shadow.cast.x, shadow.cast.y, shadow.cast.width, shadow.cast.height]);
+            this.set_uniform_float('uShadowT0', 4, shadow.sampling.t0);
+            this.set_uniform_float('uShadowT1', 4, shadow.sampling.t1);
+            this.set_uniform_float('uShadowW', 2, [shadow.weightA, shadow.weightB]);
+        }
+        this.set_uniform_float('uShadowOn', 1, [shadow ? 1 : 0]);
     }
 
     /** Stores the styling decisions only; geometry is re-read from the actor on every paint. */
@@ -242,6 +347,8 @@ export const RoundedClipEffect = GObject.registerClass({
 
         const scale = this._scale ?? 1.0;
         const fbo = this._readTargetSize();
+        // A shadow widens the paint volume, so the box is predicted from the wider extent.
+        const shadowMargin = this._shadowFade.style ? SHADOW_PAD : 0;
         const plan = paintPlan({
             targetSize: readActorSize(actor),
             windowActorSize: readActorSize(getWindowActor(win)),
@@ -252,6 +359,7 @@ export const RoundedClipEffect = GObject.registerClass({
             insets: this._insets,
             phase: resolvedPhase ?? this._lastPhase,
             bodyPlan: this._bodyPlan,
+            margin: shadowMargin,
         });
         if (plan.suspend) {
             this._suspend();
@@ -261,6 +369,12 @@ export const RoundedClipEffect = GObject.registerClass({
         if (resolvedPhase)
             this._lastPhase = resolvedPhase;
         this.resume();
+
+        // Advance the blend to the frame being drawn, then ask for another while it runs.
+        if (this._shadowFade.advance())
+            this.queue_repaint();
+        this._bindShadow(this._shadowLayers(paintContext?.get_framebuffer?.()?.get_context?.() ?? null,
+            plan.body));
 
         const {size, frame, box} = plan;
         const changes = clipGeometryChanges(this._paint, {scale, width: size.width, height: size.height, frame});

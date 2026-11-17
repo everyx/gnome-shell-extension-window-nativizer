@@ -58,20 +58,9 @@ function shadowPipeline(context, radius, shadows) {
     return pipeline;
 }
 
-/** Per-window pipeline over the shared baked texture, so each cross-fades its own opacity. */
-export function shadowPipelineFor(context, radius, shadows) {
-    const source = shadowPipeline(context, radius, shadows);
-    if (!source)
-        return null;
-
-    const pipeline = Cogl.Pipeline.new(context);
-    pipeline.set_layer_texture(0, source.get_layer_texture(0));
-    return pipeline;
-}
-
-export function setPipelineOpacity(pipeline, opacity) {
-    const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
-    pipeline.set_color(new Cogl.Color({red: 255, green: 255, blue: 255, alpha}));
+/** The baked texture itself; the clip binds it as its own layer and samples it in the shader. */
+export function shadowTextureFor(context, radius, shadows) {
+    return shadowPipeline(context, radius, shadows)?.get_layer_texture(0) ?? null;
 }
 
 /** Names and arities come from the shader: a key it does not declare uploads undefined, not -1. */
@@ -114,7 +103,12 @@ function bake(context, radius, shadows) {
     framebuffer.orthographic(0, 0, buffer, buffer, -1, 1);
     framebuffer.clear4f(CLEAR_COLOR_BUFFER, 0, 0, 0, 0);
     framebuffer.draw_textured_rectangle(pipeline, 0, 0, buffer, buffer, 0, 0, 1, 1);
-    context.flush();
+    // The bake's draw is journalled against this framebuffer, not the window's, so it has to be
+    // forced out before another pipeline samples it. One per style, cached.
+    if (framebuffer.finish)
+        framebuffer.finish();
+    else
+        context.flush();
 
     const drawing = Cogl.Pipeline.new(context);
     drawing.set_color(OPAQUE_WHITE);

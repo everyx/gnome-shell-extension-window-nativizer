@@ -14,7 +14,7 @@ import {journal} from '../platform/journal.js';
 import {normalizeConstrainedEdges} from './resizeBand.js';
 import {OverviewDecoration} from './overviewDecoration.js';
 import {resolveMonitorBounds, safeRead} from './window.js';
-import {getWindowGroup, getDisplay, setActorBelowSibling} from '../platform/display.js';
+import {getWindowGroup, getDisplay} from '../platform/display.js';
 import {getSurfaceContainer} from '../platform/surfaceContainer.js';
 import {getWindowActor} from '../platform/window.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset} from '../platform/windowPhase.js';
@@ -29,8 +29,9 @@ export class WindowDecoration {
         this._St = options.St ?? (globalThis.St ?? null);
 
         this._RoundedClipEffect = options.RoundedClipEffect ?? null;
-        this._ShadowActor = options.ShadowActor ?? null;
         this._ResizeBand = options.ResizeBand ?? null;
+        // Injected like the other effects, so the unit suite does not import Clutter.
+        this._ShadowVolume = options.ShadowVolume ?? null;
         this._journal = options.journal ?? journal;
         this._requestPass = options.requestPass ?? null;
 
@@ -68,7 +69,8 @@ export class WindowDecoration {
         // The force-corners flag for this pass; the overview then picks the legacy offscreen clip.
         this._forceOverviewCorners = false;
 
-        this.shadow = null;
+        this._shadowOn = false;
+        this._volume = null;
         this.resizeBand = null;
     }
 
@@ -81,7 +83,7 @@ export class WindowDecoration {
     }
 
     get hasShadow() {
-        return Boolean(this.shadow);
+        return this._shadowOn;
     }
 
     get hasResizeBand() {
@@ -119,9 +121,9 @@ export class WindowDecoration {
         const clip = this.clip;
         const hasClip = Boolean(clip);
         const target = safeRead(() => clip?.get_actor?.() ?? this.clipTarget, null);
-        const shadow = safeRead(() => this.shadow?.diagnosticsView ?? null, null);
-        // The effect answers for its own fields; this view only composes the answers.
+        // The effect answers for its own fields, the shadow's included; this view composes them.
         const effect = hasClip ? safeRead(() => clip.diagnosticsView ?? null, null) : null;
+        const shadow = safeRead(() => effect?.shadowDiagnostics ?? null, null);
 
         return {
             clipTargetType: hasClip
@@ -230,11 +232,13 @@ export class WindowDecoration {
     _drawPass(read, winActor) {
         const {actions, ring, inOverview} = read;
 
-        this._syncClip(actions.drawClip || actions.ring.clear, read.clipTarget, ring.insets, inOverview);
-
-        // A cleared ring defers to the client's shadow, but never while our clip is in place.
-        const deferToClientShadow = actions.ring.clear && !this.clip;
-        this._syncShadow(actions.drawRing || (!deferToClientShadow && actions.drawShadow), winActor);
+        // A cleared ring defers to the client's shadow, but never while our clip is in place: the
+        // clip takes the ring over, so the shadow under it is ours.
+        this._shadowOn = actions.drawRing ||
+            (actions.drawShadow && (!actions.ring.clear || actions.drawClip));
+        // The shadow rides in the clip's effect, so one is needed even when no corner is cut.
+        this._syncClip(actions.drawClip || actions.ring.clear || this._shadowOn,
+            read.clipTarget, ring.insets, inOverview);
 
         this._syncResizeBand(actions.drawResize, read.inputs, ring.insets, winActor);
 
@@ -246,6 +250,7 @@ export class WindowDecoration {
             style: actions.style,
             ring,
             drawClip: drawnClip,
+            drawShadow: this._shadowOn,
             scale: read.scale,
             readableScale: read.readableScale,
             scaleCandidates: read.scaleCandidates,
@@ -257,9 +262,8 @@ export class WindowDecoration {
             inOverview: this.overview.inOverview,
         });
         this._pass = pass;
+        // One handoff: the effect cuts the frame and casts the shadow from the same pass.
         this.clip?.applyPass(pass);
-        // Both cuts read one phase source and body: a transient disagreement cannot split them.
-        this.shadow?.applyPass(pass);
 
         // Presence changes only in _syncClip, so this pass's style is pushed here, and can throw.
         this.setOverviewMode(inOverview);
@@ -299,7 +303,7 @@ export class WindowDecoration {
             drawClip: Boolean(pass?.drawClip),
             hasStyle: Boolean(pass?.style),
             forceOverviewCorners: this._forceOverviewCorners,
-            shadow: this.shadow,
+            shadow: this._shadowOn ? pass?.style ?? null : null,
         });
 
         this._syncOverviewClip(mode);
@@ -335,6 +339,11 @@ export class WindowDecoration {
                     ? new ClipClass(this._St, {journal: this._journal})
                     : null;
                 this.clipTarget = clipTarget;
+                // Added before the clip: Clutter only asks the effects that precede the painting one.
+                const VolumeClass = this._ShadowVolume;
+                this._volume = VolumeClass ? new VolumeClass() : null;
+                if (this._volume)
+                    this.clipTarget?.add_effect?.(this._volume);
                 this.clipTarget?.add_effect?.(this.clip);
             } else {
                 this._removeClipEffect();
@@ -346,35 +355,27 @@ export class WindowDecoration {
             if (clipTarget !== (this.clip?.get_actor() ?? null)) {
                 this._removeClipEffect();
                 this.clipTarget = clipTarget;
+                // Added before the clip: Clutter only asks the effects that precede the painting one.
+                const VolumeClass = this._ShadowVolume;
+                this._volume = VolumeClass ? new VolumeClass() : null;
+                if (this._volume)
+                    this.clipTarget?.add_effect?.(this._volume);
                 this.clipTarget?.add_effect?.(this.clip);
             }
         }
         // A re-pin restates the phase strategy too; the setter is a no-op while unchanged.
         if (this.clip)
             this.clip.setPhaseInTransform?.(this.clipPhaseInTransform);
+        this._volume?.setEnabled?.(Boolean(this._shadowOn));
         // A clip that appears is suppressed at once, not at the end of the pass: the overview must
         // never hold an enabled clip, even between these two calls.
         if (wanted !== hasClip)
             this.setOverviewMode(inOverview, this.clip ? insets : null);
     }
 
-    _syncShadow(wantShadow, actor = null) {
-        const winActor = this._getActor(actor);
-        if (!winActor)
-            return;
-
-        const hasShadow = Boolean(this.shadow);
-        if (wantShadow !== hasShadow) {
-            if (wantShadow) {
-                const ShadowClass = this._ShadowActor;
-                this.shadow = ShadowClass
-                    ? new ShadowClass(winActor, this._container, this._St, {journal: this._journal})
-                    : null;
-            } else {
-                this.shadow?.destroy();
-                this.shadow = null;
-            }
-        }
+    /** The effect draws the shadow now, so this only records whether it should. */
+    _syncShadow(wantShadow) {
+        this._shadowOn = Boolean(wantShadow);
     }
 
     _syncResizeBand(want, inputs, insets, actor = null) {
@@ -455,9 +456,6 @@ export class WindowDecoration {
         if (!winActor)
             return;
 
-        if (this.shadow && this._container)
-            setActorBelowSibling(this.shadow, winActor, this._container);
-
         this.resizeBand?.restack();
     }
 
@@ -493,9 +491,12 @@ export class WindowDecoration {
 
         try {
             actor.remove_effect?.(this.clip);
+            if (this._volume)
+                actor.remove_effect?.(this._volume);
         } catch {
             // The effect went away with its actor.
         }
+        this._volume = null;
     }
 
     /** Phased teardown; a close animation may keep the visuals, the manager keeps the signals. */
@@ -524,7 +525,7 @@ export class WindowDecoration {
             } catch {
                 // The shadow may already be gone.
             }
-            this.shadow = null;
+            this._shadowOn = false;
         }
     }
 }

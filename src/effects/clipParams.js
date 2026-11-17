@@ -204,6 +204,13 @@ export function clipGeometryChanges(prev, next) {
  * `phase` and `fbo` come from the caller, where the live actor is read. `box.explained` is not a
  * gate: an FBO from another size compresses one frame, and suspending would blank it instead.
  */
+/** A shadow widens the paint volume by `margin` on every side, and the FBO follows it. */
+function extentOf(size, margin) {
+    return margin > 0
+        ? {width: size.width + 2 * margin, height: size.height + 2 * margin}
+        : size;
+}
+
 export function paintPlan({
     targetSize = null, windowActorSize = null, windowSize = null, fbo = null,
     scale = 1.0, candidates = null, insets = null, phase = null, bodyPlan = null,
@@ -220,8 +227,11 @@ export function paintPlan({
         return {suspend: 'no-frame'};
     // The paint volume a shadow lives in is wider than the actor by `margin` on every side; the box
     // has to be predicted from that extent or the FBO read can never be explained.
-    const extent = margin > 0
-        ? {width: size.width + 2 * margin, height: size.height + 2 * margin}
-        : size;
-    return {suspend: null, size, frame, box: offscreenPaintBox(extent, scale, fbo, candidates)};
+    return {
+        suspend: null,
+        size,
+        body,
+        frame,
+        box: offscreenPaintBox(extentOf(size, margin), scale, fbo, candidates),
+    };
 }

@@ -4,12 +4,12 @@ import {ZERO_INSETS} from '../lib/frame.js';
 
 /** readableScale stays null while no scale was read: the clip cannot be handed the 1.0 default. */
 export function decorationPass({
-    style, ring = null, drawClip = false, scale = 1.0, readableScale = null,
+    style, ring = null, drawClip = false, drawShadow = false, scale = 1.0, readableScale = null,
     scaleCandidates = null, bodyPlan = null, clipTarget = null, phaseInTransform = false,
     inOverview = false,
 }) {
     return {
-        style, ring, drawClip, scale, readableScale,
+        style, ring, drawClip, drawShadow, scale, readableScale,
         scaleCandidates, bodyPlan, clipTarget, phaseInTransform, inOverview,
     };
 }
@@ -36,6 +36,8 @@ export function shadowStyleFrom(pass) {
 export function applyPassToClip(effect, pass) {
     effect.setParams(clipParamsFrom(pass));
     effect.setBodyPlan(pass.bodyPlan);
+    effect.setShadowInsets(pass.ring?.insets ?? null);
+    effect.setShadowStyle(pass.drawShadow ? shadowStyleFrom(pass) : null);
 }
 
 /** Setter order is the actor's invariant: phase, target, plan, scale, then style last. */

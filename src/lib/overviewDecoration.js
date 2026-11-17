@@ -343,15 +343,16 @@ export class OverviewDecoration {
         return Math.max(1, getWorkspaceCount());
     }
 
-    /** One per preview: a Clutter.Clone has one parent, and the shadow sits beside the window actor. */
+    /** One per preview: the shadow is an actor of its own, drawn from the bake the desktop uses. */
     _applyShadow() {
         const OverviewShadow = this._OverviewShadowClass;
         if (!this._readings.shadow || !OverviewShadow)
             return;
-        // Keyed on the source: a rebuild replaces it, so a count-only check left clones on the dead actor.
-        if (this._mountedShadowSource !== this._readings.shadow) {
+        // Keyed on the style: a restyle rebuilds every shadow, since each is drawn from that bake.
+        const key = this._readings.shadow;
+        if (this._mountedShadowSource !== key) {
             this._clearShadow();
-            this._mountedShadowSource = this._readings.shadow;
+            this._mountedShadowSource = key;
         }
         if (this._shadows.length >= this._expectedPreviewCount())
             return;

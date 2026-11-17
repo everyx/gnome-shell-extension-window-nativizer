@@ -155,6 +155,23 @@ export function shadowSlices({corner, window, buffer}, width, height) {
     ];
 }
 
+/**
+ * The stops one axis of the baked texture spans, and the slice width, for a cast of that extent.
+ * The 9-slice is separable, so a shader maps each axis alone with these and needs no per-slice
+ * branch: `[0,c]` is the corner, `[c,e-c]` the middle strip, `[e-c,e]` the far corner.
+ */
+export function shadowSampling({corner, window, buffer}, castWidth, castHeight) {
+    const o = BAKE_ORIGIN;
+    // `c` and not `corner`: a cast narrower than two corners shows only its outer `c` bake px.
+    const c = Math.max(0, Math.min(corner, castWidth / 2, castHeight / 2));
+    const shown = c / buffer;
+    const outerFar = (buffer - corner - 1) / buffer + corner / buffer;
+    return {
+        t0: [o / buffer, o / buffer + shown, outerFar - shown, outerFar],
+        t1: [(o + SHADOW_PAD + window / 2) / buffer, 1 / buffer, c, 0],
+    };
+}
+
 /** Runs on the actor's allocation clock, so the cast tracks the frame the compositor draws. */
 export function shadowLayout(style, actorSize, insets, scale = 1.0, bodySource = null) {
     const settled = bodySource
