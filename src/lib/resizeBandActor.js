@@ -248,6 +248,10 @@ export const ResizeBand = GObject.registerClass({
         if (!win)
             return Clutter.EVENT_PROPAGATE;
 
+        // Focus first: mutter focuses the press before it reads a single modifier, and focusing here
+        // can run a decoration pass synchronously, so nothing of this press may be read before it.
+        focusWindow(win, event.get_time());
+
         const intent = pressIntent({
             state: event.get_state(),
             grabMods: getDisplay()?.get_compositor_modifiers?.() ?? 0,
@@ -255,8 +259,6 @@ export const ResizeBand = GObject.registerClass({
             allowsResize: isWindowAllowsResize(win),
             allowsMove: isWindowAllowsMove(win),
         });
-        // Mutter focuses the press it handles whether or not the window already had it.
-        focusWindow(win, event.get_time());
         if (intent.raise)
             win?.raise?.();
         if (!intent.grab)
