@@ -13,7 +13,6 @@ import {
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {getDisplay, setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
-import {isWindowAllowsMove} from '../platform/window.js';
 
 import {Subscriptions} from './subscriptions.js';
 
@@ -28,7 +27,7 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
-import {isWindowAllowsResize} from '../platform/window.js';
+import {isWindowAllowsMove, isWindowAllowsResize} from '../platform/window.js';
 import {getWindowFromActor} from '../platform/windowActor.js';
 import {setActorBox} from './snap.js';
 
@@ -252,13 +251,12 @@ export const ResizeBand = GObject.registerClass({
         const intent = pressIntent({
             state: event.get_state(),
             grabMods: getDisplay()?.get_compositor_modifiers?.() ?? 0,
-            hasFocus: Boolean(win.has_focus?.()),
             raiseOnClick: isRaiseOnClick(),
             allowsResize: isWindowAllowsResize(win),
             allowsMove: isWindowAllowsMove(win),
         });
-        if (intent.focus)
-            focusWindow(win, event.get_time());
+        // Mutter focuses the press it handles whether or not the window already had it.
+        focusWindow(win, event.get_time());
         if (intent.raise)
             win?.raise?.();
         if (!intent.grab)

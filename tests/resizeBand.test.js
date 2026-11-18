@@ -863,33 +863,30 @@ describe('bandBoxes', () => {
 });
 
 describe('pressIntent (what a press on the band means, as Mutter decides it)', () => {
-    // Mutter focuses the press before it reads the modifiers, so a modifier move focuses too.
-    const base = {state: 0, grabMods: 0, hasFocus: false, raiseOnClick: true,
-        allowsResize: true, allowsMove: true};
+    // Focus is not part of this decision: Mutter focuses every press it handles, and the caller
+    // does that unconditionally, so there is no branch here that could order it wrongly.
+    const base = {state: 0, grabMods: 0, raiseOnClick: true, allowsResize: true, allowsMove: true};
 
-    it('focuses, raises and resizes on a plain press on an unfocused window', () => {
-        expect(pressIntent(base)).toEqual({focus: true, raise: true, grab: 'resize'});
+    it('raises and resizes on a plain press', () => {
+        expect(pressIntent(base)).toEqual({raise: true, grab: 'resize'});
     });
 
-    it('focuses and moves on a modifier press, and does not raise', () => {
+    it('moves on a modifier press, and does not raise where the grab is', () => {
         // The grab modifiers make the press a compositor grab, not a click on the window.
-        expect(pressIntent({...base, state: 64, grabMods: 64, hasFocus: true}))
-            .toEqual({focus: false, raise: false, grab: 'move'});
         expect(pressIntent({...base, state: 64, grabMods: 64}))
-            .toEqual({focus: true, raise: false, grab: 'move'});
+            .toEqual({raise: false, grab: 'move'});
     });
 
     it('leaves the raise to the preference, and still resizes', () => {
-        expect(pressIntent({...base, raiseOnClick: false, hasFocus: true}))
-            .toEqual({focus: false, raise: false, grab: 'resize'});
+        expect(pressIntent({...base, raiseOnClick: false})).toEqual({raise: false, grab: 'resize'});
     });
 
     it('moves only when every configured modifier is held', () => {
         // Half a chord is neither an unmodified click nor a compositor grab.
         expect(pressIntent({...base, state: 64, grabMods: 64 | 128}))
-            .toEqual({focus: true, raise: false, grab: null});
+            .toEqual({raise: false, grab: null});
         expect(pressIntent({...base, state: 64 | 128, grabMods: 64 | 128}))
-            .toEqual({focus: true, raise: false, grab: 'move'});
+            .toEqual({raise: false, grab: 'move'});
     });
 
     it('starts no grab for a capability the window does not have', () => {
