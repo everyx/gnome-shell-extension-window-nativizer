@@ -104,7 +104,7 @@ export function clipFrameFor(actorSize, insets, scale, phase) {
 }
 
 
-/** Writes a Clutter.ActorBox in place, which is the box both call sites hold. */
+/** Writes a Clutter.ActorBox in place; every caller holds one, so nothing is allocated. */
 export function setActorBox(box, x1, y1, x2, y2) {
     box.init(x1, y1, x2, y2);
 }

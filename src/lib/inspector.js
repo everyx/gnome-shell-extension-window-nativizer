@@ -40,8 +40,6 @@ import {
 import {readWindow} from './window.js';
 import {getWindowFromActor} from '../platform/windowActor.js';
 
-// Highlight styling mirrors upstream Shell's pickers.
-
 function highlightStyle(outerRadius) {
     return `border: ${HIGHLIGHT_BORDER_WIDTH}px solid -st-accent-color; ` +
         `background-color: st-transparentize(-st-accent-color, ${HIGHLIGHT_BG_TRANSPARENTIZE}); ` +

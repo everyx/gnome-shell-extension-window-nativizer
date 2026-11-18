@@ -24,11 +24,7 @@ export function windowSizeFrom(frameRect, bufferRect) {
     return sizeOf(frameRect) ?? sizeOf(bufferRect);
 }
 
-/**
- * The window's own size, read live. Both reads stay in the expression rather than behind a
- * callback: this runs on the paint clock, and a closure per paint is a cost the settlement of a
- * body does not need.
- */
+/** The window's own size, read live with the reads inline: this runs on the paint clock. */
 export function readWindowSize(win) {
     return sizeOf(getWindowFrameRect(win)) ?? sizeOf(getWindowBufferRect(win));
 }
@@ -42,7 +38,7 @@ export function readBodySizes(clipTarget, windowActor, win) {
     };
 }
 
-/** One window's settle: last settled body, its authority and window size, and the hold count. */
+/** The settle state kept across passes, so the paint and the pass settle from one history. */
 export class BodyPlan {
     constructor({tolerance = BODY_SETTLE_TOLERANCE} = {}) {
         this._tolerance = tolerance;

@@ -106,7 +106,7 @@ export function buildAxisSwitch(axis, corrected, onChange) {
     return switchRow;
 }
 
-/** The title, subtitle, icon, tooltip and a11y labels shared by the list and conflict rows. */
+/** One header shape for both callers, so a conflict row and a list row cannot drift. */
 export function setupRuleRowHeader(row, options) {
     const {name, sampleTitle, properties, appInfo} = options;
 

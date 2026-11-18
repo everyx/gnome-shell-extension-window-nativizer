@@ -18,9 +18,8 @@ export class PendingSource {
                 keep = callback();
                 return keep;
             } finally {
-                // Three ways out, one rule: the slot keeps an id only while that source is live.
-                // A thrown callback ends its source; a callback that queued a replacement has
-                // already put that one in the slot, and clearing here would strand it.
+                // One rule, three exits: the slot holds an id only while that source lives. A throw
+                // ends its source; one that queued a replacement already put it in the slot.
                 if (!keep && this._id === id)
                     this._id = 0;
             }
