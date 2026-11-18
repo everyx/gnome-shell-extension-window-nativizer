@@ -6,9 +6,11 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
-import {beginWindowGrabOp, focusWindow, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
+import {
+    beginWindowGrabOp, focusWindow, getMoveGrabOp, getPointerSprite, getResizeGrabOp,
+} from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
-import {setActorAboveSibling} from '../platform/display.js';
+import {getDisplay, setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
 import {isRaiseOnClick} from '../platform/window.js';
 
@@ -249,21 +251,21 @@ export const ResizeBand = GObject.registerClass({
         const [x, y] = event.get_coords();
         const posHint = new Graphene.Point({x, y});
 
-        // Before the grab: focus is an input of the pass the first resize frame draws with.
-        if (!win.has_focus?.())
-            focusWindow(win, event.get_time());
-        // Mutter's click path raises what it focuses, unless the preference says otherwise.
-        if (isRaiseOnClick())
-            win?.raise?.();
+        // An unmodified press is a click on that window: focus is an input of the pass the first
+        // frame draws with, and the raise follows the preference as mutter's click path does.
+        const grabMods = getDisplay()?.get_compositor_modifiers?.() ?? 0;
+        const unmodified = (event.get_state() & grabMods) === 0;
+        if (unmodified) {
+            if (!win.has_focus?.())
+                focusWindow(win, event.get_time());
+            if (isRaiseOnClick())
+                win?.raise?.();
+        }
 
-        const op = getResizeGrabOp(direction);
-        const grabbed = beginWindowGrabOp(
-            win,
-            op,
-            sprite,
-            event.get_time(),
-            posHint
-        );
+        // Held grab modifiers make the press a move anywhere on the window, the band included.
+        const op = unmodified ? getResizeGrabOp(direction) : getMoveGrabOp();
+        const grabbed = beginWindowGrabOp(win, op, sprite, event.get_time(),
+            unmodified ? posHint : null);
         if (!grabbed)
             return Clutter.EVENT_PROPAGATE;
 
