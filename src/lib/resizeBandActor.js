@@ -8,11 +8,11 @@ import St from 'gi://St';
 
 import {
     beginWindowGrabOp, focusWindow, getMoveGrabOp, getPointerSprite, getResizeGrabOp,
+    isRaiseOnClick,
 } from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {getDisplay, setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
-import {isRaiseOnClick} from '../platform/window.js';
 
 import {Subscriptions} from './subscriptions.js';
 

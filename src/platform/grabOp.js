@@ -38,6 +38,11 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     }
 }
 
+/** Mutter's own `raise-on-click`, read through Meta rather than restated as a schema string. */
+export function isRaiseOnClick(meta = metaNamespace()) {
+    return meta?.prefs_get_raise_on_click?.() ?? true;
+}
+
 /** Mutter's own Super+drag op: an unconstrained move, and one enum member. */
 export function getMoveGrabOp(meta = metaNamespace()) {
     return meta?.GrabOp?.MOVING_UNCONSTRAINED ?? null;

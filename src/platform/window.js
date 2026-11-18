@@ -1,23 +1,8 @@
 /** The reads and queries this tree makes of a Meta.Window, one Shell call each. */
 
-import Gio from 'gi://Gio';
-
 import {WindowType} from '../lib/mutterRules.generated.js';
 import {getStage} from './display.js';
 import {safeRead} from './read.js';
-
-let wmPreferences = null;
-
-/** Read once per session: the press path runs on every band click, and the pref rarely moves. */
-export function isRaiseOnClick() {
-    try {
-        wmPreferences ??= new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
-        return wmPreferences.get_boolean('raise-on-click');
-    } catch {
-        // No WM schema (a nested session without it): mutter's own default.
-        return true;
-    }
-}
 
 export function isWindowMaximized(win) {
     return safeRead(() => Boolean(win?.is_maximized?.()), false);
