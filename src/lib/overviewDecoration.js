@@ -21,6 +21,12 @@ import {getWorkspaceCount} from '../platform/display.js';
 import {countSurfaceActorsCoveringBox, getWindowSurfaceContainer} from '../platform/surfaceContainer.js';
 import {getOverviewPreviews, getWindowActor, getWindowClientType, getWindowFrameRect, isWindowOnAllWorkspaces} from '../platform/window.js';
 
+/** 255 takes Mutter's opaque fast path, which skips the mask; one below it keeps the mask in play. */
+const BYPASS_OPACITY = 254;
+
+/** A zero scale builds a texture with no pixels; the floor keeps the mask allocatable. */
+const MIN_MASK_SCALE = 0.05;
+
 /** Thumbnails never scale past this fraction, which bounds the resolution the mask needs. */
 const OVERVIEW_PREVIEW_MAX_SCALE = 0.95;
 
@@ -272,7 +278,7 @@ export class OverviewDecoration {
         }
         try {
             this._savedBypassOpacity = container.get_opacity();
-            container.set_opacity(Math.min(254, this._savedBypassOpacity));
+            container.set_opacity(Math.min(BYPASS_OPACITY, this._savedBypassOpacity));
             this._bypassContainer = container;
         } catch {
             // Gone mid-settle: the next pass retries, and nothing was lowered, so the exit restores nothing.
@@ -299,7 +305,7 @@ export class OverviewDecoration {
         const longest = Math.max(textureWidth, textureHeight);
         const previewScale = OVERVIEW_PREVIEW_MAX_SCALE * monitorScale / (bufferScale || 1);
         const scale = Math.min(previewScale, OVERVIEW_MASK_MAX_DIMENSION / longest);
-        return Math.min(1, Math.max(scale, 0.05));
+        return Math.min(1, Math.max(scale, MIN_MASK_SCALE));
     }
 
     /** Re-resolves the previews and re-reads the mask key: the one path no window signal triggers. */
