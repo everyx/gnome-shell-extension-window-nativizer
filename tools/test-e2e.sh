@@ -122,16 +122,23 @@ function unmaximizeWindow(win) {
 function moveResizeFrame(win, ...args) {
     return win.move_resize_frame?.(false, ...args);
 }
-// Everything the extension adds to the window group, found by type in one place: the classes also
-// carry a `name`, and asking two ways had drifted into three.
+// Everything the extension adds to the window group, found by type in one place: `name` is a label
+// the classes also set, and the old substring matching on a string representation asked two ways.
 function actorsOfType(type) {
-    return global.window_group.get_children().filter(c => c.toString().includes(type));
+    return global.window_group.get_children()
+        .filter(c => c.constructor?.$gtype?.name === type);
 }
 function shadowActors() {
     return actorsOfType('WindowNativizerShadowActor');
 }
 function bandActors() {
     return actorsOfType('WindowNativizerResizeBand');
+}
+function shadowFor(actor) {
+    return shadowActors().find(c => c._windowActor === actor) ?? null;
+}
+function bandFor(actor) {
+    return bandActors().find(c => c._windowActor === actor) ?? null;
 }
 JSEOF
 )"
@@ -302,8 +309,8 @@ CHECK_RESULT="$(shell_eval '
     const hasClip = [winActor, ...(winActor.get_children?.() ?? [])]
         .some(a => a.get_effects?.().some(e => e.toString().includes("RoundedClipEffect")));
 
-    const hasShadow = shadowActors().length > 0;
-    const hasBand = bandActors().length > 0;
+    const hasShadow = Boolean(shadowFor(winActor));
+    const hasBand = Boolean(bandFor(winActor));
 
     // Verify Manager.stateView(win) introspection seam
     const ext = typeof Main !== "undefined" ? Main.extensionManager.lookup("'"$UUID"'")?.stateObj : null;
@@ -399,9 +406,9 @@ BLEND_RESULT="$(shell_eval "
     // re-decorated since has a different actor, and the captured one may belong to nothing. Resolve
     // the shadow where it is used, and pick a target whose shadow has a style to blend away from -
     // without that there is nothing for this check to be about.
-    const shadowFor = w => shadowActors()
+    const shadowOf = w => shadowActors()
         .find(c => c._windowActor?.meta_window === w);
-    const styled = tracked.map(w => ({win: w, shadow: shadowFor(w)}))
+    const styled = tracked.map(w => ({win: w, shadow: shadowOf(w)}))
         .filter(e => e.shadow && e.shadow.style);
     if (styled.length < 2)
         return JSON.stringify({fadeStarted: false, fadeSettled: false, snapped: false,
@@ -411,7 +418,7 @@ BLEND_RESULT="$(shell_eval "
 
     const target = styled[0].win;
     const other = styled[1].win;
-    const liveTargetShadow = () => shadowFor(target) ?? styled[0].shadow;
+    const liveTargetShadow = () => shadowOf(target) ?? styled[0].shadow;
     const alive = w => global.get_window_actors().some(a => a.meta_window === w);
     const settledNow = () => liveTargetShadow().isSettled;
 
@@ -709,7 +716,7 @@ read_band_state() {
         const actors = global.get_window_actors();
         if (actors.length === 0) return JSON.stringify({hasBand: false, error: "no actor"});
         const winActor = actors[0];
-        const band = bandActors().find(c => c._windowActor === winActor);
+        const band = bandFor(winActor);
         if (!band) return JSON.stringify({hasBand: false});
 
         const strips = {};
@@ -750,7 +757,7 @@ read_declared_band_state() {
         const win = winActor.meta_window;
         const buf = win.get_buffer_rect();
         const frame = win.get_frame_rect();
-        const band = bandActors().find(c => c._windowActor === winActor);
+        const band = bandFor(winActor);
         if (!band) return JSON.stringify({hasBand: false, error: "no band on this window"});
 
         const strips = {};
@@ -804,8 +811,7 @@ VERT_STATE="$(shell_eval '
 
     // The wiring only: on reaching the vertically-maximized state the band is still attached. The
     // strip geometry that state produces is a pure function, owned by the resizeBand unit specs.
-    const bandOf = () => bandActors()
-        .find(c => c._windowActor === winActor);
+    const bandOf = () => bandFor(winActor);
     let verticalOnly = false;
     for (let i = 0; i < 40; i++) {
         verticalOnly = Boolean(win.maximized_vertically) && !win.maximized_horizontally;
@@ -1964,7 +1970,7 @@ SHADOW_FADE_STATE="$(shell_eval '
     // Allow manager process-detection (/proc/<pid>/maps) and idle attachment to complete.
     let shadow = null;
     for (let i = 0; i < 40; i++) {
-        shadow = shadowActors().find(c => c._windowActor === actor);
+        shadow = shadowFor(actor);
         if (shadow) break;
         await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => { r(); return GLib.SOURCE_REMOVE; }));
     }
@@ -2034,7 +2040,7 @@ if [ -n "$LIBNATIVE_APP" ]; then
         const actor = global.get_window_actors()
             .find(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS');
         if (!actor) return 'window-not-found';
-        const band = bandActors().some(c => c._windowActor === actor);
+        const band = Boolean(bandFor(actor));
         const effects = (actor.get_effects ? actor.get_effects() : []).map(e => String(e)).join(',');
         return 'band=' + (band ? 1 : 0) + ';effects=' + (effects || 'none');
     })()
