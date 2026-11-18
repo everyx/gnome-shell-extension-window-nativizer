@@ -111,18 +111,22 @@ export function isWindowAttachedDialog(win) {
     return safeRead(() => Boolean(win?.is_attached_dialog?.()), false);
 }
 
-export function isWindowAllowsResize(win) {
+function allowsCapability(win, name) {
     try {
-        const value = win?.allows_resize;
+        const value = win?.[name];
         if (typeof value === 'function')
             return Boolean(value.call(win));
-        if (typeof value === 'boolean')
-            return value;
-        return true;
+        return typeof value === 'boolean' ? value : true;
     } catch {
         return true;
     }
 }
+
+export function isWindowAllowsResize(win) {
+    return allowsCapability(win, 'allows_resize');
+}
+
+export const isWindowAllowsMove = win => allowsCapability(win, 'allows_move');
 
 export function isWindowHidden(win) {
     return safeRead(() => Boolean(win?.is_hidden?.()), false);

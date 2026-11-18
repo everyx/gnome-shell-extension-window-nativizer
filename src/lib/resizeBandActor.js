@@ -13,10 +13,12 @@ import {
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {getDisplay, setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
+import {isWindowAllowsMove} from '../platform/window.js';
 
 import {Subscriptions} from './subscriptions.js';
 
 import {ZERO_INSETS} from './frame.js';
+import {pressIntent} from './resizeBand.js';
 import {
     bandParamsInto,
     computeResizeBandsInto,
@@ -244,31 +246,30 @@ export const ResizeBand = GObject.registerClass({
             return Clutter.EVENT_PROPAGATE;
 
         const win = getWindowFromActor(this._windowActor);
-        if (!isWindowAllowsResize(win))
+        if (!win)
             return Clutter.EVENT_PROPAGATE;
 
-        const sprite = getPointerSprite(event);
+        const intent = pressIntent({
+            state: event.get_state(),
+            grabMods: getDisplay()?.get_compositor_modifiers?.() ?? 0,
+            hasFocus: Boolean(win.has_focus?.()),
+            raiseOnClick: isRaiseOnClick(),
+            allowsResize: isWindowAllowsResize(win),
+            allowsMove: isWindowAllowsMove(win),
+        });
+        if (intent.focus)
+            focusWindow(win, event.get_time());
+        if (intent.raise)
+            win?.raise?.();
+        if (!intent.grab)
+            return Clutter.EVENT_PROPAGATE;
+
+        const moving = intent.grab === 'move';
         const [x, y] = event.get_coords();
-        const posHint = new Graphene.Point({x, y});
-
-        // An unmodified press is a click on that window: focus is an input of the pass the first
-        // frame draws with, and the raise follows the preference as mutter's click path does.
-        const grabMods = getDisplay()?.get_compositor_modifiers?.() ?? 0;
-        const unmodified = (event.get_state() & grabMods) === 0;
-        if (unmodified) {
-            if (!win.has_focus?.())
-                focusWindow(win, event.get_time());
-            if (isRaiseOnClick())
-                win?.raise?.();
-        }
-
-        // Held grab modifiers make the press a move anywhere on the window, the band included.
-        const op = unmodified ? getResizeGrabOp(direction) : getMoveGrabOp();
-        const grabbed = beginWindowGrabOp(win, op, sprite, event.get_time(),
-            unmodified ? posHint : null);
-        if (!grabbed)
-            return Clutter.EVENT_PROPAGATE;
-
-        return Clutter.EVENT_STOP;
+        const grabbed = beginWindowGrabOp(win,
+            moving ? getMoveGrabOp() : getResizeGrabOp(direction),
+            getPointerSprite(event), event.get_time(),
+            moving ? null : new Graphene.Point({x, y}));
+        return grabbed ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
     }
 });

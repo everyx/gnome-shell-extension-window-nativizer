@@ -14,11 +14,6 @@ export function getPointerSprite(event) {
 }
 
 /** True only when Mutter accepted the grab: a FALSE return must leave the event propagating. */
-/**
- * A press that starts a resize is a click on that window, and mutter focuses what it handles.
- * A native window's edge lies inside its own input region, so the press goes through mutter; the
- * band is a sibling actor, so the focus mutter would have given has to be given here.
- */
 export function focusWindow(win, time) {
     try {
         win?.focus?.(time);
@@ -38,12 +33,10 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     }
 }
 
-/** Mutter's own `raise-on-click`, read through Meta rather than restated as a schema string. */
 export function isRaiseOnClick(meta = metaNamespace()) {
     return meta?.prefs_get_raise_on_click?.() ?? true;
 }
 
-/** Mutter's own Super+drag op: an unconstrained move, and one enum member. */
 export function getMoveGrabOp(meta = metaNamespace()) {
     return meta?.GrabOp?.MOVING_UNCONSTRAINED ?? null;
 }
