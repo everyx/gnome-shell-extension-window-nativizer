@@ -1,6 +1,6 @@
 /** From the FBO's own extent each paint: patched and unpatched mutter size the box differently. */
 
-import {roundHalfAwayFromZero} from '../platform/numeric.js';
+import {isPositiveFinite, roundHalfAwayFromZero} from '../platform/numeric.js';
 
 /** Upstream's rounding margin before the `ceilf` (0.75f). */
 export const ENLARGE_ROUNDING_PAD = 0.75;
@@ -22,7 +22,7 @@ function roundTo256ths(value) {
 
 /** A positive usable scale, or 1.0 for anything else: the box cannot divide by zero. */
 function usableScale(scale) {
-    return Number.isFinite(scale) && scale > 0 ? scale : 1.0;
+    return isPositiveFinite(scale) ? scale : 1.0;
 }
 
 /** One axis on the device grid: `end - start` is the axis's FBO extent. */
@@ -64,7 +64,7 @@ export function offscreenScaleCandidates(scales) {
         return null;
     const out = [];
     for (const scale of scales) {
-        if (!Number.isFinite(scale) || !(scale > 0))
+        if (!isPositiveFinite(scale))
             continue;
         for (const value of [scale, Math.ceil(scale)]) {
             if (!out.some(seen => Math.abs(seen - value) < 1e-6))
@@ -91,7 +91,7 @@ export function resolveOffscreenScale(size, target, scale, candidates = null) {
     let best = null;
     let bestOffset = Infinity;
     for (const candidate of offers) {
-        if (!Number.isFinite(candidate) || !(candidate > 0))
+        if (!isPositiveFinite(candidate))
             continue;
         const offset = extentDistance(offscreenDeviceExtent(size, candidate), target);
         if (offset < bestOffset) {

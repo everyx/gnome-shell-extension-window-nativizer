@@ -1,7 +1,7 @@
 /** GTK 4.24 GskRectSnap: FLOOR/CEIL equal upstream; ROUND deviates (origin-odd epsilon). */
 
 import {frameFromInsets, ZERO_INSETS} from './frame.js';
-import {snapDirection, SnapDirection} from '../platform/numeric.js';
+import {isPositiveFinite, snapDirection, SnapDirection} from '../platform/numeric.js';
 
 export {SNAP_EPSILON, SnapDirection} from '../platform/numeric.js';
 
@@ -13,7 +13,7 @@ export const SnapRule = Object.freeze({
 
 /** Matches gsk_rect_snap_to_grid's scalar projection; the ROUND edge carries our deviation. */
 export function snapCoordToGrid(value, scale, direction = SnapDirection.ROUND) {
-    if (!(scale > 0) || !Number.isFinite(scale))
+    if (!isPositiveFinite(scale))
         return value;
     return snapDirection(value * scale, direction) / scale;
 }
