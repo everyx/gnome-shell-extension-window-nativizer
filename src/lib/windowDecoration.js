@@ -62,7 +62,6 @@ export class WindowDecoration {
         // Latched once, never moved: the visual floor reads it, so a drag cannot flip the corners.
         this._initialFrameSize = null;
         // The hold's witness: the ring is buffer - frame, so only a moved buffer makes a ring real.
-        // The buffer and the ring are one record because neither is ever read without the other.
         this._witness = null;
         // The last pass both cuts painted: the one record a mode change re-pushes outside a pass.
         this._pass = null;
@@ -200,7 +199,6 @@ export class WindowDecoration {
         this._checkDiagnosticInvariants(inputs, winActor);
 
         // Hand it the plan, not a body: actors are read live at paint, so the cut tracks the frame.
-        // The same rule as the paint's live read, over this pass's snapshot.
         const windowSize = windowSizeFrom(inputs?.frameRect, inputs?.bufferRect);
         const passPlan = this.bodyPlan.settle;
 
@@ -273,9 +271,8 @@ export class WindowDecoration {
             windowActorSize: readActorSize(winActor),
             windowSize: read.windowSize,
         });
-        // A settle that kept a body it does not believe needs another pass to give up on it, and
-        // nothing else asks for one: without this the body stays on the losing read until an
-        // unrelated signal arrives, which for a stopped window means never.
+        // A settle that kept a body it does not believe needs another pass to give up on it, or the
+        // body stays on the losing read until an unrelated signal - never, for a stopped window.
         if (settled.unsettled)
             this._requestPass?.();
         this._witness = {buffer: read.buffer, ring: read.ringNow};

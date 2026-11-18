@@ -32,9 +32,8 @@ uniform float uErase;       // 1 erases outer bounding rect and ring, 0 keeps ri
 uniform float uClearStroke; // 1 pushes sampling coords inward to erase client CSD stroke, 0 samples 1:1
 uniform float uScale;       // Device px per shader unit, not FBO px
 // The FBO's oversampling is averaged on the blit into the monitor-sized allocation, so the outline
-// ring, the clear-stroke inset and the AA ramp convert with the monitor scale. The FBO's scale
-// instead draws a 1px outline at 1/scale units: 0.5 logical px, 0.625 device px, where unpatched
-// mutter allocates ceilf (1.25) = 2.
+// ring, the clear-stroke inset and the AA ramp convert with the monitor scale; the FBO's scale
+// would draw 1px at 1/scale units: 0.5 logical, 0.625 device px, where unpatched mutter takes 2.
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;

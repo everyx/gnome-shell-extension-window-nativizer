@@ -50,8 +50,7 @@ function shadowPipeline(context, radius, shadows) {
         return cached;
 
     // No gate: a failed bake is retried by the next paint, which is what Clutter's own
-    // ClutterOffscreenEffect does when its framebuffer cannot be allocated. A shortage clears on
-    // its own, and the diagnostic - one line per episode - is what keeps the retry quiet.
+    // ClutterOffscreenEffect does when its framebuffer cannot be allocated.
     const pipeline = bake(context, radius, shadows);
     if (pipeline)
         pipelines.set(key, pipeline);
