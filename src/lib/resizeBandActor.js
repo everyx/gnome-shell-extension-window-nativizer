@@ -17,8 +17,8 @@ import {insetsEqual, rectEquals} from '../platform/rect.js';
 import {Subscriptions} from './subscriptions.js';
 
 import {ZERO_INSETS} from './frame.js';
-import {pressIntent} from './resizeBand.js';
 import {
+    pressIntent,
     bandParamsInto,
     computeResizeBandsInto,
     edgeForStagePoint,

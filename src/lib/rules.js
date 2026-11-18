@@ -276,14 +276,10 @@ export function resolveRule(wmClass, rules = {}, kind = {}) {
     const isFixed = !fields.allowsResize && Number.isFinite(frameWidth) && Number.isFinite(frameHeight) && frameWidth > 0 && frameHeight > 0;
 
     const has = key => Boolean(key && Object.prototype.hasOwnProperty.call(rules, key));
-    const lookup = key => has(key)
-        ? parseRuleState(rules[key])
-        : null;
-
     // Fixed window: exact-size key first, then generic; a resizable window has only generic.
     if (isFixed) {
         const exactKey = buildRuleKey(wmClass, {...fields, width: frameWidth, height: frameHeight});
-        const matched = lookup(exactKey);
+        const matched = has(exactKey) ? parseRuleState(rules[exactKey]) : null;
         if (matched)
             return matched;
     }

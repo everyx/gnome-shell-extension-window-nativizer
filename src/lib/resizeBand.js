@@ -186,14 +186,8 @@ export function computeResizeBandsInto(bands, {
     maximizedHorizontally = false,
     maximizedVertically = false,
 } = {}) {
-    if (boundsUnknown) {
-        let changed = false;
-        for (const region of RESIZE_BAND_REGIONS)
-            changed = clearBand(bands, region) || changed;
-        return changed;
-    }
-
-    if (!Number.isFinite(scale) || scale <= 0 ||
+    // Unknown bounds, an unusable scale or frame: nothing to place, so clear every strip.
+    if (boundsUnknown || !Number.isFinite(scale) || scale <= 0 ||
         !frame || !Number.isFinite(frame.x) || !Number.isFinite(frame.y) ||
         !(frame.width > 0) || !(frame.height > 0)) {
         let changed = false;

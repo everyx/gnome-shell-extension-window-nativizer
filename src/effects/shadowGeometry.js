@@ -2,7 +2,8 @@
 
 import {rectEquals, sameSize} from '../platform/rect.js';
 import {ADWAITA_STYLE} from '../lib/adwaitaStyle.generated.js';
-import {SHADOW_BAKE_ORIGIN, SHADOW_BAKE_EXTRA} from '../lib/shadowBake.js';
+import {SHADOW_BAKE_ORIGIN as BAKE_ORIGIN, SHADOW_BAKE_EXTRA as BAKE_EXTRA}
+    from '../lib/shadowBake.js';
 import {twoDecimals} from '../lib/diagnosticInvariants.js';
 import {clipFrameFor, ZERO_PHASE} from '../lib/snap.js';
 import {resolvePaintBody, BODY_SETTLE_TOLERANCE} from './clipParams.js';
@@ -14,8 +15,6 @@ export const SHADOW_PAD = ADWAITA_STYLE.shadowPad;
 export const SHADOW_BODY_TOLERANCE = BODY_SETTLE_TOLERANCE;
 
 // 2px near + 1px far, the shape Clutter's box-enlarge rule gives on an integer box.
-const BAKE_ORIGIN = SHADOW_BAKE_ORIGIN;
-const BAKE_EXTRA = SHADOW_BAKE_EXTRA;
 
 /** 2*(pad+radius) square, middle 2*pad; the corner spans 2*pad+radius so the cutline stays C0. */
 export function shadowGeometry(radius) {

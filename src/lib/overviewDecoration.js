@@ -153,9 +153,8 @@ export class OverviewDecoration {
     }
 
     /**
-     * A workspace move rebuilds the clone's card, a resize moves the mask: both re-install. They are
-     * one unit, so the retry starts from an empty pair - a connect that failed in between must not
-     * leave the other one looking like a complete install for the rest of the episode.
+     * A workspace move rebuilds the card, a resize moves the mask; both re-install, so a retry
+     * starts from an empty pair: a connect that failed in between is not a half install.
      */
     _syncHooks() {
         if (!this._inOverview) {
@@ -191,15 +190,6 @@ export class OverviewDecoration {
 
     /** Sampled with the texture's minification filter, so a downscaled thumbnail keeps mipmapping. */
     _applyMask() {
-        // The invariant: a rounded mask lives only in the overview, so a late reconcile retires instead.
-        if (!this._inOverview)
-            return false;
-        // Deferral, not refusal: nothing is cached, so this must not read as the window being stuck square.
-        if (!this._canMask || !this._maskReady()) {
-            this._maskRefusalDiagnostic.check(null);
-            return false;
-        }
-
         // Past readiness a refusal leaves the preview square, so name the gate; the latch caps it at one.
         const buildRoundedMask = this._OverviewMask?.buildRoundedMask;
         if (!buildRoundedMask)
