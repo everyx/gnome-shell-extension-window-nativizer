@@ -10,7 +10,6 @@ import {
 import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 import {MIN_BAND_WINDOW, RESIZE_BAND} from './resizeBand.js';
-import {isWindowMaximized, isWindowTiled} from '../platform/window.js';
 import {INTEGRAL_EPSILON} from '../platform/numeric.js';
 
 /** 2× the radius: below it the corner arcs overlap, so no rounded rect fits a 1×1 helper. */
@@ -160,7 +159,6 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     return !isFractionalScale(scale);
 }
 
-export {isWindowMaximized, isWindowTiled};
 
 /** The ring question reads the widest margin per axis, the band the narrowest: 0,24 is not 12. */
 export function declaredSides({insets, bufferWidth, bufferHeight, frameWidth, frameHeight}) {

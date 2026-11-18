@@ -7,11 +7,12 @@ import {WindowType} from '../src/lib/mutterRules.generated.js';
 import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 import {
     VISUAL_MIN_DECORABLE_SIZE,
-    computeInsets, isFractionalScale, shouldClipWindow, isWindowMaximized,
-    isWindowTiled, isDecoratableWindowType, checkDecorationEligibility, inferDecorationBaseline,
+    computeInsets, isFractionalScale, shouldClipWindow,
+    isDecoratableWindowType, checkDecorationEligibility, inferDecorationBaseline,
     evaluateWindowActions,
     declaredSides, declaresOwnShadow,
 } from '../src/lib/detector.js';
+import {isWindowMaximized, isWindowTiled} from '../src/platform/window.js';
 import {
     buildRuleKey,
 } from '../src/lib/rules.js';

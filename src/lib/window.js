@@ -10,12 +10,11 @@ import {insetsFromRects} from './frame.js';
 import {clientDeclaredRing} from './detector.js';
 import {getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowTiled} from '../platform/window.js';
 import {getTrackedAppId, getWindowFromActor} from '../platform/windowActor.js';
-import {resolveMonitorBounds, getWindowActors} from '../platform/display.js';
+import {getWindowActors} from '../platform/display.js';
 import {getPhysicalMonitorScale, getWindowScaleCandidates} from '../platform/monitor.js';
 import {safeRead, readWindowString} from '../platform/read.js';
 import {offscreenScaleCandidates} from './offscreenBox.js';
 
-export {resolveMonitorBounds, safeRead};
 
 /** First non-blank source wins; a whitespace-only XWayland class is no identity nor rule key. */
 export function readDeclaredIdentity(win) {
@@ -74,18 +73,18 @@ export function readWindow(win, {classifier = null} = {}) {
     if (!win)
         return null;
 
-    let b = null;
-    let f = null;
+    let bufferRect = null;
+    let frameRect = null;
     try {
-        b = getWindowBufferRect(win, {throwOnError: true});
-        f = getWindowFrameRect(win, {throwOnError: true});
+        bufferRect = getWindowBufferRect(win, {throwOnError: true});
+        frameRect = getWindowFrameRect(win, {throwOnError: true});
     } catch {
         // throwOnError: a window being destroyed mid-read throws instead of reporting zero rects.
         return null;
     }
 
-    const hasValidGeometry = Boolean(b && f && b.width > 0 && b.height > 0 && f.width > 0 && f.height > 0);
-    const insets = hasValidGeometry ? insetsFromRects(b, f) : null;
+    const hasValidGeometry = Boolean(bufferRect && frameRect && bufferRect.width > 0 && bufferRect.height > 0 && frameRect.width > 0 && frameRect.height > 0);
+    const insets = hasValidGeometry ? insetsFromRects(bufferRect, frameRect) : null;
 
     const isX11 = safeRead(() => getWindowClientType(win) === WindowClientType.X11, false);
     const hasSsd = safeRead(() => isWindowDecorated(win), false);
@@ -97,7 +96,7 @@ export function readWindow(win, {classifier = null} = {}) {
         if (typeof win.hasRing === 'boolean')
             return win.hasRing;
         if (hasValidGeometry)
-            return clientDeclaredRing({hasSsd, insets, bufferWidth: b.width, bufferHeight: b.height, frameWidth: f.width, frameHeight: f.height});
+            return clientDeclaredRing({hasSsd, insets, bufferWidth: bufferRect.width, bufferHeight: bufferRect.height, frameWidth: frameRect.width, frameHeight: frameRect.height});
         return false;
     }, false);
 
@@ -132,12 +131,12 @@ export function readWindow(win, {classifier = null} = {}) {
     const tiled = safeRead(() => isWindowTiled(win, {isMaximized, hasTileMatch}), false);
 
     return {
-        bufferRect: b,
-        frameRect: f,
-        bufferWidth: b?.width ?? 0,
-        bufferHeight: b?.height ?? 0,
-        frameWidth: f?.width ?? 0,
-        frameHeight: f?.height ?? 0,
+        bufferRect,
+        frameRect,
+        bufferWidth: bufferRect?.width ?? 0,
+        bufferHeight: bufferRect?.height ?? 0,
+        frameWidth: frameRect?.width ?? 0,
+        frameHeight: frameRect?.height ?? 0,
         hasValidGeometry,
         insets,
         hasRing,

@@ -1,11 +1,10 @@
 import {
     readWindow,
     readDeclaredIdentity,
-    safeRead,
     isClassificationPending,
     reconcileOutcome,
 } from '../src/lib/window.js';
-import {readWindowString} from '../src/platform/read.js';
+import {readWindowString, safeRead} from '../src/platform/read.js';
 import {getWindowFromActor} from '../src/platform/windowActor.js';
 
 import {evaluateWindowActions} from '../src/lib/detector.js';
