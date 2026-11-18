@@ -12,6 +12,7 @@ import {
     edgeForPoint,
     edgeForStagePoint,
     MIN_BAND_WINDOW,
+    pressIntent,
     normalizeConstrainedEdges,
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
@@ -858,5 +859,38 @@ describe('bandBoxes', () => {
         expect(boxes.bottom).toBeNull();
         expect(boxes.left).not.toBeNull();
         expect(boxes.right).not.toBeNull();
+    });
+});
+
+describe('pressIntent (what a press on the band means, as Mutter decides it)', () => {
+    // Focus is not part of this decision: Mutter focuses every press it handles, and the caller
+    // does that unconditionally, so there is no branch here that could order it wrongly.
+    const base = {state: 0, grabMods: 0, raiseOnClick: true, allowsResize: true, allowsMove: true};
+
+    it('raises and resizes on a plain press', () => {
+        expect(pressIntent(base)).toEqual({raise: true, grab: 'resize'});
+    });
+
+    it('moves on a modifier press, and does not raise where the grab is', () => {
+        // The grab modifiers make the press a compositor grab, not a click on the window.
+        expect(pressIntent({...base, state: 64, grabMods: 64}))
+            .toEqual({raise: false, grab: 'move'});
+    });
+
+    it('leaves the raise to the preference, and still resizes', () => {
+        expect(pressIntent({...base, raiseOnClick: false})).toEqual({raise: false, grab: 'resize'});
+    });
+
+    it('moves only when every configured modifier is held', () => {
+        // Half a chord is neither an unmodified click nor a compositor grab.
+        expect(pressIntent({...base, state: 64, grabMods: 64 | 128}))
+            .toEqual({raise: false, grab: null});
+        expect(pressIntent({...base, state: 64 | 128, grabMods: 64 | 128}))
+            .toEqual({raise: false, grab: 'move'});
+    });
+
+    it('starts no grab for a capability the window does not have', () => {
+        expect(pressIntent({...base, allowsResize: false}).grab).toBeNull();
+        expect(pressIntent({...base, state: 64, grabMods: 64, allowsMove: false}).grab).toBeNull();
     });
 });

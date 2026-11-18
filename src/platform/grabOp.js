@@ -14,6 +14,14 @@ export function getPointerSprite(event) {
 }
 
 /** True only when Mutter accepted the grab: a FALSE return must leave the event propagating. */
+export function focusWindow(win, time) {
+    try {
+        win?.focus?.(time);
+    } catch {
+        // The window went between the press and the focus: nothing left to focus.
+    }
+}
+
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (typeof win?.begin_grab_op !== 'function' || !sprite || op === null || op === undefined)
         return false;
@@ -23,6 +31,14 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     } catch {
         return false;
     }
+}
+
+export function isRaiseOnClick(meta = metaNamespace()) {
+    return meta?.prefs_get_raise_on_click?.() ?? true;
+}
+
+export function getMoveGrabOp(meta = metaNamespace()) {
+    return meta?.GrabOp?.MOVING_UNCONSTRAINED ?? null;
 }
 
 function metaNamespace() {

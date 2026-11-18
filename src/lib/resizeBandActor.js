@@ -6,14 +6,18 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
-import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
+import {
+    beginWindowGrabOp, focusWindow, getMoveGrabOp, getPointerSprite, getResizeGrabOp,
+    isRaiseOnClick,
+} from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
-import {setActorAboveSibling} from '../platform/display.js';
+import {getDisplay, setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
 
 import {Subscriptions} from './subscriptions.js';
 
 import {ZERO_INSETS} from './frame.js';
+import {pressIntent} from './resizeBand.js';
 import {
     bandParamsInto,
     computeResizeBandsInto,
@@ -23,7 +27,7 @@ import {
     RESIZE_BAND,
     RESIZE_BAND_REGIONS,
 } from './resizeBand.js';
-import {isWindowAllowsResize} from '../platform/window.js';
+import {isWindowAllowsMove, isWindowAllowsResize} from '../platform/window.js';
 import {getWindowFromActor} from '../platform/windowActor.js';
 import {setActorBox} from './snap.js';
 
@@ -241,24 +245,31 @@ export const ResizeBand = GObject.registerClass({
             return Clutter.EVENT_PROPAGATE;
 
         const win = getWindowFromActor(this._windowActor);
-        if (!isWindowAllowsResize(win))
+        if (!win)
             return Clutter.EVENT_PROPAGATE;
 
-        const sprite = getPointerSprite(event);
+        // Focus first: mutter focuses the press before it reads a single modifier, and focusing here
+        // can run a decoration pass synchronously, so nothing of this press may be read before it.
+        focusWindow(win, event.get_time());
+
+        const intent = pressIntent({
+            state: event.get_state(),
+            grabMods: getDisplay()?.get_compositor_modifiers?.() ?? 0,
+            raiseOnClick: isRaiseOnClick(),
+            allowsResize: isWindowAllowsResize(win),
+            allowsMove: isWindowAllowsMove(win),
+        });
+        if (intent.raise)
+            win?.raise?.();
+        if (!intent.grab)
+            return Clutter.EVENT_PROPAGATE;
+
+        const moving = intent.grab === 'move';
         const [x, y] = event.get_coords();
-        const posHint = new Graphene.Point({x, y});
-
-        const op = getResizeGrabOp(direction);
-        const grabbed = beginWindowGrabOp(
-            win,
-            op,
-            sprite,
-            event.get_time(),
-            posHint
-        );
-        if (!grabbed)
-            return Clutter.EVENT_PROPAGATE;
-
-        return Clutter.EVENT_STOP;
+        const grabbed = beginWindowGrabOp(win,
+            moving ? getMoveGrabOp() : getResizeGrabOp(direction),
+            getPointerSprite(event), event.get_time(),
+            moving ? null : new Graphene.Point({x, y}));
+        return grabbed ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
     }
 });

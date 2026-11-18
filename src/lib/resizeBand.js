@@ -155,6 +155,19 @@ function clipValuesInto(bands, region, rx, ry, rw, rh, bounds, constrained) {
     return changed;
 }
 
+/** What a press means, once the focus is given: mutter focuses every press it handles, then looks
+ * at the modifiers (`meta_window_handle_ungrabbed_event()`). */
+export function pressIntent({state, grabMods, raiseOnClick, allowsResize, allowsMove}) {
+    const unmodified = (state & grabMods) === 0;
+    const grabbing = grabMods !== 0 && (state & grabMods) === grabMods;
+    let grab = null;
+    if (unmodified && allowsResize)
+        grab = 'resize';
+    else if (grabbing && allowsMove)
+        grab = 'move';
+    return {raise: unmodified && raiseOnClick, grab};
+}
+
 /** @returns Every surface present, all null */
 export function emptyBands() {
     const bands = {};
