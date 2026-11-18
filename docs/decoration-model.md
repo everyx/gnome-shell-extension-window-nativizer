@@ -282,6 +282,23 @@ pass reads it false, so picking the window while the double shadow shows records
 state - and that is the state the rule then corrects, here and on any other window that
 reaches it (`rule-model.md`).
 
+### Why the shadow is a separate actor
+
+Folding it into the clip's effect would cost one framebuffer per window instead of two. Clutter
+does grow the offscreen to the widened paint volume, but it paints that target as the actor's
+square: `clutter-offscreen-effect.c` places the quad from `fbo_offset`, and
+`real_paint_target` says as much ("overlay where the actor would have drawn if it hadn't been
+redirected offscreen"). The room outside the window is only real if the effect maps the target
+back to it itself, which is what `rounded-window-corners` does by deriving a `fboMap` from
+`get_paint_volume().get_origin()` on every paint.
+
+Measured here, with the volume widened by the shadow's 28 px pad: the FBO for a 400x300 actor
+did grow to 459x359, and the body was then drawn a pad *inside* the window instead of the
+shadow landing a pad *outside* it. Nothing about that is impossible - the target's placement
+has to be recomputed rather than predicted by `offscreenPaintBox`, which only knows Clutter's
+own 2 px enlarge. The shadow keeps its own actor instead: it is free to paint outside the
+window's square, its placement is Clutter's problem, and the corner cut stays one concern.
+
 ## Where we deliberately differ from Mutter
 
 - **XWayland without custom frame extents & Server-Side Decorations (SSD).**

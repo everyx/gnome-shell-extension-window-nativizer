@@ -122,6 +122,17 @@ function unmaximizeWindow(win) {
 function moveResizeFrame(win, ...args) {
     return win.move_resize_frame?.(false, ...args);
 }
+// Everything the extension adds to the window group, found by type in one place: the classes also
+// carry a `name`, and asking two ways had drifted into three.
+function actorsOfType(type) {
+    return global.window_group.get_children().filter(c => c.toString().includes(type));
+}
+function shadowActors() {
+    return actorsOfType('WindowNativizerShadowActor');
+}
+function bandActors() {
+    return actorsOfType('WindowNativizerResizeBand');
+}
 JSEOF
 )"
 
@@ -291,10 +302,8 @@ CHECK_RESULT="$(shell_eval '
     const hasClip = [winActor, ...(winActor.get_children?.() ?? [])]
         .some(a => a.get_effects?.().some(e => e.toString().includes("RoundedClipEffect")));
 
-    const parent = winActor.get_parent();
-    const children = parent ? parent.get_children().map(c => c.toString()) : [];
-    const hasShadow = children.some(c => c.includes("WindowNativizerShadowActor"));
-    const hasBand = children.some(c => c.includes("WindowNativizerResizeBand"));
+    const hasShadow = shadowActors().length > 0;
+    const hasBand = bandActors().length > 0;
 
     // Verify Manager.stateView(win) introspection seam
     const ext = typeof Main !== "undefined" ? Main.extensionManager.lookup("'"$UUID"'")?.stateObj : null;
@@ -375,8 +384,7 @@ BLEND_RESULT="$(shell_eval "
     let shadows = [];
     let tracked = [];
     for (let i = 0; i < 60; i++) {
-        shadows = global.window_group.get_children()
-            .filter(c => c.name === 'WindowNativizerShadowActor');
+        shadows = shadowActors();
         tracked = shadows.map(s => s._windowActor?.meta_window).filter(Boolean);
         if (tracked.length >= 2)
             break;
@@ -391,8 +399,8 @@ BLEND_RESULT="$(shell_eval "
     // re-decorated since has a different actor, and the captured one may belong to nothing. Resolve
     // the shadow where it is used, and pick a target whose shadow has a style to blend away from -
     // without that there is nothing for this check to be about.
-    const shadowFor = w => global.window_group.get_children()
-        .find(c => c.name === 'WindowNativizerShadowActor' && c._windowActor?.meta_window === w);
+    const shadowFor = w => shadowActors()
+        .find(c => c._windowActor?.meta_window === w);
     const styled = tracked.map(w => ({win: w, shadow: shadowFor(w)}))
         .filter(e => e.shadow && e.shadow.style);
     if (styled.length < 2)
@@ -576,10 +584,9 @@ echo ">> Client ran its full 8-step resize timeline and exited normally."
 for _ in $(seq 1 20); do
     CLEANUP_POLL="$(shell_eval '
 (() => {
-    const windowGroupChildren = global.window_group.get_children().map(c => c.toString());
     return JSON.stringify({
-        leakedShadowCount: windowGroupChildren.filter(c => c.includes("WindowNativizerShadowActor")).length,
-        leakedBandCount: windowGroupChildren.filter(c => c.includes("WindowNativizerResizeBand")).length
+        leakedShadowCount: shadowActors().length,
+        leakedBandCount: bandActors().length
     });
 })()
 ')"
@@ -592,13 +599,10 @@ echo ">> [test-e2e] Verifying complete cleanup after window close..."
 CLEANUP_CHECK="$(shell_eval '
 (() => {
     const actors = global.get_window_actors();
-    const windowGroupChildren = global.window_group.get_children().map(c => c.toString());
-    const leakedShadows = windowGroupChildren.filter(c => c.includes("WindowNativizerShadowActor"));
-    const leakedBands = windowGroupChildren.filter(c => c.includes("WindowNativizerResizeBand"));
     return JSON.stringify({
         actorsLength: actors.length,
-        leakedShadowCount: leakedShadows.length,
-        leakedBandCount: leakedBands.length
+        leakedShadowCount: shadowActors().length,
+        leakedBandCount: bandActors().length
     });
 })()
 ')"
@@ -639,9 +643,7 @@ band_count() {
     local reply
     reply="$(shell_eval '
     (() => {
-        const bands = global.window_group.get_children().filter(c =>
-            c.toString().includes("WindowNativizerResizeBand"));
-        return JSON.stringify({bandCount: bands.length});
+        return JSON.stringify({bandCount: bandActors().length});
     })()
     ')"
     python3 - "$reply" << 'PYEOF'
@@ -707,9 +709,7 @@ read_band_state() {
         const actors = global.get_window_actors();
         if (actors.length === 0) return JSON.stringify({hasBand: false, error: "no actor"});
         const winActor = actors[0];
-        const parent = winActor.get_parent();
-        const children = parent ? parent.get_children() : [];
-        const band = children.find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+        const band = bandActors().find(c => c._windowActor === winActor);
         if (!band) return JSON.stringify({hasBand: false});
 
         const strips = {};
@@ -750,9 +750,7 @@ read_declared_band_state() {
         const win = winActor.meta_window;
         const buf = win.get_buffer_rect();
         const frame = win.get_frame_rect();
-        const parent = winActor.get_parent();
-        const children = parent ? parent.get_children() : [];
-        const band = children.find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+        const band = bandActors().find(c => c._windowActor === winActor);
         if (!band) return JSON.stringify({hasBand: false, error: "no band on this window"});
 
         const strips = {};
@@ -806,8 +804,8 @@ VERT_STATE="$(shell_eval '
 
     // The wiring only: on reaching the vertically-maximized state the band is still attached. The
     // strip geometry that state produces is a pure function, owned by the resizeBand unit specs.
-    const bandOf = () => winActor.get_parent()?.get_children()
-        .find(c => c.name === "WindowNativizerResizeBand" && c._windowActor === winActor);
+    const bandOf = () => bandActors()
+        .find(c => c._windowActor === winActor);
     let verticalOnly = false;
     for (let i = 0; i < 40; i++) {
         verticalOnly = Boolean(win.maximized_vertically) && !win.maximized_horizontally;
@@ -1015,9 +1013,8 @@ shell_eval '
 TILED_STYLE="$(shell_eval '
 (() => {
     const w = global.get_window_actors()[0].meta_window;
-    const shadows = global.window_group.get_children()
-        .filter(c => c.name === "WindowNativizerShadowActor");
-    const s = shadows.find(c => c._windowActor && c._windowActor.meta_window === w);
+    const s = shadowActors()
+        .find(c => c._windowActor && c._windowActor.meta_window === w);
     return JSON.stringify({
         verticalOnly: w.maximized_vertically && !w.maximized_horizontally,
         actor: Boolean(s),
@@ -1967,7 +1964,7 @@ SHADOW_FADE_STATE="$(shell_eval '
     // Allow manager process-detection (/proc/<pid>/maps) and idle attachment to complete.
     let shadow = null;
     for (let i = 0; i < 40; i++) {
-        shadow = global.window_group.get_children().find(c => c.name === "WindowNativizerShadowActor" && c._windowActor === actor);
+        shadow = shadowActors().find(c => c._windowActor === actor);
         if (shadow) break;
         await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => { r(); return GLib.SOURCE_REMOVE; }));
     }
@@ -2034,11 +2031,10 @@ if [ -n "$LIBNATIVE_APP" ]; then
     NATIVE_STATE="$(shell_eval "
     (() => {
         global.window_group.show();
-        const kids = global.window_group.get_children();
         const actor = global.get_window_actors()
             .find(a => a.meta_window && a.meta_window.get_wm_class() === '$LIBNATIVE_CLASS');
         if (!actor) return 'window-not-found';
-        const band = kids.some(c => c.name === 'WindowNativizerResizeBand' && c._windowActor === actor);
+        const band = bandActors().some(c => c._windowActor === actor);
         const effects = (actor.get_effects ? actor.get_effects() : []).map(e => String(e)).join(',');
         return 'band=' + (band ? 1 : 0) + ';effects=' + (effects || 'none');
     })()
@@ -2250,8 +2246,7 @@ read_x11_state() {
         if (!actor) return JSON.stringify({found: false});
         const first = actor.get_first_child() ?? actor;
         const has = o => o.get_effects().some(e => e.toString().includes("RoundedClipEffect"));
-        const band = global.window_group.get_children().some(c =>
-            c.toString().includes("WindowNativizerResizeBand") && c._windowActor === actor);
+        const band = bandActors().some(c => c._windowActor === actor);
         return JSON.stringify({found: true, onFirstChild: has(first), onActor: has(actor), band});
     })()
     ')"
@@ -2502,12 +2497,11 @@ read_session_state() {
         const Main = await import("resource:///org/gnome/shell/ui/main.js");
         const ext = Main.extensionManager.lookup("'"$UUID"'")?.stateObj;
         const m = ext?._manager;
-        const kids = global.window_group.get_children();
         return JSON.stringify({
             actors: global.get_window_actors().length,
             tracked: m?.trackedCount ?? -1,
-            bands: kids.filter(c => c.toString().includes("WindowNativizerResizeBand")).length,
-            shadows: kids.filter(c => c.toString().includes("WindowNativizerShadowActor")).length,
+            bands: bandActors().length,
+            shadows: shadowActors().length,
         });
     })()
     ')"
