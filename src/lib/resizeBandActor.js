@@ -6,10 +6,11 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
-import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
+import {beginWindowGrabOp, focusWindow, getPointerSprite, getResizeGrabOp} from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {setActorAboveSibling} from '../platform/display.js';
 import {insetsEqual, rectEquals} from '../platform/rect.js';
+import {isRaiseOnClick} from '../platform/window.js';
 
 import {Subscriptions} from './subscriptions.js';
 
@@ -247,6 +248,13 @@ export const ResizeBand = GObject.registerClass({
         const sprite = getPointerSprite(event);
         const [x, y] = event.get_coords();
         const posHint = new Graphene.Point({x, y});
+
+        // Before the grab: focus is an input of the pass the first resize frame draws with.
+        if (!win.has_focus?.())
+            focusWindow(win, event.get_time());
+        // Mutter's click path raises what it focuses, unless the preference says otherwise.
+        if (isRaiseOnClick())
+            win?.raise?.();
 
         const op = getResizeGrabOp(direction);
         const grabbed = beginWindowGrabOp(

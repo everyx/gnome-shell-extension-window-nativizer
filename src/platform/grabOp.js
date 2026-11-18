@@ -14,6 +14,19 @@ export function getPointerSprite(event) {
 }
 
 /** True only when Mutter accepted the grab: a FALSE return must leave the event propagating. */
+/**
+ * A press that starts a resize is a click on that window, and mutter focuses what it handles.
+ * A native window's edge lies inside its own input region, so the press goes through mutter; the
+ * band is a sibling actor, so the focus mutter would have given has to be given here.
+ */
+export function focusWindow(win, time) {
+    try {
+        win?.focus?.(time);
+    } catch {
+        // The window went between the press and the focus: nothing left to focus.
+    }
+}
+
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (typeof win?.begin_grab_op !== 'function' || !sprite || op === null || op === undefined)
         return false;

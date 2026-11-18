@@ -385,6 +385,13 @@ The geometry is pure (`lib/resizeBand.js`); the actor that applies it lives in
 `lib/resizeBandActor.js`. The strips only decide where an event lands - the direction is
 resolved from the pointer, not from which strip was entered.
 
+**A press on the band is a click on that window.** A native window's edge lies inside its own
+input region, so the press that starts a resize reaches Mutter, whose click path focuses the window
+and raises it unless `raise-on-click` is off (`meta_window_handle_ungrabbed_event()`). The band is a
+sibling actor, so that press never reaches Mutter and both halves of the click have to be given
+here. Without the focus, a resize of an unfocused window ran its first passes in the backdrop style,
+and the window could visibly change shape before the grab caught up.
+
 **The band is exactly GTK's input region.** `update_realized_window_properties`
 (`vendor/gtk/gtkwindow.c`) builds a CSD window's input region as the border box grown by
 `RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
