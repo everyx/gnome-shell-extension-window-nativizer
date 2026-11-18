@@ -8,6 +8,11 @@
 /** `GSK_SNAP_EPSILON` in gskrectprivate.h, as of GTK 4.24. */
 export const SNAP_EPSILON = 0.001;
 
+/** A usable scale or size: finite and above zero. NaN, Infinity, zero and negatives are not. */
+export function isPositiveFinite(value) {
+    return Number.isFinite(value) && value > 0;
+}
+
 /** How far a scale may drift from a whole number and still read as one; a scale is float32. */
 export const INTEGRAL_EPSILON = 0.001;
 
