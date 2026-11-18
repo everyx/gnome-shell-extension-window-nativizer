@@ -4,7 +4,7 @@
 
 # Window Nativizer
 
-**Give GNOME-native decoration and resize handling to applications that aren't.**
+**GNOME-native decoration and resize behaviour, for applications that don't have it.**
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -14,118 +14,71 @@
   <img src="https://img.shields.io/badge/License-GPL--2.0--or--later-blue.svg" alt="License">
 </p>
 
-<p>
-Brings authentic Adwaita rounded corners, GPU-baked shadows, and GTK-standard resize ergonomics to applications that aren't GNOME-native (Qt, Electron, GTK3, Wine, and other apps that draw their own frame).
-</p>
-
 <img src="assets/preview.webp" alt="Before and after: a square window next to the same window with rounded corners and a shadow" width="560">
 
 </div>
 
 > [!IMPORTANT]
-> This is an LLM-assisted (vibe coding) project, personally tested and verified in real-world daily
-> use, and backed by strict automated upstream parity tests.
+> This project is developed with LLM assistance (vibe coding). The author uses it daily and has
+> verified it there, and strict automated upstream parity tests act as the quality gate.
 
----
+Rounded corners, an outline, a shadow and resize edges like a libadwaita window's, for Qt,
+Electron, GTK3 and Wine, and for any window that draws its own frame.
 
-## Key Features
+## How it behaves
 
-### 🎯 Authentic Libadwaita Styling
-Applications that aren't GNOME-native often feel out of place on a modern GNOME desktop. Window Nativizer brings them in line with official styling:
-- **Standard Adwaita corners** with subtle inner outline highlights
-- **Multi-layer Gaussian shadows** matching libadwaita layer for layer
-- **Every native window state**: Rounded and shadowed when focused, the lighter backdrop shadow when unfocused, a hairline ring in the theme's colour when tiled, nothing when maximized or fullscreen
-- **High contrast aware**: Follows the system contrast setting and deepens the outline
-- **Compiled from upstream**: Curves and metrics come straight from GNOME's own sources
+- **Looks like libadwaita.** Radius, outline and the three shadow layers are computed from GNOME's
+  own sources, so light, dark and high contrast each follow the system, and focused, backdrop,
+  tiled and maximised states all take the style upstream specifies for them.
+- **Only what is missing.** Windows that already draw a libadwaita-style decoration are left alone,
+  and an existing shadow is not stacked on top of.
+- **Resizes like a GTK window.** The 0–1 px border a client already has becomes a generous grab
+  margin: the compositor does the grabbing, the cursor is eight-way, and the titlebar, buttons and
+  tabs inside the window are left alone.
+- **Correctable when the guess is wrong.** Where the automatic decision is wrong for a window kind,
+  name the axis - **Corners**, **Shadow** or **Resize** - and the extension does the opposite on
+  it. See [Corrections](#corrections).
+- **Baked once, not re-laid-out.** Each style gets one baked corner-and-shadow texture that a single
+  shader pass draws, so no CSS runs again while you drag a window.
 
-### 🖱️ Effortless Drag-to-Resize Ergonomics
-Visual rounding is only half the story - windows that aren't GNOME-native often have paper-thin borders that are nearly impossible to grab. Window Nativizer fixes window ergonomics from the ground up:
-- **No pixel hunting**: Expands 0~1px borders into a comfortable invisible grab area aligned with GTK's native input region
-- **Smooth Corner Reach**: Follows GTK's corner coordinate heuristics, so diagonal resizing doesn't slip
-- **Native Mutter Grab-Ops**: Triggers compositor-level resize grabs and dynamic 8-way directional cursors without lag
-- **Non-Intrusive**: Only covers the outer perimeter - never intercepts client titlebar drags, window buttons, or tab clicks
+## Compared to the others
 
-### ⚡ Smooth GPU Shaders
-- **Pre-baked GPU shadow meshes**: No CSS re-layout overhead at runtime
-- **Decoupled straight-edge AA**: Anti-aliasing stays on the corner arcs, so straight edges stay solid and sharp while dragging at fractional scales
-- **Corners that track the window**: They stay locked to the frame during a live resize, without lag
-- **Transitions that follow focus**: The shadow fades to the backdrop set when focus leaves and snaps back when it returns, the way upstream declares it; the same opacity tracks GNOME Shell's close animation
-- **Follows the animation setting**: With animations off the fade snaps as well
-- **Low resource footprint**: The GPU draws the corners and shadow in one pass, adding almost nothing to CPU and memory
+| | Reborn | Window Nativizer |
+| --- | --- | --- |
+| Which windows get rounded | every window, with a blacklist to exclude some | only the ones that aren't GNOME-native, corrected per window kind |
+| Radius and shadow | set by you, squircles included | taken from libadwaita's stylesheet |
+| Resize optimisation | left alone, the edge the window already has | the same grab band GTK's own windows have |
+| Light, dark and high contrast | does not follow the theme, one set of values for every theme | follows the system setting |
 
-### 🛡️ Smart & Non-Invasive
-- **Leaves GNOME-native apps alone**: Automatically skips apps that draw their own Adwaita-style decoration (Libadwaita or Libhandy); the check is asynchronous, so a process's first window may be decorated a frame or two late. The resize band still follows the GTK4-handle reading, and Firefox is nativized like any other GTK3 app
-- **No stacked shadows**: Where a shadow already exists - Mutter's on an opaque bare X11 window, or the client's own, when it already looks like ours - we leave it alone instead of adding ours
-- **Round and sharp overview previews**: Rounded and sharp at once, because the corners come from the window's own surface rather than an extra offscreen pass (see [**Display & Rendering**](#display--rendering) below)
-- **Clean tile seams**: A tile match drops the ambient shadow; the 1px tiled ring is drawn around the whole window, not suppressed on the shared edge
-
----
-
-## Display & Rendering
-
-Sharpness gives way to picture quality wherever the decoration would cost it. A loss that is certain is not the default; a loss that is only possible leaves the decoration on.
-
-Windows that paint their own rounded surface need no offscreen pass, so nothing softens: the overview preview takes its corners from that surface directly, and stays as sharp as the window.
-
-- **Certain loss - the overview**: XWayland windows, and the few Wayland windows whose corners another surface paints, keep a square, sharp preview. **Force overview corners on every window** (Preferences › Display & Rendering, off by default) rounds them too, at the price of a blurrier thumbnail. Overview only
-- **Possible loss - fractional scaling**: on a 125% or 150% monitor the rounded pass resamples the whole window, so text may read a little soft. **Prioritize crisp text** (Preferences › Display & Rendering, off by default) keeps that monitor square instead, and the shadow is unaffected. Per monitor
-
-Both switches are off by default, but their default behaviour pulls opposite ways on purpose: a square preview costs less than a smeared one, and a monitor that may soften text still keeps its corners.
-
----
-
-## Comparison: Window Nativizer vs. Rounded Window Corners
-
-| Feature | [Rounded Window Corners (Reborn)](https://github.com/flexagoon/rounded-window-corners) | Window Nativizer |
-| :--- | :--- | :--- |
-| **Primary Goal** | Desktop theming & custom aesthetics | GNOME / Adwaita native consistency |
-| **Target Scope** | Rounds all windows (opt-out / blacklist) | Decorates only windows that aren't GNOME-native; leaves GNOME-native apps untouched |
-| **Corner Radius** | User-configurable (e.g. 12px, 16px, 20px) | Authentic curvature matching official Libadwaita |
-| **Resize & Drag Ergonomics** | Retains application's declared border (often 0~1px, frustrating to grab) | Adds GTK-standard grab margins outside the window, with 8-way directional cursors |
-| **Shadow Pipeline** | Corners cut by a CSS node the Shell re-lays-out | Shadow and corners baked once into a GPU texture |
-
----
+Pick Reborn if you want to set every number yourself; pick this one if you want every window to
+match the rest of GNOME with no configuration.
 
 ## Corrections
 
-Window Nativizer automatically handles most applications, but you can correct its judgement per window kind:
+Most windows need none. When one looks wrong, open the extension's settings and click **Pick window…**
+under **Corrections**: a correction states which axis the automatic decision got wrong for that window
+kind, and reversing it is the whole edit. Corrections are stored per window kind (app plus Wayland
+or XWayland, window type, size, shadow margins), travel between machines via the clipboard, and can
+also be driven from a script by calling `PickWindow(b debug)` on
+`org.gnome.Shell.Extensions.WindowNativizer` - pass `false` for an ordinary pick.
 
-Each correction names the axes - **Corners**, **Shadow**, **Resize** - whose automatic decision is wrong for that window kind, and the extension does the opposite on those axes. An axis the correction does not name keeps following the decision, so a correction is always a real change rather than a restatement of what already happens.
+Two things are not judgements and cannot be corrected: **what a client paints inside its own
+surface** (a custom titlebar, its own grips - the compositor sees geometry, not pixels), and **the
+shadow Mutter draws outside an opaque bare X11 window**.
 
-| Corrected axis | Typical Use Case |
-| :--- | :--- |
-| Nothing | Default. The automatic decision stands; most windows need no correction at all |
-| Corners | Round a window the decision left alone, or stop rounding one our rounding breaks (artifacts, native look preferred) |
-| Shadow | Cast ours where the decision left the client's, or retract ours where the decision drew one |
-| Resize | Retract the band on a fixed-ratio popup it cannot track, or add it where the decision read the window's own handle as native (GTK4 wide margins) |
+[rule-model.md](docs/rule-model.md) is the full model; the reasoning is in
+[decoration-model.md](docs/decoration-model.md) § Known boundaries.
 
-To correct a window that looks wrong, open **Preferences** and click **Pick window…** in **Corrections**.
+## Display & Rendering
 
-- **Stored per window kind**: the app plus Wayland or XWayland, window type, size, shadow margins - a fixed-size kind may add a size suffix. The **Corrections** row shows that kind and the title the window was picked from
-- **Moving corrections between machines**: the menu beside **Pick window…** - **Export to Clipboard** copies them, **Import from Clipboard** merges them back
-- **Resolving import conflicts**: **Resolve Import Conflicts** handles each conflict, defaulting to **Replace**, or **Keep**/**Replace** for all at once
-- **From a script**: `PickWindow(b debug)` on `org.gnome.Shell.Extensions.WindowNativizer` raises the same picker; since 0.11.0 the boolean is required, so pass `false` for the ordinary pick ([development.md](docs/development.md) has the `gdbus` line)
+Where a loss is certain, it is off by default; where a loss is only possible, the decoration stays.
+Both switches live in **Settings › Display & Rendering**, and both are off by default.
 
-[Learn more about the rule model →](docs/rule-model.md)
-
----
-
-## What a correction cannot fix
-
-Each correction reverses the judgement for one window kind. Two things are not judgements at all:
-
-- **What a client paints inside its own surface**: a custom titlebar, an in-surface border, its own grips. The compositor sees geometry, not paint; only a margin the client declares tells us a decoration is there
-- **The lighter shadow libadwaita gives a message dialog**: a style class inside the client, while the compositor sees only the window type; guessing from the type would hit the dialogs that are not message dialogs
-
-Shadow ownership and the small-window floor are judgements, so a **Shadow** or **Corners** correction reverses them.
-
-- **The small-window floor**: a window whose shorter edge is at or under ~38 logical px - read on its first stable size - gets no decoration at all, because at that size the corners read as a pill and the shadow swallows the window body. A **Corners** correction on that kind brings it back
-- **Mutter's shadow outside an opaque bare X11 window**: no correction clears it. **Shadow** only stacks ours on top - two shadows, which is what you want during the focus fade - and **Corners** alone leaves the square shadow beside our rounded body
-- **An alpha buffer that declares every pixel opaque**: it can leave Mutter's shadow beside ours too; the **Shadow** axis retracts ours and leaves Mutter's
-
-[rule-model.md](docs/rule-model.md) is the full model; [decoration-model.md](docs/decoration-model.md) § Known boundaries has the reasoning.
-
----
+- **Force overview corners on every window**: overview thumbnails are square and sharp by default.
+  Turning this on rounds them too, at the cost of a blurrier thumbnail. Only affects the overview.
+- **Prioritize crisp text**: at 125% or 150% fractional scaling the rounded pass resamples the
+  window, so text can look soft. With this on, windows on that monitor keep square corners; the
+  shadow is unaffected. Applies per monitor.
 
 ## Installation
 
@@ -143,7 +96,8 @@ gnome-extensions install --force window-nativizer@everyx.github.io.shell-extensi
 ```sh
 paru -S gnome-shell-extension-window-nativizer
 ```
-`yay` and other AUR helpers work the same. The package builds from source and pulls in its build dependencies.
+`yay` and other AUR helpers work the same way. The package builds from source and pulls in its build
+dependencies automatically.
 
 ### From Source
 ```sh
@@ -154,59 +108,42 @@ pnpm run install:ext
 ```
 
 ### Enable
-Log out and back in, then enable:
+Log out and back in, then enable it:
 ```sh
 gnome-extensions enable window-nativizer@everyx.github.io
 ```
 
----
-
 ## Going Further
 
-### In-App Theming
+**Inside the window.** Titlebar, buttons and menus come from the app's own theme, which no window
+decoration can touch: [adw-gtk3](https://github.com/lassekongo83/adw-gtk3) for GTK3 (its
+[list](https://github.com/lassekongo83/adw-gtk3#related-projects) covers Electron, Wine, Java and
+GTK4), [Legacy Theme Scheme Auto
+Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/) for
+dark mode, and [QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations) for Qt.
 
-This extension only fixes the window frame. What's inside - title bar, buttons, menus - comes from
-the app's own theme, and no window decoration can change it. For that:
+**Below the compositor.** Some limits are not the extension's to fix, and the author maintains a
+[Mutter patchset](https://gitlab.gnome.org/everyx/mutter/-/tree/everyx?ref_type=heads) covering
+offscreen effects on HDR windows
+([#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)), seams under
+fractional scaling (upstream
+[MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179),
+[#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)), and the 200 ms
+fade of Mutter's own XWayland shadow. On Arch it is packaged in
+[archlinuxcn](https://github.com/archlinuxcn/repo/tree/master/archlinuxcn/mutter-everyx) as
+`mutter-everyx`.
 
-- **[adw-gtk3](https://github.com/lassekongo83/adw-gtk3)** for GTK3 apps - an unofficial GTK3 port of
-  libadwaita, whose README keeps a [list](https://github.com/lassekongo83/adw-gtk3#related-projects)
-  of the projects covering Electron, Wine, Java and GTK4 apps that aren't libadwaita.
-- **[Legacy Theme Scheme Auto Switcher](https://extensions.gnome.org/extension/4998/legacy-gtk3-theme-scheme-auto-switcher/)**
-  so GTK3 apps follow dark mode.
-- **[QAdwaitaDecorations](https://github.com/FedoraQt/QAdwaitaDecorations)** for Qt apps - Adwaita-style
-  title bars.
+## Docs
 
-### Patched Mutter
-
-Certain compositor-level limitations cannot be solved by an extension alone. The author maintains a tailored Mutter patchset ([everyx/mutter](https://gitlab.gnome.org/everyx/mutter/-/tree/everyx?ref_type=heads)):
-
-- **HDR Color Fidelity on Offscreen Effects**: Propagates window `color-state` and enables FP16 offscreen textures, preventing clipped HDR windows from being forcibly dimmed to 100 nits SDR ([#21](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/21)).
-- **Fractional Offscreen Rendering**: Incorporates upstream [MR !5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) to eliminate subpixel edge seams under fractional scaling ([#27](https://github.com/everyx/gnome-shell-extension-window-nativizer/issues/27)).
-- **Smooth XWayland Shadow Transitions**: Adds a 200ms ease-out backdrop fade for Mutter-rendered XWayland window shadows (e.g. Electron apps), matching Libadwaita's smooth transitions instead of snapping instantly.
-- **Upstream Fixes & Stability**: Includes several pending upstream patches for surface lifecycle handling and performance optimizations.
-
-**Installation for Arch Linux Users:**
-
-Pre-packaged in the [Arch Linux CN](https://github.com/archlinuxcn/repo/tree/master/archlinuxcn/mutter-everyx) repository. If you have enabled `[archlinuxcn]`, install it with:
-
-```sh
-sudo pacman -S mutter-everyx
-```
-
----
-
-## Architecture & Documentation
-
-For low-level implementation details, design decisions, and benchmarks:
-- [Decoration & Shader Architecture](docs/decoration-model.md) - GPU meshes, pipeline hooks, and memory budgets
-- [Pixel Alignment & Accuracy](docs/decoration-alignment.md) - Upstream Libadwaita curve matching and regression tests
-- [Rule System](docs/rule-model.md) - Process heuristics, window types, and rule precedence
-- [Development & Testing Guide](docs/development.md) - Environment setup and test suite execution
-
----
+- [Decorations & Shader Architecture](docs/decoration-model.md): how a window is drawn, and what it costs
+- [Pixel Precision & Alignment](docs/decoration-alignment.md): libadwaita's curves, measured pixel by pixel
+- [Rule System](docs/rule-model.md): process probes, window types, precedence
+- [Development & Testing](docs/development.md): nested shell, test suites, translations
 
 ## License & Credits
 
-Licensed under **GPL-2.0-or-later**.
+Released under **GPL-2.0-or-later**.
 
-Metrics and styling generated from [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita), shadows derived from [GTK4](https://gitlab.gnome.org/GNOME/gtk), window behaviors aligned with [Mutter](https://gitlab.gnome.org/GNOME/mutter).
+Metrics and styling are taken from [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita), shadows
+from [GTK4](https://gitlab.gnome.org/GNOME/gtk), and window behaviour from
+[Mutter](https://gitlab.gnome.org/GNOME/mutter).
