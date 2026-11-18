@@ -226,11 +226,12 @@ def wait_for_decoration(env):
     js = """
     (() => {
         const ours = ["dev.windownativizer.declared", "dev.windownativizer.bare"];
-        const shadows = global.window_group.get_children()
-            .filter(c => c.name === "WindowNativizerShadowActor")
-            .map(c => c._windowActor?.meta_window)
-            .filter(Boolean);
-        const decorated = shadows.filter(w => ours.includes(w.get_gtk_application_id?.() ?? ""));
+        const ext = Main.extensionManager.lookup("window-nativizer@everyx.github.io");
+        const manager = ext?.stateObj?._manager ?? null;
+        const decorated = global.get_window_actors()
+            .map(a => a.meta_window)
+            .filter(w => w && ours.includes(w.get_gtk_application_id?.() ?? ""))
+            .filter(w => manager?.stateView(w)?.hasShadow === true);
         return JSON.stringify({ decorated: decorated.length });
     })()
     """
