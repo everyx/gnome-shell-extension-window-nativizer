@@ -5,44 +5,11 @@ import {isPositiveFinite, snapDirection, SnapDirection} from '../platform/numeri
 
 export {SNAP_EPSILON, SnapDirection} from '../platform/numeric.js';
 
-/** GTK's GSK_RECT_SNAP_* macros: four 8-bit directions, left/bottom/right/top low to high. */
-export const SnapRule = Object.freeze({
-    GROW: 0x01020201,   // top: FLOOR, right: CEIL, bottom: CEIL, left: FLOOR
-    ROUND: 0x03030303,  // top: ROUND, right: ROUND, bottom: ROUND, left: ROUND
-});
-
 /** Matches gsk_rect_snap_to_grid's scalar projection; the ROUND edge carries our deviation. */
 export function snapCoordToGrid(value, scale, direction = SnapDirection.ROUND) {
     if (!isPositiveFinite(scale))
         return value;
     return snapDirection(value * scale, direction) / scale;
-}
-
-/** Matches gsk_rect_snap_get_direction: side 0 is TOP, then RIGHT, BOTTOM, LEFT. */
-function snapRuleGetDirection(rule, side) {
-    return (rule >> (8 * side)) & 0xFF;
-}
-
-export function snapRectToGrid(rect, scale, rule = SnapRule.ROUND) {
-    if (!(scale > 0) || !Number.isFinite(scale))
-        return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
-
-    const topDir = snapRuleGetDirection(rule, 0);
-    const rightDir = snapRuleGetDirection(rule, 1);
-    const bottomDir = snapRuleGetDirection(rule, 2);
-    const leftDir = snapRuleGetDirection(rule, 3);
-
-    const left = snapCoordToGrid(rect.x, scale, leftDir);
-    const top = snapCoordToGrid(rect.y, scale, topDir);
-    const right = snapCoordToGrid(rect.x + rect.width, scale, rightDir);
-    const bottom = snapCoordToGrid(rect.y + rect.height, scale, bottomDir);
-
-    return {
-        x: left,
-        y: top,
-        width: Math.max(0, right - left),
-        height: Math.max(0, bottom - top),
-    };
 }
 
 /** Snaps each outer inset margin separately, so the body frame cannot drift by a fraction. */
