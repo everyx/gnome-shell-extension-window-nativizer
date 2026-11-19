@@ -392,6 +392,15 @@ sibling actor, so that press never reaches Mutter and both halves of the click h
 here. Without the focus, a resize of an unfocused window ran its first passes in the backdrop style,
 and the window could visibly change shape before the grab caught up.
 
+**Hovering the band focuses but does not raise.** In `sloppy` and `mouse` focus modes Mutter keeps
+the pointer's window from the surface under the pointer, so a strip - an `St.Widget`, not a surface -
+would lose that window's focus; the strip gives it back on `enter-event`. `auto-raise` cannot come
+back with it: Mutter queues it inside its own focus bookkeeping through
+`meta_display_queue_autoraise_callback()`, which is private (`display-private.h`), and no display
+method replaces it (measured: no `raise`-matching method on `global.display`). The only route left is
+a timer of our own with Mutter's two rules to reproduce and three cancellation points, for a feature
+that needs a non-default focus mode *and* a non-default preference.
+
 **The band is exactly GTK's input region.** `update_realized_window_properties`
 (`vendor/gtk/gtkwindow.c`) builds a CSD window's input region as the border box grown by
 `RESIZE_HANDLE_SIZE 12` on every side, and clicks outside it go through - so 12px out from
