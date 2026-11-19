@@ -570,3 +570,53 @@ Deliberately not regulated, because a rule would cost more than it returns:
 | short local names | `const s = usableScale(scale)` reads better than `scale` twice in twenty lines |
 | export comments | most exports carry one; the rest are upstream constants and self-evident predicates |
 | comment density | `comment-density` in ego-lint is already a signal, and a second opinion would not be |
+
+## What looks simplifiable, and is not
+
+Each of these has already survived a review that proposed deleting it. The reason is recorded here
+so the next review spends its attention somewhere else.
+
+**Mirrors of upstream arithmetic.** `platform/windowPhase.js` holds two independent mirrors: the
+arithmetic of Mutter's `surface_container_apply_transform`, and the read-back of the transform
+Mutter actually applied. The read-back is preferred and the mirror is the fallback, so deleting
+either removes the disagreement diagnostic that `windowDecoration` reports. `tools/check-upstream-mirrors.mjs`
+pins the read-back against the C it mirrors.
+
+**Constants with more than one reader.** `lib/shadowBake.js` is six lines and three users:
+`effects/shadowGeometry.js` at runtime, and both generators. Inlined into the geometry module, the
+generated shader's bake offsets and the runtime's would be free to disagree - which is the drift
+that file exists to prevent.
+
+**A flag that exists to be answered differently.** `getMonitorScale(i, {strict})` and
+`getMonitorCount({strict})` look like a parameter with one caller. `platform/monitor.js` is the
+second, and it needs "unreadable" (`null`) to stay distinct from "integer scale" and "no monitors".
+Folding the two answers together is the bug the flag prevents.
+
+**A table where the copies look alike.** `FINGERPRINT_FIELDS` is read by eight functions - key
+building, parsing, wire kinds, fingerprints, specifier matching - and it is the single statement of
+the seven field names and their grammars. Inlining any one of them is how a key format drifts.
+
+**A seam that looks like over-injection.** `cursorTypeFor(shape, types)` and `setActorCursor`'s
+`types` pass-through take the enum from the caller because the lookup has to be testable without a
+display and the namespace is not always there. The test seam and the runtime seam are one seam.
+
+**Duplication with a drift test.** `snapSliceRects` and `snapSliceBoxesInto` are the same eight
+slices in two shapes: rects for reading, boxes for a caller's container. `snapSliceRects` has no
+`src/` caller; it survives because `tests/shadowGeometry.test.js` asserts the shadow layout against
+it and `decoration-alignment.md` quotes it as the readable statement of the arithmetic. If it is
+ever deleted, that arithmetic moves into the spec that needs it, not out of the tree.
+
+**A constructor that is the order.** `decorationPass()` looks like an identity builder. It is the
+declared order of a pass's fields, and `applyPassToShadow`'s setter order is an invariant that
+depends on it; collapsing it puts that order in two places.
+
+**Getters only the harness reads.** `ShadowActor`'s `style`, `isFading` and `isSettled` have no
+`src/` caller - `tools/test-e2e.sh` reads them off the live actor as the only observation point for
+the cross-fade. A dead-code sweep that trusts `grep src/` deletes the test suite's eyes.
+
+**Comments whose subject is a fact.** Each of these names something a reader cannot infer, and each
+has been proposed for deletion: where the arcs meet, and the two false leads that look like
+decoration (`detector.js`); the opposite boundary inclusivities in `settleClipBody`; `roundf`
+against `Math.round` on negative halves in the phase mirror; why `get_resource_scale()` is never
+read (`lib/offscreenBox.js`); what Clutter does when an unallocated actor is translated; why a `':'`
+in a rule key throws rather than splitting; why `BYPASS_OPACITY` is 254 rather than 255.
