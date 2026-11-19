@@ -5,7 +5,9 @@
 
 import {PREFIX} from '../src/platform/journal.js';
 import {CursorShape, setActorCursor, cursorTypeFor} from '../src/platform/actorCursor.js';
-import {beginWindowGrabOp, getPointerSprite, getResizeGrabOp} from '../src/platform/grabOp.js';
+import {
+    beginWindowGrabOp, focusesOnPointer, getPointerSprite, getResizeGrabOp,
+} from '../src/platform/grabOp.js';
 import {resolveUniformLocation} from '../src/platform/uniformLocation.js';
 import {coglContextForBake} from '../src/platform/coglContext.js';
 import {getPhysicalMonitorScale, invalidateMonitorCache} from '../src/platform/monitor.js';
@@ -196,6 +198,24 @@ describe('platform', () => {
             expect(getResizeGrabOp('invalid', mockMeta)).toBeNull();
             expect(getResizeGrabOp('n', null)).toBeNull();
             expect(getResizeGrabOp('n', {})).toBeNull();
+        });
+    });
+
+    describe('focusesOnPointer', () => {
+        // GDesktopFocusMode: 0 click, 1 sloppy, 2 mouse. Only the pointer modes focus on hover.
+        const withMode = mode => ({prefs_get_focus_mode: () => mode});
+
+        it('follows the pointer modes and not the click one', () => {
+            expect(focusesOnPointer(withMode(0))).toBeFalse();
+            expect(focusesOnPointer(withMode(1))).toBeTrue();
+            expect(focusesOnPointer(withMode(2))).toBeTrue();
+        });
+
+        it('answers false when the mode cannot be read, or is one it does not know', () => {
+            expect(focusesOnPointer({})).toBeFalse();
+            expect(focusesOnPointer(null)).toBeFalse();
+            // An unknown mode must keep click behaviour: taking the focus is the risky side.
+            expect(focusesOnPointer(withMode(3))).toBeFalse();
         });
     });
 

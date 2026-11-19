@@ -33,6 +33,18 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     }
 }
 
+/** `GDesktopFocusMode`: 1 sloppy, 2 mouse (gdesktop-enums.h); 0 is click, and 3 is not defined. */
+const POINTER_FOCUS_MODES = [1, 2];
+
+/**
+ * In the pointer modes Mutter focuses what the pointer is over, so a window whose edge the pointer
+ * is on would already have focus - and the band is not part of that window's surface. A value this
+ * does not recognise keeps click behaviour: taking focus is the risky side of the guess.
+ */
+export function focusesOnPointer(meta = metaNamespace()) {
+    return POINTER_FOCUS_MODES.includes(meta?.prefs_get_focus_mode?.());
+}
+
 export function isRaiseOnClick(meta = metaNamespace()) {
     return meta?.prefs_get_raise_on_click?.() ?? true;
 }

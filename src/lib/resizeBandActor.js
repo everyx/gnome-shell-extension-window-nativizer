@@ -7,8 +7,8 @@ import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
 import {
-    beginWindowGrabOp, focusWindow, getMoveGrabOp, getPointerSprite, getResizeGrabOp,
-    isRaiseOnClick,
+    beginWindowGrabOp, focusWindow, focusesOnPointer, getMoveGrabOp, getPointerSprite,
+    getResizeGrabOp, isRaiseOnClick,
 } from '../platform/grabOp.js';
 import {CursorShape, setActorCursor} from '../platform/actorCursor.js';
 import {getDisplay, setActorAboveSibling} from '../platform/display.js';
@@ -102,8 +102,10 @@ export const ResizeBand = GObject.registerClass({
                 reactive: true,
             });
             // connectObject ties the handlers to this band, so destroy() takes them with it.
-            child.connectObject('enter-event',
-                (_actor, event) => this._applyCursor(region, event), this);
+            child.connectObject('enter-event', (_actor, event) => {
+                this._applyCursor(region, event);
+                this._focusOnEnter(event);
+            }, this);
             child.connectObject('motion-event',
                 (_actor, event) => this._applyCursor(region, event), this);
             child.connectObject('leave-event', () => this._clearCursor(region), this);
@@ -233,6 +235,18 @@ export const ResizeBand = GObject.registerClass({
             setActorCursor(this._regions.get(region), CursorShape.DEFAULT);
         }
         return Clutter.EVENT_PROPAGATE;
+    }
+
+    /**
+     * Mutter decides pointer focus from the surface under the pointer, and a strip is not part of
+     * that surface: without this the window would lose focus the moment the pointer reached it.
+     */
+    _focusOnEnter(event) {
+        if (!focusesOnPointer() || !this._windowActor)
+            return;
+        const win = getWindowFromActor(this._windowActor);
+        if (win && !win.has_focus?.())
+            focusWindow(win, event.get_time());
     }
 
     /** Hands the grab to Mutter, or lets the press through. */
