@@ -4,10 +4,8 @@
 
 import {
     SnapDirection,
-    SnapRule,
     snapActorBodyFrame,
     snapCoordToGrid,
-    snapRectToGrid,
     snapSliceBoxesInto,
     snapSliceRects,
 } from '../src/lib/snap.js';
@@ -107,44 +105,6 @@ describe('ROUND deviates from GSK deliberately (origin-odd symmetry)', () => {
     });
 });
 
-describe('SnapRule', () => {
-    it('grows outward: floors top/left, ceils bottom/right', () => {
-        const rect = {x: 10.4, y: 20.4, width: 100.2, height: 100.2};
-        const snapped = snapRectToGrid(rect, 1.0, SnapRule.GROW);
-        expect(snapped.x).toBe(10);
-        expect(snapped.y).toBe(20);
-        expect(snapped.width).toBe(101);
-        expect(snapped.height).toBe(101);
-    });
-
-    it('rounds edges symmetrically to nearest grid line', () => {
-        const rect = {x: 10.4, y: 20.6, width: 100.2, height: 100.2};
-        const snapped = snapRectToGrid(rect, 1.0, SnapRule.ROUND);
-        expect(snapped.x).toBe(10);
-        expect(snapped.y).toBe(21);
-        // x2 = 10.4 + 100.2 = 110.6 -> 111. width = 111 - 10 = 101
-        expect(snapped.width).toBe(101);
-        // y2 = 20.6 + 100.2 = 120.8 -> 121. height = 121 - 21 = 100
-        expect(snapped.height).toBe(100);
-    });
-
-    it('locks phase with shadow slice boxes under fractional scale (4/3)', () => {
-        const scale = 4.0 / 3.0;
-        const rect = {x: 26.0, y: 23.0, width: 501.0, height: 400.0};
-        const snapped = snapRectToGrid(rect, scale, SnapRule.ROUND);
-
-        // SnapCoordToGrid(26.0, 4/3, ROUND) = round(34.6667) / (4/3) = 35 / (4/3) = 26.25
-        expect(snapped.x).toBeCloseTo(26.25, 4);
-        expect(snapped.x * scale).toBe(35);
-
-        // Verify shadow box left edge precisely matches snapped.x
-        const boxes = snapSliceBoxes(rect, 32, scale);
-        // Left edge slice is boxes[6]
-        expect(boxes[6].x).toBeCloseTo(snapped.x, 4);
-        expect(boxes[6].x1).toBeCloseTo(snapped.x, 4);
-    });
-});
-
 describe('snapCoordToGrid', () => {
     it('returns exact values when already aligned at 1.0x', () => {
         expect(snapCoordToGrid(100, 1.0, SnapDirection.ROUND)).toBe(100);
@@ -168,32 +128,6 @@ describe('snapCoordToGrid', () => {
     it('bypasses snapping when scale <= 0', () => {
         expect(snapCoordToGrid(10.33, 0, SnapDirection.ROUND)).toBe(10.33);
         expect(snapCoordToGrid(10.33, -1, SnapDirection.ROUND)).toBe(10.33);
-    });
-});
-
-describe('snapRectToGrid', () => {
-    it('preserves integer rects at 1.0x scale', () => {
-        const rect = {x: 10, y: 20, width: 300, height: 200};
-        const snapped = snapRectToGrid(rect, 1.0, SnapRule.ROUND);
-        expect(snapped).toEqual(rect);
-    });
-
-    it('aligns fractional rects to grid at fractional scale', () => {
-        const rect = {x: 10.1, y: 20.3, width: 300.5, height: 199.7};
-        const snapped = snapRectToGrid(rect, 1.25, SnapRule.ROUND);
-
-        // x: 10.1 * 1.25 = 12.625 -> round 13 -> 10.4
-        expect(snapped.x).toBe(10.4);
-        // y: 20.3 * 1.25 = 25.375 -> round 25 -> 20.0
-        expect(snapped.y).toBe(20.0);
-
-        // Right edge: (10.1 + 300.5) = 310.6 * 1.25 = 388.25 -> round 388 -> 310.4
-        // width = 310.4 - 10.4 = 300.0
-        expect(snapped.width).toBeCloseTo(300.0, 4);
-
-        // Bottom edge: (20.3 + 199.7) = 220.0 * 1.25 = 275 -> 220.0
-        // height = 220.0 - 20.0 = 200.0
-        expect(snapped.height).toBeCloseTo(200.0, 4);
     });
 });
 
@@ -341,9 +275,6 @@ describe('scale edge cases and robustness', () => {
     it('handles non-numeric, zero, and infinite scales safely', () => {
         for (const badScale of [0, -1, -2.5, NaN, undefined, null, Infinity, -Infinity]) {
             expect(snapCoordToGrid(15.75, badScale)).toBe(15.75);
-
-            const rect = {x: 10.5, y: 20.5, width: 100.5, height: 80.5};
-            expect(snapRectToGrid(rect, badScale)).toEqual(rect);
         }
     });
 });

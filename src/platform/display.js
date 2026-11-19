@@ -91,14 +91,6 @@ export function getTabList(type = 3, workspace = null) {
     }
 }
 
-export function focusWindow(win, timestamp = 0, customDisplay = null) {
-    try {
-        getDisplay(customDisplay)?.focus_window?.(win, timestamp);
-    } catch {
-        // Focus is best effort: the window may be gone by the time the call lands.
-    }
-}
-
 export function setActorAboveSibling(child, sibling, customGroup = null) {
     if (!child || !sibling)
         return;
@@ -124,14 +116,6 @@ export function getWindowActors() {
         return globalThis.global?.get_window_actors?.() ?? [];
     } catch {
         return [];
-    }
-}
-
-export function getActiveWorkspaceIndex() {
-    try {
-        return globalThis.global?.workspace_manager?.get_active_workspace_index?.() ?? 0;
-    } catch {
-        return 0;
     }
 }
 

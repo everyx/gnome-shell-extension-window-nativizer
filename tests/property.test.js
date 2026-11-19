@@ -2,7 +2,7 @@
  * Property tests for the pure geometry/rules math (jasmine-gjs).
  *
  * These fuzz the invariants that the review found by hand - ordered slices, a body that fits
- * its actor, bands inside their monitor, a snapped rect that never inverts - across a wide
+ * its actor, bands inside their monitor - across a wide
  * input space instead of a handful of examples. The PRNG is seeded, so a failure is
  * reproducible. Run: pnpm test
  */
@@ -12,7 +12,6 @@ import {
     clipFrameFor,
     snapActorBodyFrame,
     snapCoordToGrid,
-    snapRectToGrid,
     snapSliceBoxesInto,
     ZERO_PHASE,
 } from '../src/lib/snap.js';
@@ -77,23 +76,6 @@ describe('property: snap', () => {
     it('passes the input through unchanged for an unusable scale', () => {
         for (const scale of BAD_SCALES)
             expect(snapCoordToGrid(12.345, scale)).toBe(12.345);
-    });
-
-    it('never inverts a rect for a usable scale', () => {
-        const rng = mulberry32(0x2ec7);
-        for (let i = 0; i < ITER; i++) {
-            const rect = {
-                x: range(rng, -1000, 1000),
-                y: range(rng, -1000, 1000),
-                width: range(rng, 0, 800),
-                height: range(rng, 0, 800),
-            };
-            const out = snapRectToGrid(rect, pick(rng, GOOD_SCALES));
-            expect(out.width).toBeGreaterThanOrEqual(0);
-            expect(out.height).toBeGreaterThanOrEqual(0);
-            expect(finite(out.x)).toBeTrue();
-            expect(finite(out.y)).toBeTrue();
-        }
     });
 
     it('keeps all 8 slice boxes ordered and finite for any cast, corner and scale', () => {

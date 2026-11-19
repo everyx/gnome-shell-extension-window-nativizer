@@ -23,11 +23,9 @@ import {
     getMonitorGeometry,
     resolveMonitorBounds,
     getTabList,
-    focusWindow,
     setActorAboveSibling,
     setActorBelowSibling,
     getWindowActors,
-    getActiveWorkspaceIndex,
     getActiveWorkspace,
     getStage,
     getStageDimensions
@@ -713,16 +711,7 @@ describe('platform', () => {
             expect(resolveMonitorBounds(mockDisplay, {get_monitor: () => 5})).toBeNull();
         });
 
-        it('handles window focusing and actor layering with null guards', () => {
-            let focused = null;
-            const mockDisplay = {
-                focus_window: (win, ts) => {
-                    focused = {win, ts};
-                },
-            };
-            focusWindow({id: 'win1'}, 123, mockDisplay);
-            expect(focused).toEqual({win: {id: 'win1'}, ts: 123});
-
+        it('handles actor layering with null guards', () => {
             let raised = null;
             let above = null;
             let lowered = null;
@@ -784,13 +773,11 @@ describe('platform', () => {
                 get_window_actors: () => actors,
                 workspace_manager: {
                     get_active_workspace: () => ws,
-                    get_active_workspace_index: () => 0,
                 },
             };
 
             expect(getWindowActors()).toBe(actors);
             expect(getActiveWorkspace()).toBe(ws);
-            expect(getActiveWorkspaceIndex()).toBe(0);
         });
 
         it('queries stage and stage dimensions safely', () => {
