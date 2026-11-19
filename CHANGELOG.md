@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.12.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.2...v0.12.0) (2026-11-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **detector:** an existing correction that names `corners` or `shadow` on a window that cannot be resized now reverses the new default instead of the old one, and adds the decoration back - which is the double corner the correction was made to remove. Such a correction has to be deleted; the default then does what the rule did. There is no way to migrate them automatically: a stored state does not record which default it was written against, and inverting every fixed-size state would break the rules that legitimately ask for decoration on such a window.
+
+### Features
+
+* **detector:** a window that cannot be resized is not decorated ([089642b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/089642b43966ea18dd8e34f7d1048590fa4b848c))
+
+
+### Bug Fixes
+
+* **band:** give the pointer modes the focus Mutter cannot ([5477a9f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5477a9f1333c96b0863170c0047c63c47a38e385))
+* **band:** make a press on the band behave like the click it is ([2078fbd](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/2078fbd5df6ec9ad0d5dad3fada0b7bbfc89c225))
+* **license:** ship the GPL-2 text unmodified ([4664f0d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4664f0d821e602ec4776c6899bc8465c2e5f49c9))
+* **metadata:** say what the extension actually does with a client's data ([189e0eb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/189e0ebcbfedf2a4a8863ba51a5fc971757b4626))
+* **phase:** refuse a transform that carries a position instead of a phase ([53f7280](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/53f7280d730b32cc242e8a7f42640c0cf470fbc4))
+* **settle:** ask for the pass that lets a held body give up ([23d2008](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/23d20083ccf4e1f1702784e6cab268b98afb7521))
+* **teardown:** finish the rest of a cleanup when one step fails ([dd913e3](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dd913e337bbc805bf9259b9dfab7b4af6eecf1db))
+
+
+### Documentation
+
+* **comments:** say it once, and only what the code cannot ([39b8eaf](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/39b8eaf9db2067575b989e74620b8245fce265f8))
+* **decoration:** record what widening the paint volume actually did ([4418045](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/44180454511af83b4a37d402725fc83397b5897e))
+* **decoration:** record why the band focuses on hover but does not raise ([1f98e66](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1f98e663885a48658a65475273dbe2753abb85e4))
+* **development:** record what looks simplifiable and is not ([25df7fb](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/25df7fbcedccf78faa9020a98a73357efca867a9))
+* **dev:** say which two modules the unit suite cannot load ([c154102](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c154102bc67a72baefcc9aa4563ebe86ea797313))
+* **dev:** say why the picker answers any local process ([854f690](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/854f6907305320348d72c1d9e3c6868e64fd9b32))
+* **readme:** trim the page, and write both mirrors for their own reader ([1dda32b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1dda32b7c4645d911d31ba6647191a2b32d11b5f))
+* **shell:** name the three diagnostic lines that describe a transient ([f86775a](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/f86775adb6290da95d7490c5943018b385cf5b0f))
+
 ## [0.11.2](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.1...v0.11.2) (2026-10-25)
 
 
