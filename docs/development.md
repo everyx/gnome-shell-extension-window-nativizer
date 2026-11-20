@@ -614,6 +614,15 @@ depends on it; collapsing it puts that order in two places.
 `src/` caller - `tools/test-e2e.sh` reads them off the live actor as the only observation point for
 the cross-fade. A dead-code sweep that trusts `grep src/` deletes the test suite's eyes.
 
+**A grab flag that looks missing.** `getResizeGrabOp()` returns a plain `RESIZING_*` where
+`meta_window_handle_ungrabbed_event()` adds `META_GRAB_OP_WINDOW_FLAG_UNCONSTRAINED` to the same op
+before starting the grab. Mutter is not consistent about it: a press in the client area carries the
+flag (`core/window.c`) and a press on a server-side frame does not (`x11/window-x11.c` calls
+`meta_window_begin_grab_op()` with the bare op), so the two paths differ upstream. The flag relaxes
+the titlebar-visible constraint (`core/constraints.c`), and a band standing in for a window's edge
+has no single answer to copy. Code reading only: this session offers no injected pointer device, so
+a grab cannot be driven far enough to compare frame rects.
+
 **Comments whose subject is a fact.** Each of these names something a reader cannot infer, and each
 has been proposed for deletion: where the arcs meet, and the two false leads that look like
 decoration (`detector.js`); the opposite boundary inclusivities in `settleClipBody`; `roundf`
