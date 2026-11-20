@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.12.0...v0.12.1) (2026-11-20)
+
+
+### Documentation
+
+* **development:** record the grab flag that looks missing and is not ([02df4fe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/02df4fe3c8a962d3cd65a558ebfcf2fccc150ac3))
+
 ## [0.12.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.2...v0.12.0) (2026-11-19)
 
 
