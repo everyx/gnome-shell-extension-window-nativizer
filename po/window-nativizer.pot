@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 10:19+0800\n"
+"POT-Creation-Date: 2026-11-25 12:07+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -299,7 +299,7 @@ msgid ""
 msgstr ""
 
 #: src/prefs/rulePage.js:240
-msgid "Use the button above to pick a window that is decorated incorrectly"
+msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
 msgstr ""
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
@@ -327,8 +327,9 @@ msgid ""
 "pick again"
 msgstr ""
 
+#. The one way a correction cannot act: the window is below the size both cuts need to fit.
 #: src/prefs/windowPicker.js:24
-msgid "No correction added: it would have no effect on a window of this kind"
+msgid "No correction added: this window is too small to decorate"
 msgstr ""
 
 #: src/prefs/windowPicker.js:71

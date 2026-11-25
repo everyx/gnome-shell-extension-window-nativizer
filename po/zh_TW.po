@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 10:19+0800\n"
+"POT-Creation-Date: 2026-11-25 12:07+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -29,7 +29,7 @@ msgstr "陰影"
 #. Translators: One of the three rule axes: the resize band around the window.
 #: src/lib/rulePresenter.js:46
 msgid "Resize"
-msgstr "調整大小"
+msgstr "縮放"
 
 #: src/lib/rulePresenter.js:72
 msgid "Automatic: no corners"
@@ -49,25 +49,25 @@ msgstr "自動：畫陰影"
 
 #: src/lib/rulePresenter.js:77
 msgid "Automatic: edges fixed"
-msgstr "自動：邊緣不可拖"
+msgstr "自動：邊緣不可拖動"
 
 #: src/lib/rulePresenter.js:77
 msgid "Automatic: edges draggable"
-msgstr "自動：邊緣可拖"
+msgstr "自動：邊緣可拖動"
 
 #: src/lib/rulePresenter.js:93
 msgid "Windows of this kind are never decorated"
-msgstr "此類視窗不做裝飾"
+msgstr "這類視窗不裝飾"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/lib/rulePresenter.js:102
 msgid "The window frame can already be resized"
-msgstr "視窗邊框本身已可調整大小"
+msgstr "邊框由系統繪製，本身可拖動"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/lib/rulePresenter.js:105
 msgid "Fixed-size windows have no resize handle"
-msgstr "固定大小的視窗沒有可調整大小的邊緣"
+msgstr "尺寸固定的視窗沒有可拖動的邊緣"
 
 #: src/lib/rulePresenter.js:118 src/prefs/conflictDialog.js:193
 msgid "Automatic"
@@ -81,7 +81,7 @@ msgstr "對話框"
 #. Translators: A dialog that blocks its parent window.
 #: src/lib/rulePresenter.js:126
 msgid "modal dialog"
-msgstr "模態對話框"
+msgstr "強制回應對話框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
 #: src/lib/rulePresenter.js:128
@@ -110,43 +110,43 @@ msgstr "%s %s"
 #. Translators: The window has no parent window.
 #: src/lib/rulePresenter.js:145
 msgid "with no parent"
-msgstr "無父視窗"
+msgstr "沒有上層視窗"
 
 #. Translators: The window is attached to its parent window.
 #: src/lib/rulePresenter.js:147
 msgid "attached to its parent"
-msgstr "附加到父視窗"
+msgstr "跟隨上層視窗"
 
 #. Translators: The window has a parent window it is not attached to.
 #: src/lib/rulePresenter.js:149
 msgid "with a parent"
-msgstr "有父視窗"
+msgstr "有上層視窗"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
 #: src/lib/rulePresenter.js:164
 #, javascript-format
 msgid "fixed-size (%s)"
-msgstr "固定大小（%s）"
+msgstr "固定尺寸（%s）"
 
 #. Translators: A window the user cannot resize.
 #: src/lib/rulePresenter.js:167
 msgid "fixed-size"
-msgstr "固定大小"
+msgstr "固定尺寸"
 
 #. Translators: A window the user can resize.
 #: src/lib/rulePresenter.js:171
 msgid "resizable"
-msgstr "可調整大小"
+msgstr "可縮放"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
 #: src/lib/rulePresenter.js:178
 msgid "frame drawn by the system"
-msgstr "由系統繪製邊框"
+msgstr "邊框由系統繪製"
 
 #. Translators: The window declares no shadow margin ring of its own.
 #: src/lib/rulePresenter.js:181
 msgid "no shadow margins"
-msgstr "無陰影邊距"
+msgstr "未宣告陰影邊距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
 #: src/lib/rulePresenter.js:186
@@ -166,21 +166,21 @@ msgstr "一般"
 
 #: src/prefs.js:47
 msgid "Display & Rendering"
-msgstr "顯示與渲染"
+msgstr "顯示與轉譯"
 
 #: src/prefs.js:48
 msgid "Control how windows are decorated at different monitor scales"
-msgstr "控制視窗在不同顯示器縮放下的裝飾方式"
+msgstr "依螢幕縮放決定裝飾方式"
 
 #: src/prefs.js:53
 msgid "Prioritize crisp text"
-msgstr "優先保證文字清晰"
+msgstr "優先保持文字清晰"
 
 #: src/prefs.js:54
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
-msgstr "在分數縮放的顯示器上跳過圓角，以保持文字清晰（陰影不受影響）"
+msgstr "分數縮放下不畫圓角，以保持文字清晰（陰影不受影響）"
 
 #: src/prefs.js:60
 msgid "Force overview corners on every window"
@@ -190,12 +190,12 @@ msgstr "強制所有視窗顯示概覽圓角"
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
-msgstr ""
+msgstr "XWayland 視窗，以及少數為保持清晰留成直角的 Wayland 視窗，也畫上圓角（代價是更模糊）"
 "為清晰而保持直角的 XWayland 及極少數 Wayland 視窗也畫上圓角（代價是更模糊）"
 
 #: src/prefs/clipboardActions.js:23
 msgid "No corrections to export"
-msgstr "沒有可匯出的修正規則"
+msgstr "沒有可匯出的修正"
 
 #: src/prefs/clipboardActions.js:35
 #, javascript-format
@@ -205,7 +205,7 @@ msgstr[0] "已將 %d 條修正規則匯出至剪貼簿"
 
 #: src/prefs/clipboardActions.js:61
 msgid "Clipboard is empty or does not contain text"
-msgstr "剪貼簿為空或不包含文字"
+msgstr "剪貼簿是空的，或不包含文字"
 
 #: src/prefs/clipboardActions.js:94
 #, javascript-format
@@ -214,7 +214,7 @@ msgstr "匯入失敗：%s"
 
 #: src/prefs/clipboardActions.js:105
 msgid "All rules in clipboard are already up to date"
-msgstr "剪貼簿中的所有規則已是最新"
+msgstr "剪貼簿中的規則已是最新"
 
 #: src/prefs/clipboardActions.js:110
 #, javascript-format
@@ -224,7 +224,7 @@ msgstr[0] "成功匯入 %d 條規則"
 
 #: src/prefs/conflictDialog.js:14
 msgid "Resolve Import Conflicts"
-msgstr "解決匯入衝突"
+msgstr "處理匯入衝突"
 
 #: src/prefs/conflictDialog.js:45
 msgid "Cancel"
@@ -246,23 +246,23 @@ msgstr "保留"
 
 #: src/prefs/conflictDialog.js:79
 msgid "Keep existing rules for all conflicts"
-msgstr "所有衝突均保留現有規則"
+msgstr "每一處衝突都保留現有規則"
 
 #: src/prefs/conflictDialog.js:84
 msgid "Replace"
-msgstr "替換"
+msgstr "取代"
 
 #: src/prefs/conflictDialog.js:85
 msgid "Replace existing rules with imported rules for all conflicts"
-msgstr "所有衝突均替換為匯入規則"
+msgstr "每一處衝突都換成匯入的規則"
 
 #: src/prefs/conflictDialog.js:159
 msgid "Could not apply the changes. Review your selections and try again."
-msgstr "無法套用變更。請檢查您的選擇後重試。"
+msgstr "套用失敗，請重新檢查每一處衝突的處理方式"
 
 #: src/prefs/rulePage.js:89
 msgid "Revert to the automatic decision"
-msgstr "還原為自動判斷"
+msgstr "回復自動判斷"
 
 #
 #: src/prefs/rulePage.js:173
@@ -271,7 +271,7 @@ msgstr "選取視窗…"
 
 #: src/prefs/rulePage.js:176
 msgid "The correction applies to every window of its kind"
-msgstr "這條修正對此類所有視窗生效"
+msgstr "對所有同類視窗生效"
 
 #: src/prefs/rulePage.js:181
 msgid "Import from Clipboard"
@@ -279,7 +279,7 @@ msgstr "從剪貼簿匯入"
 
 #: src/prefs/rulePage.js:182
 msgid "Export to Clipboard"
-msgstr "匯出至剪貼簿"
+msgstr "匯出到剪貼簿"
 
 #: src/prefs/rulePage.js:188 src/prefs/rulePage.js:191
 msgid "More actions"
@@ -294,21 +294,21 @@ msgstr "誤判修正"
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
-msgstr "修正按視窗種類生效；開關修正其中一個軸的自動判斷"
+msgstr "修正依視窗種類分別生效；開啟開關，該軸改為與自動判斷相反"
 
 #: src/prefs/rulePage.js:240
-msgid "Use the button above to pick a window that is decorated incorrectly"
-msgstr "點擊上方按鈕，選取裝飾不正確的視窗"
+msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
+msgstr "裝飾不正確的視窗，點「選取視窗…」新增修正"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
 #: src/prefs/ruleUi.js:96
 msgid "Turn on to correct the automatic decision for this window kind"
-msgstr "開啟後修正此類視窗的自動判斷"
+msgstr "開啟後，這一軸與自動判斷相反"
 
 #: src/prefs/ruleUi.js:126
 #, javascript-format
 msgid "Picked from the window “%s”"
-msgstr "選取自視窗「%s」"
+msgstr "選自視窗「%s」"
 
 #. Translators: Closes the error dialog.
 #: src/prefs/ruleUi.js:137
@@ -317,34 +317,35 @@ msgstr "關閉"
 
 #: src/prefs/windowPicker.js:18
 msgid "No correction added: this window could not be identified"
-msgstr "未新增修正：無法識別這個視窗"
+msgstr "無法辨識這個視窗，未新增修正"
 
 #: src/prefs/windowPicker.js:22
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
-msgstr "未新增修正：擴充套件沒有回應——請重新啟動工作階段後再次選取"
+msgstr "擴充功能沒有回應，未新增修正；請重新登入後再選取"
 
+#. The one way a correction cannot act: the window is below the size both cuts need to fit.
 #: src/prefs/windowPicker.js:24
-msgid "No correction added: it would have no effect on a window of this kind"
-msgstr "未新增修正：這條修正對此類視窗不會有任何效果"
+msgid "No correction added: this window is too small to decorate"
+msgstr "視窗過小，無法裝飾，未新增修正"
 
 #: src/prefs/windowPicker.js:71
 msgid "Window Pick Failed"
-msgstr "視窗選取失敗"
+msgstr "選取視窗失敗"
 
 #
 #: src/prefs/windowPicker.js:73
 msgid "A window is already being picked"
-msgstr "視窗選取正在進行"
+msgstr "正在選取視窗"
 
 #: src/prefs/windowPicker.js:74
 msgid "Could not connect to the Window Nativizer extension: it is not enabled"
-msgstr "無法連線至 Window Nativizer 擴充套件：擴充套件未啟用"
+msgstr "Window Nativizer 擴充功能沒有啟用，無法選取視窗"
 
 #: src/prefs/windowPicker.js:101
 msgid "No correction added: it could not be saved"
-msgstr "未新增修正：修正未能儲存"
+msgstr "儲存失敗，未新增修正"
 
 #: src/prefs/windowPicker.js:113
 #, javascript-format
@@ -358,4 +359,4 @@ msgstr "已為 %s 新增修正：%s"
 
 #: src/prefs/windowPicker.js:124
 msgid "The correction takes effect once the window is restored"
-msgstr "視窗還原後修正生效"
+msgstr "視窗結束最大化或並排後，才能看到修正效果"

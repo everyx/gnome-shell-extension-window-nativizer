@@ -237,7 +237,7 @@ export function setupCorrectionsGroup(page, ctx) {
 
         if (displayRows.length === 0) {
             const emptyRow = new Adw.ActionRow({
-                title: asMarkup(_('Use the button above to pick a window that is decorated incorrectly')),
+                title: asMarkup(_('Use “Pick window…” to correct a window that is decorated incorrectly')),
                 sensitive: false,
             });
             rulesGroup.add(emptyRow);

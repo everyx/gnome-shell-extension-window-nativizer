@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 10:19+0800\n"
+"POT-Creation-Date: 2026-11-25 12:07+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -29,7 +29,7 @@ msgstr "阴影"
 #. Translators: One of the three rule axes: the resize band around the window.
 #: src/lib/rulePresenter.js:46
 msgid "Resize"
-msgstr "调整大小"
+msgstr "缩放"
 
 #: src/lib/rulePresenter.js:72
 msgid "Automatic: no corners"
@@ -49,25 +49,25 @@ msgstr "自动：画阴影"
 
 #: src/lib/rulePresenter.js:77
 msgid "Automatic: edges fixed"
-msgstr "自动：边缘不可拖"
+msgstr "自动：边缘不可拖动"
 
 #: src/lib/rulePresenter.js:77
 msgid "Automatic: edges draggable"
-msgstr "自动：边缘可拖"
+msgstr "自动：边缘可拖动"
 
 #: src/lib/rulePresenter.js:93
 msgid "Windows of this kind are never decorated"
-msgstr "此类窗口不做装饰"
+msgstr "这类窗口不装饰"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/lib/rulePresenter.js:102
 msgid "The window frame can already be resized"
-msgstr "窗口边框本身已可调整大小"
+msgstr "边框由系统绘制，本身可拖动"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
 #: src/lib/rulePresenter.js:105
 msgid "Fixed-size windows have no resize handle"
-msgstr "固定大小的窗口没有可调整大小的边缘"
+msgstr "尺寸固定的窗口没有可拖动的边缘"
 
 #: src/lib/rulePresenter.js:118 src/prefs/conflictDialog.js:193
 msgid "Automatic"
@@ -110,43 +110,43 @@ msgstr "%s %s"
 #. Translators: The window has no parent window.
 #: src/lib/rulePresenter.js:145
 msgid "with no parent"
-msgstr "无父窗口"
+msgstr "没有上级窗口"
 
 #. Translators: The window is attached to its parent window.
 #: src/lib/rulePresenter.js:147
 msgid "attached to its parent"
-msgstr "附加到父窗口"
+msgstr "跟随上级窗口"
 
 #. Translators: The window has a parent window it is not attached to.
 #: src/lib/rulePresenter.js:149
 msgid "with a parent"
-msgstr "有父窗口"
+msgstr "有上级窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
 #: src/lib/rulePresenter.js:164
 #, javascript-format
 msgid "fixed-size (%s)"
-msgstr "固定大小（%s）"
+msgstr "固定尺寸（%s）"
 
 #. Translators: A window the user cannot resize.
 #: src/lib/rulePresenter.js:167
 msgid "fixed-size"
-msgstr "固定大小"
+msgstr "固定尺寸"
 
 #. Translators: A window the user can resize.
 #: src/lib/rulePresenter.js:171
 msgid "resizable"
-msgstr "可调整大小"
+msgstr "可缩放"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
 #: src/lib/rulePresenter.js:178
 msgid "frame drawn by the system"
-msgstr "由系统绘制边框"
+msgstr "边框由系统绘制"
 
 #. Translators: The window declares no shadow margin ring of its own.
 #: src/lib/rulePresenter.js:181
 msgid "no shadow margins"
-msgstr "无阴影边距"
+msgstr "未声明阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
 #: src/lib/rulePresenter.js:186
@@ -170,7 +170,7 @@ msgstr "显示与渲染"
 
 #: src/prefs.js:48
 msgid "Control how windows are decorated at different monitor scales"
-msgstr "控制窗口在不同显示器缩放下的装饰方式"
+msgstr "按显示器缩放决定装饰方式"
 
 #: src/prefs.js:53
 msgid "Prioritize crisp text"
@@ -180,7 +180,7 @@ msgstr "优先保证文字清晰"
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
-msgstr "在分数缩放的显示器上跳过圆角，以保持文字清晰（阴影不受影响）"
+msgstr "分数缩放下不画圆角，以保证文字清晰（阴影不受影响）"
 
 #: src/prefs.js:60
 msgid "Force overview corners on every window"
@@ -191,17 +191,18 @@ msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
 msgstr ""
-"为清晰而保持直角的 XWayland 及极少数 Wayland 窗口也画上圆角（代价是更模糊）"
+"XWayland 窗口，以及少数为保持清晰留成直角的 Wayland 窗口，也画上圆角（代价是"
+"更模糊）"
 
 #: src/prefs/clipboardActions.js:23
 msgid "No corrections to export"
-msgstr "没有可导出的修正规则"
+msgstr "没有可导出的修正"
 
 #: src/prefs/clipboardActions.js:35
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
-msgstr[0] "已将 %d 条修正规则导出到剪贴板"
+msgstr[0] "已将 %d 条修正导出到剪贴板"
 
 #: src/prefs/clipboardActions.js:61
 msgid "Clipboard is empty or does not contain text"
@@ -214,17 +215,17 @@ msgstr "导入失败：%s"
 
 #: src/prefs/clipboardActions.js:105
 msgid "All rules in clipboard are already up to date"
-msgstr "剪贴板中的所有规则已是最新"
+msgstr "剪贴板中的规则已是最新"
 
 #: src/prefs/clipboardActions.js:110
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
-msgstr[0] "成功导入 %d 条规则"
+msgstr[0] "%d 条规则导入成功"
 
 #: src/prefs/conflictDialog.js:14
 msgid "Resolve Import Conflicts"
-msgstr "解决导入冲突"
+msgstr "处理导入冲突"
 
 #: src/prefs/conflictDialog.js:45
 msgid "Cancel"
@@ -238,7 +239,7 @@ msgstr "应用"
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
-msgstr[0] "%d 条规则存在冲突："
+msgstr[0] "%d 条规则有冲突："
 
 #: src/prefs/conflictDialog.js:78
 msgid "Keep"
@@ -246,7 +247,7 @@ msgstr "保留"
 
 #: src/prefs/conflictDialog.js:79
 msgid "Keep existing rules for all conflicts"
-msgstr "所有冲突均保留现有规则"
+msgstr "每一处冲突都保留现有规则"
 
 #: src/prefs/conflictDialog.js:84
 msgid "Replace"
@@ -254,15 +255,15 @@ msgstr "替换"
 
 #: src/prefs/conflictDialog.js:85
 msgid "Replace existing rules with imported rules for all conflicts"
-msgstr "所有冲突均替换为导入规则"
+msgstr "每一处冲突都换成导入的规则"
 
 #: src/prefs/conflictDialog.js:159
 msgid "Could not apply the changes. Review your selections and try again."
-msgstr "无法应用更改。请检查您的选择后重试。"
+msgstr "应用失败，请重新检查每一处冲突的处理方式"
 
 #: src/prefs/rulePage.js:89
 msgid "Revert to the automatic decision"
-msgstr "还原为自动判断"
+msgstr "恢复自动判断"
 
 #
 #: src/prefs/rulePage.js:173
@@ -271,7 +272,7 @@ msgstr "选取窗口…"
 
 #: src/prefs/rulePage.js:176
 msgid "The correction applies to every window of its kind"
-msgstr "这条修正对此类所有窗口生效"
+msgstr "对所有同类窗口生效"
 
 #: src/prefs/rulePage.js:181
 msgid "Import from Clipboard"
@@ -294,21 +295,21 @@ msgstr "误判修正"
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
-msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
+msgstr "修正按窗口种类分别生效；打开开关，该轴改为与自动判断相反"
 
 #: src/prefs/rulePage.js:240
-msgid "Use the button above to pick a window that is decorated incorrectly"
-msgstr "点击上方按钮，选取装饰不正确的窗口"
+msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
+msgstr "装饰不正确的窗口，点“选取窗口…”添加修正"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
 #: src/prefs/ruleUi.js:96
 msgid "Turn on to correct the automatic decision for this window kind"
-msgstr "开启后修正此类窗口的自动判断"
+msgstr "打开后，这一轴与自动判断相反"
 
 #: src/prefs/ruleUi.js:126
 #, javascript-format
 msgid "Picked from the window “%s”"
-msgstr "选取自窗口“%s”"
+msgstr "选自窗口“%s”"
 
 #. Translators: Closes the error dialog.
 #: src/prefs/ruleUi.js:137
@@ -317,34 +318,35 @@ msgstr "关闭"
 
 #: src/prefs/windowPicker.js:18
 msgid "No correction added: this window could not be identified"
-msgstr "未添加修正：无法识别这个窗口"
+msgstr "无法识别这个窗口，未添加修正"
 
 #: src/prefs/windowPicker.js:22
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
-msgstr "未添加修正：扩展没有响应——请重启会话后重新选取"
+msgstr "扩展没有响应，未添加修正；重新登录后再选取"
 
+#. The one way a correction cannot act: the window is below the size both cuts need to fit.
 #: src/prefs/windowPicker.js:24
-msgid "No correction added: it would have no effect on a window of this kind"
-msgstr "未添加修正：这条修正对此类窗口不会有任何效果"
+msgid "No correction added: this window is too small to decorate"
+msgstr "窗口过小，无法装饰，未添加修正"
 
 #: src/prefs/windowPicker.js:71
 msgid "Window Pick Failed"
-msgstr "窗口选取失败"
+msgstr "选取窗口失败"
 
 #
 #: src/prefs/windowPicker.js:73
 msgid "A window is already being picked"
-msgstr "窗口选取正在进行"
+msgstr "正在选取窗口"
 
 #: src/prefs/windowPicker.js:74
 msgid "Could not connect to the Window Nativizer extension: it is not enabled"
-msgstr "无法连接到 Window Nativizer 扩展：该扩展未启用"
+msgstr "Window Nativizer 扩展没有启用，无法选取窗口"
 
 #: src/prefs/windowPicker.js:101
 msgid "No correction added: it could not be saved"
-msgstr "未添加修正：修正未能保存"
+msgstr "保存失败，未添加修正"
 
 #: src/prefs/windowPicker.js:113
 #, javascript-format
@@ -358,4 +360,4 @@ msgstr "已为 %s 添加修正：%s"
 
 #: src/prefs/windowPicker.js:124
 msgid "The correction takes effect once the window is restored"
-msgstr "窗口还原后修正生效"
+msgstr "窗口退出最大化或平铺后，才能看到修正效果"

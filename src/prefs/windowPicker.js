@@ -20,8 +20,8 @@ const PICK_REFUSALS = {
     // Written as an escape: the msgid keys a translation, so a literal dash would drop it.
     [PickRefusal.NO_SUGGESTION]: () =>
         _('No correction added: the extension did not answer \u2014 restart the session and pick again'),
-    [PickRefusal.NO_EFFECT]: () =>
-        _('No correction added: it would have no effect on a window of this kind'),
+    // The one way a correction cannot act: the window is below the size both cuts need to fit.
+    [PickRefusal.NO_EFFECT]: () => _('No correction added: this window is too small to decorate'),
 };
 
 /** A reason this build does not know is still a kind nothing acts on: the fallback says so. */
