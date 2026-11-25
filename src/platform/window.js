@@ -1,6 +1,6 @@
 /** The reads and queries this tree makes of a Meta.Window, one Shell call each. */
 
-import {WindowType} from '../lib/mutterRules.generated.js';
+import {WindowClientType, WindowType} from '../lib/mutterRules.generated.js';
 import {getStage} from './display.js';
 import {safeRead} from './read.js';
 
@@ -152,7 +152,8 @@ export function isWindowDecorated(win) {
 const COMPONENTS_RGB = 3;
 const COMPONENTS_RGBA = 4;
 
-// Per-actor memo: the buffer format is fixed by the client's X11 depth for the actor's whole life.
+// Per-actor memo, X11 only: a client's depth is fixed for the actor's whole life, where a Wayland
+// surface may attach a different buffer format on any commit.
 const actorBufferAlphaCache = new WeakMap();
 
 /** Whether the buffer carries alpha; null when unreadable, since a guess decides the shadow. */
@@ -161,12 +162,13 @@ export function getWindowBufferAlpha(win) {
     if (!actor)
         return null;
 
-    const cached = actorBufferAlphaCache.get(actor);
+    const cacheable = getWindowClientType(win) === WindowClientType.X11;
+    const cached = cacheable ? actorBufferAlphaCache.get(actor) : undefined;
     if (cached !== undefined)
         return cached;
 
     const alpha = readBufferAlpha(actor);
-    if (alpha !== null)
+    if (alpha !== null && cacheable)
         actorBufferAlphaCache.set(actor, alpha);
     return alpha;
 }

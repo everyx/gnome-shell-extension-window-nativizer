@@ -5,6 +5,7 @@ import {
     reconcileOutcome,
 } from '../src/lib/window.js';
 import {readWindowString, safeRead} from '../src/platform/read.js';
+import {getWindowBufferAlpha} from '../src/platform/window.js';
 import {getWindowFromActor} from '../src/platform/windowActor.js';
 
 import {evaluateWindowActions} from '../src/lib/detector.js';
@@ -262,7 +263,7 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeTrue();
     });
 
-    it('reads the buffer alpha only for a bare X11 window, and carries null elsewhere', () => {
+    it('reads the buffer alpha for a client-owned buffer on either protocol', () => {
         const read = (clientType, {decorated = false, hasRing = null} = {}) => {
             let calls = 0;
             const win = {
@@ -288,13 +289,11 @@ describe('window inspection (readWindow)', () => {
             return {reading: readWindow(win), calls};
         };
 
-        // The one case the reading is about, and it lands.
+        // Both protocols: the format is the client's, and a dialog can paint its edges either way.
         expect(read(WindowClientType.X11).reading.bufferAlpha).toBeTrue();
         expect(read(WindowClientType.X11).calls).toBe(1);
-
-        // Wayland has no client intent behind `decorated`, so the number would not mean anything.
-        expect(read(WindowClientType.WAYLAND).reading.bufferAlpha).toBeNull();
-        expect(read(WindowClientType.WAYLAND).calls).toBe(0);
+        expect(read(WindowClientType.WAYLAND).reading.bufferAlpha).toBeTrue();
+        expect(read(WindowClientType.WAYLAND).calls).toBe(1);
 
         // An SSD frame's texture is the frame client's, so it would answer for the client inside.
         expect(read(WindowClientType.X11, {decorated: true}).reading.bufferAlpha).toBeNull();
@@ -303,6 +302,41 @@ describe('window inspection (readWindow)', () => {
         // A declared ring already made Mutter drop its shadow; there is nothing to decide.
         expect(read(WindowClientType.X11, {hasRing: true}).reading.bufferAlpha).toBeNull();
         expect(read(WindowClientType.X11, {hasRing: true}).calls).toBe(0);
+    });
+
+    it('re-reads the buffer format on Wayland, where a commit can change it', () => {
+        // The cache is X11-only: a client's depth cannot change, a Wayland surface's format can.
+        const actorFor = components => {
+            let current = components;
+            return {
+                actor: {
+                    get_texture: () => ({
+                        get_texture: () => ({
+                            get_plane: () => ({get_components: () => current}),
+                        }),
+                    }),
+                },
+                set: value => {
+                    current = value;
+                },
+            };
+        };
+        const winFor = (clientType, holder) => ({
+            get_client_type: () => clientType,
+            get_compositor_private: () => holder.actor,
+        });
+
+        const wayland = actorFor(4);
+        const waylandWin = winFor(WindowClientType.WAYLAND, wayland);
+        expect(getWindowBufferAlpha(waylandWin)).toBeTrue();
+        wayland.set(3);
+        expect(getWindowBufferAlpha(waylandWin)).toBeFalse();
+
+        const x11 = actorFor(4);
+        const x11Win = winFor(WindowClientType.X11, x11);
+        expect(getWindowBufferAlpha(x11Win)).toBeTrue();
+        x11.set(3);
+        expect(getWindowBufferAlpha(x11Win)).toBeTrue();
     });
 
     it('passes an unclassified process through as null, not as a default', () => {

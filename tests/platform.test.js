@@ -12,6 +12,7 @@ import {resolveUniformLocation} from '../src/platform/uniformLocation.js';
 import {coglContextForBake} from '../src/platform/coglContext.js';
 import {getPhysicalMonitorScale, invalidateMonitorCache} from '../src/platform/monitor.js';
 import {countSurfaceActorsCoveringBox, getSurfaceContainer} from '../src/platform/surfaceContainer.js';
+import {WindowClientType} from '../src/lib/mutterRules.generated.js';
 import {getWindowActor, getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowDisplayTitle, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowHidden, isWindowLocatedOnWorkspace, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowMinimized, isWindowOnAllWorkspaces, isWindowTiled} from '../src/platform/window.js';
 import {findMetaWindow, findMetaWindowCached, getWindowFromActor} from '../src/platform/windowActor.js';
 import {getAppliedSubpixelPhase, getWindowSubpixelOffset, PHASE_MAGNITUDE_BOUND} from '../src/platform/windowPhase.js';
@@ -961,9 +962,10 @@ describe('platform', () => {
             expect(getWindowBufferAlpha(null)).toBeNull();
         });
 
-        it('reads each actor once: the format is fixed by the client depth', () => {
+        it('reads an X11 actor once: the client depth fixes the format for its whole life', () => {
             const counter = {calls: 0};
-            const win = winWithActor(actorWithComponents(4, counter));
+            const win = {...winWithActor(actorWithComponents(4, counter)),
+                get_client_type: () => WindowClientType.X11};
             expect(getWindowBufferAlpha(win)).toBeTrue();
             expect(getWindowBufferAlpha(win)).toBeTrue();
             expect(counter.calls).toBe(1);
