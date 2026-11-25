@@ -200,6 +200,52 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toContain('no-csd');
     });
 
+    it('a dialog declaring no extents but carrying alpha is left unverified', () => {
+        // WPS's PDF export dialog: 968x443, depth 32, WM_NORMAL_HINTS with min == max on the height
+        // only, so Mutter still answers resizable. It paints its own corners inside the buffer.
+        const r = inferDecorationBaseline({
+            isX11: true,
+            windowType: WindowType.MODAL_DIALOG,
+            bufferAlpha: true,
+            ...marginsFromRects(968, 443, 968, 443),
+        });
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeFalse();
+        expect(r.reason).toBe('unverified-corners');
+    });
+
+    it('the same dialog with an opaque buffer keeps its decoration', () => {
+        // The counterexample the reading has to survive: no extents, no frame, nothing painted with
+        // transparency - a plain square body, which is exactly what our corners are for.
+        const r = inferDecorationBaseline({
+            isX11: true,
+            windowType: WindowType.MODAL_DIALOG,
+            bufferAlpha: false,
+            ...marginsFromRects(968, 443, 968, 443),
+        });
+        expect(r.corners).toBeTrue();
+        // Its shadow is Mutter's: an opaque bare X11 window is the one case we leave alone.
+        expect(r.shadow).toBeFalse();
+    });
+
+    it('the reading needs the dialog type, no declared extents and an alpha buffer', () => {
+        // Alpha says the shadow is ours, which is what keeps a bare X11 window's corners on.
+        const flat = {...marginsFromRects(968, 443, 968, 443), bufferAlpha: true};
+        const dialog = {...flat, windowType: WindowType.MODAL_DIALOG};
+
+        expect(inferDecorationBaseline({isX11: true, ...dialog}).reason).toBe('unverified-corners');
+        // A normal window keeps its decoration: this says nothing about X11 windows as a class.
+        expect(inferDecorationBaseline({isX11: true, ...flat, windowType: WindowType.NORMAL}).corners)
+            .toBeTrue();
+        // Declared extents mean the client asked for a ring, which the takeover handles.
+        expect(inferDecorationBaseline({
+            isX11: true, windowType: WindowType.MODAL_DIALOG,
+            ...marginsFromRects(968, 443, 960, 435), bufferAlpha: true,
+        }).corners).toBeTrue();
+        // The protocol does not matter: what the client paints is not a protocol feature.
+        expect(inferDecorationBaseline({isX11: false, ...dialog}).reason).toBe('unverified-corners');
+    });
+
     it('WeChat article / browser window (XWayland, CEF, extents 4,4,4,4) -> its ring is the client\'s, so the shadow is not ours', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const r = inferDecorationBaseline({
@@ -441,6 +487,33 @@ describe('evaluateWindowActions', () => {
     // A client that declared a ring: the baseline reads the shadow as the client's,
     // and the automatic corner takeover makes it ours again.
     const ringedWindow = {...baseWin, bufferWidth: 460, bufferHeight: 360};
+
+    it('an unverified dialog loses the decoration but keeps the band, and a rule restores it', () => {
+        const dialog = {
+            ...baseWin, isX11: true, windowType: WindowType.MODAL_DIALOG, bufferAlpha: true,
+        };
+        const off = evaluateWindowActions(dialog);
+        expect(off.drawClip).toBeFalse();
+        expect(off.drawShadow).toBeFalse();
+        // The band stays: it is a working affordance on a window that has no edge of its own.
+        expect(off.drawResize).toBeTrue();
+        expect(off.reason).toBe('unverified-corners');
+
+        // Readings are reversible: every axis this turned off can be asked for again, and the key
+        // carries the same fingerprint the resolver will rebuild.
+        const key = buildRuleKey('test-app', {
+            clientType: 'x11', windowType: WindowType.MODAL_DIALOG,
+            hasParent: false, allowsResize: true, isAttachedDialog: false, hasRing: false, hasSsd: false,
+        });
+        const back = evaluateWindowActions({...dialog, rules: {[key]: 'corners,shadow'}});
+        expect(back.drawClip).toBeTrue();
+        expect(back.drawShadow).toBeTrue();
+        // The band was never part of this reading, so reversing the decoration leaves it alone.
+        expect(back.drawResize).toBeTrue();
+
+        const noBand = evaluateWindowActions({...dialog, rules: {[key]: 'resize'}});
+        expect(noBand.drawResize).toBeFalse();
+    });
 
     it('degenerate helper surface (wl-clipboard 1x1): no decoration', () => {
         const res = evaluateWindowActions({

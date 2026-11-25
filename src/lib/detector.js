@@ -79,7 +79,21 @@ function bareX11ShadowOwner(bufferAlpha) {
     return 'unknown';
 }
 
-/** Widest declared margin per axis, logical px; alpha is read only for a bare X11 window. */
+/**
+ * A dialog with no declared extents that carries alpha: it may be painting its own corners, and
+ * nothing here can see whether it does - a format says nothing about pixels, and an extension
+ * cannot read them. The dialog type keeps this off a bare window, which is the population the
+ * decoration exists for.
+ */
+export function isUnverifiedDialog({
+    hasSsd = false, windowType = WindowType.NORMAL, sideW = 0, sideH = 0, hasAlpha = false,
+} = {}) {
+    if (hasSsd || sideW > 0 || sideH > 0 || !hasAlpha)
+        return false;
+    return windowType === WindowType.DIALOG || windowType === WindowType.MODAL_DIALOG;
+}
+
+/** Widest declared margin per axis, logical px; the alpha read answers two questions. */
 export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
@@ -87,6 +101,7 @@ export function inferDecorationBaseline({
     bufferAlpha = null,
     nativeLikeCorners = false,
     allowsResize = true,
+    windowType = WindowType.NORMAL,
 }) {
     const insets = `${sideW.toFixed(1)}x${sideH.toFixed(1)}`;
 
@@ -126,6 +141,11 @@ export function inferDecorationBaseline({
             reason: `fixed-size${nativeLikeCorners ? '; native-like-corners' : ''}; shadow: ${reason}`,
         };
     }
+
+    // A dialog declares nothing and has no frame: an edge from us would be its only one, and the ring
+    // lands outside corners it may already paint.
+    if (isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
+        return {shadow: false, corners: false, reason: 'unverified-corners'};
 
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
@@ -205,7 +225,8 @@ export function decideResizeBand({
     const hasNativeHandle = hasGtk4Client &&
         narrowestSides.sideW >= RESIZE_BAND && narrowestSides.sideH >= RESIZE_BAND;
 
-    return reversed ? hasNativeHandle : !hasNativeHandle;
+    const automatic = !hasNativeHandle;
+    return reversed ? !automatic : automatic;
 }
 
 function resolveAxisValue(reversedAxes, axis, baseline) {
@@ -253,7 +274,9 @@ export function evaluateWindowActions({
     const visuallyFloored = eligibility.reversible === true;
     const baseline = visuallyFloored
         ? {corners: false, shadow: false, reason: eligibility.reason}
-        : inferDecorationBaseline({isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, allowsResize});
+        : inferDecorationBaseline({
+            isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, allowsResize, windowType,
+        });
 
     // `clientDeclaredRing` stays a pure question; clearing the SSD ring is strategy, handled here.
     const clientOwnRing = clientDeclaredRing({hasSsd, insets, bufferWidth, bufferHeight, frameWidth, frameHeight});

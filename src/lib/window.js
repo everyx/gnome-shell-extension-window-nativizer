@@ -100,9 +100,10 @@ export function readWindow(win, {classifier = null} = {}) {
         return false;
     }, false);
 
-    // Bare X11 only: has_shadow() abstains on ARGB32, and an SSD frame would answer for its client.
+    // Never behind an SSD frame, which would answer for its client; both protocols are asked, since
+    // a window can paint its own edges either way.
     let bufferAlpha = null;
-    if (!hasSsd && isX11 && !hasRing)
+    if (!hasSsd && !hasRing)
         bufferAlpha = safeRead(() => getWindowBufferAlpha(win), null);
 
     const isMaximized = safeRead(() => isWindowMaximized(win), false);

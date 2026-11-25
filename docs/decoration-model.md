@@ -140,6 +140,26 @@ what the reversal is for. The correlation is strong in practice - every fixed-si
 needed a correction here was a non-native application painting its own frame - and the cost of
 being wrong is a square corner on a dialog, against two arcs on every such window.
 
+A fourth reading stands both axes down: a **dialog with no declared extents that carries alpha**
+(`unverified-corners`). The name says what it is. A buffer's format is not its pixels: an alpha
+channel is what a corner the client rounded itself *may* look like from here, and it says nothing at
+all about a body that is opaque throughout - and an extension cannot read the pixels to tell
+(measured: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return without
+filling the buffer they are handed, so the only readable fact is the format; that read is cached
+for X11 alone, where a client's depth fixes it for the actor's life, while a Wayland surface can
+attach a different format on any commit). The reading is a
+policy, not a detection, and it is asked one way only: decorating costs a ring outside a ring
+someone else drew, abstaining costs a square dialog, which is what the window looks like without us
+and which one rule reverses. An opaque dialog of the same shape is left alone entirely, since
+nothing in it can be a corner we did not draw.
+
+Two of its inputs look removable and are not. Without the **dialog type** the same test strips the
+decoration from every bare window with an alpha buffer, which is the population this extension
+exists for - the suite says so, in the bare-XWayland cases. Without the **alpha** requirement it
+strips it from every dialog that declares nothing, including the plain square ones. The protocol
+makes no difference either way: what a client paints inside its buffer is not a protocol feature,
+and a Qt client-side dialog on Wayland is the same case as an X11 one, which is why both are asked.
+
 The shadow can be the reason to abstain too, and there a *reading* decides. Where a bare X11
 window's buffer cannot be read, the compositor's own shadow and ours cannot be told apart, and a
 second shadow is worse than none, so both axes abstain (`x11-shadow-unknown`). Where the same
@@ -604,6 +624,17 @@ ours, and an unreadable one, where neither axis is drawn. A rule still corrects 
 window by reversing the shadow axis, which draws ours on top - a double shadow, and what a user who
 wants the focus fade is asking for. The corners remain ours in that case: a square shadow beside a
 rounded body is the mismatch this entry records.
+
+**Why that question is X11-only.** Every gate above comes from one function, `has_shadow()` in
+`compositor/meta-window-actor-x11.c`: it refuses maximized and fullscreen windows, tile matches,
+windows behind a frames client, **non-opaque (ARGB32) buffers** - "we can't easily generate shadows
+for them" - windows that declare custom frame extents ("that likely means that it is drawing a shadow
+itself"), and shaped windows, and answers yes for everything else. Two of those are this reading's
+own: the alpha channel is how the ARGB32 gate is consulted, and the declared extent is how
+`has_custom_frame_extents` is. The Wayland actor has no shadow machinery at all
+(`compositor/meta-window-actor-wayland.c` mentions none), because a Wayland window's shadow is either
+the client's own, painted inside its buffer, or absent. So "who paints this window's shadow" has no
+answer to compare against off X11.
 
 **An ARGB32 window that declares its whole surface opaque.** `_NET_WM_OPAQUE_REGION` is not readable
 from GJS, so the buffer's alpha channel is as close as the reading gets: a window can carry alpha and
