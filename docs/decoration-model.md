@@ -140,6 +140,18 @@ what the reversal is for. The correlation is strong in practice - every fixed-si
 needed a correction here was a non-native application painting its own frame - and the cost of
 being wrong is a square corner on a dialog, against two arcs on every such window.
 
+**The case that keeps the rule in charge: WeChat.** Nine of its windows are the same client, the
+same toolkit, Wayland, `NORMAL`, fixed size, declaring no extents, and carrying alpha: two of them -
+`280x380` and `640x560` - have no corners and no shadow of their own, and want ours; the other seven,
+`330x194` through `770x610`, paint their own rounded corners and shadow, and must not get a second
+pair. Every attribute read here is identical across all nine. Size is the only difference, and size
+is what the rule key already carries for a window that cannot resize (`size=WxH`). The one signal
+that would separate them is the pixels at the corner, and that is not readable from an extension
+(measured, twice: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return without
+filling the buffer they are handed). So this is not a predicate waiting to be improved, it is the
+case rules exist for - and a per-toolkit or per-protocol signal would make it worse, because all
+nine would land on the same side of it.
+
 A fourth reading stands both axes down: a **dialog with no declared extents that carries alpha**
 (`unverified-corners`). The name says what it is. A buffer's format is not its pixels: an alpha
 channel is what a corner the client rounded itself *may* look like from here, and it says nothing at
