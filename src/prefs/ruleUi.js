@@ -90,12 +90,13 @@ export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackL
 }
 
 /** An Adw.SwitchRow for one axis: on means the user reversed the automatic decision. */
-export function buildAxisSwitch(axis, corrected, onChange) {
+export function buildAxisSwitch(axis, corrected, onChange, subtitle = null) {
     const name = axisName(axis);
     // Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
     const hint = _('Turn on to correct the automatic decision for this window kind');
     const switchRow = new Adw.SwitchRow({
         title: asMarkup(name),
+        subtitle: subtitle ? asMarkup(subtitle) : null,
         tooltip_text: hint,
         active: corrected.has(axis),
     });

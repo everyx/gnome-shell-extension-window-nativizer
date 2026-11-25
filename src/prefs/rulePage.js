@@ -15,6 +15,7 @@ import {
 } from '../lib/rules.js';
 import {
     axisName,
+    axisAutomaticState,
     axisUnavailableReason,
     isDecoratableKind,
     keyAxisCapabilities,
@@ -156,7 +157,8 @@ function buildRuleRow(rowData, ctx, onRefresh) {
             row.add_row(unavailableRow);
             continue;
         }
-        row.add_row(buildAxisSwitch(axis, corrected, onAxisChange));
+        row.add_row(buildAxisSwitch(axis, corrected, onAxisChange,
+            axisAutomaticState(axis, properties)));
     }
 
     return row;

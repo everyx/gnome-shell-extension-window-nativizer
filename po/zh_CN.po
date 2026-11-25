@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 23:33+0800\n"
+"POT-Creation-Date: 2026-11-25 10:19+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -31,107 +31,131 @@ msgstr "阴影"
 msgid "Resize"
 msgstr "调整大小"
 
-#: src/lib/rulePresenter.js:69
+#: src/lib/rulePresenter.js:72
+msgid "Automatic: no corners"
+msgstr "自动：不画圆角"
+
+#: src/lib/rulePresenter.js:72
+msgid "Automatic: corners drawn"
+msgstr "自动：画圆角"
+
+#: src/lib/rulePresenter.js:75
+msgid "Automatic: no shadow"
+msgstr "自动：不画阴影"
+
+#: src/lib/rulePresenter.js:75
+msgid "Automatic: shadow drawn"
+msgstr "自动：画阴影"
+
+#: src/lib/rulePresenter.js:77
+msgid "Automatic: edges fixed"
+msgstr "自动：边缘不可拖"
+
+#: src/lib/rulePresenter.js:77
+msgid "Automatic: edges draggable"
+msgstr "自动：边缘可拖"
+
+#: src/lib/rulePresenter.js:93
 msgid "Windows of this kind are never decorated"
 msgstr "此类窗口不做装饰"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:78
+#: src/lib/rulePresenter.js:102
 msgid "The window frame can already be resized"
 msgstr "窗口边框本身已可调整大小"
 
 #. Translators: Shown where a resize control would be, but cannot be used.
-#: src/lib/rulePresenter.js:81
+#: src/lib/rulePresenter.js:105
 msgid "Fixed-size windows have no resize handle"
 msgstr "固定大小的窗口没有可调整大小的边缘"
 
-#: src/lib/rulePresenter.js:94 src/prefs/conflictDialog.js:193
+#: src/lib/rulePresenter.js:118 src/prefs/conflictDialog.js:193
 msgid "Automatic"
 msgstr "自动"
 
 #. Translators: A dialog window.
-#: src/lib/rulePresenter.js:100
+#: src/lib/rulePresenter.js:124
 msgid "dialog"
 msgstr "对话框"
 
 #. Translators: A dialog that blocks its parent window.
-#: src/lib/rulePresenter.js:102
+#: src/lib/rulePresenter.js:126
 msgid "modal dialog"
 msgstr "模态对话框"
 
 #. Translators: A small utility window, such as a palette or a toolbar.
-#: src/lib/rulePresenter.js:104
+#: src/lib/rulePresenter.js:128
 msgid "utility window"
 msgstr "工具窗口"
 
 #. Translators: A normal, top-level window.
-#: src/lib/rulePresenter.js:109
+#: src/lib/rulePresenter.js:133
 msgid "window"
 msgstr "窗口"
 
-#: src/lib/rulePresenter.js:116
+#: src/lib/rulePresenter.js:140
 msgid "XWayland"
 msgstr "XWayland"
 
-#: src/lib/rulePresenter.js:116
+#: src/lib/rulePresenter.js:140
 msgid "Wayland"
 msgstr "Wayland"
 
 #. Translators: %s is client type then window type ("Wayland window"); reorder with %2$s %1$s.
-#: src/lib/rulePresenter.js:118
+#: src/lib/rulePresenter.js:142
 #, javascript-format
 msgid "%s %s"
 msgstr "%s %s"
 
 #. Translators: The window has no parent window.
-#: src/lib/rulePresenter.js:121
+#: src/lib/rulePresenter.js:145
 msgid "with no parent"
 msgstr "无父窗口"
 
 #. Translators: The window is attached to its parent window.
-#: src/lib/rulePresenter.js:123
+#: src/lib/rulePresenter.js:147
 msgid "attached to its parent"
 msgstr "附加到父窗口"
 
 #. Translators: The window has a parent window it is not attached to.
-#: src/lib/rulePresenter.js:125
+#: src/lib/rulePresenter.js:149
 msgid "with a parent"
 msgstr "有父窗口"
 
 #. Translators: %s is the width and height of the window, e.g. "fixed-size (360×420)".
-#: src/lib/rulePresenter.js:140
+#: src/lib/rulePresenter.js:164
 #, javascript-format
 msgid "fixed-size (%s)"
 msgstr "固定大小（%s）"
 
 #. Translators: A window the user cannot resize.
-#: src/lib/rulePresenter.js:143
+#: src/lib/rulePresenter.js:167
 msgid "fixed-size"
 msgstr "固定大小"
 
 #. Translators: A window the user can resize.
-#: src/lib/rulePresenter.js:147
+#: src/lib/rulePresenter.js:171
 msgid "resizable"
 msgstr "可调整大小"
 
 #. Translators: The compositor draws this window's frame, so it owns the resize handles.
-#: src/lib/rulePresenter.js:154
+#: src/lib/rulePresenter.js:178
 msgid "frame drawn by the system"
 msgstr "由系统绘制边框"
 
 #. Translators: The window declares no shadow margin ring of its own.
-#: src/lib/rulePresenter.js:157
+#: src/lib/rulePresenter.js:181
 msgid "no shadow margins"
 msgstr "无阴影边距"
 
 #. Translators: %s is the entity, parent, frame clause, and size, in that order.
-#: src/lib/rulePresenter.js:162
+#: src/lib/rulePresenter.js:186
 #, javascript-format
 msgid "%s, %s, %s, %s"
 msgstr "%s，%s，%s，%s"
 
 #. Translators: %s is the entity, parent, and size, in that order.
-#: src/lib/rulePresenter.js:166
+#: src/lib/rulePresenter.js:190
 #, javascript-format
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
@@ -236,43 +260,43 @@ msgstr "所有冲突均替换为导入规则"
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "无法应用更改。请检查您的选择后重试。"
 
-#: src/prefs/rulePage.js:88
+#: src/prefs/rulePage.js:89
 msgid "Revert to the automatic decision"
 msgstr "还原为自动判断"
 
 #
-#: src/prefs/rulePage.js:171
+#: src/prefs/rulePage.js:173
 msgid "Pick window…"
 msgstr "选取窗口…"
 
-#: src/prefs/rulePage.js:174
+#: src/prefs/rulePage.js:176
 msgid "The correction applies to every window of its kind"
 msgstr "这条修正对此类所有窗口生效"
 
-#: src/prefs/rulePage.js:179
+#: src/prefs/rulePage.js:181
 msgid "Import from Clipboard"
 msgstr "从剪贴板导入"
 
-#: src/prefs/rulePage.js:180
+#: src/prefs/rulePage.js:182
 msgid "Export to Clipboard"
 msgstr "导出到剪贴板"
 
-#: src/prefs/rulePage.js:186 src/prefs/rulePage.js:189
+#: src/prefs/rulePage.js:188 src/prefs/rulePage.js:191
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs/rulePage.js:201
+#: src/prefs/rulePage.js:203
 msgid "Corrections"
 msgstr "误判修正"
 
 #
-#: src/prefs/rulePage.js:202
+#: src/prefs/rulePage.js:204
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按窗口种类生效；开关修正其中一个轴的自动判断"
 
-#: src/prefs/rulePage.js:238
+#: src/prefs/rulePage.js:240
 msgid "Use the button above to pick a window that is decorated incorrectly"
 msgstr "点击上方按钮，选取装饰不正确的窗口"
 
@@ -281,13 +305,13 @@ msgstr "点击上方按钮，选取装饰不正确的窗口"
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "开启后修正此类窗口的自动判断"
 
-#: src/prefs/ruleUi.js:125
+#: src/prefs/ruleUi.js:126
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "选取自窗口“%s”"
 
 #. Translators: Closes the error dialog.
-#: src/prefs/ruleUi.js:136
+#: src/prefs/ruleUi.js:137
 msgid "Close"
 msgstr "关闭"
 

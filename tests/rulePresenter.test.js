@@ -11,6 +11,7 @@ import {
     isDecoratableKind,
     keyAxisCapabilities,
     neverDecorated,
+    axisAutomaticState,
     axisUnavailableReason,
     ruleSummaryText,
     windowTypeNoun,
@@ -75,6 +76,34 @@ describe('rulePresenter', () => {
                 has_ssd: true,
             });
             expect(ssdCaps[RuleAxis.RESIZE]).toBeFalse();
+        });
+    });
+
+    describe('axisAutomaticState', () => {
+        // The switch reverses the automatic decision, so the row says what off means.
+        const props = extra => ({window_type: String(WindowType.NORMAL), ...extra});
+
+        it('reads all three axes off a fixed size, which turns both decorations off', () => {
+            const fixed = props({allows_resize: false, has_ring: false, has_ssd: false});
+            expect(axisAutomaticState(RuleAxis.CORNERS, fixed)).toBe('Automatic: no corners');
+            expect(axisAutomaticState(RuleAxis.SHADOW, fixed)).toBe('Automatic: no shadow');
+            expect(axisAutomaticState(RuleAxis.RESIZE, fixed)).toBe('Automatic: edges fixed');
+        });
+
+        it('turns the shadow off behind a system frame or a declared ring', () => {
+            expect(axisAutomaticState(RuleAxis.SHADOW, props({has_ssd: true})))
+                .toBe('Automatic: no shadow');
+            expect(axisAutomaticState(RuleAxis.SHADOW, props({has_ring: true})))
+                .toBe('Automatic: no shadow');
+            expect(axisAutomaticState(RuleAxis.CORNERS, props({allows_resize: true})))
+                .toBe('Automatic: corners drawn');
+            expect(axisAutomaticState(RuleAxis.RESIZE, props({allows_resize: true})))
+                .toBe('Automatic: edges draggable');
+        });
+
+        it('answers nothing for a key that cannot say, or an unknown axis', () => {
+            expect(axisAutomaticState(RuleAxis.CORNERS, null)).toBeNull();
+            expect(axisAutomaticState('nope', props({}))).toBeNull();
         });
     });
 

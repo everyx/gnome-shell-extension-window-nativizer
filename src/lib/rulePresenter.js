@@ -56,6 +56,30 @@ export function isDecoratableKind(properties) {
         isDecoratableWindowType(Number(properties.window_type ?? WindowType.NORMAL));
 }
 
+/**
+ * What the axis does while the switch is off, which is the automatic decision the switch reverses:
+ * an "adds" or "removes" label would be a claim about the pair, not the rule. Everything it reads
+ * travels in the rule key; null where the key cannot answer.
+ */
+export function axisAutomaticState(axis, properties = null) {
+    if (!properties)
+        return null;
+    const fixed = properties.allows_resize === false;
+    const framed = fixed || Boolean(properties.has_ssd);
+
+    switch (axis) {
+    case RuleAxis.CORNERS:
+        return fixed ? _('Automatic: no corners') : _('Automatic: corners drawn');
+    case RuleAxis.SHADOW:
+        return framed || properties.has_ring === true
+            ? _('Automatic: no shadow') : _('Automatic: shadow drawn');
+    case RuleAxis.RESIZE:
+        return framed ? _('Automatic: edges fixed') : _('Automatic: edges draggable');
+    default:
+        return null;
+    }
+}
+
 /** The shared capability answer, read through a rule key's own field names. */
 export function keyAxisCapabilities(properties) {
     return ruleAxisCapabilities({
