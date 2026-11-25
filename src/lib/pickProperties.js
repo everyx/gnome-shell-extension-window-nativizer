@@ -22,6 +22,10 @@ export function extractWindowProperties(reading, wmClassOverride = null) {
         isMaximized: boolString(reading.isMaximized),
         isFullscreen: boolString(reading.isFullscreen),
         hasTileMatch: boolString(reading.hasTileMatch),
+        // Null means the read was skipped (a ring or an SSD frame), which is not "no alpha".
+        bufferAlpha: reading.bufferAlpha === null || reading.bufferAlpha === undefined
+            ? 'unknown'
+            : boolString(reading.bufferAlpha),
     };
 
     const f = reading.frameRect;

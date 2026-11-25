@@ -44,6 +44,7 @@ describe('extractWindowProperties', () => {
             isMaximized: 'false',
             isFullscreen: 'false',
             hasTileMatch: 'false',
+            bufferAlpha: 'unknown',
         });
     });
 
@@ -68,6 +69,7 @@ describe('extractWindowProperties', () => {
             isMaximized: 'false',
             isFullscreen: 'false',
             hasTileMatch: 'false',
+            bufferAlpha: 'unknown',
         });
     });
 
@@ -163,6 +165,7 @@ describe('extractWindowProperties', () => {
             isMaximized: 'false',
             isFullscreen: 'false',
             hasTileMatch: 'false',
+            bufferAlpha: 'unknown',
         });
     });
 
