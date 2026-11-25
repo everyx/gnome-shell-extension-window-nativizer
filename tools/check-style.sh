@@ -39,6 +39,14 @@ if grep -rnE '^[[:space:]]*(//|\*|/\*)' src --include='*.js' \
     exit 1
 fi
 
+# A doc comment belongs to the declaration below it. Two in a row means a new declaration was
+# inserted between one and its subject, which leaves the first describing the wrong thing. Made
+# twice here before this rule existed.
+if ! node tools/find-stacked-comments.mjs; then
+    echo "[check-style] Two doc comments stacked: one of them describes the wrong declaration." >&2
+    exit 1
+fi
+
 # The one prose-adjacent rule that is lexical enough to grep: a comment may not name the machinery
 # that judges the code - a rule id, a lint tool, a script, a test runner. Those belong to the check
 # that enforces them, and they rot the moment the tool is renamed. This is narrower than "watch the
