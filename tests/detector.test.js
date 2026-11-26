@@ -228,6 +228,19 @@ describe('inferDecorationBaseline', () => {
         expect(r.shadow).toBeFalse();
     });
 
+    it('a utility window is one of the kinds a client paints for itself', () => {
+        // Navicat's palette: X11, UTILITY, no extents, alpha, and its own rounded frame - the same
+        // shape as the WPS dialog, which the dialog types alone would not reach.
+        const r = inferDecorationBaseline({
+            isX11: true,
+            windowType: WindowType.UTILITY,
+            bufferAlpha: true,
+            ...marginsFromRects(424, 428, 424, 428),
+        });
+        expect(r.corners).toBeFalse();
+        expect(r.reason).toBe('unverified-corners');
+    });
+
     it('the reading needs the dialog type, no declared extents and an alpha buffer', () => {
         // Alpha says the shadow is ours, which is what keeps a bare X11 window's corners on.
         const flat = {...marginsFromRects(968, 443, 968, 443), bufferAlpha: true};

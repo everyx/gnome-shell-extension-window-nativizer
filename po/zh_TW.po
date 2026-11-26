@@ -190,8 +190,10 @@ msgstr "強制所有視窗顯示概覽圓角"
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
-msgstr "XWayland 視窗，以及少數為保持清晰留成直角的 Wayland 視窗，也畫上圓角（代價是更模糊）"
-"為清晰而保持直角的 XWayland 及極少數 Wayland 視窗也畫上圓角（代價是更模糊）"
+msgstr ""
+"XWayland 視窗，以及少數為保持清晰留成直角的 Wayland 視窗，也畫上圓角（代價是"
+"更模糊）為清晰而保持直角的 XWayland 及極少數 Wayland 視窗也畫上圓角（代價是更"
+"模糊）"
 
 #: src/prefs/clipboardActions.js:23
 msgid "No corrections to export"

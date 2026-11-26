@@ -79,18 +79,20 @@ function bareX11ShadowOwner(bufferAlpha) {
     return 'unknown';
 }
 
+/** The kinds that carry their own chrome: dialogs and utility windows, never a normal window. */
+const UNVERIFIED_KINDS = [WindowType.DIALOG, WindowType.MODAL_DIALOG, WindowType.UTILITY];
+
 /**
- * A dialog with no declared extents that carries alpha: it may be painting its own corners, and
- * nothing here can see whether it does - a format says nothing about pixels, and an extension
- * cannot read them. The dialog type keeps this off a bare window, which is the population the
- * decoration exists for.
+ * A dialog or utility window with no declared extents that carries alpha: it may be painting its
+ * own corners, and nothing can see whether it does - a format says nothing about pixels. The kind
+ * is what keeps this off a normal window, the population the decoration exists for.
  */
 export function isUnverifiedDialog({
     hasSsd = false, windowType = WindowType.NORMAL, sideW = 0, sideH = 0, hasAlpha = false,
 } = {}) {
     if (hasSsd || sideW > 0 || sideH > 0 || !hasAlpha)
         return false;
-    return windowType === WindowType.DIALOG || windowType === WindowType.MODAL_DIALOG;
+    return UNVERIFIED_KINDS.includes(windowType);
 }
 
 /** Widest declared margin per axis, logical px; the alpha read answers two questions. */

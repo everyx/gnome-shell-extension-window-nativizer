@@ -152,25 +152,30 @@ filling the buffer they are handed). So this is not a predicate waiting to be im
 case rules exist for - and a per-toolkit or per-protocol signal would make it worse, because all
 nine would land on the same side of it.
 
-A fourth reading stands both axes down: a **dialog with no declared extents that carries alpha**
-(`unverified-corners`). The name says what it is. A buffer's format is not its pixels: an alpha
-channel is what a corner the client rounded itself *may* look like from here, and it says nothing at
-all about a body that is opaque throughout - and an extension cannot read the pixels to tell
-(measured: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return without
-filling the buffer they are handed, so the only readable fact is the format; that read is cached
-for X11 alone, where a client's depth fixes it for the actor's life, while a Wayland surface can
-attach a different format on any commit). The reading is a
-policy, not a detection, and it is asked one way only: decorating costs a ring outside a ring
-someone else drew, abstaining costs a square dialog, which is what the window looks like without us
-and which one rule reverses. An opaque dialog of the same shape is left alone entirely, since
-nothing in it can be a corner we did not draw.
+A fourth reading stands both axes down: a **dialog or utility window with no declared extents that
+carries alpha** (`unverified-corners`). The name says what it is. A buffer's format is not its
+pixels: an alpha channel is what a corner the client rounded itself *may* look like from here, and
+it says nothing at all about a body that is opaque throughout - and an extension cannot read the
+pixels to tell (measured: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return
+without filling the buffer they are handed, so the only readable fact is the format; that read is
+cached for X11 alone, where a client's depth fixes it for the actor's life, while a Wayland surface
+can attach a different format on any commit). The reading is a policy, not a detection, and it is
+asked one way only: decorating costs a ring outside a ring someone else drew, abstaining costs a
+square window, which is what the window looks like without us and which one rule reverses.
 
-Two of its inputs look removable and are not. Without the **dialog type** the same test strips the
+Two measured cases fix its shape. WPS's PDF export dialog, `968x443` at depth 32, declares no
+extents and paints its own corners, which our arc landed outside. Navicat's palette is the utility
+case, `424x428` at depth 32, declaring no extents and carrying the same self-drawn frame. Both are
+the kinds that carry their own chrome in practice.
+
+Three of its inputs look removable and none is. Without the **kind** the same rule strips the
 decoration from every bare window with an alpha buffer, which is the population this extension
-exists for - the suite says so, in the bare-XWayland cases. Without the **alpha** requirement it
-strips it from every dialog that declares nothing, including the plain square ones. The protocol
-makes no difference either way: what a client paints inside its buffer is not a protocol feature,
-and a Qt client-side dialog on Wayland is the same case as an X11 one, which is why both are asked.
+exists for - the suite says so, in the bare-XWayland cases; a normal window is deliberately outside
+it. Without the **alpha** requirement it strips it from every dialog that declares nothing, plain
+square ones included. Without the **extent** requirement it reaches windows that declared a ring,
+where the client has already said which shadow it paints. The protocol is not one of those inputs:
+what a client paints inside its buffer is not a protocol feature, and a Qt client-side dialog on
+Wayland is the same case as an X11 one.
 
 The shadow can be the reason to abstain too, and there a *reading* decides. Where a bare X11
 window's buffer cannot be read, the compositor's own shadow and ours cannot be told apart, and a
