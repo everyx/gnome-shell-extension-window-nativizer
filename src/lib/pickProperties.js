@@ -37,6 +37,30 @@ export function extractWindowProperties(reading, wmClassOverride = null) {
     return props;
 }
 
+/** A theme reply that guessed would be worse than one that says it could not tell. */
+function themeName(dark) {
+    if (typeof dark !== 'boolean')
+        return 'unknown';
+    return dark ? 'dark' : 'light';
+}
+
+/**
+ * What the machine and the extension were, so a report can be read without a second command. Every
+ * value is a string like the rest of the reply, and "unknown" is said rather than left out: a field a
+ * caller cannot see is a field the caller has to guess about.
+ */
+export function environmentProperties({
+    versionName = null, monitorScale = null, dark = null, highContrast = null, ruleState = null,
+} = {}) {
+    return {
+        extensionVersion: typeof versionName === 'string' && versionName ? versionName : 'unknown',
+        monitorScale: Number.isFinite(monitorScale) ? String(monitorScale) : 'unknown',
+        theme: themeName(dark),
+        highContrast: typeof highContrast === 'boolean' ? boolString(highContrast) : 'unknown',
+        ruleState: typeof ruleState === 'string' && ruleState ? ruleState : 'none',
+    };
+}
+
 /** Both read through the clip's own container rule, so the mirror and the applied phase compare. */
 export function extractPhaseProperties(win, St = null) {
     const mirror = getWindowSubpixelOffset(win, St);

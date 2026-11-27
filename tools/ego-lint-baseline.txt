@@ -9,9 +9,11 @@ lifecycle/untracked-timeout	lib/nativeLikeCorners.js	1
 metadata/future-shell-version	-	1
 # Over the 8,000 ceiling, all of it the corner probe: the reader, the verdict, the async state
 # machine, its cache, and the gate that refuses to sample a clip of ours (a sample taken after the
-# pass drew reports our own cut as the client's). `pnpm run check:volume` reads the line below as its
-# budget, so the gate and this decision agree; the next feature has to pay for its own lines.
-# accepted-overage: 461
+# pass drew reports our own cut as the client's). The pick reply's environment fields are the other
+# part: a report is one paste instead of four questions, paid for once. `pnpm run check:volume` reads
+# the line below as its budget, so the gate and this decision agree; the next feature has to pay for
+# its own lines.
+# accepted-overage: 504
 quality/code-volume	-	1
 quality/destroy-try-catch	lib/inspector.js	2
 quality/destroy-try-catch	lib/manager.js	1

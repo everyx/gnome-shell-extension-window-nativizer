@@ -177,6 +177,9 @@ export class InspectorService {
             properties.cornerAlpha = this._manager.cornerProbe?.lastSampleText(win) ?? 'unavailable';
         }
 
+        if (answer?.environment)
+            Object.assign(properties, answer.environment);
+
         // Display only, not used in rule identity matching.
         const title = getWindowDisplayTitle(win);
         if (title)
