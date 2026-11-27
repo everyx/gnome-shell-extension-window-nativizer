@@ -148,6 +148,22 @@ be printed whole. A failure or an interrupt keeps that file and names its path, 
 deletes the output of its own failure costs a re-run to learn what it already knew; a green run's
 file is removed. The path is `<tmpdir>/window-nativizer-<hook>.<pid>.log`, one per run.
 
+## What an agent must not do
+
+Four actions reach outside this tree, and no check can catch them, so they are written down instead of
+being left to judgement. Ask first, every time, however small the change looks - and say in the PR
+which of the four the change touched, or that none did.
+
+| Action | Why it is not ours to take |
+|---|---|
+| Driving the real desktop session instead of the nested one | `tools/dev.sh` exists because a test driving the developer's own shell can log them out of it; its first safety rule is that the desktop's `gnome-shell` is never signalled, evaluated against, or joined over its bus |
+| Publishing: a tag, the AUR package, extensions.gnome.org | A release is a promise to users that outlives the branch it was cut from |
+| Force-pushing a shared branch | Rewriting history someone has pulled destroys their work without telling them |
+| Deleting the installed extension or the user's dconf | The extension runs inside the developer's session; that install directory and those settings are their desktop, not our test fixture |
+
+Everything else - editing files, running the check chain, opening or rebasing your own branch, using
+the tools in `tools/` - proceed without asking, then report what you observed.
+
 ## Commit messages
 
 Conventional Commits, matching the history: `type(scope): verb …`, no trailing
