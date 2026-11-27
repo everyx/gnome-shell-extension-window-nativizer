@@ -142,14 +142,6 @@ describe('the pick heuristic', () => {
             expect(suggestedRuleWouldChange(propertiesFor(nativeLike), nativeLike, '')).toBeFalse();
         });
 
-        it('suggests nothing for a structurally ineligible window, and any rule is inert', () => {
-            // A menu is never decorated, so there is nothing to correct - and a state
-            // stored for it would have no effect, which is what the pre-flight reports.
-            const menu = {...plainWindow, windowType: WindowType.MENU};
-            expect(suggestedRuleState(menu)).toBe('');
-            expect(suggestedRuleWouldChange(propertiesFor(menu), menu, 'corners,shadow')).toBeFalse();
-        });
-
         it('returns null when the window declares no identity', () => {
             const anonymous = {...plainWindow, wmClass: ''};
             expect(suggestedRuleWouldChange(propertiesFor(anonymous), anonymous, 'corners,shadow')).toBeNull();

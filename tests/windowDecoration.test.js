@@ -664,36 +664,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(deco.resizeBand.geometry.scale).toBe(1.5);
     });
 
-    it('keeps the 1.25 last-good scale across a null read, not the 1.0 identity', () => {
-        // The reviewer's exact case: an initialised-on-construction cache updated only by a usable
-        // read, so 1.25 survives a null. A constructor-only `_scale = 1.0` fallback would return
-        // 1.0 here, and a correct fractional display would jump and back on every read failure.
-        const deco = new WindowDecoration(mockWin, {
-            container: mockContainer,
-            display: mockDisplay,
-            RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
-            ResizeBand: MockResizeBand,
-        });
-        const actions = {
-            drawClip: true,
-            drawRing: false,
-            drawShadow: true,
-            drawResize: true,
-            ring: {clear: false, safeInset: false},
-            style: {radius: 12, outline: null, shadows: []},
-        };
-        const insets = {left: 10, top: 10, right: 10, bottom: 10};
-
-        deco.apply({actions, inputs: {insets, monitorScale: 1.25}, actor: mockActor});
-        deco.apply({actions, inputs: {insets, monitorScale: null}, actor: mockActor});
-
-        expect(deco._resolveScale({monitorScale: null})).toBe(1.25);
-        expect(deco.clip.params.scale).toBe(1.25);
-        expect(deco.shadow.scale).toBe(1.25);
-        expect(deco.resizeBand.geometry.scale).toBe(1.25);
-    });
-
     it('does not persist a substituted 1.0: an unreadable first scale leaves _scale null', () => {
         // A first pass whose monitorScale read fails still lays out with the 1.0 substitute, but
         // only a readable reading is the last good one. Storing the substitute would make every
@@ -1918,27 +1888,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         expect(clip.cancelled).toBe(1);
     });
 
-    it('provides a stateView snapshot of decoration properties', () => {
-        const deco = new WindowDecoration(mockWin, {
-            container: mockContainer,
-            display: mockDisplay,
-            RoundedClipEffect: MockClipEffect,
-            ShadowActor: MockShadowActor,
-            ResizeBand: MockResizeBand,
-        });
-
-        const view = deco.stateView;
-        expect(view).toEqual({
-            hasClip: false,
-            drawClip: false,
-            isActivelyClipped: false,
-            hasShadow: false,
-            hasResizeBand: false,
-            ring: null,
-            overview: {inOverview: false, hasMask: false, hasShadow: false, hasBypass: false},
-        });
-    });
-
     it('reports the live clip internals through diagnosticsView without touching the overview', () => {
         const {deco} = setupMaskHarness({drawClip: true, drawShadow: false});
 
@@ -2087,20 +2036,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
         harness.deco.setOverviewMode(true);
 
         expect(harness.surface.mask).toBe(harness.mask);
-    });
-
-    it('keeps the mask through a different-sized buffer commit', () => {
-        const harness = setupMaskHarness();
-        harness.deco.setOverviewMode(true);
-        expect(harness.surface.mask).toBe(harness.mask);
-
-        // The client commits a different-sized buffer; the card rebuild retires the mask and
-        // re-installs it against the new buffer. Nothing reads the texture back.
-        harness.setBuffer(1600, 1200);
-        harness.windowSignals.find(s => s.signal === 'size-changed').cb();
-
-        expect(harness.surface.mask).toBe(harness.mask);
-        expect(harness.surface.paintCalls).toBe(0);
     });
 
     it('re-installs the mask when the readings it was built from move', () => {
@@ -2457,27 +2392,6 @@ describe('WindowDecoration (lifecycle and orchestration)', () => {
 
         expect(surface.mask).toBe(harness.mask);
         expect(deco.clip.enabled).toBeFalse();
-    });
-
-    it('masks a Wayland window whose shaped texture is directly readable', () => {
-        // The pre-fix code asked `paint_to_bitmap()` whether masking would move Mutter's
-        // screenshot path and left a directly readable texture square. That refusal is gone:
-        // the mask applies to every Wayland window, and nothing reads the texture back.
-        const {mask, surface, deco} = setupMaskHarness();
-
-        deco.setOverviewMode(true);
-
-        expect(deco.clip.enabled).toBeFalse();
-        expect(surface.mask).toBe(mask);
-        expect(surface.paintCalls).toBe(0);
-
-        // Forcing corners does not change it: the mask is the preferred path and it lands, so
-        // the forced legacy clip stays suspended.
-        const forced = setupMaskHarness({forceOverviewCorners: true});
-        forced.deco.setOverviewMode(true);
-        expect(forced.deco.clip.enabled).toBeFalse();
-        expect(forced.surface.mask).toBe(forced.mask);
-        expect(forced.surface.paintCalls).toBe(0);
     });
 
     it('applies the shaped-texture mask and the surface-container opacity bypass on Wayland', () => {

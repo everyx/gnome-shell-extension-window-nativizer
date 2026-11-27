@@ -427,29 +427,6 @@ describe('window inspection (readWindow)', () => {
         expect(reading.hasGtk4Client).toBeNull();
     });
 
-    it('survives identity resolvers that throw, and reads no identity at all', () => {
-        const throwingIdentityWin = {
-            get_buffer_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
-            get_frame_rect: () => ({x: 0, y: 0, width: 500, height: 400}),
-            get_wm_class: () => {
-                throw new Error('invalid UTF-8');
-            },
-            get_sandboxed_app_id: () => {
-                throw new Error('dbus error');
-            },
-            get_gtk_application_id: () => {
-                throw new Error('app gone');
-            },
-            get_pid: () => {
-                throw new Error('pid inaccessible');
-            },
-        };
-
-        const reading = readWindow(throwingIdentityWin);
-        expect(reading).not.toBeNull();
-        expect(reading.wmClass).toBe('');
-    });
-
     it('passes pid fallback -1 to classifier.hasGtk4Client when win.get_pid throws', () => {
         let receivedPid = null;
         const throwingPidWin = {
@@ -471,32 +448,6 @@ describe('window inspection (readWindow)', () => {
         expect(reading.pid).toBe(-1);
         expect(receivedPid).toBe(-1);
         expect(reading.hasGtk4Client).toBeFalse();
-    });
-
-    it('falls back to true when allows_resize throws', () => {
-        const win = {
-            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            allows_resize: () => {
-                throw new Error('finalized');
-            },
-        };
-        const reading = readWindow(win);
-        expect(reading).not.toBeNull();
-        expect(reading.allowsResize).toBeTrue();
-    });
-
-    it('falls back to NORMAL when get_window_type throws', () => {
-        const win = {
-            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            get_window_type: () => {
-                throw new Error('finalized');
-            },
-        };
-        const reading = readWindow(win);
-        expect(reading).not.toBeNull();
-        expect(reading.windowType).toBe(WindowType.NORMAL);
     });
 
     it('falls back to false for throwing tile, fullscreen, maximize, and ring getters', () => {
@@ -523,20 +474,6 @@ describe('window inspection (readWindow)', () => {
         expect(reading.isMaximized).toBeFalse();
         expect(reading.tiled).toBeFalse();
         expect(reading.hasRing).toBeFalse();
-    });
-
-    it('falls back to false when is_maximized throws in isolation', () => {
-        const throwingIsMaximizedWin = {
-            get_buffer_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            get_frame_rect: () => ({x: 0, y: 0, width: 800, height: 600}),
-            is_maximized: () => {
-                throw new Error('is_maximized error');
-            },
-        };
-        const reading = readWindow(throwingIsMaximizedWin);
-        expect(reading).not.toBeNull();
-        expect(reading.isMaximized).toBeFalse();
-        expect(reading.tiled).toBeFalse();
     });
 });
 

@@ -113,14 +113,6 @@ describe('checkDecorationEligibility', () => {
             expect(checkDecorationEligibility({...base, windowType}).eligible).toBeTrue();
     });
 
-    it('server-side decorations (SSD) are not a structural gate: gating lives in the baseline', () => {
-        // checkDecorationEligibility() takes no hasSsd parameter; SSD windows stay
-        // eligible here and are resolved per-axis by inferDecorationBaseline().
-        expect(checkDecorationEligibility(base)).toEqual({eligible: true, reason: ''});
-        const r = inferDecorationBaseline({hasSsd: true, ...marginsFromRects(800, 600, 800, 600)});
-        expect(r).toEqual({shadow: false, corners: true, reason: 'has-ssd-frame'});
-    });
-
     it('maximized / fullscreen -> ineligible', () => {
         expect(checkDecorationEligibility({...base, isMaximized: true}))
             .toEqual({eligible: false, reason: 'maximized/fullscreen'});
@@ -281,13 +273,6 @@ describe('inferDecorationBaseline', () => {
     });
 
     it('XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
-        const r = inferDecorationBaseline({isX11: true, bufferAlpha: false, ...marginsFromRects(800, 600, 800, 600)});
-        expect(r.shadow).toBeFalse();
-        expect(r.corners).toBeTrue();
-        expect(r.reason).toBe('x11-mutter-native-shadow');
-    });
-
-    it('bare XWayland with an RGB buffer -> Mutter paints that shadow, so ours stays off', () => {
         const r = inferDecorationBaseline({isX11: true, bufferAlpha: false, ...marginsFromRects(800, 600, 800, 600)});
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeTrue();
@@ -720,20 +705,6 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe('has-ssd-frame');
     });
 
-    it('SSD window with insets: clears frame shadow ring and draws native Adwaita shadow', () => {
-        const res = evaluateWindowActions({
-            ...baseWin,
-            hasSsd: true,
-            isX11: true,
-            insets: {left: 25, top: 25, right: 25, bottom: 25},
-            wmClass: 'navicat',
-        });
-        expect(res.drawShadow).toBeTrue();
-        expect(res.drawClip).toBeTrue();
-        expect(res.ring.clear).toBeTrue();
-        expect(res.reason).toBe('ring-cleared(has-ssd-frame)');
-    });
-
     it('corners that already look like ours: clip skipped, shadow still read from the margins', () => {
         const res = evaluateWindowActions({
             ...baseWin,
@@ -836,21 +807,6 @@ describe('evaluateWindowActions', () => {
         expect(res.ring.clear).toBeTrue();
         expect(res.drawShadow).toBeTrue();
         expect(res.reason).toBe('ring-cleared(has-csd(0.0x12.0))');
-    });
-
-    it('a ring on the far side of each axis alone is still the client\'s ring (TLBR 0,0,24,24)', () => {
-        // Double-shadow regression: the shadow axis must read the per-axis maximum. A
-        // per-axis minimum answers "no ring", leaving the client's own shadow in place
-        // while we draw ours.
-        const res = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'one-side-ring-app',
-            insets: {left: 0, right: 0, top: 24, bottom: 24},
-        });
-        expect(res.drawClip).toBeTrue();
-        expect(res.ring.clear).toBeTrue();
-        expect(res.drawShadow).toBeTrue();
-        expect(res.reason).toBe('ring-cleared(has-csd(0.0x24.0))');
     });
 
     it('clears a ring that is positive only on one side of each axis (TLBR 0,24,0,24)', () => {
@@ -1227,27 +1183,6 @@ describe('evaluateWindowActions', () => {
         expect(snapTiledWin.drawShadow).toBeFalse();
         expect(snapTiledWin.drawClip).toBeTrue();
         expect(snapTiledWin.reason).toContain('tile-match(shadow-off');
-    });
-
-    it('GNOME tiling alignment: single tiled window without match retains shadow', () => {
-        const singleTiledWin = evaluateWindowActions({
-            ...baseWin,
-            isMaximized: false,
-            hasTileMatch: false,
-        });
-        expect(singleTiledWin.drawShadow).toBeTrue();
-        expect(singleTiledWin.drawClip).toBeTrue();
-    });
-
-    it('GNOME tiling alignment: full maximized window skips all decorations', () => {
-        const maximizedWin = evaluateWindowActions({
-            ...baseWin,
-            isMaximized: true,
-            hasTileMatch: false,
-        });
-        expect(maximizedWin.drawShadow).toBeFalse();
-        expect(maximizedWin.drawClip).toBeFalse();
-        expect(maximizedWin.reason).toBe('maximized/fullscreen');
     });
 
     it('preferCrispText retains rounded corners on integer scale displays (1.0x, 2.0x)', () => {

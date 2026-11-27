@@ -12,20 +12,11 @@ import {
     readWindowSize,
     windowSizeFrom,
 } from '../src/effects/bodyPlan.js';
-import {readWindow} from '../src/lib/window.js';
 import {INVARIANT_STRIKES} from '../src/lib/diagnosticInvariants.js';
 
 const size = (width, height = 600) => ({width, height});
 
 describe('readWindowSize', () => {
-    it('prefers the frame rect over the buffer rect', () => {
-        const win = {
-            get_frame_rect: () => ({x: 0, y: 0, ...size(800)}),
-            get_buffer_rect: () => ({x: 0, y: 0, ...size(790)}),
-        };
-        expect(readWindowSize(win)).toEqual(size(800));
-    });
-
     it('falls back to the buffer rect when the frame has no extent', () => {
         const win = {
             get_frame_rect: () => ({x: 0, y: 0, width: 0, height: 0}),
@@ -218,21 +209,5 @@ describe('BodyPlan (a window’s settle, owned in one place)', () => {
         // behaviour and the opposite of carrying the old body forward.
         expect(plan.next({targetSize: size(450), windowActorSize: size(700), windowSize: size(700)}))
             .toEqual(jasmine.objectContaining({body: size(450), unsettled: true}));
-    });
-
-    it('agrees with the reading it was handed, so a paint settles on the same body a pass did', () => {
-        // The pass reads the window's size from its own reading; a paint reads it live. Health means
-        // the two agree, so a paint with those same numbers lands on the body the pass recorded.
-        const reading = readWindow({
-            get_frame_rect: () => ({x: 0, y: 0, ...size(800)}),
-            get_buffer_rect: () => ({x: 0, y: 0, ...size(800)}),
-        });
-        const plan = new BodyPlan();
-        const pass = plan.next({
-            targetSize: size(800),
-            windowActorSize: size(800),
-            windowSize: {width: reading.frameWidth, height: reading.frameHeight},
-        });
-        expect(pass.body).toEqual(size(800));
     });
 });

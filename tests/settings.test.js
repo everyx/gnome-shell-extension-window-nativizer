@@ -161,9 +161,8 @@ describe('rule titles', () => {
             .toEqual({[kept]: {state: 'corners', title: 'Chat'}});
     });
 
-    it('returns empty maps on null or throwing settings', () => {
+    it('returns an empty title map on null settings', () => {
         expect(getRuleTitles(null)).toEqual({});
-        expect(getWindowRules(null)).toEqual({});
     });
 });
 

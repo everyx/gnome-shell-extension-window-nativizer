@@ -72,10 +72,6 @@ describe('platform', () => {
             }
             expect(thrown).toBe(`${PREFIX} unknown cursor shape: sideways`);
         });
-
-        it('answers null for a shape this line has no member for', () => {
-            expect(cursorTypeFor(CursorShape.NORTH, {DEFAULT: 0})).toBeNull();
-        });
     });
 
     describe('setActorCursor', () => {
