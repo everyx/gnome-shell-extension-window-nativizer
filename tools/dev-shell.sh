@@ -85,6 +85,8 @@ for i in $(seq 1 40); do
             '(async () => {
                 const Main = await import("resource:///org/gnome/shell/ui/main.js");
                 const GLib = imports.gi.GLib;
+                if (Main.layoutManager?._startingUp)
+                    return JSON.stringify({settled: false});
                 global.window_group.show();
                 if (Main.overview.visible) Main.overview.hide();
                 for (let j = 0; j < 30; j++) {
