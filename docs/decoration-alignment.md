@@ -550,17 +550,10 @@ Four things are asserted, and the split matters when one fails:
 - **flatness** - every body row the profile samples is flat to `BODY_FLAT_TOLERANCE` (0 grey levels),
   which is what separates a decoration from a body the clip is deforming.
 
-The tool used to gate on a stored copy of *our own* earlier profile. That can only ever say "we
-changed": when the shadow maths was corrected on 2026-10-04 the stored profile stopped matching, the
-run failed for a week without anyone running it, and the failure said nothing about whether the new
-output was right - it was, to within a grey level of libadwaita, while the stored profile sat 9 grey
-levels away from it. A reference of our own past numbers is blind in the other direction too: it
-cannot notice that we never matched libadwaita to begin with. Nothing is stored for later at all, in
-either direction: both witnesses compare live reads of the same session.
+Nothing is stored for later comparison: both witnesses compare live reads of the same session against `libadwaita`, avoiding stale baseline drift.
 
 **This check needs a session.** It runs from the pre-commit hook (`run-checks` skips it only on a
-machine without `gnome-shell`), which is what closes the gap that once let it fail for a week
-unnoticed; CI cannot run it, because CI has no session.
+machine without `gnome-shell`); CI cannot run it, because CI has no session.
 
 ### GTK3 CSD Pixel-Level Verification in E2E
 
@@ -601,7 +594,7 @@ yielded a ~2px cover on the integer branch.
 
 ## Five rules this work generalised
 
-All four were learned by getting them wrong in the edge and overview work above, and none is
+All five were learned by getting them wrong in the edge and overview work above, and none is
 specific to this decoration.
 
 **A value defined on the far side of a rasterisation boundary must not be folded into geometry
