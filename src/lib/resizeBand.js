@@ -140,7 +140,6 @@ export function pressIntent({state, grabMods, raiseOnClick, allowsResize, allows
     return {raise: unmodified && raiseOnClick, grab};
 }
 
-/** @returns Every surface present, all null */
 export function emptyBands() {
     const bands = {};
     for (const region of RESIZE_BAND_REGIONS)
@@ -185,7 +184,6 @@ export function computeResizeBandsInto(bands, {
     return changed;
 }
 
-/** @param params - see `computeResizeBandsInto`; one rect per side, null where it is empty. */
 export function computeResizeBands(params) {
     const bands = emptyBands();
     computeResizeBandsInto(bands, params);

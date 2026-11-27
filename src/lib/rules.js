@@ -102,7 +102,6 @@ export const FINGERPRINT_FIELDS = [
     boolField('has_ssd', 'hasSsd', false),
 ];
 
-/** One boolean attribute's entry: grammar, fallback, and the two same-direction converters. */
 function boolField(name, key, fallback) {
     return {name, key, fallback, pattern: BOOL_FIELD, text: boolString, parse: raw => raw === 'true'};
 }
@@ -225,7 +224,6 @@ export function sanitizeWindowRules(rawRules = {}) {
     return clean;
 }
 
-/** Stores a state, canonicalised; a state with nothing reversed removes the key. */
 export function withRule(rules = {}, key, state) {
     const axes = parseRuleState(state);
     if (!axes)

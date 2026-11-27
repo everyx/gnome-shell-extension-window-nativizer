@@ -38,7 +38,7 @@ export function applyPassToClip(effect, pass) {
     effect.setBodyPlan(pass.bodyPlan);
 }
 
-/** Setter order is the actor's invariant: phase, target, plan, scale, then style last. */
+/** Applies pass to shadow; setter order is the actor's invariant (style last). */
 export function applyPassToShadow(actor, pass) {
     actor.setPhaseInTransform(pass.phaseInTransform);
     actor.setClipTarget(pass.clipTarget);

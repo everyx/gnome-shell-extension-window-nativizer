@@ -1,5 +1,3 @@
-/** The interactive pick: ask the extension over D-Bus, then turn its answer into a correction. */
-
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';

@@ -112,7 +112,6 @@ export function countSurfaceActorsCoveringBox(container, St = null) {
     }
 }
 
-/** An actor's allocation as a box, or null when it carries no positive size. */
 function actorBox(actor) {
     const {x = 0, y = 0, width = 0, height = 0} = actor ?? {};
     if (!(width > 0) || !(height > 0))
@@ -120,7 +119,6 @@ function actorBox(actor) {
     return {x, y, width, height};
 }
 
-/** Whether a child's box contains `box` on all four sides. */
 function coversBox(candidate, box) {
     if (!candidate)
         return false;

@@ -1,9 +1,4 @@
-/**
- * The signals one owner holds: connect through it, hand them all back in one call at teardown.
- *
- * The pair is what makes teardown correct: the id alone cannot be disconnected from, and the
- * object alone cannot say which id to drop.
- */
+/** Signal subscriptions owned by one caller, disconnected together at teardown. */
 
 export class Subscriptions {
     constructor() {

@@ -169,10 +169,6 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     dialog.present();
 }
 
-/**
- * One conflict's row: the labels a rule is known by, its two toggle columns, and the choice they
- * currently hold. The caller owns where the row goes and what its toggles notify.
- */
 function buildConflictRow(item, {installedApps, iconTheme}, onChoiceChanged) {
     const {key, existingState, importedState, existingTitle, importedTitle} = item;
     const {properties, appInfo, name} = resolveRuleDisplay(key, installedApps);

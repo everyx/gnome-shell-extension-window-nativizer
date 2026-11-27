@@ -41,9 +41,7 @@ const NO_GEOMETRY = Object.freeze({
     insets: ZERO_INSETS, bounds: null, boundsUnknown: false, scale: 1, constrainedEdges: null,
 });
 
-// `a === b` first: for a cache, absent on both reads as unchanged, which is a statement about this
-// comparison rather than about equality - platform/rect.js answers the latter, where an unreadable
-// side never equals anything.
+// `a === b` first: for a cache, absent on both reads as unchanged (unlike rectEquals).
 function sameBounds(a, b) {
     return a === b || (a && b && rectEquals(a, b));
 }
@@ -154,7 +152,6 @@ export const ResizeBand = GObject.registerClass({
         // Kept for `_directionForEvent()`, which resolves the pointer in the same container frame.
         this._frame = this._params.frame;
 
-        // Written in place into `this._bands`; the flag says whether any rect moved.
         const changed = computeResizeBandsInto(this._bands, {
             frame: this._params.frame,
             bounds: this._params.bounds,
@@ -249,7 +246,6 @@ export const ResizeBand = GObject.registerClass({
             focusWindow(win, event.get_time());
     }
 
-    /** Hands the grab to Mutter, or lets the press through. */
     _onButtonPress(event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
             return Clutter.EVENT_PROPAGATE;

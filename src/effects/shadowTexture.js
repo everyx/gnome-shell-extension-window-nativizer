@@ -14,7 +14,7 @@ const CLEAR_COLOR_BUFFER = 1; // Cogl BUFFER_BIT_COLOR (GIR omits enum)
 const OPAQUE_WHITE = new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
 
 const pipelines = new Map(); // styleKey -> Cogl.Pipeline with baked texture
-let destroyed = false; // sealed after destroy()
+let destroyed = false;
 // One line per episode, re-armed by a good bake; session-level because the cache is shared.
 const bakeDiagnostic = new Diagnostic(journal, 1);
 
@@ -28,7 +28,6 @@ export function reset() {
     bakeDiagnostic.reset();
 }
 
-/** The colour a style's layers are drawn in: the first that names one, else black. */
 function styleColor(shadows) {
     return shadows.find(s => s.color)?.color ?? [0, 0, 0];
 }

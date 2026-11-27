@@ -164,12 +164,7 @@ export class WindowDecoration {
         this._settlePass(read, winActor);
     }
 
-    /**
-     * Everything this pass reads, before anything is written: target, scale, witness, the plan it
-     * settles against, and the ring those compose into. Only the resolved target and the two inputs
-     * the overview reads later stay on `this`; the rest travels in the record, so no read can be
-     * reordered behind a write that would change it.
-     */
+    /** Reads all pass inputs before any write, so no read can be reordered behind a mutating write. */
     _readPass({
         actions, inputs, target = null, surfaceContainer = undefined,
         inOverview = false, forceOverviewCorners = false,

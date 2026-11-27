@@ -18,7 +18,6 @@ export function opaqueMask(context) {
     return mask;
 }
 
-/** Uploads the pure mask bytes as a Cogl texture matching the desktop clip's body geometry. */
 export function buildRoundedMask(context, geometry) {
     const mask = roundedMaskBytes(geometry);
     if (!mask)

@@ -29,7 +29,6 @@ export function readWindowSize(win) {
     return sizeOf(getWindowFrameRect(win)) ?? sizeOf(getWindowBufferRect(win));
 }
 
-/** The three reads one paint or relayout settles from, taken live. */
 export function readBodySizes(clipTarget, windowActor, win) {
     return {
         targetSize: readActorSize(clipTarget),

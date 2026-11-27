@@ -200,7 +200,6 @@ export const ShadowActor = GObject.registerClass({
         if (this.width <= 0 || this.height <= 0 || !currentStyle)
             return;
 
-        // Advance the blend to the drawn frame, then queue more frames while it runs.
         if (this._fade.advance())
             this.queue_redraw();
 

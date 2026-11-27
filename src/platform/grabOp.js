@@ -5,7 +5,6 @@ function resolveBackend() {
     return stage?.get_context?.()?.get_backend?.() ?? globalThis.global?.backend;
 }
 
-/** `get_sprite` is primary; `get_pointer_sprite` is the fallback when it is unavailable. */
 export function getPointerSprite(event) {
     const stage = globalThis.global?.stage;
     const backend = resolveBackend();
@@ -37,11 +36,7 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
 /** `GDesktopFocusMode`: 1 sloppy, 2 mouse (gdesktop-enums.h); 0 is click, and 3 is not defined. */
 const POINTER_FOCUS_MODES = [1, 2];
 
-/**
- * In the pointer modes Mutter focuses what the pointer is over, so a window whose edge the pointer
- * is on would already have focus - and the band is not part of that window's surface. A value this
- * does not recognise keeps click behaviour: taking focus is the risky side of the guess.
- */
+/** Pointer modes already focus the hovered window; unknown modes default to false to avoid stealing focus. */
 export function focusesOnPointer(meta = metaNamespace()) {
     return POINTER_FOCUS_MODES.includes(meta?.prefs_get_focus_mode?.());
 }
@@ -63,7 +58,6 @@ function metaNamespace() {
     }
 }
 
-/** The Meta namespace is a parameter, so which typelib is used is the caller's choice. */
 export function getResizeGrabOp(direction, meta = metaNamespace()) {
     const grabOp = meta?.GrabOp;
     if (!grabOp)

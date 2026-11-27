@@ -24,7 +24,6 @@ export function resolveClipTarget(win, actor, St = null, surfaceContainer = unde
         : surfaceContainer;
 
     const isX11 = getWindowClientType(win) === CLIENT_TYPE_X11;
-    // A foreign St.Widget injected ahead of the surface must never take the clip.
     const defaultTarget = isX11 ? getX11SurfaceChild(actor, St) ?? actor : actor;
 
     if (container) {
