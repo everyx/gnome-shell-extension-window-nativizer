@@ -8,39 +8,70 @@ tested without a session; the processes only gather inputs and apply results.
 
 | Module | Responsibility |
 |---|---|
-| `lib/clipTarget.js` | clip target resolution: window actor vs surface actor, skipping injected foreign widgets (e.g. Blur my Shell) and validating geometry |
-| `lib/detector.js` | whether a window needs decoration, and what a pass draws on each axis (pure) |
-| `lib/frame.js` | body-inside-actor geometry (pure) |
-| `lib/nativeLikeCorners.js` | process classification: asynchronous `/proc/<pid>/maps` inspection and caching for native Adwaita providers and GTK4 clients |
-| `lib/overviewDecoration.js` | the overview's own decoration: the shaped-texture corner mask, the preview opacity bypass, and the shadow clone |
-| `lib/rules.js` | the window-kind rule model: keys, matching, sanitising, and canonical rule evaluation (pure) |
-| `lib/pickWire.js` | the picker's D-Bus wire format: bus name/path, the interface XML, and the flag that selects the debug reply |
-| `lib/pickProperties.js` | the picker's window dictionary: what a window reports about itself, and the two phase reads |
-| `lib/pickDiagnostics.js` | the picker's debug reply: the decoration fields, the process classification, and the field-by-field guarding |
-| `lib/pickTarget.js` | the picker's hit test as a pure function of candidate readings |
-| `lib/pickSuggestion.js` | what a pick should correct: the axes a kind can be corrected on, the suggestion, and whether it would change anything (pure) |
-| `lib/pickHighlight.js` | the picker highlight's geometry: the border's outset box, its concentric corner, and the radius the window is expected to show (pure) |
-| `lib/snap.js` | grid snapping math and the 8-slice geometry layout (pure) |
-| `lib/style.js` | which decoration parameters a window state gets (pure) |
-| `lib/settings.js` | GSettings IO adapter |
-| `lib/resizeBand.js` | the resize band's hit strips and GTK's direction order (pure) |
-| `lib/resizeBandActor.js` | the resize band actor: one reactive child per strip, direction from the pointer, hover cursor and resize grab |
-| `lib/window.js` | reading `Meta.Window` properties, actor discovery, physical monitor scale, and geometry normalization |
-| `lib/windowDecoration.js` | single-window decoration lifecycle: the tri-axis actors, phased teardown, and the read-only state view |
-| `lib/windowTracking.js` | the windows a session drives: which signals wake a pass, how a burst coalesces into one, and the first-frame gate |
-| `lib/manager.js` | high-level orchestrator: global signal routing, focus/overview changes, decoration lifecycle, and the inspection surfaces |
-| `lib/inspector.js` | the interactive window picker and its D-Bus service |
-| `effects/shadowFade.js` | cubic-bezier transition curves and the interrupted cross-fade state machine (pure) |
-| `effects/clipParams.js` | the clip effect's upload decisions: which uniforms changed and when the cached frame is stale (pure) |
-| `effects/bodyPlan.js` | one window's settle: the reference points a pass advances, and the live reads both cuts settle from |
-| `effects/decorationPass.js` | one pass's value for the two cuts, and what each of them reads it as: the clip's parameters, the shadow's style |
-| `effects/overviewMaskBytes.js` | the overview corner mask's A_8 bytes, split from the Cogl upload (pure) |
-| `effects/` | rounded clipping, shadow geometry, the shadow actor, baked GPU shadow textures, and the overview's corner mask and shadow clone |
-| `effects/pendingSource.js` | a borrowed GLib source id: queue cancels the previous one, and only the id that is still current is cleared on the way out |
-| `platform/journal.js` | the journal: the one sink every line is written to and the one place the `[window-nativizer]` tag is added (zero-import leaf) |
-| `platform/numeric.js` | the GI-free upstream-numeric primitives the C mirrors share: C `roundf` and GSK's `gsk_rect_snap_direction` (pure) |
-| `platform/read.js` | the guarded read every platform accessor shares: the value, or the fallback when the call throws - `platform`, because `src/lib` may not be imported from here |
-| `platform/` | zero-side-effect platform library and ponyfills: unified encapsulation for all GNOME Shell, Mutter, and Clutter/Cogl API interactions across GNOME 50–51, plus the shared numeric core |
+| `extension.js` | entry point: builds/tears down `Manager` and `InspectorService` with idempotent enable guard |
+| `lib/appInfo.js` | application identity helpers (`wmClass`, sandboxed/GTK app id, sibling lookup) |
+| `lib/clipTarget.js` | clip target resolution: surface container vs window actor, skipping foreign widgets, geometry validation |
+| `lib/detector.js` | decoration eligibility and per-axis baseline + rule + policy decisions (pure) |
+| `lib/diagnosticInvariants.js` | edge-triggered per-episode diagnostic latches and formatting helpers |
+| `lib/frame.js` | body-inside-actor geometry and `flatSafeInsets` (pure) |
+| `lib/inspector.js` | interactive window picker, highlight overlay, and D-Bus service (`InspectorService`) |
+| `lib/manager.js` | session orchestrator: global signals, focus/overview transitions, decoration lifecycle, pick answers |
+| `lib/nativeLikeCorners.js` | process classification: async `/proc/<pid>/maps` probe and cache for libadwaita/libhandy clients |
+| `lib/offscreenBox.js` | FBO extent/origin reverse-derivation from actor size and real resource scale (pure) |
+| `lib/overviewDecoration.js` | overview mask eligibility, opacity bypass state, and shadow clone plan (pure) |
+| `lib/pickAnswer.js` | pick reply assembly: properties + suggestion + change check (pure) |
+| `lib/pickDiagnostics.js` | debug pick reply: decoration fields, cached process classification, field-by-field guarding |
+| `lib/pickHighlight.js` | picker highlight geometry: outset box, concentric corner, expected window radius (pure) |
+| `lib/pickProperties.js` | window snapshot dictionary and two-source phase extraction for D-Bus |
+| `lib/pickSuggestion.js` | pick correction suggestion and pre-flight would-change check (pure) |
+| `lib/pickTarget.js` | pure window hit-test over candidate readings |
+| `lib/pickWire.js` | picker D-Bus bus name, object path, interface XML, and `debug` flag parser |
+| `lib/resizeBand.js` | resize band hit strips and GTK first-match direction order (pure) |
+| `lib/resizeBandActor.js` | resize band actor: 4 reactive strips, pointer direction, hover cursor, resize grab |
+| `lib/rulePresenter.js` | human-readable kind sentences and axis labels for preferences |
+| `lib/rules.js` | window-kind rule model: `FINGERPRINT_FIELDS`, matching, sanitising, canonical state (pure) |
+| `lib/settings.js` | GSettings IO adapter for rules and display toggles |
+| `lib/shadowBake.js` | shared bake padding constants (`SHADOW_BAKE_ORIGIN`, `SHADOW_BAKE_EXTRA`) |
+| `lib/snap.js` | physical grid snapping, `clipFrameFor`, and 8-slice layout math (pure) |
+| `lib/style.js` | window state → decoration style parameters (pure) |
+| `lib/subscriptions.js` | signal subscription bag with tracked disconnect on teardown |
+| `lib/window.js` | `Meta.Window` snapshot reads, identity resolution, monitor scale, `reconcileOutcome` |
+| `lib/windowDecoration.js` | single-window decoration lifecycle: tri-axis actors, phased teardown, `diagnosticsView` |
+| `lib/windowTracking.js` | per-window signal coalescing, burst debounce, and first-frame gate |
+| `effects/bodyPlan.js` | per-window body settle state: reference points and between-pass holds |
+| `effects/clipEffect.js` | offscreen rounded-clip + 1px inner outline shader effect |
+| `effects/clipParams.js` | clip paint plan, uniform dirty checks, and body settle math (pure) |
+| `effects/decorationPass.js` | single-pass value object shared by clip and shadow |
+| `effects/overviewMask.js` | installs/clears `Meta.ShapedTexture` A_8 corner mask in overview |
+| `effects/overviewMaskBytes.js` | A_8 corner mask byte generator, decoupled from Cogl upload (pure) |
+| `effects/overviewShadow.js` | `Clutter.Clone` of `ShadowActor` mounted on overview window previews |
+| `effects/pendingSource.js` | borrowed GLib source id wrapper: auto-cancels previous, clears only current |
+| `effects/shadowActor.js` | sibling actor below window drawing the baked 8-slice texture with focus cross-fade |
+| `effects/shadowFade.js` | cubic-bezier transition curves and interrupted cross-fade state machine (pure) |
+| `effects/shadowGeometry.js` | shadow cast rect, slice UV/box layout, phase offset, undecided-state check (pure) |
+| `effects/shadowTexture.js` | baked GPU shadow texture cache and Cogl pipeline builder |
+| `platform/actorCursor.js` | capability-checked `Clutter.Actor.set_cursor_type` cursor mapping |
+| `platform/coglContext.js` | Cogl context lookup across Mutter/Shell versions |
+| `platform/display.js` | `global.display`, `global.stage`, `global.window_group`, active workspace queries |
+| `platform/grabOp.js` | `Meta.GrabOp` resize direction mapping |
+| `platform/journal.js` | single logging sink adding `[window-nativizer]` tag (zero-import leaf) |
+| `platform/monitor.js` | monitor geometry/scale reads and `resolveHighestScaleMonitorIndex` |
+| `platform/numeric.js` | GI-free upstream-numeric primitives (`roundHalfAwayFromZero`, GSK snap direction) |
+| `platform/read.js` | guarded platform accessor wrapper returning fallback on throw |
+| `platform/rect.js` | pure rectangle helpers (`rectEquals`, `sameSize`, `insetsFromRects`, etc.) |
+| `platform/shaderEffect.js` | shader base class bridge (`Shell.GLSLEffect` on 50, `Clutter.ShaderEffect` on 51) |
+| `platform/surfaceContainer.js` | structural `getSurfaceContainer`, foreign-widget filter, `countSurfaceActorsCoveringBox` |
+| `platform/uniformLocation.js` | shader uniform location cache/lookup |
+| `platform/window.js` | guarded `Meta.Window` getters (`frame_rect`, `buffer_rect`, `bufferAlpha`, etc.) |
+| `platform/windowActor.js` | window actor lookup and allocation reads |
+| `platform/windowPhase.js` | `getWindowSubpixelOffset` mirror and `getAppliedSubpixelPhase` read-back |
+| `prefs.js` | preferences entry point (`ExtensionPreferences`), wires rule page and display switches |
+| `prefs/clipboardActions.js` | clipboard import/export and validation for rules |
+| `prefs/conflictDialog.js` | import-conflict resolution dialog |
+| `prefs/rulePage.js` | `Adw.PreferencesPage` managing rule rows, pick button, and deferred rebuilds |
+| `prefs/ruleUi.js` | `Adw.ExpanderRow` rule row builder with axis switches and bundled symbolic icons |
+| `prefs/windowPicker.js` | D-Bus client calling `PickWindow(false)` with liveness guard |
+| `*.generated.js` | build-checked upstream constants/shaders (`adwaitaStyle`, `gtkRules`, `mutterRules`, `inspectorStyle`, `shadowShader`) |
 
 ## The two processes
 

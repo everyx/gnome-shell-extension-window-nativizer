@@ -17,9 +17,10 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
-| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `lint:ego`, `test`, and `check:decoration` |
+| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `lint:ego`, `test:tools`, `test`, and `check:decoration` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
+| `pnpm run test:tools` | Node unit tests for generator/audit scripts (`tools/*.test.mjs`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
 | `pnpm run stats` | code size and EGO `quality/code-volume` budget; CI posts the base→head delta as a PR comment |
 | `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000; `stats` itself only reports |
@@ -31,6 +32,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO reviewer's linter, compared against `tools/ego-lint-baseline.txt`: a finding that is not in the baseline, one that now appears more often, or a baseline entry that no longer appears all exit 1. `-- --update` rewrites the baseline; `EGO_LINT_DIR` points at a prepared checkout |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
+| `pnpm run install:ext` | builds and force-installs `dist/<uuid>.shell-extension.zip` via `gnome-extensions` |
 | `pnpm run lint:zip` | analyses that zip with shexli |
 | `pnpm run gen:code` | regenerates all transpiled shaders, styling constants, and upstream bindings |
 | `pnpm run gen:preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
@@ -116,7 +118,7 @@ owns only the manifest's `$.version-name` (`release-please-config.json`).
 `pnpm install` points git at `.githooks/`, and each check has exactly one hook: a check that ran in
 both would only make the second run slow, so the split follows what a check guards.
 
-- **every commit** runs `lint`, `check:style`, the unit tests and `check:decoration` (or all via `check`), unless every staged path is inert - documentation or assets, the list lives in `run-checks` - because none of them can see such a commit. Each guards
+- **every commit** runs `lint`, `check:style`, `lint:ego`, `test` and `check:decoration`, unless every staged path is inert - documentation or assets, the list lives in `run-checks` - because none of them can see such a commit. Each guards
   something the commit itself can break, so the commit that breaks one is the commit that fixes it,
   and every commit stays valid on its own. The rendering is one of those things: the unit tests see
   the decisions, not the pixels, so a shadow or a clip change that misses libadwaita by a level is
@@ -126,9 +128,8 @@ both would only make the second run slow, so the split follows what a check guar
   a week;
 - **every push** drives `test:e2e` through a nested session: it guards what a commit can break - a lifecycle, a
   resize band - but it costs about two minutes, and a commit hook slow enough to be bypassed is worth less than
-  a push hook nobody minds. Pushes are rare; commits are not. Everything else that covers what leaves the
-  machine moved to CI, which runs it on every push: `lint:ego`, `build`, and `lint:zip` (`shexli`, the reader
-  extensions.gnome.org will use). `check:perf` no longer runs in a hook at all - its swing across sessions
+  a push hook nobody minds. Pushes are rare; commits are not. CI runs on every push (`lint`, `check:style`,
+  `lint:ego`, `test`, `test:tools`, `build`, and `lint:zip` via `shexli`). `check:perf` no longer runs in a hook at all - its swing across sessions
   (0.70-0.90 against a 0.85 budget) is wider than its guard band, so as a per-push gate it flipped coins; run it
   by hand after a push that touches the frame paths. It needs no quiet machine either way: the budget is a ratio
   against the same round's disabled baseline, so a busy machine moves
@@ -361,7 +362,7 @@ live objects say `unavailable` explicitly rather than being omitted.
 
 `wmClass`, `windowTitle`, `width`, `height`, `clientType`, `hasRing`, `hasSsd`, `isMaximized`,
 `isFullscreen`, `hasTileMatch`, `allowsResize`, `isAttachedDialog`, `hasParent`, `windowType`,
-`suggestedState`, `suggestedStateWouldChange`.
+`bufferAlpha`, `suggestedState`, `suggestedStateWouldChange`.
 
 **Diagnostics-only - present only when `debug` is `true`**:
 

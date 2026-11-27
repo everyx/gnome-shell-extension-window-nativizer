@@ -67,10 +67,7 @@ For example:
   or across locales, so they cannot define a stable structural kind.
 
 The rules live in one settings key, `window-rules` (`a{sa{ss}}`), fingerprint →
-`{state, title}` - the state matching reads, and the display-only sample beside it. The
-old `suppress-rules` / `force-rules` pair is gone and its contents are not migrated:
-a group plus a named axis has no equivalent in the axis form below. The `resize-band`
-master switch is gone too: the band is the resize axis, reversed per kind like the rest.
+`{state, title}` - the state matching reads, and the display-only sample beside it.
 
 ## State grammar: the axes a rule reverses
 
