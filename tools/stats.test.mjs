@@ -119,3 +119,26 @@ test('renders a base to head comment with deltas and the budget line', () => {
     assert.match(result.stdout, /within the 8,000 budget/);
     assert.match(result.stdout, /src\/authored\.js/);
 });
+
+test('--check fails above 8,000 lines unless the repository declares an overage', () => {
+    const tree = mkdtempSync(path.join(tmpdir(), 'stats-budget-'));
+    mkdirSync(path.join(tree, 'src'));
+    mkdirSync(path.join(tree, 'tools'));
+    writeFileSync(path.join(tree, 'src', 'big.js'), 'const a = 1;\n'.repeat(8001));
+
+    const declared = (text) => writeFileSync(path.join(tree, 'tools', 'ego-lint-baseline.txt'), text);
+
+    let result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 1, 'an undeclared overage fails');
+
+    declared('# accepted-overage: 434\n');
+    result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /within the accepted ceiling of 8,434/);
+
+    // The declaration is a budget, not a waiver: one line beyond it fails again.
+    declared('# accepted-overage: 0\n');
+    assert.equal(run(STATS, '--root', tree, '--check').status, 1);
+
+    rmSync(tree, {recursive: true, force: true});
+});

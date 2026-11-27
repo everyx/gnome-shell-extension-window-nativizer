@@ -12,6 +12,10 @@
  * CI runs the head version against both trees: a counting change then shows up as one visible
  * delta instead of silently rebasing the number.
  *
+ * `--check` fails above 8,000 lines, or above the overage the repository has declared in
+ * `tools/ego-lint-baseline.txt` (`# accepted-overage: N`). The declaration is the same decision as
+ * the accepted `quality/code-volume` finding, so the gate and the baseline cannot disagree.
+ *
  * Usage: node tools/stats.mjs [--root <path>] [--json] [--top <n>] [--check]
  */
 
@@ -22,6 +26,20 @@ import {fileURLToPath} from 'node:url';
 const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EGO_LIMIT = 8000;
 const USAGE = 'usage: node tools/stats.mjs [--root <path>] [--json] [--top <n>] [--check]';
+
+/** The overage the repository has declared, or 0 when it declares none. */
+export function acceptedOverage(baselineText) {
+    const match = /^#\s*accepted-overage:\s*(\d+)/m.exec(String(baselineText ?? ''));
+    return match ? Number(match[1]) : 0;
+}
+
+function declaredOverage(root) {
+    try {
+        return acceptedOverage(readFileSync(path.join(root, 'tools', 'ego-lint-baseline.txt'), 'utf8'));
+    } catch {
+        return 0;
+    }
+}
 
 function fail(message) {
     console.error(`[stats] ${message}`);
@@ -172,7 +190,15 @@ if (options.json) {
         console.log(`    ${String(file.nonBlank).padStart(5)}  ${file.path}`);
 }
 
-if (options.check && result.ego.nonBlank > EGO_LIMIT) {
-    console.error(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(EGO_LIMIT)}`);
-    process.exitCode = 1;
+if (options.check) {
+    const accepted = declaredOverage(options.root);
+    const budget = EGO_LIMIT + accepted;
+    if (result.ego.nonBlank > budget) {
+        console.error(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(budget)} ` +
+            `(${fmt(EGO_LIMIT)} + ${fmt(accepted)} accepted)`);
+        process.exitCode = 1;
+    } else if (result.ego.nonBlank > EGO_LIMIT) {
+        console.log(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} is within the accepted ` +
+            `ceiling of ${fmt(budget)} (${fmt(EGO_LIMIT)} + ${fmt(accepted)})`);
+    }
 }

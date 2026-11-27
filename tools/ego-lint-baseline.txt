@@ -2,11 +2,22 @@
 # A path is "-" when the finding names no file. Regenerate with: pnpm run lint:ego -- --update
 # Each line is a decision, so read the diff: a new line accepts a warning for good.
 lifecycle/signal-balance	-	1
+# cornerProbe keeps its timer ids in its own maps and clears them on destroy; the rule wants the
+# Subscriptions object, which this module does not own.
+lifecycle/untracked-timeout	lib/cornerProbe.js	1
 lifecycle/untracked-timeout	lib/nativeLikeCorners.js	1
 metadata/future-shell-version	-	1
+# Over the 8,000 ceiling, all of it the corner probe: the reader, the verdict, the async state
+# machine and its cache. `pnpm run check:volume` reads the line below as its budget, so the gate and
+# this decision agree; the next feature has to pay for its own lines.
+# accepted-overage: 434
+quality/code-volume	-	1
 quality/destroy-try-catch	lib/inspector.js	2
 quality/destroy-try-catch	lib/manager.js	1
 quality/destroy-try-catch	lib/overviewDecoration.js	1
 quality/destroy-try-catch	lib/windowDecoration.js	2
 quality/private-api	lib/manager.js	1
+# R-SLOP-16 flags `GLib.file_get_contents` as "does not exist in GJS". It does; the rule is a known
+# false positive in the reviewer itself (docs/internal/field-test-appindicator.md: "INCORRECT").
+R-SLOP-16	platform/probeCache.js	1
 schema-usage/unused-key	-	1
