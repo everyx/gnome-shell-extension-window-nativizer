@@ -89,6 +89,7 @@ export function getSurfaceContainer(actor, win, St = null) {
 
         return compatible[0];
     } catch {
+        // Window actor tree may be tearing down mid-pass; fall back to window actor.
         return null;
     }
 }

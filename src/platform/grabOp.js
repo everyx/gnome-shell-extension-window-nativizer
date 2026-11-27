@@ -13,7 +13,6 @@ export function getPointerSprite(event) {
         backend?.get_pointer_sprite?.(stage) ?? null;
 }
 
-/** True only when Mutter accepted the grab: a FALSE return must leave the event propagating. */
 export function focusWindow(win, time) {
     try {
         win?.focus?.(time);
@@ -22,6 +21,7 @@ export function focusWindow(win, time) {
     }
 }
 
+/** True only when Mutter accepted the grab: a FALSE return must leave the event propagating. */
 export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     if (typeof win?.begin_grab_op !== 'function' || !sprite || op === null || op === undefined)
         return false;
@@ -29,6 +29,7 @@ export function beginWindowGrabOp(win, op, sprite, time, posHint) {
     try {
         return win.begin_grab_op(op, sprite, time, posHint) === true;
     } catch {
+        // Mutter rejects grabs on windows that unmanaged or lost their surface mid-click.
         return false;
     }
 }
@@ -57,6 +58,7 @@ function metaNamespace() {
     try {
         return globalThis.imports?.gi?.Meta ?? null;
     } catch {
+        // Absent outside a live GJS GI session (e.g. unit tests).
         return null;
     }
 }

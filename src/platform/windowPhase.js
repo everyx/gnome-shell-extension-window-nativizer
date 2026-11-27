@@ -61,6 +61,7 @@ export function getWindowSubpixelOffset(win, St = null, container = null) {
             y: adjRelY - relY,
         };
     } catch {
+        // Disposed window or unreadable monitor layout yields no mirror phase.
         return null;
     }
 }
@@ -104,6 +105,7 @@ export function getAppliedSubpixelPhase(win, St = null, container = null) {
         const phase = {x, y};
         return isSubpixelPhase(phase) ? phase : null;
     } catch {
+        // Disposed container or uncached transform yields no applied phase.
         return null;
     }
 }

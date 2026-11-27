@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 12:07+0800\n"
+"POT-Creation-Date: 2026-11-27 11:03+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -205,160 +205,160 @@ msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已將 %d 條修正規則匯出至剪貼簿"
 
-#: src/prefs/clipboardActions.js:61
-msgid "Clipboard is empty or does not contain text"
-msgstr "剪貼簿是空的，或不包含文字"
-
-#: src/prefs/clipboardActions.js:94
+#: src/prefs/clipboardActions.js:72
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "匯入失敗：%s"
 
-#: src/prefs/clipboardActions.js:105
+#: src/prefs/clipboardActions.js:96
+msgid "Clipboard is empty or does not contain text"
+msgstr "剪貼簿是空的，或不包含文字"
+
+#: src/prefs/clipboardActions.js:110
 msgid "All rules in clipboard are already up to date"
 msgstr "剪貼簿中的規則已是最新"
 
-#: src/prefs/clipboardActions.js:110
+#: src/prefs/clipboardActions.js:115
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "成功匯入 %d 條規則"
 
-#: src/prefs/conflictDialog.js:14
+#: src/prefs/conflictDialog.js:10
 msgid "Resolve Import Conflicts"
 msgstr "處理匯入衝突"
 
-#: src/prefs/conflictDialog.js:45
+#: src/prefs/conflictDialog.js:40
 msgid "Cancel"
 msgstr "取消"
 
-#: src/prefs/conflictDialog.js:51
+#: src/prefs/conflictDialog.js:45
 msgid "Apply"
 msgstr "套用"
 
-#: src/prefs/conflictDialog.js:62
+#: src/prefs/conflictDialog.js:65
+msgid "Keep"
+msgstr "保留"
+
+#: src/prefs/conflictDialog.js:66
+msgid "Keep existing rules for all conflicts"
+msgstr "每一處衝突都保留現有規則"
+
+#: src/prefs/conflictDialog.js:71
+msgid "Replace"
+msgstr "取代"
+
+#: src/prefs/conflictDialog.js:72
+msgid "Replace existing rules with imported rules for all conflicts"
+msgstr "每一處衝突都換成匯入的規則"
+
+#: src/prefs/conflictDialog.js:133
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] "%d 條規則存在衝突："
 
-#: src/prefs/conflictDialog.js:78
-msgid "Keep"
-msgstr "保留"
-
-#: src/prefs/conflictDialog.js:79
-msgid "Keep existing rules for all conflicts"
-msgstr "每一處衝突都保留現有規則"
-
-#: src/prefs/conflictDialog.js:84
-msgid "Replace"
-msgstr "取代"
-
-#: src/prefs/conflictDialog.js:85
-msgid "Replace existing rules with imported rules for all conflicts"
-msgstr "每一處衝突都換成匯入的規則"
-
-#: src/prefs/conflictDialog.js:159
+#: src/prefs/conflictDialog.js:161
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "套用失敗，請重新檢查每一處衝突的處理方式"
 
-#: src/prefs/rulePage.js:89
+#: src/prefs/rulePage.js:66
 msgid "Revert to the automatic decision"
 msgstr "回復自動判斷"
 
-#
 #: src/prefs/rulePage.js:173
-msgid "Pick window…"
-msgstr "選取視窗…"
-
-#: src/prefs/rulePage.js:176
-msgid "The correction applies to every window of its kind"
-msgstr "對所有同類視窗生效"
-
-#: src/prefs/rulePage.js:181
 msgid "Import from Clipboard"
 msgstr "從剪貼簿匯入"
 
-#: src/prefs/rulePage.js:182
+#: src/prefs/rulePage.js:174
 msgid "Export to Clipboard"
 msgstr "匯出到剪貼簿"
 
-#: src/prefs/rulePage.js:188 src/prefs/rulePage.js:191
+#: src/prefs/rulePage.js:180 src/prefs/rulePage.js:183
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs/rulePage.js:203
+#
+#: src/prefs/rulePage.js:216
+msgid "Pick window…"
+msgstr "選取視窗…"
+
+#: src/prefs/rulePage.js:219
+msgid "The correction applies to every window of its kind"
+msgstr "對所有同類視窗生效"
+
+#: src/prefs/rulePage.js:224
 msgid "Corrections"
 msgstr "誤判修正"
 
 #
-#: src/prefs/rulePage.js:204
+#: src/prefs/rulePage.js:225
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正依視窗種類分別生效；開啟開關，該軸改為與自動判斷相反"
 
-#: src/prefs/rulePage.js:240
+#: src/prefs/rulePage.js:261
 msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
 msgstr "裝飾不正確的視窗，點「選取視窗…」新增修正"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:96
+#: src/prefs/ruleUi.js:105
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "開啟後，這一軸與自動判斷相反"
 
-#: src/prefs/ruleUi.js:126
+#: src/prefs/ruleUi.js:134
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "選自視窗「%s」"
 
 #. Translators: Closes the error dialog.
-#: src/prefs/ruleUi.js:137
+#: src/prefs/ruleUi.js:145
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs/windowPicker.js:18
+#: src/prefs/windowPicker.js:16
 msgid "No correction added: this window could not be identified"
 msgstr "無法辨識這個視窗，未新增修正"
 
-#: src/prefs/windowPicker.js:22
+#: src/prefs/windowPicker.js:20
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "擴充功能沒有回應，未新增修正；請重新登入後再選取"
 
 #. The one way a correction cannot act: the window is below the size both cuts need to fit.
-#: src/prefs/windowPicker.js:24
+#: src/prefs/windowPicker.js:22
 msgid "No correction added: this window is too small to decorate"
 msgstr "視窗過小，無法裝飾，未新增修正"
 
-#: src/prefs/windowPicker.js:71
+#: src/prefs/windowPicker.js:65
 msgid "Window Pick Failed"
 msgstr "選取視窗失敗"
 
 #
-#: src/prefs/windowPicker.js:73
+#: src/prefs/windowPicker.js:67
 msgid "A window is already being picked"
 msgstr "正在選取視窗"
 
-#: src/prefs/windowPicker.js:74
+#: src/prefs/windowPicker.js:68
 msgid "Could not connect to the Window Nativizer extension: it is not enabled"
 msgstr "Window Nativizer 擴充功能沒有啟用，無法選取視窗"
 
-#: src/prefs/windowPicker.js:101
+#: src/prefs/windowPicker.js:94
 msgid "No correction added: it could not be saved"
 msgstr "儲存失敗，未新增修正"
 
-#: src/prefs/windowPicker.js:113
+#: src/prefs/windowPicker.js:103
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs/windowPicker.js:114
+#: src/prefs/windowPicker.js:104
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已為 %s 新增修正：%s"
 
-#: src/prefs/windowPicker.js:124
+#: src/prefs/windowPicker.js:114
 msgid "The correction takes effect once the window is restored"
 msgstr "視窗結束最大化或並排後，才能看到修正效果"

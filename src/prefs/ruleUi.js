@@ -2,14 +2,23 @@ import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
 
-import {RuleAxis, RULE_AXES} from '../lib/rules.js';
+import {RuleAxis, RULE_AXES, parseRuleKey} from '../lib/rules.js';
 import {axisName, asMarkup, windowKindSentence, _} from '../lib/rulePresenter.js';
+import {findAppInfoByWmClass} from '../lib/appInfo.js';
 
-export const AXIS_ICONS = {
+const AXIS_ICONS = {
     [RuleAxis.CORNERS]: {bundled: 'winnativizer-corners-symbolic', fallback: 'window-restore-symbolic'},
     [RuleAxis.SHADOW]: {bundled: 'winnativizer-shadow-symbolic', fallback: 'edit-copy-symbolic'},
     [RuleAxis.RESIZE]: {bundled: 'winnativizer-resize-symbolic', fallback: 'view-restore-symbolic'},
 };
+
+/** Resolves display metadata for a rule key from installed app info, falling back to wmClass/key. */
+export function resolveRuleDisplay(key, installedApps) {
+    const {baseWmClass, properties} = parseRuleKey(key);
+    const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+    const name = appInfo?.name || baseWmClass || key;
+    return {baseWmClass, properties, appInfo, name};
+}
 
 let _cssProviderRegistered = false;
 
@@ -49,7 +58,7 @@ export function registerIconThemePath(iconTheme) {
 }
 
 /** The axis's bundled symbolic icon, or its stock fallback. */
-export function createAxisImage(axis, iconTheme) {
+function createAxisImage(axis, iconTheme) {
     const {bundled, fallback} = AXIS_ICONS[axis];
     return new Gtk.Image({
         icon_name: iconTheme.has_icon(bundled) ? bundled : fallback,
@@ -101,7 +110,6 @@ export function buildAxisSwitch(axis, corrected, onChange, subtitle = null) {
         active: corrected.has(axis),
     });
     switchRow.update_property([Gtk.AccessibleProperty.LABEL], [name]);
-    // The same text, for assistive technology.
     switchRow.update_property([Gtk.AccessibleProperty.DESCRIPTION], [hint]);
     switchRow.connect('notify::active', () => onChange(axis, switchRow.active));
     return switchRow;

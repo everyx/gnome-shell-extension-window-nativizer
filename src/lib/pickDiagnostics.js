@@ -82,12 +82,14 @@ export function extractDiagnosticProperties(win, deco = null, reads = null, St =
     try {
         view = deco?.diagnosticsView ?? null;
     } catch {
+        // Disposing decoration may throw on getter access; report fields as unavailable.
         view = null;
     }
     for (const key of DIAGNOSTIC_DECORATION_KEYS) {
         try {
             properties[key] = view ? diagnosticText(view[key]) : 'unavailable';
         } catch {
+            // One unreadable diagnostic field must not abort the remaining reply.
             properties[key] = 'unavailable';
         }
     }

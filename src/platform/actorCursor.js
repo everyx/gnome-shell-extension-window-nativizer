@@ -33,6 +33,7 @@ function clutterNamespace() {
     try {
         return globalThis.imports?.gi?.Clutter ?? null;
     } catch {
+        // Absent outside a live GJS GI session (e.g. unit tests).
         return null;
     }
 }

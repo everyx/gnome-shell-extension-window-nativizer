@@ -96,7 +96,7 @@ export function monitorScaleAt(index) {
 }
 
 /** Scale of the monitor the frame sits on, from the cache; null when that read is unavailable. */
-export function resolveWindowMonitorScale(win) {
+function resolveWindowMonitorScale(win) {
     const index = resolveFrameMonitorIndex(win);
     if (index === null || index < 0)
         return null;
@@ -108,7 +108,7 @@ export function getAllMonitorScales() {
     return readMonitorList()?.map(entry => entry.scale).filter(scale => scale > 0) ?? null;
 }
 
-export function resolveWindowScaleCandidates(win) {
+function resolveWindowScaleCandidates(win) {
     const buffer = getWindowBufferRect(win);
     if (!buffer || !(buffer.width > 0) || !(buffer.height > 0))
         return null;

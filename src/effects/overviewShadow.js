@@ -5,7 +5,7 @@ import GObject from 'gi://GObject';
 
 import {SHADOW_PAD} from './shadowGeometry.js';
 
-export const OVERVIEW_SHADOW_G_TYPE = 'WindowNativizerOverviewShadow';
+const OVERVIEW_SHADOW_G_TYPE = 'WindowNativizerOverviewShadow';
 
 export const OverviewShadow = GObject.registerClass({
     GTypeName: OVERVIEW_SHADOW_G_TYPE,

@@ -10,7 +10,6 @@ import {gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions
 import {
     RULE_AXES,
     buildRuleState,
-    parseRuleKey,
     parseRuleState,
 } from '../lib/rules.js';
 import {
@@ -21,11 +20,11 @@ import {
     keyAxisCapabilities,
     asMarkup,
 } from '../lib/rulePresenter.js';
-import {findAppInfoByWmClass} from '../lib/appInfo.js';
 import {readEntries, setAllRuleEntries} from '../lib/settings.js';
 import {
     populateAxisIcons,
     buildAxisSwitch,
+    resolveRuleDisplay,
     setupRuleRowHeader,
 } from './ruleUi.js';
 import {exportToClipboard, importFromClipboard} from './clipboardActions.js';
@@ -38,9 +37,7 @@ function prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
         if (!entry || !entry.state)
             continue;
 
-        const {baseWmClass} = parseRuleKey(key);
-        const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-        const appName = appInfo?.name || baseWmClass || key;
+        const {appInfo, name: appName} = resolveRuleDisplay(key, installedApps);
 
         rows.push({
             key,
@@ -52,7 +49,6 @@ function prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
         });
     }
 
-    // Tier 0: recently imported items pinned to top, tier 1: everything else.
     rows.sort((a, b) => {
         const tierA = a.isRecentlyImported ? 0 : 1;
         const tierB = b.isRecentlyImported ? 0 : 1;
@@ -66,12 +62,47 @@ function prepareDisplayRows(entries, installedApps, recentImportKeys = null) {
     return rows;
 }
 
+function buildDeleteRuleButton(onClick) {
+    const deleteTooltip = _('Revert to the automatic decision');
+    const deleteButton = new Gtk.Button({
+        icon_name: 'user-trash-symbolic',
+        css_classes: ['flat', 'destructive-action'],
+        valign: Gtk.Align.CENTER,
+        margin_start: 12,
+        tooltip_text: deleteTooltip,
+    });
+    deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [deleteTooltip]);
+    deleteButton.connect('clicked', onClick);
+    return deleteButton;
+}
+
+function buildUnavailableAxisRow(axis, {decoratable, properties}) {
+    const unavailableRow = new Adw.ActionRow({
+        title: asMarkup(axisName(axis)),
+        sensitive: false,
+    });
+    const reason = axisUnavailableReason(axis, {decoratable, properties});
+    const reasonLabel = new Gtk.Label({
+        label: reason,
+        css_classes: ['dim-label'],
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.FILL,
+        hexpand: true,
+        xalign: 1.0,
+        wrap: false,
+        ellipsize: Pango.EllipsizeMode.END,
+        tooltip_text: reason,
+    });
+    unavailableRow.add_suffix(reasonLabel);
+    return unavailableRow;
+}
+
 function buildRuleRow(rowData, ctx, onRefresh) {
     const {settings, installedApps, iconTheme} = ctx;
     const {key: ruleKey, state, title: sample, isRecentlyImported, appName, appInfo: cachedAppInfo} = rowData;
-    const {baseWmClass, properties} = parseRuleKey(ruleKey);
-    const appInfo = cachedAppInfo ?? findAppInfoByWmClass(baseWmClass, installedApps);
-    const name = appName || appInfo?.name || baseWmClass || ruleKey;
+    const {properties, appInfo: resolvedAppInfo, name: resolvedName} = resolveRuleDisplay(ruleKey, installedApps);
+    const appInfo = cachedAppInfo ?? resolvedAppInfo;
+    const name = appName || resolvedName;
     const corrected = parseRuleState(state) ?? new Set();
     const caps = keyAxisCapabilities(properties);
     const decoratable = isDecoratableKind(properties);
@@ -86,22 +117,14 @@ function buildRuleRow(rowData, ctx, onRefresh) {
     if (isRecentlyImported)
         row.add_css_class('recently-imported');
 
-    const deleteTooltip = _('Revert to the automatic decision');
-    const deleteButton = new Gtk.Button({
-        icon_name: 'user-trash-symbolic',
-        css_classes: ['flat', 'destructive-action'],
-        valign: Gtk.Align.CENTER,
-        margin_start: 12,
-        tooltip_text: deleteTooltip,
-    });
-    deleteButton.update_property([Gtk.AccessibleProperty.LABEL], [deleteTooltip]);
-    deleteButton.connect('clicked', () => {
+    const removeRuleAndRefresh = () => {
         const entries = readEntries(settings);
         delete entries[ruleKey];
         setAllRuleEntries(settings, entries);
         onRefresh();
-    });
+    };
 
+    const deleteButton = buildDeleteRuleButton(removeRuleAndRefresh);
     const iconBox = new Gtk.Box({spacing: 8, valign: Gtk.Align.CENTER});
     populateAxisIcons(iconBox, corrected, caps, iconTheme);
 
@@ -124,9 +147,7 @@ function buildRuleRow(rowData, ctx, onRefresh) {
         const nextStateStr = buildRuleState(nextAxes);
 
         if (!nextStateStr) {
-            delete entries[ruleKey];
-            setAllRuleEntries(settings, entries);
-            onRefresh();
+            removeRuleAndRefresh();
             return;
         }
 
@@ -137,24 +158,7 @@ function buildRuleRow(rowData, ctx, onRefresh) {
 
     for (const axis of RULE_AXES) {
         if (!caps[axis]) {
-            const unavailableRow = new Adw.ActionRow({
-                title: asMarkup(axisName(axis)),
-                sensitive: false,
-            });
-            const reason = axisUnavailableReason(axis, {decoratable, properties});
-            const reasonLabel = new Gtk.Label({
-                label: reason,
-                css_classes: ['dim-label'],
-                valign: Gtk.Align.CENTER,
-                halign: Gtk.Align.FILL,
-                hexpand: true,
-                xalign: 1.0,
-                wrap: false,
-                ellipsize: Pango.EllipsizeMode.END,
-                tooltip_text: reason,
-            });
-            unavailableRow.add_suffix(reasonLabel);
-            row.add_row(unavailableRow);
+            row.add_row(buildUnavailableAxisRow(axis, {decoratable, properties}));
             continue;
         }
         row.add_row(buildAxisSwitch(axis, corrected, onAxisChange,
@@ -164,19 +168,7 @@ function buildRuleRow(rowData, ctx, onRefresh) {
     return row;
 }
 
-export function setupCorrectionsGroup(page, ctx) {
-    const {settings, window, installedApps, isWindowAlive} = ctx;
-
-    const pickButton = new Gtk.Button({
-        child: new Adw.ButtonContent({
-            icon_name: 'list-add-symbolic',
-            label: _('Pick window…'),
-        }),
-        css_classes: ['flat'],
-        tooltip_text: _('The correction applies to every window of its kind'),
-        valign: Gtk.Align.CENTER,
-    });
-
+function buildCorrectionsHeader(pickButton) {
     const menu = new Gio.Menu();
     menu.append(_('Import from Clipboard'), 'win.import-clipboard');
     menu.append(_('Export to Clipboard'), 'win.export-clipboard');
@@ -198,11 +190,40 @@ export function setupCorrectionsGroup(page, ctx) {
     });
     headerBox.append(pickButton);
     headerBox.append(menuButton);
+    return headerBox;
+}
+
+function registerClipboardActions(window, ctx, scheduleRenderRules) {
+    const actionGroup = new Gio.SimpleActionGroup();
+
+    const exportAction = new Gio.SimpleAction({name: 'export-clipboard'});
+    exportAction.connect('activate', () => exportToClipboard(ctx));
+    actionGroup.add_action(exportAction);
+
+    const importAction = new Gio.SimpleAction({name: 'import-clipboard'});
+    importAction.connect('activate', () => importFromClipboard(ctx, scheduleRenderRules));
+    actionGroup.add_action(importAction);
+
+    window.insert_action_group('win', actionGroup);
+}
+
+export function setupCorrectionsGroup(page, ctx) {
+    const {settings, window, installedApps, isWindowAlive} = ctx;
+
+    const pickButton = new Gtk.Button({
+        child: new Adw.ButtonContent({
+            icon_name: 'list-add-symbolic',
+            label: _('Pick window…'),
+        }),
+        css_classes: ['flat'],
+        tooltip_text: _('The correction applies to every window of its kind'),
+        valign: Gtk.Align.CENTER,
+    });
 
     const rulesGroup = new Adw.PreferencesGroup({
         title: asMarkup(_('Corrections')),
         description: asMarkup(_('Corrections apply per window kind; a switch corrects the automatic decision for one axis')),
-        header_suffix: headerBox,
+        header_suffix: buildCorrectionsHeader(pickButton),
     });
     page.add(rulesGroup);
 
@@ -263,18 +284,7 @@ export function setupCorrectionsGroup(page, ctx) {
             focusedRow.grab_focus();
     };
 
-    const actionGroup = new Gio.SimpleActionGroup();
-
-    const exportAction = new Gio.SimpleAction({name: 'export-clipboard'});
-    exportAction.connect('activate', () => exportToClipboard(ctx));
-    actionGroup.add_action(exportAction);
-
-    const importAction = new Gio.SimpleAction({name: 'import-clipboard'});
-    importAction.connect('activate', () => importFromClipboard(ctx, scheduleRenderRules));
-    actionGroup.add_action(importAction);
-
-    window.insert_action_group('win', actionGroup);
-
+    registerClipboardActions(window, ctx, scheduleRenderRules);
     setupWindowPickerAction(pickButton, ctx, ruleKey => scheduleRenderRules({focusKey: ruleKey}));
 
     renderRules();

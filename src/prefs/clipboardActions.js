@@ -39,8 +39,43 @@ export function exportToClipboard(ctx) {
     window.add_toast(new Adw.Toast({title: asMarkup(title)}));
 }
 
+function applyClipboardImport(ctx, text, scheduleRenderRules) {
+    const {window, settings, isWindowAlive} = ctx;
+    try {
+        const existing = readEntries(settings);
+        const importResult = importRulesJson(existing, text);
+
+        if (importResult.hasConflicts) {
+            showConflictDialog(window, ctx, importResult, resolutions => {
+                if (!isWindowAlive())
+                    return;
+
+                const {nextEntries, landedKeys} = applyConflictResolutions(
+                    existing,
+                    importResult.nonConflictingEntries,
+                    importResult.cleanImported,
+                    resolutions
+                );
+                setAllRuleEntries(settings, nextEntries);
+                reportImport(window, landedKeys, scheduleRenderRules);
+            });
+            return;
+        }
+
+        const {nextEntries, addedCount, updatedCount, importedKeys} = importResult;
+        const changed = addedCount + updatedCount > 0;
+        if (changed)
+            setAllRuleEntries(settings, nextEntries);
+        reportImport(window, changed ? importedKeys : [], scheduleRenderRules);
+    } catch (err) {
+        window.add_toast(new Adw.Toast({
+            title: asMarkup(_('Import failed: %s').format(err.message)),
+        }));
+    }
+}
+
 export function importFromClipboard(ctx, scheduleRenderRules) {
-    const {window, settings, windowCancellable, isWindowAlive} = ctx;
+    const {window, windowCancellable, isWindowAlive} = ctx;
     const clipboard = window.get_clipboard() ?? Gdk.Display.get_default()?.get_clipboard();
     if (!clipboard)
         return;
@@ -63,37 +98,7 @@ export function importFromClipboard(ctx, scheduleRenderRules) {
             return;
         }
 
-        try {
-            const existing = readEntries(settings);
-            const importResult = importRulesJson(existing, text);
-
-            if (importResult.hasConflicts) {
-                showConflictDialog(window, ctx, importResult, resolutions => {
-                    if (!isWindowAlive())
-                        return;
-
-                    const {nextEntries, landedKeys} = applyConflictResolutions(
-                        existing,
-                        importResult.nonConflictingEntries,
-                        importResult.cleanImported,
-                        resolutions
-                    );
-                    setAllRuleEntries(settings, nextEntries);
-                    reportImport(window, landedKeys, scheduleRenderRules);
-                });
-                return;
-            }
-
-            const {nextEntries, addedCount, updatedCount, importedKeys} = importResult;
-            const changed = addedCount + updatedCount > 0;
-            if (changed)
-                setAllRuleEntries(settings, nextEntries);
-            reportImport(window, changed ? importedKeys : [], scheduleRenderRules);
-        } catch (err) {
-            window.add_toast(new Adw.Toast({
-                title: asMarkup(_('Import failed: %s').format(err.message)),
-            }));
-        }
+        applyClipboardImport(ctx, text, scheduleRenderRules);
     });
 }
 

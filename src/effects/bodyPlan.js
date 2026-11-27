@@ -42,10 +42,7 @@ export function readBodySizes(clipTarget, windowActor, win) {
 export class BodyPlan {
     constructor({tolerance = BODY_SETTLE_TOLERANCE} = {}) {
         this._tolerance = tolerance;
-        this._body = null;
-        this._authority = null;
-        this._windowSize = null;
-        this._strikes = 0;
+        this.reset();
     }
 
     /** Fresh per pass: a plan moving under a paint would let the cut and the cast disagree. */

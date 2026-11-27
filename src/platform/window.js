@@ -28,13 +28,14 @@ export function isWindowTiled(win, options = {}) {
         const vMax = isWindowMaximizedVertically(win);
         return (hMax !== vMax) || hasMatch;
     } catch {
+        // Disposed or unmapped Meta.Window cannot be queried as tiled.
         return false;
     }
 }
 
-export function getWindowFrameRect(win, {throwOnError = false} = {}) {
+function readWindowRect(win, method, throwOnError) {
     try {
-        return win?.get_frame_rect?.() ?? null;
+        return win?.[method]?.() ?? null;
     } catch (err) {
         if (throwOnError)
             throw err;
@@ -42,14 +43,12 @@ export function getWindowFrameRect(win, {throwOnError = false} = {}) {
     }
 }
 
+export function getWindowFrameRect(win, {throwOnError = false} = {}) {
+    return readWindowRect(win, 'get_frame_rect', throwOnError);
+}
+
 export function getWindowBufferRect(win, {throwOnError = false} = {}) {
-    try {
-        return win?.get_buffer_rect?.() ?? null;
-    } catch (err) {
-        if (throwOnError)
-            throw err;
-        return null;
-    }
+    return readWindowRect(win, 'get_buffer_rect', throwOnError);
 }
 
 export function getWindowActor(win) {
@@ -118,6 +117,7 @@ function allowsCapability(win, name) {
             return Boolean(value.call(win));
         return typeof value === 'boolean' ? value : true;
     } catch {
+        // Default true avoids suppressing the resize band on a transient/throwing capability read.
         return true;
     }
 }
@@ -126,7 +126,9 @@ export function isWindowAllowsResize(win) {
     return allowsCapability(win, 'allows_resize');
 }
 
-export const isWindowAllowsMove = win => allowsCapability(win, 'allows_move');
+export function isWindowAllowsMove(win) {
+    return allowsCapability(win, 'allows_move');
+}
 
 export function isWindowHidden(win) {
     return safeRead(() => Boolean(win?.is_hidden?.()), false);
@@ -183,6 +185,7 @@ function readBufferAlpha(actor) {
             return false;
         return null;
     } catch {
+        // Unmapped or disposed texture has no readable pixel format; null keeps the shadow undecided.
         return null;
     }
 }

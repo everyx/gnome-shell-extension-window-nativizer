@@ -1,15 +1,11 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 
-import {parseRuleKey, parseRuleState} from '../lib/rules.js';
+import {parseRuleState} from '../lib/rules.js';
 import {keyAxisCapabilities, _, ngettext} from '../lib/rulePresenter.js';
-import {findAppInfoByWmClass} from '../lib/appInfo.js';
-import {setupRuleRowHeader, populateAxisIcons, ensureCustomStyles} from './ruleUi.js';
+import {setupRuleRowHeader, populateAxisIcons, resolveRuleDisplay, ensureCustomStyles} from './ruleUi.js';
 
-export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
-    ensureCustomStyles();
-    const {conflicts} = importResult;
-
+function buildConflictDialogChrome(parentWindow) {
     const dialog = new Adw.Window({
         title: _('Resolve Import Conflicts'),
         transient_for: parentWindow,
@@ -41,9 +37,7 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     });
     toolbarView.add_bottom_bar(statusLabel);
 
-    const cancelButton = new Gtk.Button({
-        label: _('Cancel'),
-    });
+    const cancelButton = new Gtk.Button({label: _('Cancel')});
     cancelButton.connect('clicked', () => dialog.close());
     headerBar.pack_start(cancelButton);
 
@@ -56,17 +50,10 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     const page = new Adw.PreferencesPage();
     toolbarView.set_content(page);
 
-    const conflictCount = conflicts.length;
-    const group = new Adw.PreferencesGroup({
-        title: ngettext(
-            '%d conflicting rule:',
-            '%d conflicting rules:',
-            conflictCount
-        ).format(conflictCount),
-    });
-    group.add_css_class('conflict-group');
-    page.add(group);
+    return {dialog, page, statusLabel, applyButton};
+}
 
+function buildConflictHeaderChecks(rowControllers) {
     const headerBtnsBox = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 8,
@@ -88,14 +75,6 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
     });
     headerBtnsBox.append(checkAllKeep);
     headerBtnsBox.append(checkAllReplace);
-    group.set_header_suffix(headerBtnsBox);
-
-    const keepColGroup = new Gtk.SizeGroup({mode: Gtk.SizeGroupMode.HORIZONTAL});
-    const replaceColGroup = new Gtk.SizeGroup({mode: Gtk.SizeGroupMode.HORIZONTAL});
-    keepColGroup.add_widget(checkAllKeep);
-    replaceColGroup.add_widget(checkAllReplace);
-
-    const rowControllers = [];
 
     let syncingHeader = false;
     const syncHeaderChecks = () => {
@@ -124,14 +103,6 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
         syncingHeader = false;
     };
 
-    for (const item of conflicts) {
-        const {row, controller} = buildConflictRow(item, ctx, syncHeaderChecks);
-        group.add(row);
-        rowControllers.push(controller);
-    }
-
-    syncHeaderChecks();
-
     checkAllKeep.connect('toggled', () => {
         if (syncingHeader)
             return;
@@ -147,6 +118,37 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
             ctrl.setReplace();
         syncHeaderChecks();
     });
+
+    return {headerBtnsBox, syncHeaderChecks};
+}
+
+export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
+    ensureCustomStyles();
+    const {conflicts} = importResult;
+    const {dialog, page, statusLabel, applyButton} = buildConflictDialogChrome(parentWindow);
+
+    const conflictCount = conflicts.length;
+    const group = new Adw.PreferencesGroup({
+        title: ngettext(
+            '%d conflicting rule:',
+            '%d conflicting rules:',
+            conflictCount
+        ).format(conflictCount),
+    });
+    group.add_css_class('conflict-group');
+    page.add(group);
+
+    const rowControllers = [];
+    const {headerBtnsBox, syncHeaderChecks} = buildConflictHeaderChecks(rowControllers);
+    group.set_header_suffix(headerBtnsBox);
+
+    for (const item of conflicts) {
+        const {row, controller} = buildConflictRow(item, ctx, syncHeaderChecks);
+        group.add(row);
+        rowControllers.push(controller);
+    }
+
+    syncHeaderChecks();
 
     applyButton.connect('clicked', () => {
         const resolutions = {};
@@ -173,9 +175,7 @@ export function showConflictDialog(parentWindow, ctx, importResult, onApply) {
  */
 function buildConflictRow(item, {installedApps, iconTheme}, onChoiceChanged) {
     const {key, existingState, importedState, existingTitle, importedTitle} = item;
-    const {baseWmClass, properties} = parseRuleKey(key);
-    const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
-    const name = appInfo?.name || baseWmClass || key;
+    const {properties, appInfo, name} = resolveRuleDisplay(key, installedApps);
 
     const row = new Adw.ActionRow();
     setupRuleRowHeader(row, {

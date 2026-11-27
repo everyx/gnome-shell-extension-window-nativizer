@@ -32,6 +32,22 @@ export function edgeForStagePoint(frame, coords, origin, constrainedEdges = null
     return edgeForPoint(frame, x - originX, y - originY, {constrainedEdges});
 }
 
+function resolveEdgeHit(cross, minCross, maxCross, b, c,
+    edgeConstrained, minConstrained, maxConstrained,
+    edgeShape, minCornerShape, maxCornerShape) {
+    if (edgeConstrained)
+        return null;
+    if (cross < minCross && minConstrained)
+        return null;
+    if (cross > maxCross && maxConstrained)
+        return null;
+    if (cross < minCross + c && cross >= minCross - b)
+        return minConstrained ? edgeShape : minCornerShape;
+    if (cross > maxCross - c && cross <= maxCross + b)
+        return maxConstrained ? edgeShape : maxCornerShape;
+    return edgeShape;
+}
+
 /** Body points are the client's; a constrained edge yields null, its corner the free edge. */
 export function edgeForPoint(frame, x, y, {
     constrainedEdges = null,
@@ -61,58 +77,14 @@ export function edgeForPoint(frame, x, y, {
     });
 
     // First match wins: earlier edge claims corner overlap on narrow windows.
-    if (x < left && x >= left - b) {
-        if (constrained.left)
-            return null;
-        if (y < top && constrained.top)
-            return null;
-        if (y > bottom && constrained.bottom)
-            return null;
-        if (y < top + c && y >= top - b)
-            return constrained.top ? 'w' : 'nw';
-        if (y > bottom - c && y <= bottom + b)
-            return constrained.bottom ? 'w' : 'sw';
-        return 'w';
-    }
-    if (x > right && x <= right + b) {
-        if (constrained.right)
-            return null;
-        if (y < top && constrained.top)
-            return null;
-        if (y > bottom && constrained.bottom)
-            return null;
-        if (y < top + c && y >= top - b)
-            return constrained.top ? 'e' : 'ne';
-        if (y > bottom - c && y <= bottom + b)
-            return constrained.bottom ? 'e' : 'se';
-        return 'e';
-    }
-    if (y < top && y >= top - b) {
-        if (constrained.top)
-            return null;
-        if (x < left && constrained.left)
-            return null;
-        if (x > right && constrained.right)
-            return null;
-        if (x < left + c && x >= left - b)
-            return constrained.left ? 'n' : 'nw';
-        if (x > right - c && x <= right + b)
-            return constrained.right ? 'n' : 'ne';
-        return 'n';
-    }
-    if (y > bottom && y <= bottom + b) {
-        if (constrained.bottom)
-            return null;
-        if (x < left && constrained.left)
-            return null;
-        if (x > right && constrained.right)
-            return null;
-        if (x < left + c && x >= left - b)
-            return constrained.left ? 's' : 'sw';
-        if (x > right - c && x <= right + b)
-            return constrained.right ? 's' : 'se';
-        return 's';
-    }
+    if (x < left && x >= left - b)
+        return resolveEdgeHit(y, top, bottom, b, c, constrained.left, constrained.top, constrained.bottom, 'w', 'nw', 'sw');
+    if (x > right && x <= right + b)
+        return resolveEdgeHit(y, top, bottom, b, c, constrained.right, constrained.top, constrained.bottom, 'e', 'ne', 'se');
+    if (y < top && y >= top - b)
+        return resolveEdgeHit(x, left, right, b, c, constrained.top, constrained.left, constrained.right, 'n', 'nw', 'ne');
+    if (y > bottom && y <= bottom + b)
+        return resolveEdgeHit(x, left, right, b, c, constrained.bottom, constrained.left, constrained.right, 's', 'sw', 'se');
     return null;
 }
 

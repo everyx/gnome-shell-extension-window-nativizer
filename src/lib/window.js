@@ -42,8 +42,8 @@ export function resolveWindowIdentity(win) {
         return declared;
 
     const remembered = fallbackIdentities.get(win);
-    if (remembered && remembered.declared === declared)
-        return remembered.identity;
+    if (remembered)
+        return remembered;
 
     const pid = getWindowPid(win);
     let peer = '';
@@ -64,7 +64,7 @@ export function resolveWindowIdentity(win) {
 
     const identity = chooseWindowIdentity({declared, peer, tracked, pid});
     if (identity && identity !== peer && !identity.startsWith('pid-'))
-        fallbackIdentities.set(win, {declared, identity});
+        fallbackIdentities.set(win, identity);
     return identity;
 }
 
