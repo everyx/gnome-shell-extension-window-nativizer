@@ -42,9 +42,12 @@ WL_DISPLAY="wayland-window-nativizer"
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
+# The session owns both its settings and its caches: a probe cache written here must never land in
+# the user's ~/.cache, where it would outlive the test run.
 export XDG_CONFIG_HOME="$STATE_DIR/config"
+export XDG_CACHE_HOME="$STATE_DIR/cache"
 
-mkdir -p "$STATE_DIR" "$XDG_CONFIG_HOME"
+mkdir -p "$STATE_DIR" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 
 cmd_shell() {
     if [[ -f "$STATE_DIR/ready" ]] && [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -53,8 +56,8 @@ cmd_shell() {
     fi
     # Sync latest extension code + compile GSettings schema
     deploy_ext
-    rm -rf "$PIDFILE" "$LOG" "$STATE_DIR/ready" "$XDG_CONFIG_HOME"   # Clear old logs to avoid mixing session outputs
-    mkdir -p "$XDG_CONFIG_HOME"
+    rm -rf "$PIDFILE" "$LOG" "$STATE_DIR/ready" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
+    mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 
     local scale="${1:-${WINDOW_NATIVIZER_SCALE:-1.0}}"
     echo ">> Starting headless nested shell (background, log: $LOG, scale: $scale)"
@@ -70,7 +73,7 @@ cmd_shell() {
     # into a wait on a session that is not driving anything. Closed here, the lock is held for the
     # startup (so two `dev.sh shell` runs still serialize) and released when this script exits.
     WN_SESSION_LOCK_HELD=1 WINDOW_NATIVIZER_UUID="$UUID" WINDOW_NATIVIZER_SCALE="$scale" \
-        XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+        XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_CACHE_HOME="$XDG_CACHE_HOME" \
         setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" \
         9>&- > "$LOG" 2>&1 < /dev/null &
     local session_pid=$!

@@ -252,6 +252,11 @@ Things about it that cost time to find:
   `logical x global.display.get_monitor_scale(monitor)`. On a fractional-scale display
   that is a 4/3 difference here, enough to sample the wrong place entirely and conclude
   that nothing is drawn.
+- **Its caches are its own.** `XDG_CACHE_HOME` is pointed at `/tmp/window-nativizer-dev/cache`
+  alongside the settings, so anything the session writes to `$XDG_CACHE_HOME` - the corner probe's
+  verdicts, for one - is thrown away with the session instead of outliving it in the developer's
+  `~/.cache`.
+
 - **`dconf` writes go to the session, not to `XDG_CONFIG_HOME`.** The nested session keeps
   its settings in `$XDG_CONFIG_HOME/dconf/user` (`/tmp/window-nativizer-dev/config`, wiped by
   `dev.sh shell`), but a plain `dconf write` performs the write through the *current* session's
