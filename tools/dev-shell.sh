@@ -55,7 +55,6 @@ fi
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
     "${VIRTUAL_MONITORS[@]}" "${X11_ARGS[@]}" --unsafe-mode 9>&- &
 echo $! > "$PIDFILE"
-sleep 4
 
 # Workaround for headless mode: without GDM activation flow, window_group remains hidden,
 # window actors are never mapped (visual testing distorts). Force show window_group and
@@ -77,7 +76,7 @@ PYEOF
 }
 
 SETTLED=0
-for i in $(seq 1 15); do
+for i in $(seq 1 40); do
     BUS_ADDR="$(tr '\0' '\n' < /proc/$!/environ 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)"
     if [[ -n "$BUS_ADDR" ]]; then
         eval_reply="$(gdbus call --address "$BUS_ADDR" --dest org.gnome.Shell \
@@ -100,10 +99,10 @@ for i in $(seq 1 15); do
             break
         fi
     fi
-    sleep 1
+    sleep 0.25
 done
 if [[ "$SETTLED" -ne 1 ]]; then
-    echo "!! Failed to initialize window_group and dismiss overview after 15 attempts!"
+    echo "!! Failed to initialize window_group and dismiss overview after 40 attempts!"
     exit 1
 fi
 

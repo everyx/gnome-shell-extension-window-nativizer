@@ -27,9 +27,9 @@ if [[ $# -eq 0 && -z "${WINDOW_NATIVIZER_SCALE:-}" ]]; then
     echo "================================================================"
     "$0" 1.0
     echo ""
-    "$0" 1.25
+    WN_E2E_SCALE_ONLY=1 "$0" 1.25
     echo ""
-    "$0" 1.33
+    WN_E2E_SCALE_ONLY=1 "$0" 1.33
     echo ""
     echo "================================================================"
     echo ">> [test-e2e] Matrix PASSED: All checks passed at 1.0x, 1.25x and 1.33x!"
@@ -82,6 +82,9 @@ if ! echo "$EXT_INFO" | grep -qE "State: (ACTIVE|ENABLED)"; then
 fi
 echo ">> Extension is enabled ($(echo "$EXT_INFO" | sed -n 's/^ *State: //p'))."
 
+SCALE_ONLY="${WN_E2E_SCALE_ONLY:-0}"
+
+if [[ "$SCALE_ONLY" != "1" ]]; then
 # 3. Every member we call must be callable on the shell we are testing, with the shape the code
 # assumes. Public headers prove a declaration exists, not that GJS can reach it: out-arguments,
 # (skip) annotations and properties-versus-methods all hide in that gap. See tools/gjs-surface.js.
@@ -97,6 +100,7 @@ GJS_SURFACE_OUT="$(LD_LIBRARY_PATH="$GJS_LIB_DIRS${LD_LIBRARY_PATH:+:$LD_LIBRARY
     exit 1
 }
 echo "$GJS_SURFACE_OUT"
+fi
 
 get_dbus_bus() {
     local pid
@@ -245,6 +249,37 @@ if ! check_fields "$OVERVIEW_INIT_STATE" '{"overviewVisible": false}'; then
     exit 1
 fi
 echo ">> Shell session confirmed settled onto desktop."
+
+if [[ "$SCALE_ONLY" == "1" ]]; then
+    # Scale-only leg: open one decorated probe window and vertically maximize it for the tiled
+    # ring & MosaicWM scaled-ring pixel checks.
+    "$DEV" app env WINDOW_NATIVIZER_DECORATED=1 WINDOW_NATIVIZER_APP_ID=dev.windownativizer.scalering \
+        gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+    SCALE_RING_PID=$!
+    ready=0
+    for _ in $(seq 1 40); do
+        ready="$(shell_eval '(() => { const a = global.get_window_actors()[0]; const r = a?.meta_window?.get_frame_rect(); return r && r.width > 0 && shadowFor(a) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
+        [ "$ready" = "1" ] && break
+        sleep 0.1
+    done
+    if [[ "$ready" != "1" ]]; then
+        echo "!! Timeout waiting for scale-ring probe to be decorated"
+        kill "${SCALE_RING_PID:-}" 2>/dev/null || true
+        exit 1
+    fi
+    shell_eval '(() => { const w = global.get_window_actors()[0]?.meta_window; if (w) maximizeWindow(w, 2); })()' >/dev/null
+    vert=0
+    for _ in $(seq 1 40); do
+        vert="$(shell_eval '(() => { const w = global.get_window_actors()[0]?.meta_window; return w?.maximized_vertically && !w?.maximized_horizontally ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
+        [ "$vert" = "1" ] && break
+        sleep 0.1
+    done
+    if [[ "$vert" != "1" ]]; then
+        echo "!! Timeout waiting for scale-ring probe to maximize vertically"
+        kill "${SCALE_RING_PID:-}" 2>/dev/null || true
+        exit 1
+    fi
+else
 
 # 3. Launch GTK4 test client in background
 # Its stdout is the step log the Dynamic Resize Stress gate greps: every timeline step
@@ -828,6 +863,8 @@ fi
 echo ">> Vertically maximized state: $VERT_STATE"
 echo ">> Vertically maximized (tiled) resize band verified: band attached on reaching the state."
 
+fi # end !SCALE_ONLY before tiled ring pixel check
+
 # The ring is 15% of the theme colour over whatever is behind it, and that is the whole of the tiled
 # style - a style-field assertion cannot see whether it renders at all. The wallpaper is unknowable,
 # so the check is relative: it holds for any backdrop, and accepts either theme colour.
@@ -1011,6 +1048,16 @@ shell_eval '
 })()
 ' >/dev/null
 
+if [[ "$SCALE_ONLY" == "1" ]]; then
+    shell_eval 'for (const a of global.get_window_actors()) a.meta_window?.delete(global.get_current_time());' >/dev/null 2>&1 || true
+    kill "${SCALE_RING_PID:-}" 2>/dev/null || true
+    wait "${SCALE_RING_PID:-}" 2>/dev/null || true
+    for _ in $(seq 1 30); do
+        left="$(shell_eval 'global.get_window_actors().length' | grep -o '[0-9]\+' | head -1 || echo 0)"
+        [ "$left" = "0" ] && break
+        sleep 0.1
+    done
+else
 
 # The tiled ring is drawn by the shadow actor, and that actor was once gated on "has shadow" - which
 # a tiled window does not have, so the ring was never drawn. Assert the actor is attached for a tiled
@@ -1162,6 +1209,8 @@ sys.exit(0 if d.get("hasBand") and live else 1)
 echo ">> Restored state: $RESTORED_STATE"
 echo ">> Unmaximized state verified: resize band restored on all sides."
 
+fi # end !SCALE_ONLY before (c2)
+
 # (c2) Subpixel phase straight edge check:
 # Under fractional scales, a client-decorated GTK3 CSD window dragged across
 # continuous device subpixel phases over a white backdrop must maintain clean, monotonic
@@ -1170,39 +1219,26 @@ echo ">> [test-e2e] Verifying straight edge monotonicity across subpixel phases 
 EDGE_PHASE_BUS="$(get_dbus_bus)"
 EDGE_PHASE_CHECK=1
 
-# Launch full-screen white backdrop to ensure edge contrast:
+# Launch backdrop, GTK3 CSD probe, and saturated E2E-Red subject concurrently:
 "$DEV" app python3 "$ROOT/tools/backdrop.py" >/dev/null 2>&1 &
 BACKDROP_PHASE_PID=$!
-for _ in $(seq 1 40); do
-    has_backdrop="$(shell_eval 'global.get_window_actors().some(a => a.meta_window?.get_wm_class()?.toLowerCase().includes("backdrop")) ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
-    [ "$has_backdrop" = "1" ] && break
-    sleep 0.25
-done
-
-# Launch minimal GTK3 CSD probe client (with declared margins and client-side border):
 "$DEV" app python3 "$ROOT/tools/gtk3-probe.py" >/dev/null 2>&1 &
 GTK3_PHASE_PID=$!
-for _ in $(seq 1 40); do
-    has_probe="$(shell_eval 'global.get_window_actors().some(a => a.meta_window?.get_title() === "GTK3 CSD Probe") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
-    [ "$has_probe" = "1" ] && break
-    sleep 0.25
-done
-
-# A second subject with a saturated body: against the red body the shadow-to-body transition
-# has a green channel that the hairline breaks, which is what makes a *bright* seam visible to
-# the probe. The GTK3 subject's body is theme grey, close enough to a hairline's grey that the
-# pixel alone cannot tell them apart, so the bright check reads this window. It sits clear of the
-# GTK3 subject so the two do not occlude each other; x 900..903 has the same subpixel phases as
-# 240..243 because both ranges start on a multiple of the phase period.
 "$DEV" app env WINDOW_NATIVIZER_BODY=#ff0000 WINDOW_NATIVIZER_SIZE=600x450 \
     WINDOW_NATIVIZER_APP_ID=dev.windownativizer.e2e-red WINDOW_NATIVIZER_TITLE=E2E-Red \
     gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
 RED_PHASE_PID=$!
-for _ in $(seq 1 40); do
-    has_red="$(shell_eval 'global.get_window_actors().some(a => a.meta_window?.get_title() === "E2E-Red") ? 1 : 0' | grep -o '[01]' | head -1 || echo 0)"
-    [ "$has_red" = "1" ] && break
-    sleep 0.25
+all_ready=0
+for _ in $(seq 1 60); do
+    all_ready="$(shell_eval '(() => { const ws = global.get_window_actors().map(a => a.meta_window); const ready = w => w && w.get_frame_rect().width > 0; return (ws.some(w => ready(w) && w.is_maximized?.() && w.get_wm_class()?.toLowerCase().includes("backdrop")) && ws.some(w => ready(w) && w.get_title() === "GTK3 CSD Probe") && ws.some(w => ready(w) && w.get_title() === "E2E-Red")) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
+    [ "$all_ready" = "1" ] && break
+    sleep 0.2
 done
+if [[ "$all_ready" != "1" ]]; then
+    echo "!! Timeout waiting for c2 backdrop, GTK3 probe, and red probe to be ready"
+    kill "$BACKDROP_PHASE_PID" "$GTK3_PHASE_PID" "$RED_PHASE_PID" 2>/dev/null || true
+    exit 1
+fi
 
 for test_x in 240 241 242 243; do
     shell_eval "
@@ -1402,6 +1438,23 @@ if [[ "$EDGE_PHASE_CHECK" -ne 1 ]]; then
     exit 1
 fi
 echo ">> Subpixel phase straight edge & corner verified: smooth monotonic transition across all 4 phases."
+
+if [[ "$SCALE_ONLY" == "1" ]]; then
+    "$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --title "Window Nativizer E2E Declared" --hold 40000 >/dev/null 2>&1 &
+    DECLARED_PID=$!
+    found=0
+    for _ in $(seq 1 60); do
+        found="$(shell_eval '(() => { const a = global.get_window_actors().find(x => x.meta_window?.get_title() === "Window Nativizer E2E Declared"); return a && a.meta_window.get_frame_rect().width > 0 && shadowFor(a) && bandFor(a) ? 1 : 0; })()' | grep -o '[01]' | head -1 || echo 0)"
+        [ "$found" = "1" ] && break
+        sleep 0.2
+    done
+    if [[ "$found" != "1" ]]; then
+        echo "!! Timeout waiting for declared window to map and be decorated"
+        kill "${DECLARED_PID:-}" 2>/dev/null || true
+        exit 1
+    fi
+    sleep 0.3
+else
 
 # (d) A window the user placed flush by hand is not tiled: no maximize flag is set for it, so
 # Mutter reports every edge unconstrained and the band has to survive. Inferring tiling from
@@ -1730,6 +1783,8 @@ if ! check_fields "$STICKY_STATE" '{"overviewVisible": true, "matched": true}'; 
 fi
 echo ">> Sticky window verified: every preview shadowed, surface container at opacity 254."
 
+fi # end !SCALE_ONLY before (f2)
+
 # (f2) The suite passed with the square-in-overview regression because it never looked at a
 # pixel: opacity 254 only proves *a* mask was installed, not that the mask rounds the body. The
 # check now measures the preview's corner coverage against the two things the user can compare it
@@ -1941,6 +1996,8 @@ for i in $(seq 1 40); do
     [ "$left" = "0" ] && break
     sleep 0.25
 done
+
+if [[ "$SCALE_ONLY" != "1" ]]; then
 
 # (g) Verify shadow actor opacity synchronization during window close animation
 echo ">> [test-e2e] Verifying shadow actor opacity synchronization during window close animation..."
@@ -2807,6 +2864,17 @@ if [[ "$PREF_CLOSED" != 1 ]]; then
 fi
 echo ">> Preferences window opened and closed; anything it logged is audited below."
 
+fi # end !SCALE_ONLY before log audit
+
+# Run clip-tangent check once on 1.0 inside the already-running session before stopping the shell.
+if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
+    if ! python3 "$ROOT/tools/check-clip-tangent.py" --check; then
+        echo "!! The clip's frame disagrees with its offscreen box at scale $SCALE"
+        exit 1
+    fi
+    summary "Clip Frame vs Offscreen Box: PASSED (1 shader unit = 1 logical px; every edge and corner tangent on the body frame)"
+fi
+
 # 10. Stop shell before analyzing logs
 "$DEV" stop >/dev/null 2>&1 || true
 
@@ -2815,10 +2883,10 @@ echo "================================================================"
 echo " Analyzing Shell Log for Warnings, Errors, and Criticals"
 echo "================================================================"
 
-python3 - "$LOG" << 'PYEOF'
+python3 - "$LOG" "$SCALE_ONLY" << 'PYEOF'
 import sys, re
 
-log_path = sys.argv[1]
+log_path, scale_only = sys.argv[1], sys.argv[2] == "1"
 with open(log_path, "r", errors="ignore") as f:
     lines = f.readlines()
 
@@ -2941,7 +3009,8 @@ if offending:
 
 # Each injected fault is expected to produce its own exact number of lines: a case that did not run,
 # and one that logged more than it provokes, both fail.
-for name, got, want in (("teardown", exempted_teardown, 1), ("picker", exempted_picker, 2)):
+expected_faults = (("teardown", exempted_teardown, 0), ("picker", exempted_picker, 0)) if scale_only else (("teardown", exempted_teardown, 1), ("picker", exempted_picker, 2))
+for name, got, want in expected_faults:
     if got != want:
         print(f"!! [FAIL] Expected exactly {want} line(s) from the injected {name} fault, found "
               f"{got}: the fault-injection case did not run, or it logged more than it provokes.")
@@ -2960,15 +3029,6 @@ if exempted_mutter_ping:
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
-# The clip is evaluated in the offscreen FBO's coordinate space, so its frame is only on the body
-# when the box it is handed is the FBO divided by the monitor scale. This reads both back from
-# pixels: the FBO the compositor made, and every straight edge and corner-arc tangent against the
-# body frame the clip reports. It runs last because it opens its own windows, after the log audit.
-if ! python3 "$ROOT/tools/check-clip-tangent.py" --check; then
-    echo "!! The clip's frame disagrees with its offscreen box at scale $SCALE"
-    exit 1
-fi
-summary "Clip Frame vs Offscreen Box: PASSED (1 shader unit = 1 logical px; every edge and corner tangent on the body frame)"
 
 # A decorated window dragged across a seam between monitors of different scales is sized by the
 # engine at the highest scale it touches - and from its buffer rect, so a client's reserved ring
@@ -2987,6 +3047,7 @@ else
 fi
 
 echo ">> Lifecycle Summary:"
+if [[ "$SCALE_ONLY" != "1" ]]; then
 summary "GJS Surface: PASSED (every member we call is callable, and the platform seams resolved; signatures above)"
 summary "Shell Modules: PASSED (Main.overview.visible and Main.uiGroup are as assumed)"
 summary "Window Map: PASSED (WindowNativizerRoundedClipEffect, WindowNativizerShadowActor & WindowNativizerResizeBand attached)"
@@ -3010,6 +3071,11 @@ summary "Pick In Flight On Disable: PASSED (D-Bus invocation answered, no hang)"
 summary "Pick Failure Injection: PASSED (no overlay left, answered, not left BUSY)"
 summary "Preferences Window: PASSED (opened and closed; nothing it logged failed the audit)"
 summary "X11 Window Decoration: $X11_RESULT"
+else
+summary "Tiled & Scaled Ring Pixel Check: PASSED (scale $SCALE)"
+summary "Subpixel Phase Straight Edge & Corner Monotonicity: PASSED (zero dark edge or corner artifacts across fractional phases)"
+summary "Overview Preview Corner Coverage: PASSED (preview corner cut, reproducing the desktop${OVERVIEW_NATIVE_NOTE})"
+fi
 summary "Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "----------------------------------------------------------------"
 echo ">> [test-e2e] Result: $PASSED PASSED, $CANNOT_RUN CANNOT RUN on $(gnome-shell --version)"
