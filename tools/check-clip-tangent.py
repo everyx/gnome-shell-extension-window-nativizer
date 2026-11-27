@@ -71,7 +71,6 @@ def ensure_session():
     if not os.path.exists(PID_FILE):
         print(">> Starting nested shell via dev.sh...")
         subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
-        time.sleep(2.0)
     pid = open(PID_FILE).read().strip()
     raw = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
     bus = [x.decode() for x in raw if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
@@ -111,11 +110,12 @@ def place_and_read(env):
     (() => {{
         const byId = id => global.get_window_actors().map(a => a.meta_window)
             .find(w => (w.get_gtk_application_id?.() ?? "") === id);
+        const bd = byId("dev.windownativizer.backdrop");
         const m = byId("dev.windownativizer.subject");
         if (m) m.move_resize_frame(false, {SUBJECT[0]}, {SUBJECT[1]}, {SUBJECT[2]}, {SUBJECT[3]});
         const decorated = global.window_group.get_children().some(c =>
             c.name === "WindowNativizerShadowActor" && c._windowActor?.meta_window === m);
-        if (!m || !decorated) return JSON.stringify({{wait: true}});
+        if (!bd || !bd.is_maximized?.() || !m || !decorated) return JSON.stringify({{wait: true}});
         const wa = m.get_compositor_private();
         const walk = a => {{
             for (const e of (a.get_effects?.() || []))
@@ -130,6 +130,7 @@ def place_and_read(env):
         const hit = walk(wa);
         if (!hit) return JSON.stringify({{wait: true}});
         const e = hit.effect;
+        if (!e._frameVec || e._frameVec[2] <= 0) return JSON.stringify({{wait: true}});
         const size = e.get_target_size?.();
         const f = m.get_frame_rect();
         return JSON.stringify({{
@@ -246,9 +247,7 @@ def main():
     env = ensure_session()
     close_existing(env)
     launch(env, "backdrop", ["WINDOW_NATIVIZER_BACKDROP=1"])
-    time.sleep(2.0)
     launch(env, "subject", ["WINDOW_NATIVIZER_BODY=#ff0000", "WINDOW_NATIVIZER_TITLE=WN-Tangent"])
-    time.sleep(4.0)
 
     geom = place_and_read(env)
     if geom is None:
