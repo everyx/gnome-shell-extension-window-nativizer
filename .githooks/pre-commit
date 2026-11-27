@@ -26,3 +26,4 @@ if git diff --cached --name-only | inert_paths_only; then
 fi
 
 run_checks pre-commit lint check:style lint:ego test check:decoration
+report_budget

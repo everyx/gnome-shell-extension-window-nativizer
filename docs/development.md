@@ -23,7 +23,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run test:tools` | Node unit tests for generator/audit scripts (`tools/*.test.mjs`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
 | `pnpm run stats` | code size and EGO `quality/code-volume` budget; CI posts the base→head delta as a PR comment |
-| `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000 plus whatever overage the baseline declares (`# accepted-overage: N`); `stats` itself only reports |
+| `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000 plus whatever overage the baseline declares (`# accepted-overage: N`); `stats` itself only reports. `pre-commit` prints that number as a reminder and never blocks on it: a feature is supposed to raise the ceiling, and a hook that refuses growth is a hook that gets `--no-verify`d |
 | `pnpm run test:decoration` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
 | `pnpm run check:decoration` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
@@ -134,6 +134,11 @@ both would only make the second run slow, so the split follows what a check guar
   by hand after a push that touches the frame paths. It needs no quiet machine either way: the budget is a ratio
   against the same round's disabled baseline, so a busy machine moves
   both arms and the guard reads it the same.
+
+Once those pass, the commit hook prints the EGO line - `8,461 / 8,000 + 461 accepted` - and exits
+zero whatever it says. It is a reminder rather than a gate because the ceiling is a budget a feature
+is allowed to raise; it is printed at all because the only thing that read it before was a CI comment,
+and master sat four lines past its declared budget with nothing failing.
 
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
 the same checks twice on every push. Either hook can be skipped the same way.
