@@ -11,6 +11,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `extension.js` | entry point: builds/tears down `Manager` and `InspectorService` with idempotent enable guard |
 | `lib/appInfo.js` | application identity helpers (`wmClass`, sandboxed/GTK app id, sibling lookup) |
 | `lib/clipTarget.js` | clip target resolution: surface container vs window actor, skipping foreign widgets, geometry validation |
+| `lib/cornerProbe.js` | async corner-alpha probe, `kindKey` cache, and map-transition wait for ambiguous windows |
 | `lib/detector.js` | decoration eligibility and per-axis baseline + rule + policy decisions (pure) |
 | `lib/diagnosticInvariants.js` | edge-triggered per-episode diagnostic latches and formatting helpers |
 | `lib/frame.js` | body-inside-actor geometry and `flatSafeInsets` (pure) |
@@ -52,11 +53,13 @@ tested without a session; the processes only gather inputs and apply results.
 | `effects/shadowTexture.js` | baked GPU shadow texture cache and Cogl pipeline builder |
 | `platform/actorCursor.js` | capability-checked `Clutter.Actor.set_cursor_type` cursor mapping |
 | `platform/coglContext.js` | Cogl context lookup across Mutter/Shell versions |
+| `platform/cornerAlpha.js` | lazy-loaded `paint_to_content` + `composite_to_stream` corner pixel alpha reader |
 | `platform/display.js` | `global.display`, `global.stage`, `global.window_group`, active workspace queries |
 | `platform/grabOp.js` | `Meta.GrabOp` resize direction mapping |
 | `platform/journal.js` | single logging sink adding `[window-nativizer]` tag (zero-import leaf) |
 | `platform/monitor.js` | monitor geometry/scale reads and `resolveHighestScaleMonitorIndex` |
 | `platform/numeric.js` | GI-free upstream-numeric primitives (`roundHalfAwayFromZero`, GSK snap direction) |
+| `platform/probeCache.js` | `$XDG_CACHE_HOME` JSON persistence for `cornerProbe` verdicts |
 | `platform/read.js` | guarded platform accessor wrapper returning fallback on throw |
 | `platform/rect.js` | pure rectangle helpers (`rectEquals`, `sameSize`, `insetsFromRects`, etc.) |
 | `platform/shaderEffect.js` | shader base class bridge (`Shell.GLSLEffect` on 50, `Clutter.ShaderEffect` on 51) |

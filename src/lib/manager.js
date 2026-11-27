@@ -8,6 +8,8 @@ import {extractWindowProperties} from './pickProperties.js';
 import {journal} from '../platform/journal.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {reconcileOutcome, readWindow} from './window.js';
+import {CornerProbe} from './cornerProbe.js';
+import {needsCornerAlphaProbe} from './cornerReading.js';
 import {ProcessClassifier} from './nativeLikeCorners.js';
 import {WindowDecoration} from './windowDecoration.js';
 import {WindowTracking} from './windowTracking.js';
@@ -48,15 +50,23 @@ export class Manager {
         this._preferCrispText = false;
         this._forceOverviewCorners = false;
         this._classifier = null;
+        this._cornerProbe = null;
     }
 
     get classifier() {
         return this._classifier;
     }
 
+    get cornerProbe() {
+        return this._cornerProbe;
+    }
+
     enable() {
         shadowTexture.reset();
         this._classifier = new ProcessClassifier();
+        this._cornerProbe = new CornerProbe({
+            onCornerKnown: win => this._reconcileWindow(win),
+        });
         // Created first, so a later enable() failure rolls back through disable() and drops it.
         this._tracking = new WindowTracking({
             onPassDue: win => this._reconcileWindow(win),
@@ -151,6 +161,8 @@ export class Manager {
         this._tearDownStrays();
         this._classifier?.destroy();
         this._classifier = null;
+        this._cornerProbe?.destroy();
+        this._cornerProbe = null;
         this._settings = null;
         // The phase mirror caches monitors per display; a stale list would outlive this session.
         invalidateMonitorCache();
@@ -223,6 +235,7 @@ export class Manager {
     }
 
     _forgetWindow(win) {
+        this._cornerProbe?.forgetWindow(win);
         const record = this._destroyWindow(win, {keepVisualsForClose: true});
 
         if (this._lastFocusWindow === win)
@@ -261,10 +274,12 @@ export class Manager {
         this._tracking.learnPid(win);
         this._classifier?.probeAdwaitaLook(record.pid);
 
-        const reading = readWindow(win, {classifier: this._classifier});
+        const reading = readWindow(win, {classifier: this._classifier, cornerProbe: this._cornerProbe});
         const outcome = reconcileOutcome(reading);
         if (outcome === 'defer')
             return;
+        if (outcome === 'apply' && needsCornerAlphaProbe(reading))
+            this._cornerProbe?.probe(win, actor, reading.frameRect, reading.cornerProbeKey);
         // Latch only on an apply pass: one that defers or read no extent is not a frame to judge.
         if (outcome === 'apply')
             record.decoration.latchInitialFrameSize(reading);
@@ -354,7 +369,7 @@ export class Manager {
     /** One reading's properties, suggested rule state, and whether that would change it. */
     pickAnswer(win) {
         const deco = this._tracking?.get(win)?.decoration ?? null;
-        const inputs = this._inputsFrom(readWindow(win, {classifier: this._classifier}), deco);
+        const inputs = this._inputsFrom(readWindow(win, {classifier: this._classifier, cornerProbe: this._cornerProbe}), deco);
         if (!inputs)
             return null;
 

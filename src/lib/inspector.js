@@ -174,6 +174,7 @@ export class InspectorService {
             // Cache only: a diagnostic must not start the probe it observes; `unknown` = uncached.
             properties.nativeLikeCorners = cachedNativeLikeCorners(
                 this._manager.classifier, getWindowPid(win));
+            properties.cornerAlpha = this._manager.cornerProbe?.lastSampleText(win) ?? 'unavailable';
         }
 
         // Display only, not used in rule identity matching.

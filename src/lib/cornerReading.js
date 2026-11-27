@@ -1,0 +1,68 @@
+/**
+ * What a corner sample means and which windows need one - pure, so the verdicts are testable
+ * without a session. The probe that produces the samples is `cornerProbe.js`.
+ */
+
+import {requiresCornerVerification} from './detector.js';
+
+const ALPHA_DROP_THRESHOLD = 32;
+import {buildRuleKey} from './rules.js';
+
+/**
+ * Classifies whether a window paints its own rounded corners from corner vs interior alpha.
+ * Returns null when the surface has not painted its first frame yet (`interior === 0`) or cannot be read.
+ */
+export function classifyCornerAlpha(sample) {
+    if (!sample || !Array.isArray(sample.corners) || sample.corners.length < 4)
+        return null;
+    const {corners, interior} = sample;
+    if (!Number.isFinite(interior) || interior <= 0)
+        return null;
+    for (const alpha of corners) {
+        if (!Number.isFinite(alpha))
+            return null;
+    }
+    return corners.some(alpha => alpha < interior - ALPHA_DROP_THRESHOLD);
+}
+
+/**
+ * True for windows where metadata alone cannot tell an opaque square surface from a self-rounded
+ * one (alpha-capable, no SSD, no declared ring, and either fixed-size or unverified dialog/utility).
+ */
+export function needsCornerAlphaProbe(reading) {
+    if (!reading?.hasValidGeometry)
+        return false;
+    if (reading.hasSsd || reading.hasRing)
+        return false;
+    if (reading.bufferAlpha === false || reading.nativeLikeCorners)
+        return false;
+    // A ring is what a declared margin looks like from here, and this window has none.
+    return requiresCornerVerification({
+        hasSsd: reading.hasSsd,
+        sideW: 0,
+        sideH: 0,
+        bufferAlpha: reading.bufferAlpha,
+        allowsResize: reading.allowsResize,
+        windowType: reading.windowType,
+    }) !== null;
+}
+
+/** Stable kind+size key for cross-open caching; null for session-scoped `pid-*` identities. */
+export function cornerProbeKey(reading) {
+    if (!reading?.hasValidGeometry || !reading.wmClass || reading.wmClass.startsWith('pid-'))
+        return null;
+    const base = buildRuleKey(reading.wmClass, {
+        clientType: reading.clientTypeToken,
+        windowType: reading.windowType,
+        hasParent: Boolean(reading.hasParent),
+        allowsResize: Boolean(reading.allowsResize),
+        isAttachedDialog: Boolean(reading.isAttachedDialog),
+        hasRing: Boolean(reading.hasRing),
+        hasSsd: Boolean(reading.hasSsd),
+        width: reading.frameWidth,
+        height: reading.frameHeight,
+    });
+    return reading.allowsResize
+        ? `${base},size=${Math.round(reading.frameWidth)}x${Math.round(reading.frameHeight)}`
+        : base;
+}

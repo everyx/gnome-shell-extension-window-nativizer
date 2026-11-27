@@ -140,28 +140,26 @@ what the reversal is for. The correlation is strong in practice - every fixed-si
 needed a correction here was a non-native application painting its own frame - and the cost of
 being wrong is a square corner on a dialog, against two arcs on every such window.
 
-**The case that keeps the rule in charge: WeChat.** Nine of its windows are the same client, the
-same toolkit, Wayland, `NORMAL`, fixed size, declaring no extents, and carrying alpha: two of them -
-`280x380` and `640x560` - have no corners and no shadow of their own, and want ours; the other seven,
-`330x194` through `770x610`, paint their own rounded corners and shadow, and must not get a second
-pair. Every attribute read here is identical across all nine. Size is the only difference, and size
-is what the rule key already carries for a window that cannot resize (`size=WxH`). The one signal
-that would separate them is the pixels at the corner, and that is not readable from an extension
-(measured, twice: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return without
-filling the buffer they are handed). So this is not a predicate waiting to be improved, it is the
-case rules exist for - and a per-toolkit or per-protocol signal would make it worse, because all
-nine would land on the same side of it.
+**How WeChat's identical fixed-size windows are separated.** Nine of WeChat's windows are the same
+client, the same toolkit, Wayland, `NORMAL`, fixed size, declaring no extents, and carrying alpha:
+two of them - `280x380` and `640x560` - have no corners and no shadow of their own, and want ours;
+the other seven, `330x194` through `770x610`, paint their own rounded corners and shadow, and must
+not get a second pair. Every metadata attribute is identical across all nine except size (`size=WxH`).
+While direct `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` do not fill caller
+buffers in GJS, `Meta.WindowActor.paint_to_content(null)` combined with
+`Shell.Screenshot.composite_to_stream` reads 1x1 RGBA samples 1px inside the four corners and at the
+center after the map transition settles. Windows whose corners are opaque (`alpha` matches interior)
+are decorated automatically; windows whose corners are transparent (`alpha < interior - 32`) stay
+undecorated. Results are cached per window kind and size in `$XDG_CACHE_HOME`
+(`corner-probe.json`) so subsequent opens apply on frame 1 without a visible undecorated flash,
+and rules remain available as an explicit user override.
 
-A fourth reading stands both axes down: a **dialog or utility window with no declared extents that
-carries alpha** (`unverified-corners`). The name says what it is. A buffer's format is not its
-pixels: an alpha channel is what a corner the client rounded itself *may* look like from here, and
-it says nothing at all about a body that is opaque throughout - and an extension cannot read the
-pixels to tell (measured: `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` both return
-without filling the buffer they are handed, so the only readable fact is the format; that read is
-cached for X11 alone, where a client's depth fixes it for the actor's life, while a Wayland surface
-can attach a different format on any commit). The reading is a policy, not a detection, and it is
-asked one way only: decorating costs a ring outside a ring someone else drew, abstaining costs a
-square window, which is what the window looks like without us and which one rule reverses.
+A fourth reading stands both axes down until probed: a **dialog or utility window with no declared
+extents that carries alpha** (`unverified-corners`). A buffer's format is not its pixels: an alpha
+channel is what a corner the client rounded itself *may* look like from here, and it says nothing at
+all about a body that is opaque throughout. Until `CornerProbe` proves the corners opaque, the
+reading abstains conservatively (`unverified-corners`) so decorating never paints a ring outside a
+ring someone else drew; once probed opaque, it decorates automatically.
 
 Two measured cases fix its shape. WPS's PDF export dialog, `968x443` at depth 32, declares no
 extents and paints its own corners, which our arc landed outside. Navicat's palette is the utility
