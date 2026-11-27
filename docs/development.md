@@ -635,3 +635,5 @@ decoration (`detector.js`); the opposite boundary inclusivities in `settleClipBo
 against `Math.round` on negative halves in the phase mirror; why `get_resource_scale()` is never
 read (`lib/offscreenBox.js`); what Clutter does when an unallocated actor is translated; why a `':'`
 in a rule key throws rather than splitting; why `BYPASS_OPACITY` is 254 rather than 255.
+
+<!-- probe: does CI pack a release-please head? -->
