@@ -60,9 +60,11 @@ const rows = [
     ['Authored files', base.files.authored, head.files.authored],
 ];
 
+const accepted = head.ego.accepted ?? 0;
+const ceiling = accepted ? `${fmt(head.ego.limit)} (8,000 + ${fmt(accepted)} accepted)` : fmt(head.ego.limit);
 const budget = head.ego.nonBlank <= head.ego.limit
-    ? `within the ${fmt(head.ego.limit)} budget`
-    : `**${fmt(head.ego.nonBlank - head.ego.limit)} over** the ${fmt(head.ego.limit)} budget (warning only; CI does not fail)`;
+    ? `within the ${ceiling} budget`
+    : `**${fmt(head.ego.nonBlank - head.ego.limit)} over** the ${ceiling} budget (warning only; CI does not fail)`;
 
 function fileMap(report) {
     const files = report.authoredFiles ?? report.largest ?? [];

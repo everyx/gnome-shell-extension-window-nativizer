@@ -120,6 +120,25 @@ test('renders a base to head comment with deltas and the budget line', () => {
     assert.match(result.stdout, /src\/authored\.js/);
 });
 
+test('the report names the declared overage, and the status follows it', () => {
+    const tree = mkdtempSync(path.join(tmpdir(), 'stats-report-'));
+    mkdirSync(path.join(tree, 'src'));
+    mkdirSync(path.join(tree, 'tools'));
+    writeFileSync(path.join(tree, 'src', 'big.js'), 'const a = 1;\n'.repeat(8005));
+    writeFileSync(path.join(tree, 'tools', 'ego-lint-baseline.txt'), '# accepted-overage: 10\n');
+
+    const stats = JSON.parse(run(STATS, '--root', tree, '--json').stdout);
+    assert.equal(stats.ego.accepted, 10);
+    assert.equal(stats.ego.limit, 8010);
+    assert.equal(stats.ego.over, 0);
+    assert.equal(stats.ego.status, 'warn');
+
+    const human = run(STATS, '--root', tree).stdout;
+    assert.match(human, /8,000 \+ 10 accepted/);
+
+    rmSync(tree, {recursive: true, force: true});
+});
+
 test('--check fails above 8,000 lines unless the repository declares an overage', () => {
     const tree = mkdtempSync(path.join(tmpdir(), 'stats-budget-'));
     mkdirSync(path.join(tree, 'src'));

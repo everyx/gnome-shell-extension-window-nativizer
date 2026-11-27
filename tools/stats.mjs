@@ -156,12 +156,15 @@ const largest = [...authoredFiles]
     .sort((a, b) => b.nonBlank - a.nonBlank || a.path.localeCompare(b.path))
     .slice(0, options.top);
 
+const acceptedOverageHere = declaredOverage(options.root);
+const limit = EGO_LIMIT + acceptedOverageHere;
 const result = {
     ego: {
         nonBlank: egoNonBlank,
-        limit: EGO_LIMIT,
-        over: Math.max(0, egoNonBlank - EGO_LIMIT),
-        status: egoNonBlank > EGO_LIMIT ? 'warn' : 'pass',
+        limit,
+        accepted: acceptedOverageHere,
+        over: Math.max(0, egoNonBlank - limit),
+        status: egoNonBlank > limit ? 'fail' : egoNonBlank > EGO_LIMIT ? 'warn' : 'pass',
     },
     authored,
     generated,
@@ -181,7 +184,10 @@ if (options.json) {
 } else {
     console.log(`src stats — ${options.root}`);
     console.log(`  files          ${fmt(result.files.total)} (${fmt(result.files.authored)} authored, ${fmt(result.files.generated)} generated)`);
-    console.log(`  EGO non-blank  ${fmt(result.ego.nonBlank)} / ${fmt(EGO_LIMIT)}${result.ego.over ? ` (${fmt(result.ego.over)} over)` : ' (within budget)'}`);
+    const budget = result.ego.accepted
+        ? `${fmt(EGO_LIMIT)} + ${fmt(result.ego.accepted)} accepted`
+        : fmt(EGO_LIMIT);
+    console.log(`  EGO non-blank  ${fmt(result.ego.nonBlank)} / ${budget}${result.ego.over ? ` (${fmt(result.ego.over)} over)` : ''}`);
     console.log(`  authored       ${fmt(authored.total)} lines = ${fmt(authored.code)} code + ${fmt(authored.commentOnly)} comment-only + ${fmt(authored.blank)} blank`);
     console.log(`  generated      ${fmt(generated.total)} lines (${fmt(generated.nonBlank)} non-blank)`);
     console.log('  note           comment-only is a line-prefix heuristic; EGO non-blank is exact');
@@ -191,14 +197,12 @@ if (options.json) {
 }
 
 if (options.check) {
-    const accepted = declaredOverage(options.root);
-    const budget = EGO_LIMIT + accepted;
-    if (result.ego.nonBlank > budget) {
-        console.error(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(budget)} ` +
-            `(${fmt(EGO_LIMIT)} + ${fmt(accepted)} accepted)`);
+    if (result.ego.nonBlank > limit) {
+        console.error(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(limit)} ` +
+            `(${fmt(EGO_LIMIT)} + ${fmt(acceptedOverageHere)} accepted)`);
         process.exitCode = 1;
     } else if (result.ego.nonBlank > EGO_LIMIT) {
         console.log(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} is within the accepted ` +
-            `ceiling of ${fmt(budget)} (${fmt(EGO_LIMIT)} + ${fmt(accepted)})`);
+            `ceiling of ${fmt(limit)} (${fmt(EGO_LIMIT)} + ${fmt(acceptedOverageHere)})`);
     }
 }
