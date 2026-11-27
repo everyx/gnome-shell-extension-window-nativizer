@@ -32,6 +32,10 @@ export function classifyCornerAlpha(sample) {
 export function needsCornerAlphaProbe(reading) {
     if (!reading?.hasValidGeometry)
         return false;
+    // Mutter answers `allows_resize` false for a maximized or fullscreen window, which otherwise
+    // reads as fixed-size - and neither state is ever decorated, so the probe would be wasted.
+    if (reading.isMaximized || reading.isFullscreen)
+        return false;
     if (reading.hasSsd || reading.hasRing)
         return false;
     if (reading.bufferAlpha === false || reading.nativeLikeCorners)

@@ -54,6 +54,16 @@ describe('needsCornerAlphaProbe', () => {
         expect(needsCornerAlphaProbe({...baseReading, windowType: WindowType.UTILITY})).toBeTrue();
     });
 
+    it('skips a maximized window, which Mutter reports as not resizable', () => {
+        // `meta_window_allows_resize()` answers false when maximized or fullscreen, so those read as
+        // fixed-size; neither is ever decorated, and probing one only costs a read and a cache line.
+        const fixed = {hasValidGeometry: true, hasSsd: false, hasRing: false, bufferAlpha: true,
+            nativeLikeCorners: false, allowsResize: false, windowType: 0};
+        expect(needsCornerAlphaProbe(fixed)).toBeTrue();
+        expect(needsCornerAlphaProbe({...fixed, isMaximized: true})).toBeFalse();
+        expect(needsCornerAlphaProbe({...fixed, isFullscreen: true})).toBeFalse();
+    });
+
     it('skips resizable normal windows, native-like windows, SSD, and declared rings', () => {
         expect(needsCornerAlphaProbe(baseReading)).toBeFalse();
         expect(needsCornerAlphaProbe({...baseReading, allowsResize: false, nativeLikeCorners: true})).toBeFalse();
