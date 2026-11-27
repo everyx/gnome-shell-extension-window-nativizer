@@ -95,6 +95,25 @@ export function isUnverifiedDialog({
     return UNVERIFIED_KINDS.includes(windowType);
 }
 
+/**
+ * Reason a ringless, non-SSD window must abstain until corner pixels prove it opaque, or null
+ * when metadata already settles it. Shared with `CornerProbe` so both agree on which windows probe.
+ */
+export function requiresCornerVerification({
+    hasSsd = false,
+    sideW = 0,
+    sideH = 0,
+    bufferAlpha = null,
+    allowsResize = true,
+    windowType = WindowType.NORMAL,
+} = {}) {
+    if (!allowsResize)
+        return 'fixed-size';
+    if (isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
+        return 'unverified-corners';
+    return null;
+}
+
 /** Widest declared margin per axis, logical px; the alpha read answers two questions. */
 export function inferDecorationBaseline({
     isX11 = false,
@@ -102,6 +121,7 @@ export function inferDecorationBaseline({
     hasSsd = false,
     bufferAlpha = null,
     nativeLikeCorners = false,
+    selfRoundedCorners = null,
     allowsResize = true,
     windowType = WindowType.NORMAL,
 }) {
@@ -133,21 +153,18 @@ export function inferDecorationBaseline({
         reason = `has-csd(${insets})`;
     }
 
-    // A fixed size means the application sized itself, and one that does so usually paints its own
-    // frame inside the buffer, which no read here can see: our arc would be a second arc, and our
-    // square shadow would show at a rounded corner. It outranks the native-like reading.
-    if (!allowsResize) {
+    const verifyReason = selfRoundedCorners !== false
+        ? requiresCornerVerification({hasSsd, sideW, sideH, bufferAlpha, allowsResize, windowType})
+        : null;
+    if (verifyReason === 'fixed-size') {
         return {
             shadow: false,
             corners: false,
             reason: `fixed-size${nativeLikeCorners ? '; native-like-corners' : ''}; shadow: ${reason}`,
         };
     }
-
-    // A dialog declares nothing and has no frame: an edge from us would be its only one, and the ring
-    // lands outside corners it may already paint.
-    if (isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
-        return {shadow: false, corners: false, reason: 'unverified-corners'};
+    if (verifyReason)
+        return {shadow: false, corners: false, reason: verifyReason};
 
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
@@ -245,6 +262,7 @@ export function evaluateWindowActions({
     isX11 = false,
     bufferAlpha = null,
     nativeLikeCorners = false,
+    selfRoundedCorners = null,
     hasGtk4Client = false,
     windowType = WindowType.NORMAL,
     hasParent = false,
@@ -277,7 +295,7 @@ export function evaluateWindowActions({
     const baseline = visuallyFloored
         ? {corners: false, shadow: false, reason: eligibility.reason}
         : inferDecorationBaseline({
-            isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, allowsResize, windowType,
+            isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, selfRoundedCorners, allowsResize, windowType,
         });
 
     // `clientDeclaredRing` stays a pure question; clearing the SSD ring is strategy, handled here.

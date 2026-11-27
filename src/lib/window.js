@@ -7,6 +7,7 @@ import {
     chooseWindowIdentity,
 } from './rules.js';
 import {insetsFromRects} from './frame.js';
+import {cornerProbeKey} from './cornerReading.js';
 import {clientDeclaredRing} from './detector.js';
 import {getWindowBufferAlpha, getWindowBufferRect, getWindowClientType, getWindowFrameRect, getWindowPid, getWindowTileMatch, getWindowTransientFor, getWindowType, isWindowAllowsResize, isWindowAppearsFocused, isWindowAttachedDialog, isWindowDecorated, isWindowFullscreen, isWindowMaximized, isWindowMaximizedHorizontally, isWindowMaximizedVertically, isWindowTiled} from '../platform/window.js';
 import {getTrackedAppId, getWindowFromActor} from '../platform/windowActor.js';
@@ -68,7 +69,7 @@ export function resolveWindowIdentity(win) {
 }
 
 /** Full snapshot, or null when the window is inaccessible; C-boundary throws are absorbed. */
-export function readWindow(win, {classifier = null} = {}) {
+export function readWindow(win, {classifier = null, cornerProbe = null} = {}) {
     if (!win)
         return null;
 
@@ -128,6 +129,27 @@ export function readWindow(win, {classifier = null} = {}) {
             return classifier.hasGtk4Client(pid);
         return false;
     }, null);
+    const clientTypeToken = isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND;
+    const probeKey = hasValidGeometry
+        ? cornerProbeKey({
+            hasValidGeometry,
+            wmClass,
+            clientTypeToken,
+            windowType,
+            hasParent,
+            allowsResize,
+            isAttachedDialog,
+            hasRing,
+            hasSsd,
+            frameWidth: frameRect.width,
+            frameHeight: frameRect.height,
+        })
+        : null;
+    const selfRoundedCorners = safeRead(() => {
+        if (cornerProbe && typeof cornerProbe.selfRoundedCorners === 'function')
+            return cornerProbe.selfRoundedCorners(win, frameRect, probeKey);
+        return null;
+    }, null);
     const tiled = safeRead(() => isWindowTiled(win, {isMaximized, hasTileMatch}), false);
 
     return {
@@ -151,8 +173,10 @@ export function readWindow(win, {classifier = null} = {}) {
         hasSsd,
         isX11,
         bufferAlpha,
-        clientTypeToken: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
+        clientTypeToken,
         nativeLikeCorners,
+        cornerProbeKey: probeKey,
+        selfRoundedCorners,
         hasGtk4Client: hasGtk4,
         windowType,
         hasParent,
