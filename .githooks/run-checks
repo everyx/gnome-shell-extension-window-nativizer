@@ -34,6 +34,14 @@ check_precondition() {
     esac
 }
 
+# A number worth seeing at commit time and never worth blocking on: the EGO ceiling is a budget a
+# feature is expected to raise, so this reports where it stands and moves on. It is the only place
+# the drift shows itself early - master sat four lines past its declared budget with nothing failing,
+# because the only thing that read it was a CI comment nobody opened.
+report_budget() {
+    node tools/stats.mjs 2>/dev/null | grep -E 'EGO non-blank +[0-9]' | sed 's/^ */pre-commit: /' || true
+}
+
 run_checks() {
     hook=$1
     shift
