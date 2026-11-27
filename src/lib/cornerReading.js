@@ -51,11 +51,12 @@ export function needsCornerAlphaProbe(reading) {
     }) !== null;
 }
 
-/** Stable kind+size key for cross-open caching; null for session-scoped `pid-*` identities. */
+/** The kind a correction is written against, so a verdict and a rule name the same window; null for
+ * session-scoped `pid-*` identities. */
 export function cornerProbeKey(reading) {
     if (!reading?.hasValidGeometry || !reading.wmClass || reading.wmClass.startsWith('pid-'))
         return null;
-    const base = buildRuleKey(reading.wmClass, {
+    return buildRuleKey(reading.wmClass, {
         clientType: reading.clientTypeToken,
         windowType: reading.windowType,
         hasParent: Boolean(reading.hasParent),
@@ -66,7 +67,4 @@ export function cornerProbeKey(reading) {
         width: reading.frameWidth,
         height: reading.frameHeight,
     });
-    return reading.allowsResize
-        ? `${base},size=${Math.round(reading.frameWidth)}x${Math.round(reading.frameHeight)}`
-        : base;
 }

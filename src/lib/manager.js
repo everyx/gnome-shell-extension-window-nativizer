@@ -65,6 +65,7 @@ export class Manager {
         shadowTexture.reset();
         this._classifier = new ProcessClassifier();
         this._cornerProbe = new CornerProbe({
+            isDecorated: win => Boolean(this._tracking?.get(win)?.decoration?.hasClip),
             onCornerKnown: win => this._reconcileWindow(win),
         });
         // Created first, so a later enable() failure rolls back through disable() and drops it.

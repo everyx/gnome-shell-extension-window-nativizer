@@ -7,6 +7,7 @@ import {
     needsCornerAlphaProbe,
 } from '../src/lib/cornerReading.js';
 import {evaluateWindowActions, inferDecorationBaseline} from '../src/lib/detector.js';
+import {buildRuleKey} from '../src/lib/rules.js';
 import {WindowType} from '../src/lib/mutterRules.generated.js';
 
 function flushAsync() {
@@ -74,32 +75,35 @@ describe('needsCornerAlphaProbe', () => {
 });
 
 describe('cornerProbeKey', () => {
-    it('builds a stable kind+size key and excludes session-scoped pid-* identities', () => {
-        const key = cornerProbeKey({
-            hasValidGeometry: true,
-            wmClass: 'wechat',
+    it('names the kind the way a correction does, size and all', () => {
+        const kind = {
             clientTypeToken: 'wayland',
             windowType: WindowType.NORMAL,
             hasParent: false,
-            allowsResize: false,
             isAttachedDialog: false,
             hasRing: false,
             hasSsd: false,
             frameWidth: 280,
             frameHeight: 380,
-        });
-        expect(key).toContain('wechat:');
-        expect(key).toContain('size=280x380');
+        };
+        const fixed = cornerProbeKey({...kind, hasValidGeometry: true, wmClass: 'wechat', allowsResize: false});
+        expect(fixed).toContain('wechat:');
+        expect(fixed).toContain('size=280x380');
 
-        const pidKey = cornerProbeKey({
-            hasValidGeometry: true,
-            wmClass: 'pid-1234',
-            clientTypeToken: 'wayland',
-            windowType: WindowType.NORMAL,
-            allowsResize: false,
-            frameWidth: 280,
-            frameHeight: 380,
-        });
+        // A resizable window's size is not part of its kind: the same key a rule is written under, so a
+        // verdict and a correction cannot describe different windows of one app.
+        const resizable = cornerProbeKey({...kind, hasValidGeometry: true, wmClass: 'wechat',
+            allowsResize: true});
+        expect(resizable).not.toContain(',size=');
+        expect(resizable).toBe(buildRuleKey('wechat', {
+            ...kind,
+            allowsResize: true,
+            width: 280,
+            height: 380,
+        }));
+
+        const pidKey = cornerProbeKey({...kind, hasValidGeometry: true, wmClass: 'pid-1234',
+            allowsResize: false});
         expect(pidKey).toBeNull();
     });
 });
@@ -230,6 +234,184 @@ describe('CornerProbe', () => {
 
         probe.forgetWindow(win);
         expect(probe.selfRoundedCorners(win, rect)).toBeNull();
+        probe.destroy();
+    });
+
+    it('never samples a window our own clip is on', async () => {
+        const win = {};
+        const actor = {};
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
+            'allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=280x380';
+        let reads = 0;
+
+        const probe = new CornerProbe({
+            cachePath: null,
+            isDecorated: () => true,
+            readCorners: async () => {
+                reads++;
+                return {corners: [255, 255, 255, 255], interior: 255};
+            },
+        });
+
+        probe.probe(win, actor, rect, kindKey);
+        await flushAsync();
+
+        expect(reads).toBe(0);
+        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeNull();
+        probe.destroy();
+    });
+
+    it('discards a sample that lands after our clip went on', async () => {
+        const win = {};
+        const actor = {};
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
+            'allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=280x380';
+        const notified = [];
+        let decorated = false;
+        let reads = 0;
+
+        const probe = new CornerProbe({
+            cachePath: null,
+            isDecorated: () => decorated,
+            readCorners: async () => {
+                reads++;
+                return {corners: [0, 0, 0, 0], interior: 255};
+            },
+            onCornerKnown: w => notified.push(w),
+        });
+
+        probe.probe(win, actor, rect, kindKey);
+        // The pass drew between the request and its answer, so the sample reads the corners we cut.
+        decorated = true;
+        await flushAsync();
+
+        expect(reads).toBe(1);
+        expect(notified).toEqual([]);
+        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeNull();
+        expect(probe.selfRoundedCorners({}, rect, kindKey)).toBeNull();
+        expect(probe.lastSampleText(win)).toContain('discarded=decorated');
+        probe.destroy();
+    });
+
+    it('remembers the kinds measured opaque, and never that a kind rounds itself', async () => {
+        const win = {};
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
+            'allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=280x380';
+
+        const opaque = new CornerProbe({
+            cachePath: null,
+            readCorners: async () => ({corners: [255, 255, 255, 255], interior: 255}),
+        });
+        opaque.probe(win, {}, rect, kindKey);
+        await flushAsync();
+        expect(opaque.selfRoundedCorners(win, rect, kindKey)).toBeFalse();
+        expect(opaque.selfRoundedCorners({}, rect, kindKey)).toBeFalse();
+        opaque.destroy();
+
+        const selfRounded = new CornerProbe({
+            cachePath: null,
+            readCorners: async () => ({corners: [0, 0, 0, 0], interior: 255}),
+        });
+        selfRounded.probe(win, {}, rect, kindKey);
+        await flushAsync();
+        expect(selfRounded.selfRoundedCorners(win, rect, kindKey)).toBeTrue();
+        // Nothing to remember: an unprobed window of the kind already stands down, so a client that
+        // rounds itself cannot leave a verdict behind for the rest of the session or in the file.
+        expect(selfRounded.selfRoundedCorners({}, rect, kindKey)).toBeNull();
+        selfRounded.destroy();
+    });
+
+    it('decides every window whose kind cannot be shared, and stores nothing for it', async () => {
+        const cachePath = GLib.build_filenamev([GLib.get_tmp_dir(), `wn-probe-null-${GLib.get_monotonic_time()}.json`]);
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const notified = [];
+        const first = {};
+        const second = {};
+
+        try {
+            const probe = new CornerProbe({
+                cachePath,
+                readCorners: async () => ({corners: [255, 255, 255, 255], interior: 255}),
+                onCornerKnown: w => notified.push(w),
+            });
+
+            // A `pid-*` identity has no kind to share across windows, so each window is its own case.
+            probe.probe(first, {}, rect, null);
+            await flushAsync();
+            probe.probe(second, {}, rect, null);
+            await flushAsync();
+
+            expect(notified).toEqual([first, second]);
+            expect(probe.selfRoundedCorners(second, rect, null)).toBeFalse();
+            probe.destroy();
+
+            // Nothing was stored, so the file may never have been written at all.
+            if (GLib.file_test(cachePath, GLib.FileTest.EXISTS)) {
+                const [, bytes] = GLib.file_get_contents(cachePath);
+                expect(Object.keys(JSON.parse(new TextDecoder().decode(bytes)))).toEqual([]);
+            }
+        } finally {
+            GLib.unlink(cachePath);
+        }
+    });
+
+    it('notifies every window of a kind, not only the probe that filled its entry', async () => {
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
+            'allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=280x380';
+        const notified = [];
+        const pending = [];
+        const probe = new CornerProbe({
+            cachePath: null,
+            readCorners: () => new Promise(resolve => pending.push(() =>
+                resolve({corners: [255, 255, 255, 255], interior: 255}))),
+            onCornerKnown: w => notified.push(w),
+        });
+        const first = {};
+        const second = {};
+
+        probe.probe(first, {}, rect, kindKey);
+        probe.probe(second, {}, rect, kindKey);
+        await flushAsync();
+        expect(pending.length).toBe(2);
+
+        // The first answer fills the kind entry and decides its own window...
+        pending[0]();
+        await flushAsync();
+        expect(notified).toEqual([first]);
+
+        // ...and the second window, reading that entry as already filled, still has to be decided:
+        // its own pass ran before either read finished, so nothing else would come back for it.
+        pending[1]();
+        await flushAsync();
+        expect(notified).toEqual([first, second]);
+        expect(probe.selfRoundedCorners(second, rect, kindKey)).toBeFalse();
+        probe.destroy();
+    });
+
+    it('reconciles the window on a self-rounded answer too, and stores nothing for the kind', async () => {
+        const rect = {x: 0, y: 0, width: 280, height: 380};
+        const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
+            'allows_resize=false,attached_dialog=false,has_ring=false,has_ssd=false,size=280x380';
+        const notified = [];
+        const probe = new CornerProbe({
+            cachePath: null,
+            readCorners: async () => ({corners: [0, 0, 0, 0], interior: 255}),
+            onCornerKnown: w => notified.push(w),
+        });
+        const win = {};
+
+        probe.probe(win, {}, rect, kindKey);
+        await flushAsync();
+
+        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeTrue();
+        // The window was drawn under "unknown", so its answer - either answer - has to reach it.
+        expect(notified).toEqual([win]);
+        // But nothing about it is worth a kind entry: an unprobed window already stands down.
+        expect(probe.selfRoundedCorners({}, rect, kindKey)).toBeNull();
         probe.destroy();
     });
 });

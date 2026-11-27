@@ -29,7 +29,6 @@ export class CornerProbe {
             ? options.cachePath
             : defaultProbeCachePath(options.uuid);
         this._kindCache = this._cachePath ? loadProbeCache(this._cachePath) : new Map();
-        this._revalidated = new Set();
         this._winCache = new Map();
         this._lastSamples = new Map();
         this._inFlight = new Map();
@@ -39,6 +38,7 @@ export class CornerProbe {
         this._saveTimer = null;
         this._onCornerKnown = options.onCornerKnown ?? null;
         this._readCorners = options.readCorners ?? readActorCornerAlpha;
+        this._isDecorated = options.isDecorated ?? (() => false);
         this._timeoutAdd = options.timeoutAdd ?? ((delayMs, cb) =>
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
                 cb();
@@ -58,13 +58,18 @@ export class CornerProbe {
         const cached = this._winCache.get(win);
         if (cached && sameDimensions(cached, frameRect))
             return cached.value;
-        if (kindKey && this._kindCache.has(kindKey))
-            return this._kindCache.get(kindKey);
+        // The cache holds the kinds measured opaque: that is the answer worth sharing, because the
+        // other one - the client rounds itself - is the stand-down an unprobed window already takes.
+        if (kindKey && this._kindCache.get(kindKey) === true)
+            return false;
         return null;
     }
 
     probe(win, actor, frameRect, kindKey = null, deps = {}) {
         if (this._destroyed || !win || !actor || !frameRect || frameRect.width < 32 || frameRect.height < 32)
+            return;
+        // A window we rounded samples our own cut: `paint_to_content()` paints the actor with its effects.
+        if (this._isDecorated(win))
             return;
 
         const size = {width: frameRect.width, height: frameRect.height};
@@ -74,12 +79,10 @@ export class CornerProbe {
         if (cached)
             this._winCache.delete(win);
 
-        // If kindCache already has an entry, revalidate once per session in the background.
-        if (kindKey && this._kindCache.has(kindKey)) {
-            if (this._revalidated.has(kindKey))
-                return;
-            this._revalidated.add(kindKey);
-        }
+        // A window of a kind measured opaque needs no answer: it decorates from that entry on its
+        // first frame.
+        if (kindKey && this._kindCache.get(kindKey) === true)
+            return;
 
         const active = this._inFlight.get(win);
         if (active && sameDimensions(active, size))
@@ -172,6 +175,9 @@ export class CornerProbe {
     }
 
     _startRead(win, actor, frameRect, kindKey, reader) {
+        // The transition wait and the retries land frames later, by which time the pass may have drawn.
+        if (this._isDecorated(win))
+            return;
         const entry = {
             width: frameRect.width,
             height: frameRect.height,
@@ -184,35 +190,50 @@ export class CornerProbe {
                 return;
             this._inFlight.delete(win);
             const verdict = error ? null : classifyCornerAlpha(sample);
+            // Kept for the inspector only.
+            const discarded = verdict !== null && this._isDecorated(win);
             this._lastSamples.set(win, {
                 sample: sample ?? null,
                 verdict,
                 error: error ? String(error) : null,
+                discarded,
             });
+            if (discarded)
+                return;
             if (verdict === null) {
                 this._scheduleRetry(win, actor, frameRect, kindKey, reader);
                 return;
             }
             this._retryCounts.delete(win);
-            const prevKind = kindKey ? this._kindCache.get(kindKey) : undefined;
-            this._winCache.set(win, {width: frameRect.width, height: frameRect.height, value: verdict});
-            if (kindKey && prevKind !== verdict) {
-                this._kindCache.delete(kindKey);
-                this._kindCache.set(kindKey, verdict);
-                this._scheduleSave();
-            }
-            if (prevKind === verdict)
-                return;
-            try {
-                this._onCornerKnown?.(win);
-            } catch (cbError) {
-                journal.failure(cbError, 'Error in onCornerKnown callback');
-            }
+            this._publish(win, frameRect, kindKey, verdict);
         };
 
         Promise.resolve()
             .then(() => reader(actor, frameRect, entry.cancellable))
             .then(sample => done(sample, null), error => done(null, error));
+    }
+
+    /**
+     * One answer, one place: the window's own reading, the entry its kind will reuse, and the
+     * reconcile for the window in hand. None of the three is derived from another, so no answer can
+     * arrive with a consumer that never hears about it.
+     */
+    _publish(win, frameRect, kindKey, verdict) {
+        this._winCache.set(win, {width: frameRect.width, height: frameRect.height, value: verdict});
+        // Only "the corners are opaque" is worth an entry, and it is for the next window of the kind:
+        // this one has been waiting since a pass that ran before the read finished.
+        if (verdict === false && kindKey && this._kindCache.get(kindKey) !== true) {
+            this._kindCache.set(kindKey, true);
+            this._scheduleSave();
+        }
+        // Either answer ends the "unknown" the window was drawn under, so both are acted on. A
+        // reconcile is idempotent, and asking whether the decision changed is the analysis that let
+        // two earlier rounds ship a window nobody came back for.
+        try {
+            this._onCornerKnown?.(win);
+        } catch (cbError) {
+            journal.failure(cbError, 'Error in onCornerKnown callback');
+        }
     }
 
     _scheduleRetry(win, actor, frameRect, kindKey, reader) {
@@ -253,7 +274,9 @@ export class CornerProbe {
             return `error:${entry.error}`;
         if (!entry.sample)
             return `null(verdict=${entry.verdict})`;
-        return `corners=[${entry.sample.corners.join(',')}] interior=${entry.sample.interior} verdict=${entry.verdict}`;
+        const discarded = entry.discarded ? ' discarded=decorated' : '';
+        return `corners=[${entry.sample.corners.join(',')}] interior=${entry.sample.interior} ` +
+            `verdict=${entry.verdict}${discarded}`;
     }
 
     forgetWindow(win) {
@@ -293,7 +316,6 @@ export class CornerProbe {
         this._retryCounts.clear();
         this._winCache.clear();
         this._lastSamples.clear();
-        this._revalidated.clear();
         for (const entry of entries)
             entry.cancellable.cancel();
         for (const retry of retries)
