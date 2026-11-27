@@ -61,6 +61,7 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shell_eval
 from shell_eval import wait_for
+from session_env import KEEP_ENV, ensure_session, session, session_env
 from shot_profile import (
     CORNERS,
     CORNER_RAYS,
@@ -78,7 +79,6 @@ from shot_profile import (
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"
-PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 
 # The standard is what this measurement supports, in gray levels, and not a number carried over from
@@ -112,17 +112,6 @@ SUBJECT_X = {"native": 80, "declared": 560, "bare": 1040}
 
 # A body is one colour next to the edge; the cast must not be painting a gradient there.
 BODY_FLAT_TOLERANCE = 0
-
-
-def ensure_session():
-    if not os.path.exists(PID_FILE):
-        print(">> Starting nested shell via dev.sh...")
-        subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
-        time.sleep(2.0)
-    pid = open(PID_FILE).read().strip()
-    raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
 
 
 def eval_js(code, env):
@@ -384,8 +373,11 @@ def main():
                              "straight edges and corners, focused and unfocused")
     parser.add_argument("--keep", action="store_true", help="Leave the windows up, to look at")
     args = parser.parse_args()
+    if args.keep:
+        # The windows live in the session, so leaving them up means leaving the session up.
+        os.environ[KEEP_ENV] = "1"
 
-    env = ensure_session()
+    env = session_env(ensure_session())
     try:
         print(">> Measuring three windows, one frame per focus state...")
         shots = measure(env)
@@ -495,4 +487,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with session():
+        main()

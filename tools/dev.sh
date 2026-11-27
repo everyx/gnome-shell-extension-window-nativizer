@@ -19,11 +19,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under tools/)
 # The nested session is one shared resource; queue behind anyone already driving it. Re-entrant
 # within this tree, so a holder that calls back into dev.sh (test-e2e.sh does this) does not
-# deadlock. `log` only reads the log file and never touches the session, and `stop` is the teardown
-# for a session that may *be* the current lock holder, so neither queues: a contended or wedged
-# session can always be observed and always be taken down.
+# deadlock. `log` and `id` only read, and `stop` is the teardown for a session that may *be* the
+# current lock holder, so none of the three queues: a contended or wedged session can always be
+# observed, identified and taken down.
 case "${1:-}" in
-    log|stop) ;;
+    log|stop|id) ;;
     *)
         if [ -z "${WN_SESSION_LOCK_HELD:-}" ]; then
             exec "$ROOT/tools/with-session-lock.sh" "$ROOT/tools/dev.sh" "$@"
@@ -39,7 +39,9 @@ source "$ROOT/tools/deploy-ext.sh"
 # inside the shell process) has no such schema and takes the shell down with it.
 export GSETTINGS_SCHEMA_DIR="$EXT_DIR/schemas"
 WL_DISPLAY="wayland-window-nativizer"
-STATE_DIR="/tmp/window-nativizer-dev"
+# Relocatable so the identity check can be tested against a throwaway directory, and so two
+# checkouts do not share one session.
+STATE_DIR="${WN_STATE_DIR:-/tmp/window-nativizer-dev}"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
 # The session owns both its settings and its caches: a probe cache written here must never land in
@@ -49,9 +51,25 @@ export XDG_CACHE_HOME="$STATE_DIR/cache"
 
 mkdir -p "$STATE_DIR" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 
+# The pid the pidfile names, printed only when that process is the nested shell this harness starts.
+# A pid file outlives a session that died, and the pid it names can then belong to anything - the
+# desktop's own shell included - so liveness alone would hand out a stranger's bus address.
+verified_pid() {
+    local pid cmd
+    [[ -f "$PIDFILE" ]] || return 0
+    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    [[ -n "$pid" ]] || return 0
+    kill -0 "$pid" 2>/dev/null || return 0
+    cmd="$( { tr '\0' ' ' < "/proc/$pid/cmdline"; } 2>/dev/null || true)"
+    [[ "$cmd" == *gnome-shell*"wayland-display=$WL_DISPLAY"* ]] || return 0
+    printf '%s\n' "$pid"
+}
+
 cmd_shell() {
-    if [[ -f "$STATE_DIR/ready" ]] && [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        echo ">> Nested shell is already running (PID $(cat "$PIDFILE"))"
+    local running
+    running="$(verified_pid)"
+    if [[ -f "$STATE_DIR/ready" ]] && [[ -n "$running" ]]; then
+        echo ">> Nested shell is already running (PID $running)"
         return
     fi
     # Sync latest extension code + compile GSettings schema
@@ -102,6 +120,10 @@ cmd_shell() {
 
 cmd_log() {
     exec tail -f "$LOG"
+}
+
+cmd_id() {
+    verified_pid
 }
 
 cmd_app() {
@@ -177,16 +199,11 @@ cmd_dconf() {
 # --headless plus the fixed Wayland display, which is this harness's session shape: the desktop
 # shell or a devkit session does not match it.
 session_pids() {
-    local pid cmd
-    if [[ -f "$PIDFILE" ]]; then
-        pid="$(cat "$PIDFILE")"
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            cmd="$( { tr '\0' ' ' < "/proc/$pid/cmdline"; } 2>/dev/null || true)"
-            if [[ "$cmd" == *gnome-shell*"wayland-display=$WL_DISPLAY"* ]]; then
-                printf '%s\n' "$pid"
-                return
-            fi
-        fi
+    local pid
+    pid="$(verified_pid)"
+    if [[ -n "$pid" ]]; then
+        printf '%s\n' "$pid"
+        return
     fi
     pgrep -f "gnome-shel[l] --headless --wayland --wayland-display=$WL_DISPLAY" 2>/dev/null || true
 }
@@ -221,10 +238,11 @@ cmd_stop() {
 case "${1:-}" in
     shell) shift; cmd_shell "$@" ;;
     log) cmd_log ;;
+    id) cmd_id ;;
     app) shift; cmd_app "$@" ;;
     xapp) shift; cmd_xapp "$@" ;;
     ext) shift; cmd_ext "$@" ;;
     dconf) shift; cmd_dconf "$@" ;;
     stop) cmd_stop ;;
-    *) echo "Usage: $0 {shell|log|app <cmd>|xapp <cmd>|ext <subcmd>|dconf <args>|stop}"; exit 1 ;;
+    *) echo "Usage: $0 {shell|log|id|app <cmd>|xapp <cmd>|ext <subcmd>|dconf <args>|stop}"; exit 1 ;;
 esac

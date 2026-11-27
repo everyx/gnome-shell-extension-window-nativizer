@@ -58,10 +58,10 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shell_eval  # noqa: E402
+from session_env import ensure_session, session, session_env  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"
-PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT = "/tmp/window-nativizer-cross-monitor.png"
 
 LEFT_MODE = "1920x1080@60.000"
@@ -91,10 +91,8 @@ PRESEAM_EDGE_TOLERANCE = 1.5
 
 
 def get_bus(pid=None):
-    pid = pid or int(open(PID_FILE).read().strip())
-    raw = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
+    """The session's bus address, for the live session unless a pid names another one."""
+    return session_env(pid)
 
 
 def eval_js(code, env):
@@ -103,12 +101,13 @@ def eval_js(code, env):
 
 def start_session():
     """A fresh session started with both virtual monitors; the second must exist before it boots."""
+    # A live session is reused by `dev.sh shell`, so the monitors this file needs are only there
+    # when the previous one is gone.
     subprocess.call([os.path.join(ROOT, "tools", "dev.sh"), "stop"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     env = dict(os.environ, WINDOW_NATIVIZER_SECOND_MONITOR="1920x1200",
                WINDOW_NATIVIZER_NO_X11="1")
-    subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell", "1.0"], env=env)
-    return get_bus()
+    return get_bus(ensure_session(("1.0",), env))
 
 
 def apply_monitors_config(env):
@@ -538,4 +537,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    with session():
+        sys.exit(main())

@@ -53,11 +53,28 @@ summary() {
     case "$1" in *PASSED*) PASSED=$((PASSED + 1));; esac
 }
 
+SESSION_STARTED=0
+
 cleanup() {
     echo ">> [test-e2e] Cleaning up test environment..."
     rm -f "$PICK_REPLY"
-    "$DEV" stop >/dev/null 2>&1 || true
+    stop_owned_session
 }
+
+# A session this run started is this run's to take down; one that was already up belongs to
+# whoever started it. WN_SESSION_KEEP=1 leaves it running, to be looked at after the run.
+stop_owned_session() {
+    if [[ "$SESSION_STARTED" != 1 ]]; then
+        return 0
+    fi
+    if [[ -n "${WN_SESSION_KEEP:-}" ]]; then
+        echo ">> [test-e2e] WN_SESSION_KEEP set: leaving the nested session up"
+        return 0
+    fi
+    "$DEV" stop >/dev/null 2>&1 || true
+    SESSION_STARTED=0
+}
+
 trap cleanup EXIT INT TERM
 
 SCALE="${1:-${WINDOW_NATIVIZER_SCALE:-1.0}}"
@@ -66,9 +83,13 @@ echo "================================================================"
 echo " Starting Headless E2E Test for $UUID (scale: $SCALE)"
 echo "================================================================"
 
-# 1. Start fresh headless shell
+# 1. Start fresh headless shell. The stop that precedes it is what makes the new session this
+# run's rather than one it borrowed: `dev.sh shell` reuses a live session, and the scale and the
+# extension state below have to be this run's.
 "$DEV" stop >/dev/null 2>&1 || true
+export WN_SESSION_OWNED=1
 "$DEV" shell "$SCALE"
+SESSION_STARTED=1
 
 # 2. Verify the extension is enabled. The state's spelling is the line's own: 45 says ENABLED where
 # 50 says ACTIVE, and matching one spelling read a correct activation as a failure on 45. Accept the
@@ -2876,7 +2897,7 @@ if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
 fi
 
 # 10. Stop shell before analyzing logs
-"$DEV" stop >/dev/null 2>&1 || true
+stop_owned_session
 
 # 11. Log Inspection & Zero-Tolerance Assertion
 echo "================================================================"

@@ -15,6 +15,8 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
+from session_env import ensure_session, session, session_env
+
 # The nested session is one shared resource; queue behind anyone already driving it instead of
 # letting two runs corrupt each other's session. The helper re-execs this script with
 # WN_SESSION_LOCK_HELD exported, so the guard is skipped on the way back in.
@@ -24,22 +26,10 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"
-PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 PREVIEW_OUTPUT = os.path.join(ROOT, "assets", "preview.webp")
 CLIENT_SCRIPT = os.path.join(ROOT, "tools", "preview-client.py")
 BACKDROP_SCRIPT = os.path.join(ROOT, "tools", "backdrop.py")
 TMP_SHOT = os.path.join(STATE_DIR, "shot_preview_raw.png")
-
-
-def ensure_session():
-    if not os.path.exists(PID_FILE):
-        print(">> Starting nested shell via dev.sh...")
-        subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
-        time.sleep(2.0)
-    pid = open(PID_FILE).read().strip()
-    raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
 
 
 def set_monitor_scale_2x(env):
@@ -140,7 +130,7 @@ def main():
     print("================================================================")
     print(" Generating assets/preview.webp (2x HiDPI Solid Window)")
     print("================================================================")
-    env = ensure_session()
+    env = session_env(ensure_session())
 
     print(">> Setting virtual monitor scale to 2.0x...")
     set_monitor_scale_2x(env)
@@ -276,11 +266,9 @@ def main():
     # that is mostly flat colour, which is what makes lossless cheap here.
     canvas.save(PREVIEW_OUTPUT, "WEBP", lossless=True)
     print(f">> Successfully saved: {PREVIEW_OUTPUT} ({os.path.getsize(PREVIEW_OUTPUT)} bytes)")
-
-    # Stop nested shell cleanly
-    subprocess.call([os.path.join(ROOT, "tools", "dev.sh"), "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     print(">> [OK] 2x Preview generation complete.")
 
 
 if __name__ == '__main__':
-    main()
+    with session():
+        main()

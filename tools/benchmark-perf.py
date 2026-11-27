@@ -29,6 +29,7 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shell_eval
+import session_env
 import argparse
 import select
 import subprocess
@@ -36,7 +37,6 @@ import json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"
-PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 CLIENT_SCRIPT = os.path.join(ROOT, "tools", "perf-client.py")
 DEV_SH = os.path.join(ROOT, "tools", "dev.sh")
 UUID = "window-nativizer@everyx.github.io"
@@ -107,31 +107,24 @@ BUDGET_MAX_BAND_PER_WINDOW_PSS_KB = 256.0  # measured 6.4KB on an idle window (A
                                           # harness reads once per state, so leave it room
 
 
-def shell_config_home(pid):
-    """The XDG_CONFIG_HOME a running shell was started with, so a foreign session is recognisable."""
-    for item in open(f"/proc/{pid}/environ", "rb").read().split(b"\0"):
-        if item.startswith(b"XDG_CONFIG_HOME="):
-            return item.decode().split("=", 1)[1]
-    return os.path.expanduser("~/.config")
-
-
 def ensure_session():
     """A nested shell running on the harness' own config, so nothing here can write your dconf."""
-    if os.path.exists(PID_FILE):
-        if shell_config_home(int(open(PID_FILE).read().strip())) != BENCH_CONFIG:
+    pid = session_env.live_pid()
+    if pid is not None:
+        config_home = (session_env.session_var(pid, "XDG_CONFIG_HOME")
+                       or os.path.expanduser("~/.config"))
+        if config_home != BENCH_CONFIG:
             print(">> The running nested shell was started with your own config, so flipping the "
                   "band axis would land in your dconf. Restarting the nested session only...")
+            # `dev.sh shell` returns early on a live session, so a restart is a stop and then a
+            # start - and the stop is what frees the config home this run needs.
             subprocess.check_call([DEV_SH, "stop"],
                                   env=dict(os.environ, XDG_CONFIG_HOME=BENCH_CONFIG))
-    if not os.path.exists(PID_FILE):
-        print(">> Starting nested shell via dev.sh, with its own config...")
-        subprocess.check_call([DEV_SH, "shell"],
-                              env=dict(os.environ, XDG_CONFIG_HOME=BENCH_CONFIG))
-        time.sleep(2.0)
-    pid = int(open(PID_FILE).read().strip())
-    raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return pid, bus
+            pid = None
+    if pid is None:
+        pid = session_env.ensure_session(
+            dev_sh_env=dict(os.environ, XDG_CONFIG_HOME=BENCH_CONFIG))
+    return pid, session_env.session_var(pid, "DBUS_SESSION_BUS_ADDRESS")
 
 
 def eval_js(code, bus, timeout=30.0):
@@ -738,4 +731,5 @@ def main():
         subprocess.call(["pkill", "-9", "-f", "perf-client.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 if __name__ == "__main__":
-    main()
+    with session_env.session():
+        main()

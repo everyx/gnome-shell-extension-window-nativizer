@@ -14,13 +14,6 @@ import subprocess
 import time
 
 
-def bus_from_pid(pid):
-    """The DBUS_SESSION_BUS_ADDRESS of a running nested shell."""
-    raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    return [x.decode() for x in raw_env
-            if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-
-
 def eval_js(code, bus, xdg_config=None, timeout=30.0):
     """Eval JS in the nested shell. xdg_config selects the session's own dconf
     store when the caller drives settings through the same bus."""
