@@ -48,10 +48,10 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shell_eval  # noqa: E402
+from session_env import ensure_session, session, session_env  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = "/tmp/window-nativizer-dev"
-PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT = "/tmp/window-nativizer-clip-tangent.png"
 
 SUBJECT = (300, 96, 441, 281)
@@ -65,16 +65,6 @@ TOLERANCE = 0.15
 
 # Corner tangents, with the arc's curvature and the outline bias removed: healthy is <= 0.01.
 TANGENT_TOLERANCE = 0.1
-
-
-def ensure_session():
-    if not os.path.exists(PID_FILE):
-        print(">> Starting nested shell via dev.sh...")
-        subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
-    pid = open(PID_FILE).read().strip()
-    raw = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
 
 
 def eval_js(code, env):
@@ -244,7 +234,7 @@ def main():
                         help=f"Exit 1 unless every edge and tangent agrees within {TOLERANCE} px")
     args = parser.parse_args()
 
-    env = ensure_session()
+    env = session_env(ensure_session())
     close_existing(env)
     launch(env, "backdrop", ["WINDOW_NATIVIZER_BACKDROP=1"])
     launch(env, "subject", ["WINDOW_NATIVIZER_BODY=#ff0000", "WINDOW_NATIVIZER_TITLE=WN-Tangent"])
@@ -303,4 +293,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with session():
+        main()

@@ -48,9 +48,9 @@ if not os.environ.get("WN_SESSION_LOCK_HELD"):
     os.execv(_HELPER, [_HELPER, os.path.abspath(__file__), *sys.argv[1:]])
 
 from PIL import Image
+from session_env import ensure_session, live_pid, session, session_env  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PID_FILE = "/tmp/window-nativizer-dev/shell.pid"
 OUT = "/tmp/opencode"
 
 SUBJECT_W, SUBJECT_H = 400, 300
@@ -87,13 +87,6 @@ DEV = os.path.join(ROOT, "tools", "dev.sh")
 NAMES = {(0, 0, 255): "BORDER", (255, 0, 0): "body", (255, 255, 255): "white"}
 
 
-def bus_env():
-    pid = open(PID_FILE).read().strip()
-    raw = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
-    bus = [x.decode() for x in raw if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
-    return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)
-
-
 def session_scale(env):
     """The live nested session's monitor scale, or None when it cannot be read."""
     try:
@@ -102,21 +95,22 @@ def session_scale(env):
         return None
 
 
-def session_env(scale):
+def session_for_scale(scale):
     wanted = float(scale)
-    if os.path.exists(PID_FILE):
-        env = bus_env()
+    pid = live_pid()
+    if pid is not None:
+        env = session_env(pid)
         live = session_scale(env)
         if live is not None and abs(live - wanted) < 0.0001:
             return env
+        # The scale is fixed when the shell boots, so a borrowed session at the wrong one is
+        # replaced rather than reused - and the replacement is this run's to stop again.
         print(f">> nested session runs at scale {live}, want {wanted}: restarting it")
         subprocess.call([DEV, "stop"])
         time.sleep(1.0)
-        if os.path.exists(PID_FILE):
-            os.remove(PID_FILE)
-    subprocess.check_call([DEV, "shell", scale])
+    pid = ensure_session((scale,))
     time.sleep(2.0)
-    return bus_env()
+    return session_env(pid)
 
 
 def eval_js(code, env):
@@ -370,7 +364,7 @@ def main():
     args = parser.parse_args()
     apply_layout(float(args.scale))
 
-    env = session_env(args.scale)
+    env = session_for_scale(args.scale)
     subprocess.call(["pkill", "-f", "probe-window.js"])
     time.sleep(0.6)
     print(f">> nested session at scale {args.scale}")
@@ -417,4 +411,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with session():
+        main()

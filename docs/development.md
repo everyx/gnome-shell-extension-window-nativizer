@@ -201,6 +201,16 @@ gdbus call --address "$BUS" --dest org.gnome.Shell --object-path /org/gnome/Shel
     --method org.gnome.Shell.Eval 'global.get_window_actors().length + " windows"'
 ```
 
+**A run leaves the session as it found it.** A session this run started is stopped when the run
+ends, in the same teardown path whatever its exit status; a session that was already up is
+borrowed and left alone. `WN_SESSION_KEEP=1` keeps even the run's own session up, to be looked at
+afterwards. A pid file left by a session that died without a stop is detected and cleared, so the
+tool starts a fresh session instead of failing on it - and `tools/dev.sh id` decides what that file
+names by its command line rather than by liveness, because a recycled pid can belong to anything,
+the desktop's own shell included. `WN_STATE_DIR` relocates the state directory, which is how that
+answer is tested without starting a session. Only a run that starts the session pays for its boot, so a commit
+that runs `check:decoration` pays one unless a session is already up.
+
 **Runs queue instead of colliding.** The nested shell, the installed extension path and
 `/tmp/window-nativizer-dev` are one shared resource, and two runs that overlap corrupt each
 other's session: a fidelity check can read a neighbour's frame (`environment witness ... 28 gray
@@ -296,7 +306,8 @@ in one profile, and a missing corner clip becomes visible - none of which can be
 the window and the background are both white.
 
 Prototype actors must be destroyed and any `GLib` sources removed before
-`tools/dev.sh stop`, otherwise the next run inherits them.
+`tools/dev.sh stop`, otherwise the next run inherits them. `tools/dev.sh stop` is also how a
+session is taken down by hand; a tool that started one stops it itself when it exits.
 
 ## Inspecting a window over D-Bus
 
