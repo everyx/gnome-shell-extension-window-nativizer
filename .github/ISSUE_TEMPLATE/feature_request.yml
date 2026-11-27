@@ -1,0 +1,35 @@
+name: Feature request
+description: A window kind that should be handled differently, or a setting that is missing
+title: "feat: "
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Most of what looks like a missing feature here is a judgement the automatic decision
+              made about one window kind, and a correction rule is enough. Check
+              [the rule model](https://github.com/everyx/gnome-shell-extension-window-nativizer/blob/master/docs/rule-model.md)
+              before filing: if reversing an axis on that kind fixes it, that is the answer, not a
+              feature.
+
+    - type: textarea
+      id: problem
+      attributes:
+          label: What is wrong today
+          description: The window kind and what the extension does to it, not the implementation you have in mind.
+      validations:
+          required: true
+
+    - type: textarea
+      id: proposal
+      attributes:
+          label: What you would expect instead
+      validations:
+          required: true
+
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: What you tried
+          description: A correction rule, a different theme, another version. A report that survives a correction rule is the one worth a setting.
+      validations:
+          required: false

@@ -1,0 +1,43 @@
+name: Bug report
+description: A window that looks wrong, a crash in the shell, or a check that disagrees
+title: "bug: "
+body:
+    - type: input
+      id: shell-version
+      attributes:
+          label: GNOME Shell version
+          description: 50 or 51. Anything else is not supported yet, and saying so saves a round trip.
+          placeholder: "51.2"
+      validations:
+          required: true
+
+    - type: textarea
+      id: pick-reply
+      attributes:
+          label: What the picker reports
+          description: >-
+              Run this and paste the reply: one click on the window, and it reports the application,
+              the window kind, the size, the declaration flags, the extension version, the monitor
+              scale, the theme and the correction rule in force. Nothing else here asks for those. The
+              reply includes the window title - redact it if it is a document or a page you would
+              rather not post, and say which window it was under "what happened". If you cannot run it
+              (the shell crashed, the extension is disabled), say why and describe the window instead.
+          value: |
+              gdbus call --session \
+                --dest org.gnome.Shell.Extensions.WindowNativizer \
+                --object-path /org/gnome/Shell/Extensions/WindowNativizer \
+                --method org.gnome.Shell.Extensions.WindowNativizer.PickWindow false
+          render: shell
+      validations:
+          required: true
+
+    - type: textarea
+      id: behaviour
+      attributes:
+          label: What happened, and what you expected instead
+          description: >-
+              Name what you see: corners that are still square, a shadow that doubles, a resize edge
+              that cannot be grabbed, a second shadow inside the window. Attach a screenshot if the
+              difference is visual. This is the part the picker cannot answer.
+      validations:
+          required: true
