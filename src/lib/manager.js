@@ -4,7 +4,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {evaluateWindowActions} from './detector.js';
 import {suggestedRuleState, suggestedRuleWouldChange} from './pickSuggestion.js';
-import {extractWindowProperties} from './pickProperties.js';
+import {environmentProperties, extractWindowProperties} from './pickProperties.js';
+import {buildRuleState, kindFromWire, resolveRule} from './rules.js';
 import {journal} from '../platform/journal.js';
 import {getWindowRules, SETTINGS_KEY_WINDOW_RULES} from './settings.js';
 import {reconcileOutcome, readWindow} from './window.js';
@@ -39,6 +40,10 @@ function gtypeName(object) {
 export class Manager {
     constructor(ext) {
         this._settings = ext.getSettings();
+        // Read once: the metadata is static for the life of the process, and the pick reply reports it
+        // so a bug report does not have to be asked for it separately.
+        const metadata = ext.metadata ?? {};
+        this._versionName = String(metadata['version-name'] ?? metadata.version ?? '');
         this._tracking = null;
         this._subscriptions = new Subscriptions();
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
@@ -375,13 +380,27 @@ export class Manager {
             return null;
 
         const properties = extractWindowProperties(inputs, inputs.wmClass);
+        const environment = environmentProperties({
+            versionName: this._versionName,
+            monitorScale: inputs.monitorScale,
+            dark: inputs.dark,
+            highContrast: inputs.highContrast,
+            // The rule that applies, not the one the exact key names: a fixed-size window may inherit a
+            // generic rule, and the reply must not describe a different window than the runtime acts on.
+            ruleState: buildRuleState(resolveRule(inputs.wmClass, inputs.rules ?? {}, {
+                ...kindFromWire(properties),
+                frameWidth: Number(properties.width) || null,
+                frameHeight: Number(properties.height) || null,
+            })),
+        });
         if (!inputs.hasValidGeometry)
-            return {properties, suggestedState: null, suggestedStateWouldChange: null};
+            return {properties, environment, suggestedState: null, suggestedStateWouldChange: null};
 
         const state = suggestedRuleState(inputs);
         const changes = suggestedRuleWouldChange(properties, inputs, state);
         return {
             properties,
+            environment,
             suggestedState: state,
             suggestedStateWouldChange: typeof changes === 'boolean' ? changes : null,
         };

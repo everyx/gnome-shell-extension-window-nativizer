@@ -401,6 +401,12 @@ live objects say `unavailable` explicitly rather than being omitted.
 `isFullscreen`, `hasTileMatch`, `allowsResize`, `isAttachedDialog`, `hasParent`, `windowType`,
 `bufferAlpha`, `suggestedState`, `suggestedStateWouldChange`.
 
+**The environment, in the same public reply**: `extensionVersion`, `monitorScale`, `theme` (`dark` or
+`light`), `highContrast`, `ruleState` (the stored axes that apply to this window kind, canonical order,
+or `none`). They are here so a bug report can be one paste instead of four questions, and every one of
+them says `unknown` when it cannot be read rather than being dropped: a caller that finds no key cannot
+tell "not asked" from "could not read", and the reply is a `a{ss}` where a missing key is silent.
+
 **Diagnostics-only - present only when `debug` is `true`**:
 
 | Group | Fields |
