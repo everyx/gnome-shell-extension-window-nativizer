@@ -1,7 +1,7 @@
 {
     "uuid": "window-nativizer@everyx.github.io",
     "name": "Window Nativizer",
-    "description": "Rounds the corners of windows that draw their own frame (Qt, Electron, GTK3, Wine) to Adwaita's radius, bakes their shadows on the GPU, and widens their resize edges to GTK's width. Apps that already look native because they link libadwaita or libhandy are recognised from /proc/<pid>/maps and keep their own corners and shadow; no Shell, Meta or Gio API reports a client's toolkit.\nNo telemetry, no network access. Stored in GSettings: your correction rules, the window title each was picked from (shown in preferences, never matched on), and two display preferences. Rules export to and import from the clipboard on request. The window picker is a session-bus method: any local process can call it, and the click it waits for is the gate.",
+    "description": "Brings Adwaita's corners and GPU-baked shadows, and GTK-width resize edges, to windows that draw their own frame (Qt, Electron, GTK3, Wine). Apps that already look native through libadwaita or libhandy are recognised by the libraries they map, and keep their corners and shadow. Where geometry cannot tell whether a window rounds its own corners, five alpha samples of its own texture decide, cached per window kind in the user cache directory.\nStored in GSettings: your rules, the title each was picked from (shown, never matched on), and two display preferences. Rules cross machines over the clipboard on request. The picker is a session-bus method any local process can call.",
     "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer",
     "shell-version": [
         "50",

@@ -26,7 +26,7 @@ Rounded corners, an outline, a shadow and resize edges like a libadwaita window'
 ## How it behaves
 
 - **Looks like libadwaita.** Radius, outline and the three shadow layers are computed from GNOME's own sources, so light, dark and high contrast each follow the system, and focused, backdrop, tiled and maximised states all take the style upstream specifies for them.
-- **Only what is missing.** Windows that already draw a libadwaita-style decoration are left alone, and an existing shadow is not stacked on top of.
+- **Only what is missing.** A window that already draws a libadwaita-style decoration keeps it, and an existing shadow is not stacked on. What is missing is read, not guessed: declared margins, a bare X11 buffer's alpha, and - where geometry says nothing - the window's own corner alpha.
 - **Resizes like a GTK window.** The 0–1 px border a client already has becomes a generous grab margin: the compositor does the grabbing, the cursor is eight-way, and the titlebar, buttons and tabs inside the window are left alone.
 - **Correctable when the guess is wrong.** Where the automatic decision is wrong for a window kind, name the axis - **Corners**, **Shadow** or **Resize** - and the extension does the opposite on it. See [Corrections](#corrections).
 - **Baked once, not re-laid-out.** Each style gets one baked corner-and-shadow texture that a single shader pass draws, so no CSS runs again while you drag a window.
@@ -46,7 +46,7 @@ Pick Reborn if you want to set every number yourself; pick this one if you want 
 
 Most windows need none. When one looks wrong, open the extension's settings and click **Pick window…** under **Corrections**: a correction states which axis the automatic decision got wrong for that window kind, and reversing it is the whole edit. Corrections are stored per window kind (app plus Wayland or XWayland, window type, size, shadow margins), travel between machines via the clipboard, and can also be driven from a script by calling `PickWindow(b debug)` on `org.gnome.Shell.Extensions.WindowNativizer` - pass `false` for an ordinary pick.
 
-Two things are not judgements and cannot be corrected: **what a client paints inside its own surface** (a custom titlebar, its own grips - the compositor sees geometry, not pixels), and **the shadow Mutter draws outside an opaque bare X11 window**.
+Two things are not judgements and cannot be corrected: **what a client paints inside its own surface** (a custom titlebar, its own grips - all three axes are about the edge: corners, shadow, resize band), and **the shadow Mutter draws outside an opaque bare X11 window**.
 
 [rule-model.md](docs/rule-model.md) is the full model; the reasoning is in [decoration-model.md](docs/decoration-model.md) § Known boundaries.
 
