@@ -1,11 +1,15 @@
 import GLib from 'gi://GLib';
 
-const MAX_CACHE_ENTRIES = 200;
-
 export function defaultProbeCachePath(uuid = 'window-nativizer@everyx.github.io') {
     return GLib.build_filenamev([GLib.get_user_cache_dir(), uuid, 'corner-probe.json']);
 }
 
+/**
+ * The kinds a probe has answered "decorate" for. Only that answer is worth remembering: it saves a
+ * bare first frame, while "it rounds itself" is already the state an unprobed window starts in. So
+ * nothing bounds the file - what it holds is the kinds this machine decorates, and a cap would
+ * evict them.
+ */
 export function loadProbeCache(path) {
     const map = new Map();
     if (!path)
@@ -18,8 +22,8 @@ export function loadProbeCache(path) {
         if (!parsed || typeof parsed !== 'object')
             return map;
         for (const [key, value] of Object.entries(parsed)) {
-            if (typeof value === 'boolean')
-                map.set(key, value);
+            if (value === true)
+                map.set(key, true);
         }
     } catch {
         // Missing or corrupt cache file is non-fatal; probing will rebuild it.
@@ -31,15 +35,13 @@ export function saveProbeCache(path, map) {
     if (!path || !(map instanceof Map))
         return;
     try {
-        while (map.size > MAX_CACHE_ENTRIES) {
-            const oldest = map.keys().next().value;
-            map.delete(oldest);
-        }
         const dir = GLib.path_get_dirname(path);
         GLib.mkdir_with_parents(dir, 0o755);
         const obj = {};
-        for (const [key, value] of map.entries())
-            obj[key] = value;
+        for (const [key, value] of map.entries()) {
+            if (value === true)
+                obj[key] = true;
+        }
         GLib.file_set_contents(path, JSON.stringify(obj));
     } catch {
         // Non-fatal: cache persistence is best-effort.

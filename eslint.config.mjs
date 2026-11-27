@@ -92,6 +92,8 @@ export default [
                 describe: 'readonly', it: 'readonly', expect: 'readonly',
                 beforeEach: 'readonly', afterEach: 'readonly',
                 spyOn: 'readonly', jasmine: 'readonly', fail: 'readonly',
+                // The suite runs under gjs, which has the WHATWG decoders the source uses too.
+                TextDecoder: 'readonly',
             },
         },
         rules: devRules,

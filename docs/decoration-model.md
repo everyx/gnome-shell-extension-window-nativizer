@@ -150,9 +150,19 @@ buffers in GJS, `Meta.WindowActor.paint_to_content(null)` combined with
 `Shell.Screenshot.composite_to_stream` reads 1x1 RGBA samples 1px inside the four corners and at the
 center after the map transition settles. Windows whose corners are opaque (`alpha` matches interior)
 are decorated automatically; windows whose corners are transparent (`alpha < interior - 32`) stay
-undecorated. Results are cached per window kind and size in `$XDG_CACHE_HOME`
-(`corner-probe.json`) so subsequent opens apply on frame 1 without a visible undecorated flash,
-and rules remain available as an explicit user override.
+undecorated. The entry is keyed by the kind the correction model uses, so a verdict and a rule always
+name the same window - the size joins that key only where it is stable, on a fixed-size window.
+
+Only the opaque answer is remembered, in `$XDG_CACHE_HOME` (`corner-probe.json`), so a familiar
+window applies on frame 1 without a visible undecorated flash. The other answer needs no entry: an
+unprobed window of the kind already stands down, so a client that paints its own corners is measured
+again on its next window and cannot be remembered as a kind-wide verdict - which also means a client
+that stops painting them needs no revalidation to be decorated. Rules still reverse either answer.
+
+The sample is never taken on a window our own clip is on: `paint_to_content()` paints the actor with
+its effects, so those corners are the ones we cut, and reading them back would report our work as the
+client's. A probe request therefore returns unanswered once the pass has drawn, and a sample that
+lands after it is kept only for the inspector (`discarded=decorated`), never cached nor acted on.
 
 A fourth reading stands both axes down until probed: a **dialog or utility window with no declared
 extents that carries alpha** (`unverified-corners`). A buffer's format is not its pixels: an alpha
