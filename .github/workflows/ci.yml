@@ -19,8 +19,12 @@ jobs:
     name: CI Image
     # Built here rather than in its own workflow, because a pull request that changes the Dockerfile
     # has to run its jobs in the image it just built; `needs` is the only ordering Actions offers.
+    #
+    # No `release-please` guard: the release pull request only bumps versions, but `pack` - which
+    # needs this job - is what checks that `package.json` and `metadata.json` agree on the new
+    # number, and that check has to run before the tag exists, not after. Five seconds when the
+    # Dockerfile is untouched.
     uses: ./.github/workflows/ci-image.yml
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
 
   lint:
     name: Code Quality & Style
