@@ -59,7 +59,7 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
     if (keepStyle)
         keptWeight = state.progress;
     else if (state.outgoing)
-        keptWeight = (1 - state.progress) * state.outgoing.weight;
+        keptWeight = computeFadeWeights(state.progress, state.outgoing.weight).outgoing;
 
     const outgoing = kept ? {style: kept, weight: keptWeight} : null;
 
@@ -146,13 +146,13 @@ export class ShadowFadeStateMachine {
     }
 
     get incomingWeight() {
-        return this._state.outgoing ? this._state.progress : 1;
+        return this._state.outgoing ? computeFadeWeights(this._state.progress).incoming : 1;
     }
 
     get outgoingWeight() {
         if (!this._state.outgoing)
             return 0;
-        return (1 - this._state.progress) * this._state.outgoing.weight;
+        return computeFadeWeights(this._state.progress, this._state.outgoing.weight).outgoing;
     }
 
     /** Sets the target style and returns whether a fade is now running. */

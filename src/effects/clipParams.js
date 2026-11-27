@@ -53,6 +53,14 @@ export function resolveBodyAuthority(targetSize, windowActorSize, resizeInFlight
     return null;
 }
 
+function maxSizeDelta(a, b) {
+    return Math.max(Math.abs(a.width - b.width), Math.abs(a.height - b.height));
+}
+
+function holdBody(previousBody, authority) {
+    return isPaintableFrame(previousBody) ? {...previousBody} : authority;
+}
+
 /** A disagreement gives up after INVARIANT_STRIKES unconfirmed passes instead of holding on. */
 export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     previousAuthority = null, windowSize = null, previousWindowSize = null,
@@ -67,26 +75,17 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     if (!isPaintableFrame(targetSize) || !isPaintableFrame(windowActorSize))
         return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0, windowKnown};
     // Strictly greater: exactly the tolerance is agreement, the same boundary the warning uses.
-    const pairDisagrees =
-        Math.abs(targetSize.width - windowActorSize.width) > tolerance ||
-        Math.abs(targetSize.height - windowActorSize.height) > tolerance;
+    const pairDisagrees = maxSizeDelta(targetSize, windowActorSize) > tolerance;
     // Inclusive: between-pass residue stays under it; only a whole-pixel move crosses the line.
     const bodyMoved = isPaintableFrame(previousAuthority) &&
-        (Math.abs(authority.width - previousAuthority.width) >= tolerance ||
-         Math.abs(authority.height - previousAuthority.height) >= tolerance);
+        maxSizeDelta(authority, previousAuthority) >= tolerance;
     // Unknown size counts as moved here: it vetoes the hold, and a frozen cut is worst mid-drag.
-    const windowMoved = !windowKnown ||
-        Math.abs(windowSize.width - previousWindowSize.width) >= tolerance ||
-        Math.abs(windowSize.height - previousWindowSize.height) >= tolerance;
+    const windowMoved = !windowKnown || maxSizeDelta(windowSize, previousWindowSize) >= tolerance;
 
     // A resize explains the disagreement: trust the actor. Else the confirmed read, else a strike.
     if (pairDisagrees && !windowResized) {
-        const targetMatches = windowKnown &&
-            Math.abs(targetSize.width - windowSize.width) <= tolerance &&
-            Math.abs(targetSize.height - windowSize.height) <= tolerance;
-        const actorMatches = windowKnown &&
-            Math.abs(windowActorSize.width - windowSize.width) <= tolerance &&
-            Math.abs(windowActorSize.height - windowSize.height) <= tolerance;
+        const targetMatches = windowKnown && maxSizeDelta(targetSize, windowSize) <= tolerance;
+        const actorMatches = windowKnown && maxSizeDelta(windowActorSize, windowSize) <= tolerance;
         if (targetMatches !== actorMatches) {
             return {
                 authority,
@@ -108,7 +107,7 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
         }
         return {
             authority,
-            body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
+            body: holdBody(previousBody, authority),
             unsettled: true,
             pairDisagreementStrikes: strikes,
             windowKnown,
@@ -120,7 +119,7 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
         return {authority, body: authority, unsettled: false, pairDisagreementStrikes: 0, windowKnown};
     return {
         authority,
-        body: isPaintableFrame(previousBody) ? {...previousBody} : authority,
+        body: holdBody(previousBody, authority),
         unsettled: true,
         pairDisagreementStrikes: 0,
         windowKnown,
@@ -209,7 +208,7 @@ export function paintPlan({
     scale = 1.0, candidates = null, insets = null, phase = null, bodyPlan = null,
 } = {}) {
     // A container can read 0 while its child still paints, so the window actor stands in for it.
-    const size = isPaintableFrame(targetSize) ? targetSize : resolveClipSize(targetSize, windowActorSize);
+    const size = resolveClipSize(targetSize, windowActorSize);
     if (!size)
         return {suspend: 'no-size'};
     // The insets clamp to the body, so only a missing phase leaves nothing to cut.

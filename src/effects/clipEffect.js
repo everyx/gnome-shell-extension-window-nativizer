@@ -112,7 +112,6 @@ export const RoundedClipEffect = GObject.registerClass({
         // A Wayland surface container carries the phase in its transform; a fallback does not.
         this._phaseInTransform = true;
         this._radius = undefined;
-        this._outline = undefined;
         this._outlineVec = [0, 0, 0, 0];
         this._erase = undefined;
         this._clearStroke = undefined;
@@ -160,7 +159,6 @@ export const RoundedClipEffect = GObject.registerClass({
 
         this._insets = {left: insets.left, top: insets.top, right: insets.right, bottom: insets.bottom};
         this._radius = radius;
-        this._outline = outline;
         this._erase = Boolean(erase);
         this._clearStroke = Boolean(clearStroke);
         if (changes.scale !== undefined)

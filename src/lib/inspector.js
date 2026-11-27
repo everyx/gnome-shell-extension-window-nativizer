@@ -217,8 +217,8 @@ export class InspectorService {
             height: dims.height,
         });
 
-        // `-st-accent-color` re-resolves when St.Settings changes, so no signal of our own.
         this._currentRadius = null;
+        // `-st-accent-color` re-resolves when St.Settings changes, so no signal of our own.
         this._highlight = new St.Widget({
             name: 'WindowNativizerInspectorHighlight',
             style: highlightStyle(0),
@@ -230,31 +230,7 @@ export class InspectorService {
 
         this._overlay.connect('motion-event', (_actor, event) => {
             const [x, y] = event.get_coords();
-            try {
-                const targetWin = this._findTargetWindow(x, y);
-                if (targetWin) {
-                    // No probe: an untracked window leaves an answer with no owner to forget it.
-                    const frame = getWindowFrameRect(targetWin);
-                    if (!frame)
-                        return;
-                    const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
-                    const innerRadius = this._getExpectedWindowRadius(targetWin);
-                    const outerRadius = highlightOuterRadius(innerRadius, HIGHLIGHT_BORDER_WIDTH);
-
-                    this._highlight.set_position(box.x, box.y);
-                    this._highlight.set_size(box.width, box.height);
-
-                    if (this._currentRadius !== outerRadius) {
-                        this._currentRadius = outerRadius;
-                        this._highlight.style = highlightStyle(outerRadius);
-                    }
-                    this._highlight.visible = true;
-                } else {
-                    this._highlight.visible = false;
-                }
-            } catch {
-                this._highlight.visible = false;
-            }
+            this._updateHighlightAt(x, y);
             return Clutter.EVENT_STOP;
         });
 
@@ -292,6 +268,36 @@ export class InspectorService {
             setActorCursor(getStage(), CursorShape.CROSSHAIR);
         } catch {
             // The cursor is cosmetic; a stage that refused the call must not stop a pick.
+        }
+    }
+
+    _updateHighlightAt(x, y) {
+        try {
+            const targetWin = this._findTargetWindow(x, y);
+            if (!targetWin) {
+                this._highlight.visible = false;
+                return;
+            }
+            // No probe: an untracked window leaves an answer with no owner to forget it.
+            const frame = getWindowFrameRect(targetWin);
+            if (!frame)
+                return;
+            const box = highlightBoundingBox(frame, HIGHLIGHT_BORDER_WIDTH);
+            const outerRadius = highlightOuterRadius(
+                this._getExpectedWindowRadius(targetWin),
+                HIGHLIGHT_BORDER_WIDTH
+            );
+
+            this._highlight.set_position(box.x, box.y);
+            this._highlight.set_size(box.width, box.height);
+            if (this._currentRadius !== outerRadius) {
+                this._currentRadius = outerRadius;
+                this._highlight.style = highlightStyle(outerRadius);
+            }
+            this._highlight.visible = true;
+        } catch {
+            // A hover hit-test failure must not throw into the shell's event handler.
+            this._highlight.visible = false;
         }
     }
 

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 12:07+0800\n"
+"POT-Creation-Date: 2026-11-27 11:03+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -204,160 +204,160 @@ msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已将 %d 条修正导出到剪贴板"
 
-#: src/prefs/clipboardActions.js:61
-msgid "Clipboard is empty or does not contain text"
-msgstr "剪贴板为空或不包含文本"
-
-#: src/prefs/clipboardActions.js:94
+#: src/prefs/clipboardActions.js:72
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "导入失败：%s"
 
-#: src/prefs/clipboardActions.js:105
+#: src/prefs/clipboardActions.js:96
+msgid "Clipboard is empty or does not contain text"
+msgstr "剪贴板为空或不包含文本"
+
+#: src/prefs/clipboardActions.js:110
 msgid "All rules in clipboard are already up to date"
 msgstr "剪贴板中的规则已是最新"
 
-#: src/prefs/clipboardActions.js:110
+#: src/prefs/clipboardActions.js:115
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
 msgstr[0] "%d 条规则导入成功"
 
-#: src/prefs/conflictDialog.js:14
+#: src/prefs/conflictDialog.js:10
 msgid "Resolve Import Conflicts"
 msgstr "处理导入冲突"
 
-#: src/prefs/conflictDialog.js:45
+#: src/prefs/conflictDialog.js:40
 msgid "Cancel"
 msgstr "取消"
 
-#: src/prefs/conflictDialog.js:51
+#: src/prefs/conflictDialog.js:45
 msgid "Apply"
 msgstr "应用"
 
-#: src/prefs/conflictDialog.js:62
+#: src/prefs/conflictDialog.js:65
+msgid "Keep"
+msgstr "保留"
+
+#: src/prefs/conflictDialog.js:66
+msgid "Keep existing rules for all conflicts"
+msgstr "每一处冲突都保留现有规则"
+
+#: src/prefs/conflictDialog.js:71
+msgid "Replace"
+msgstr "替换"
+
+#: src/prefs/conflictDialog.js:72
+msgid "Replace existing rules with imported rules for all conflicts"
+msgstr "每一处冲突都换成导入的规则"
+
+#: src/prefs/conflictDialog.js:133
 #, javascript-format
 msgid "%d conflicting rule:"
 msgid_plural "%d conflicting rules:"
 msgstr[0] "%d 条规则有冲突："
 
-#: src/prefs/conflictDialog.js:78
-msgid "Keep"
-msgstr "保留"
-
-#: src/prefs/conflictDialog.js:79
-msgid "Keep existing rules for all conflicts"
-msgstr "每一处冲突都保留现有规则"
-
-#: src/prefs/conflictDialog.js:84
-msgid "Replace"
-msgstr "替换"
-
-#: src/prefs/conflictDialog.js:85
-msgid "Replace existing rules with imported rules for all conflicts"
-msgstr "每一处冲突都换成导入的规则"
-
-#: src/prefs/conflictDialog.js:159
+#: src/prefs/conflictDialog.js:161
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "应用失败，请重新检查每一处冲突的处理方式"
 
-#: src/prefs/rulePage.js:89
+#: src/prefs/rulePage.js:66
 msgid "Revert to the automatic decision"
 msgstr "恢复自动判断"
 
-#
 #: src/prefs/rulePage.js:173
-msgid "Pick window…"
-msgstr "选取窗口…"
-
-#: src/prefs/rulePage.js:176
-msgid "The correction applies to every window of its kind"
-msgstr "对所有同类窗口生效"
-
-#: src/prefs/rulePage.js:181
 msgid "Import from Clipboard"
 msgstr "从剪贴板导入"
 
-#: src/prefs/rulePage.js:182
+#: src/prefs/rulePage.js:174
 msgid "Export to Clipboard"
 msgstr "导出到剪贴板"
 
-#: src/prefs/rulePage.js:188 src/prefs/rulePage.js:191
+#: src/prefs/rulePage.js:180 src/prefs/rulePage.js:183
 msgid "More actions"
 msgstr "更多操作"
 
-#: src/prefs/rulePage.js:203
+#
+#: src/prefs/rulePage.js:216
+msgid "Pick window…"
+msgstr "选取窗口…"
+
+#: src/prefs/rulePage.js:219
+msgid "The correction applies to every window of its kind"
+msgstr "对所有同类窗口生效"
+
+#: src/prefs/rulePage.js:224
 msgid "Corrections"
 msgstr "误判修正"
 
 #
-#: src/prefs/rulePage.js:204
+#: src/prefs/rulePage.js:225
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正按窗口种类分别生效；打开开关，该轴改为与自动判断相反"
 
-#: src/prefs/rulePage.js:240
+#: src/prefs/rulePage.js:261
 msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
 msgstr "装饰不正确的窗口，点“选取窗口…”添加修正"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:96
+#: src/prefs/ruleUi.js:105
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "打开后，这一轴与自动判断相反"
 
-#: src/prefs/ruleUi.js:126
+#: src/prefs/ruleUi.js:134
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "选自窗口“%s”"
 
 #. Translators: Closes the error dialog.
-#: src/prefs/ruleUi.js:137
+#: src/prefs/ruleUi.js:145
 msgid "Close"
 msgstr "关闭"
 
-#: src/prefs/windowPicker.js:18
+#: src/prefs/windowPicker.js:16
 msgid "No correction added: this window could not be identified"
 msgstr "无法识别这个窗口，未添加修正"
 
-#: src/prefs/windowPicker.js:22
+#: src/prefs/windowPicker.js:20
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "扩展没有响应，未添加修正；重新登录后再选取"
 
 #. The one way a correction cannot act: the window is below the size both cuts need to fit.
-#: src/prefs/windowPicker.js:24
+#: src/prefs/windowPicker.js:22
 msgid "No correction added: this window is too small to decorate"
 msgstr "窗口过小，无法装饰，未添加修正"
 
-#: src/prefs/windowPicker.js:71
+#: src/prefs/windowPicker.js:65
 msgid "Window Pick Failed"
 msgstr "选取窗口失败"
 
 #
-#: src/prefs/windowPicker.js:73
+#: src/prefs/windowPicker.js:67
 msgid "A window is already being picked"
 msgstr "正在选取窗口"
 
-#: src/prefs/windowPicker.js:74
+#: src/prefs/windowPicker.js:68
 msgid "Could not connect to the Window Nativizer extension: it is not enabled"
 msgstr "Window Nativizer 扩展没有启用，无法选取窗口"
 
-#: src/prefs/windowPicker.js:101
+#: src/prefs/windowPicker.js:94
 msgid "No correction added: it could not be saved"
 msgstr "保存失败，未添加修正"
 
-#: src/prefs/windowPicker.js:113
+#: src/prefs/windowPicker.js:103
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs/windowPicker.js:114
+#: src/prefs/windowPicker.js:104
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已为 %s 添加修正：%s"
 
-#: src/prefs/windowPicker.js:124
+#: src/prefs/windowPicker.js:114
 msgid "The correction takes effect once the window is restored"
 msgstr "窗口退出最大化或平铺后，才能看到修正效果"

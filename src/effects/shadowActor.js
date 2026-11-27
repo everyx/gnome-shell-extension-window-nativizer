@@ -117,10 +117,6 @@ export const ShadowActor = GObject.registerClass({
         return this._fade.progress;
     }
 
-    get outgoing() {
-        return this._fade.outgoing;
-    }
-
     get style() {
         return this._fade.style;
     }

@@ -259,13 +259,7 @@ export class OverviewDecoration {
         if (container === this._bypassContainer)
             return;
         // Restore the old actor first: a rebuilt container at 255 makes Mutter's fast path skip the mask.
-        if (this._bypassContainer) {
-            try {
-                this._bypassContainer.set_opacity(this._savedBypassOpacity);
-            } catch {
-                // Previous container already destroyed; nothing left to restore.
-            }
-        }
+        this._restoreOpacityBypass();
         try {
             this._savedBypassOpacity = container.get_opacity();
             container.set_opacity(Math.min(BYPASS_OPACITY, this._savedBypassOpacity));
@@ -274,6 +268,17 @@ export class OverviewDecoration {
             // Gone mid-settle: the next pass retries, and nothing was lowered, so the exit restores nothing.
             this._bypassContainer = null;
         }
+    }
+
+    _restoreOpacityBypass() {
+        if (!this._bypassContainer)
+            return;
+        try {
+            this._bypassContainer.set_opacity(this._savedBypassOpacity);
+        } catch {
+            // Container already destroyed; nothing left to restore.
+        }
+        this._bypassContainer = null;
     }
 
     /** With forced corners the clip is intended, so a refusal there is not the defect watched for. */
@@ -308,14 +313,7 @@ export class OverviewDecoration {
     }
 
     _clearMask() {
-        if (this._bypassContainer) {
-            try {
-                this._bypassContainer.set_opacity(this._savedBypassOpacity);
-            } catch {
-                // Window actor already destroyed.
-            }
-            this._bypassContainer = null;
-        }
+        this._restoreOpacityBypass();
 
         if (this._stex) {
             const opaqueMask = this._OverviewMask?.opaqueMask;

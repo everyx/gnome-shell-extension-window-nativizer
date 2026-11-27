@@ -79,7 +79,7 @@ export function exportRulesJson(entries) {
     return JSON.stringify(payload, null, 2);
 }
 
-export function importRulesJson(existingEntries, jsonText) {
+function parseImportPayload(jsonText) {
     if (!jsonText || !jsonText.trim())
         throw new Error('Empty clipboard or content');
 
@@ -93,40 +93,34 @@ export function importRulesJson(existingEntries, jsonText) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
         throw new Error('Invalid rules payload');
 
+    if (parsed.version !== undefined && parsed.version !== 1)
+        throw new Error(`Unsupported format version: ${parsed.version}`);
+
+    const hasRulesMap = parsed.rules && typeof parsed.rules === 'object' && !Array.isArray(parsed.rules);
     let rawRules = null;
-    if (parsed.version !== undefined) {
-        if (parsed.version !== 1)
-            throw new Error(`Unsupported format version: ${parsed.version}`);
-        if (parsed.rules && typeof parsed.rules === 'object' && !Array.isArray(parsed.rules))
-            rawRules = parsed.rules;
-    } else if (parsed.rules && typeof parsed.rules === 'object' && !Array.isArray(parsed.rules)) {
+    if (hasRulesMap)
         rawRules = parsed.rules;
-    } else {
+    else if (parsed.version === undefined)
         rawRules = parsed;
-    }
 
     if (!rawRules || Object.keys(rawRules).length === 0)
         throw new Error('No rules found in content');
 
     const candidateRaw = {};
     for (const [key, val] of Object.entries(rawRules)) {
-        if (val && typeof val === 'object') {
-            candidateRaw[key] = {
-                state: val.state,
-                title: val.title,
-            };
-        } else if (typeof val === 'string') {
-            candidateRaw[key] = {
-                state: val,
-                title: '',
-            };
-        }
+        if (val && typeof val === 'object')
+            candidateRaw[key] = {state: val.state, title: val.title};
+        else if (typeof val === 'string')
+            candidateRaw[key] = {state: val, title: ''};
     }
     const cleanImported = sanitizeEntries(candidateRaw);
     const importedKeys = Object.keys(cleanImported);
     if (importedKeys.length === 0)
         throw new Error('No valid rules found');
+    return {cleanImported, importedKeys};
+}
 
+function classifyImportedRules(existingEntries, cleanImported) {
     const conflicts = [];
     const nonConflictingEntries = {...existingEntries};
     let addedCount = 0;
@@ -135,10 +129,7 @@ export function importRulesJson(existingEntries, jsonText) {
     for (const [key, importedEntry] of Object.entries(cleanImported)) {
         const existing = existingEntries[key];
         if (!existing) {
-            nonConflictingEntries[key] = {
-                state: importedEntry.state,
-                title: importedEntry.title,
-            };
+            nonConflictingEntries[key] = {state: importedEntry.state, title: importedEntry.title};
             addedCount++;
         } else if (existing.state !== importedEntry.state) {
             conflicts.push({
@@ -148,17 +139,19 @@ export function importRulesJson(existingEntries, jsonText) {
                 existingTitle: existing.title || '',
                 importedTitle: importedEntry.title || '',
             });
-        } else {
-            const titleSupplemented = Boolean(!existing.title && importedEntry.title);
-            if (titleSupplemented) {
-                nonConflictingEntries[key] = {
-                    ...existing,
-                    title: importedEntry.title,
-                };
-                updatedCount++;
-            }
+        } else if (!existing.title && importedEntry.title) {
+            nonConflictingEntries[key] = {...existing, title: importedEntry.title};
+            updatedCount++;
         }
     }
+
+    return {conflicts, nonConflictingEntries, addedCount, updatedCount};
+}
+
+export function importRulesJson(existingEntries, jsonText) {
+    const {cleanImported, importedKeys} = parseImportPayload(jsonText);
+    const {conflicts, nonConflictingEntries, addedCount, updatedCount} =
+        classifyImportedRules(existingEntries, cleanImported);
 
     if (conflicts.length > 0) {
         return {
@@ -252,6 +245,7 @@ function readValue(settings, key) {
     try {
         return settings?.get_value?.(key)?.deep_unpack() ?? null;
     } catch {
+        // Missing or incompatible schema key must not crash preferences or reconcile.
         return null;
     }
 }
