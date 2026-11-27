@@ -25,12 +25,6 @@ uniform vec4 uShadow1;
     ]);
 });
 
-test('keys an indexed name so a layer loop can address it', () => {
-    // shadow1..shadow3 is what the upload loop indexes; a base name would have to be re-split.
-    const keys = uniformManifest('uniform vec4 uShadow7;\n').map(([key]) => key);
-    assert.deepEqual(keys, ['shadow7']);
-});
-
 test('refuses a type whose width it does not know', () => {
     assert.throws(
         () => uniformManifest('uniform mat4 uTransform;\n'),

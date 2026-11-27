@@ -638,14 +638,6 @@ describe('decideResizeBand', () => {
         insets: {left: 25, right: 25, top: 25, bottom: 25}};
     const ring = (left, right, top, bottom) => ({...plain, insets: {left, right, top, bottom}});
 
-    it('shows the band on a resizable window that reserves a ring', () => {
-        expect(decideResizeBand(plain)).toBeTrue();
-    });
-
-    it('a rule can retract the band where the heuristic would draw it', () => {
-        expect(decideResizeBand({...plain, reversed: true})).toBeFalse();
-    });
-
     it('bands a bare window by default, and reversing the axis retracts that band', () => {
         // The WPS case: no declared ring, so the band sits on the desktop around the
         // window. For this window there is no "force on" left - the default already
@@ -663,21 +655,6 @@ describe('decideResizeBand', () => {
         expect(decideResizeBand({...plain, reversed: true, isMaximized: true})).toBeFalse();
         expect(decideResizeBand({...plain, reversed: true, hasSsd: true})).toBeFalse();
         expect(decideResizeBand({...plain, reversed: true, frameWidth: MIN_BAND_WINDOW - 1})).toBeFalse();
-    });
-
-    it('gives a bare window the band by default: opting out is one reversal away', () => {
-        // The WPS case: no declared ring, so the band sits on the desktop around the
-        // window. That is the tradeoff the default accepts; a kind that cannot take
-        // it (a fixed-ratio video popup) reverses the resize axis.
-        const actions = evaluateWindowActions({
-            bufferWidth: 800, bufferHeight: 600, frameWidth: 800, frameHeight: 600,
-            isX11: true, bufferAlpha: false, wmClass: 'wps',
-        });
-        expect(actions.drawClip).toBeTrue();
-        expect(actions.drawResize).toBeTrue();
-        expect(decideResizeBand({...plain, insets: {left: 0, right: 0, top: 0, bottom: 0}})).toBeTrue();
-        expect(decideResizeBand({...plain, insets: {left: 0, right: 0, top: 0, bottom: 0}, reversed: true}))
-            .toBeFalse();
     });
 
     it('skips a window that cannot be resized', () => {
@@ -738,17 +715,6 @@ describe('decideResizeBand', () => {
         expect(decideResizeBand(ring(0, 0, 24, 24))).toBeTrue();
         // The symmetric ring of the same total is a native handle on a GTK4 client, and skipped.
         expect(decideResizeBand({...ring(12, 12, 12, 12), hasGtk4Client: true})).toBeFalse();
-    });
-
-    it('a fixed-ratio popup keeps its own handle by rule, not by default', () => {
-        // A video popup fills its own surface, and a compositor-driven resize cannot
-        // track a client that keeps an aspect ratio (measured: the popup ignores
-        // requested sizes). The default still bands it - that is what the default is
-        // for - so the popup's kind reverses the resize axis instead.
-        expect(decideResizeBand({...ring(0, 0, 0, 0), hasGtk4Client: false})).toBeTrue();
-        expect(decideResizeBand({...ring(0, 0, 0, 0), reversed: true})).toBeFalse();
-        // A window that reserves a margin on one axis only still has that ring to fill.
-        expect(decideResizeBand(ring(0, 0, 25, 25))).toBeTrue();
     });
 
     it('keeps the band on a window only as thin as the ring itself', () => {

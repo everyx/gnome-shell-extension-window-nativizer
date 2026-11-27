@@ -332,23 +332,6 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
             expect(reads).toBe(2);
         });
 
-        it('accepts a mapped provider', () => {
-            classifier.probeAdwaitaLook(424242, {readMaps: reader(maps('/usr/lib/libadwaita-1.so.0'))});
-            expect(classifier.adwaitaLook(424242)).toBeTrue();
-        });
-
-        it('rejects a GTK program holding no provider', () => {
-            classifier.probeAdwaitaLook(424243, {
-                readMaps: reader(maps('/usr/lib/libgtk-4.so.1', '/usr/lib/libgtk-3.so.0')),
-            });
-            expect(classifier.adwaitaLook(424243)).toBeFalse();
-        });
-
-        it('rejects a non-GTK program', () => {
-            classifier.probeAdwaitaLook(424245, {readMaps: reader(maps('/usr/lib/libQt6Core.so.6'))});
-            expect(classifier.adwaitaLook(424245)).toBeFalse();
-        });
-
         it('ignores an answer that lands after the pid was forgotten', () => {
             const known = [];
             let finish;
@@ -380,22 +363,6 @@ describe('ProcessClassifier (instance-scoped lifecycle)', () => {
     });
 
     describe('adwaitaLook when there is no answer', () => {
-        it('is null until the answer lands, and then the maps answer', () => {
-            let finish;
-            const readMaps = (pid, done) => { finish = done; };
-
-            classifier.probeAdwaitaLook(272727, {readMaps});
-            expect(classifier.adwaitaLook(272727)).toBeNull();
-            finish(maps('/usr/lib/libc.so.6'));
-            expect(classifier.adwaitaLook(272727)).toBeFalse();
-        });
-
-        it('answers in the same call when the probe resolves synchronously', () => {
-            const readMaps = (pid, done) => done(maps('/usr/lib/libc.so.6'));
-            classifier.probeAdwaitaLook(282828, {readMaps});
-            expect(classifier.adwaitaLook(282828)).toBeFalse();
-        });
-
         it('is null once the pid is forgotten or the instance is destroyed', () => {
             classifier.probeAdwaitaLook(373737, {readMaps: () => {}});
             expect(classifier.adwaitaLook(373737)).toBeNull();

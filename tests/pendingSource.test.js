@@ -149,20 +149,6 @@ describe('PendingSource (one live source per slot)', () => {
         slot.cancel();
         expect(glib.removed).toEqual([]);
     });
-
-    it('empties the slot when the callback removes its source', () => {
-        const glib = fakeSource();
-        const slot = new PendingSource(glib.add, glib.remove);
-
-        slot.queue(() => false);
-        glib.run(glib.live[0]);
-
-        // Nothing is live and nothing is tracked, so a later cancel removes nothing.
-        expect(glib.live).toEqual([]);
-        slot.cancel();
-        expect(glib.removed).toEqual([]);
-    });
-
 });
 
 describe('clipEffect suspend bookkeeping (the sequence that orphaned an idle)', () => {

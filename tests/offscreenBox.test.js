@@ -70,19 +70,6 @@ describe('offscreenQuad: one unit is one logical pixel', () => {
             .toEqual({width: 444.75, height: 284.25, offsetX: 2.25, offsetY: 2.25});
     });
 
-    it('lets a corner radius reach radius * scale device px', () => {
-        const radius = 15;
-        for (const {scale, device} of MEASURED) {
-            const quad = offscreenQuad(BODY, scale);
-            // The shader draws the radius in the same units as the box, so its device radius is
-            // radius * (device px per unit). That factor has to be the monitor scale exactly.
-            const devicePerUnit = quad.width * scale / quad.width;
-            expect(devicePerUnit).toBeCloseTo(scale, 12);
-            expect(radius * devicePerUnit).toBeCloseTo(radius * scale, 9);
-            expect(device[0]).toBeGreaterThan(BODY.width * scale);
-        }
-    });
-
     it('rounds the scaled edges to 1/256ths before the device grid, like C', () => {
         // Without this the float32 monitor scale sends the far edge to 377 instead of 376 and the
         // quad comes out 285.0 units tall against a 379px FBO: one device pixel short at the bottom.

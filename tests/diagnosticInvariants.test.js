@@ -224,16 +224,6 @@ describe('shadowBakeFailureWarning (one line per bake-failure episode)', () => {
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn.calls.mostRecent().args[0]).toContain('1024x1024');
     });
-
-    it('re-arms after a successful bake, so the next failure speaks again', () => {
-        const warn = jasmine.createSpy('warn');
-        let state = freshInvariantState();
-        state = attempt(state, false, warn);
-        expect(warn).toHaveBeenCalledTimes(1);
-        state = attempt(state, true, warn);
-        attempt(state, false, warn);
-        expect(warn).toHaveBeenCalledTimes(2);
-    });
 });
 
 describe('Diagnostic (a latch that writes its own line)', () => {

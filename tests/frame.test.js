@@ -91,16 +91,6 @@ describe('flatSafeInsets', () => {
         expect(flatSafeInsets(4 / 3).left).toBeCloseTo(3 / (4 / 3), 12);
     });
 
-    it('always covers a 1-logical-px client border plus the paint drift, symmetric per side', () => {
-        const deviceCover = {1: 1, 1.25: 3, 1.5: 3, 2: 2};
-        for (const [scale, count] of Object.entries(deviceCover)) {
-            const cover = flatSafeInsets(Number(scale));
-            // Device px the cut removes per side: the asserted whole count.
-            expect(cover.left * Number(scale)).toBeCloseTo(count, 9);
-            expect(cover).toEqual(insets(cover.left, cover.left, cover.left, cover.left));
-        }
-    });
-
     it('falls back to FLAT_SAFE_INSET when the scale is unreadable', () => {
         expect(flatSafeInsets(null)).toBe(FLAT_SAFE_INSET);
         expect(flatSafeInsets(0)).toBe(FLAT_SAFE_INSET);

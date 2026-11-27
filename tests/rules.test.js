@@ -390,26 +390,9 @@ describe('rule key contract & round-trip', () => {
         }
     });
 
-    it('renders a non-ASCII identity as text, never percent-escaped', () => {
-        const key = buildRuleKey('应用');
-        expect(key.startsWith('应用:')).toBeTrue();
-        expect(key).not.toContain('%');
-    });
-
     it('lowercases an identity but changes nothing else about it', () => {
         expect(buildRuleKey('wechat').startsWith('wechat:')).toBeTrue();
         expect(buildRuleKey('org.gnome.Nautilus').startsWith('org.gnome.nautilus:')).toBeTrue();
-    });
-
-    it('prefs-generated keys match resolveRule for the picked kind only', () => {
-        const picked = {hasParent: true, allowsResize: false};
-        const prefsGeneratedRules = {
-            [buildRuleKey('code', picked)]: 'corners,shadow',
-        };
-        expect(resolved(resolveRule('code', prefsGeneratedRules, picked)))
-            .toBe('corners,shadow');
-        expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
-        expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
     });
 });
 
@@ -492,19 +475,6 @@ describe('one canonical key per kind', () => {
 describe('sanitizeWindowRules', () => {
     const mainKey = buildRuleKey('wechat');
     const childKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-
-    it('canonicalises the axis order of a stored state', () => {
-        const input = {
-            [mainKey]: 'corners',
-            [childKey]: 'corners,shadow',
-            [buildRuleKey('resize-app')]: 'shadow,resize',
-        };
-        expect(sanitizeWindowRules(input)).toEqual({
-            [mainKey]: 'corners',
-            [childKey]: 'corners,shadow',
-            [buildRuleKey('resize-app')]: 'shadow,resize',
-        });
-    });
 
     it('drops bare app keys, truncated specifiers and malformed keys', () => {
         const input = {

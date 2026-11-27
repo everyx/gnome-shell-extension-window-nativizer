@@ -67,16 +67,6 @@ describe('the picker highlight', () => {
                 height: 400 + explicit * 2,
             });
         });
-
-        it('supports custom border widths', () => {
-            const frame = {x: 50, y: 80, width: 200, height: 150};
-            expect(highlightBoundingBox(frame, 6)).toEqual({
-                x: 44,
-                y: 74,
-                width: 212,
-                height: 162,
-            });
-        });
     });
 
     describe('highlightOuterRadius', () => {

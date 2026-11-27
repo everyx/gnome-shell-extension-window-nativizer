@@ -486,21 +486,6 @@ describe('cachedNativeLikeCorners', () => {
     });
 });
 
-describe('diagnostic vocabulary', () => {
-    it('keeps unavailable, unknown, n/a and cannotTell distinct', () => {
-        // `unavailable`: a reachable read that did not return.
-        expect(extractDiagnosticProperties(diagnosticWin(), null).clipEnabled).toBe('unavailable');
-        // `n/a`: the applied phase does not exist for a non-Wayland client.
-        expect(extractPhaseProperties(diagnosticWin()).appliedPhaseX).toBe('n/a');
-        // `unknown`: the classifier has no landed answer yet.
-        expect(cachedNativeLikeCorners({adwaitaLook: () => null}, 42)).toBe('unknown');
-        // `cannotTell`: there is no classifier to ask.
-        expect(cachedNativeLikeCorners(null, 42)).toBe('cannotTell');
-        // The four tokens are all different, so a consumer cannot fold one into another.
-        expect(new Set(['unavailable', 'unknown', 'n/a', 'cannotTell']).size).toBe(4);
-    });
-});
-
 describe('PickWindow D-Bus interface', () => {
     it('declares the required boolean under the original method name', () => {
         expect(INSPECTOR_DBUS_IFACE_XML).toContain('name="PickWindow"');

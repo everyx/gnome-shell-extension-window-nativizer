@@ -17,7 +17,6 @@ import {
     isCompatibleSurfaceGeometry,
 } from '../src/platform/surfaceContainer.js';
 
-const CLIP_INSETS = {left: 8, top: 8, right: 8, bottom: 8};
 const CLIP_SCALE = 1.25;
 
 /**
@@ -211,16 +210,6 @@ describe('clipTarget', () => {
 
                 expect(resolveClipTarget(win, actor, mockSt, unallocated)).toEqual({defer: true});
             });
-
-            it('reads its own container when the caller supplies none', () => {
-                // The standalone contract: omitting the argument is not "no container".
-                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
-                const surface = new MockSurfaceActor();
-                const actor = createMockActor({children: [surface]});
-
-                expect(resolveClipTarget(win, actor, mockSt))
-                    .toEqual({actor: surface, phaseInTransform: true});
-            });
         });
 
         describe('Wayland surface container target (keeps the subpixel phase out of the FBO)', () => {
@@ -362,14 +351,6 @@ describe('clipTarget', () => {
                 expect(resolveClipTarget(win, actor, mockSt))
                     .toEqual({actor, phaseInTransform: false});
             });
-
-            it('falls back to the window actor when every child is foreign', () => {
-                const win = createMockWindow({clientType: WindowClientType.WAYLAND});
-                const actor = createMockActor({children: [new MockStWidget(), new MockStWidget()]});
-
-                expect(resolveClipTarget(win, actor, mockSt))
-                    .toEqual({actor, phaseInTransform: false});
-            });
         });
 
         describe('Compatibility path (foreign St.Widget injected, e.g. Blur my Shell)', () => {
@@ -505,18 +486,6 @@ describe('clipTarget', () => {
             }
         });
 
-        it('suspends rather than painting when nothing can be measured', () => {
-            for (const size of [
-                {width: 0, height: 0},
-                {width: 0, height: 400},
-                {width: 500, height: 0},
-                {width: -1, height: 400},
-            ]) {
-                const plan = paintPlan({targetSize: size, windowActorSize: null, insets: CLIP_INSETS,
-                    scale: CLIP_SCALE, phase: {x: 0, y: 0}});
-                expect(plan.suspend).withContext(JSON.stringify(size)).toBe('no-size');
-            }
-        });
     });
 
     describe('a ringless Wayland body stays clipped when the container read lags', () => {

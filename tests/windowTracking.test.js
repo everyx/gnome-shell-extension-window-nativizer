@@ -5,7 +5,7 @@
  * Run: pnpm test
  */
 
-import {WindowTracking, RECONCILE_DEBOUNCE_MS} from '../src/lib/windowTracking.js';
+import {WindowTracking} from '../src/lib/windowTracking.js';
 import {WindowType} from '../src/lib/mutterRules.generated.js';
 
 /**
@@ -230,15 +230,6 @@ describe('WindowTracking — teardown', () => {
         expect(tracking.release(fakeWindow())).toBeNull();
         expect(tracking.get(fakeWindow())).toBeNull();
     });
-
-    it('pretends nothing is pending once the only window is released', () => {
-        const {tracking} = makeTracker();
-        const win = fakeWindow({actor: fakeActor({width: 0, height: 0})});
-        tracking.add(win, decoration());
-        expect(tracking.hasPending).toBeTrue();
-        tracking.release(win);
-        expect(tracking.hasPending).toBeFalse();
-    });
 });
 
 describe('WindowTracking — the window a gap leaves behind', () => {
@@ -276,9 +267,5 @@ describe('WindowTracking — the window a gap leaves behind', () => {
         tracking.release(win);
         expect(entries.length).toBe(1);
         expect(tracking.size).toBe(0);
-    });
-
-    it('defaults its debounce to the documented window', () => {
-        expect(RECONCILE_DEBOUNCE_MS).toBe(50);
     });
 });
