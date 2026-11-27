@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-27 11:03+0800\n"
+"POT-Creation-Date: 2026-11-27 11:16+0800\n"
 "PO-Revision-Date: 2026-09-28 14:15+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -69,7 +69,7 @@ msgstr "邊框由系統繪製，本身可拖動"
 msgid "Fixed-size windows have no resize handle"
 msgstr "尺寸固定的視窗沒有可拖動的邊緣"
 
-#: src/lib/rulePresenter.js:118 src/prefs/conflictDialog.js:193
+#: src/lib/rulePresenter.js:118 src/prefs/conflictDialog.js:189
 msgid "Automatic"
 msgstr "自動"
 
@@ -160,33 +160,33 @@ msgstr "%s，%s，%s，%s"
 msgid "%s, %s, %s"
 msgstr "%s，%s，%s"
 
-#: src/prefs.js:41
+#: src/prefs.js:39
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:47
+#: src/prefs.js:45
 msgid "Display & Rendering"
 msgstr "顯示與轉譯"
 
-#: src/prefs.js:48
+#: src/prefs.js:46
 msgid "Control how windows are decorated at different monitor scales"
 msgstr "依螢幕縮放決定裝飾方式"
 
-#: src/prefs.js:53
+#: src/prefs.js:51
 msgid "Prioritize crisp text"
 msgstr "優先保持文字清晰"
 
-#: src/prefs.js:54
+#: src/prefs.js:52
 msgid ""
 "Skip rounded corners on monitors with fractional scaling to keep text sharp "
 "(the shadow is unaffected)"
 msgstr "分數縮放下不畫圓角，以保持文字清晰（陰影不受影響）"
 
-#: src/prefs.js:60
+#: src/prefs.js:58
 msgid "Force overview corners on every window"
 msgstr "強制所有視窗顯示概覽圓角"
 
-#: src/prefs.js:61
+#: src/prefs.js:59
 msgid ""
 "Round XWayland and the few Wayland windows left square for sharpness (they "
 "come out blurrier)"
@@ -195,30 +195,30 @@ msgstr ""
 "更模糊）為清晰而保持直角的 XWayland 及極少數 Wayland 視窗也畫上圓角（代價是更"
 "模糊）"
 
-#: src/prefs/clipboardActions.js:23
+#: src/prefs/clipboardActions.js:21
 msgid "No corrections to export"
 msgstr "沒有可匯出的修正"
 
-#: src/prefs/clipboardActions.js:35
+#: src/prefs/clipboardActions.js:33
 #, javascript-format
 msgid "Exported %d correction to clipboard"
 msgid_plural "Exported %d corrections to clipboard"
 msgstr[0] "已將 %d 條修正規則匯出至剪貼簿"
 
-#: src/prefs/clipboardActions.js:72
+#: src/prefs/clipboardActions.js:70
 #, javascript-format
 msgid "Import failed: %s"
 msgstr "匯入失敗：%s"
 
-#: src/prefs/clipboardActions.js:96
+#: src/prefs/clipboardActions.js:94
 msgid "Clipboard is empty or does not contain text"
 msgstr "剪貼簿是空的，或不包含文字"
 
-#: src/prefs/clipboardActions.js:110
+#: src/prefs/clipboardActions.js:108
 msgid "All rules in clipboard are already up to date"
 msgstr "剪貼簿中的規則已是最新"
 
-#: src/prefs/clipboardActions.js:115
+#: src/prefs/clipboardActions.js:113
 #, javascript-format
 msgid "Imported %d rule successfully"
 msgid_plural "Imported %d rules successfully"
@@ -262,103 +262,103 @@ msgstr[0] "%d 條規則存在衝突："
 msgid "Could not apply the changes. Review your selections and try again."
 msgstr "套用失敗，請重新檢查每一處衝突的處理方式"
 
-#: src/prefs/rulePage.js:66
+#: src/prefs/rulePage.js:64
 msgid "Revert to the automatic decision"
 msgstr "回復自動判斷"
 
-#: src/prefs/rulePage.js:173
+#: src/prefs/rulePage.js:171
 msgid "Import from Clipboard"
 msgstr "從剪貼簿匯入"
 
-#: src/prefs/rulePage.js:174
+#: src/prefs/rulePage.js:172
 msgid "Export to Clipboard"
 msgstr "匯出到剪貼簿"
 
-#: src/prefs/rulePage.js:180 src/prefs/rulePage.js:183
+#: src/prefs/rulePage.js:178 src/prefs/rulePage.js:181
 msgid "More actions"
 msgstr "更多操作"
 
 #
-#: src/prefs/rulePage.js:216
+#: src/prefs/rulePage.js:214
 msgid "Pick window…"
 msgstr "選取視窗…"
 
-#: src/prefs/rulePage.js:219
+#: src/prefs/rulePage.js:217
 msgid "The correction applies to every window of its kind"
 msgstr "對所有同類視窗生效"
 
-#: src/prefs/rulePage.js:224
+#: src/prefs/rulePage.js:222
 msgid "Corrections"
 msgstr "誤判修正"
 
 #
-#: src/prefs/rulePage.js:225
+#: src/prefs/rulePage.js:223
 msgid ""
 "Corrections apply per window kind; a switch corrects the automatic decision "
 "for one axis"
 msgstr "修正依視窗種類分別生效；開啟開關，該軸改為與自動判斷相反"
 
-#: src/prefs/rulePage.js:261
+#: src/prefs/rulePage.js:259
 msgid "Use “Pick window…” to correct a window that is decorated incorrectly"
 msgstr "裝飾不正確的視窗，點「選取視窗…」新增修正"
 
 #. Translators: Tooltip on a correction switch: turning it on reverses the automatic decision.
-#: src/prefs/ruleUi.js:105
+#: src/prefs/ruleUi.js:100
 msgid "Turn on to correct the automatic decision for this window kind"
 msgstr "開啟後，這一軸與自動判斷相反"
 
-#: src/prefs/ruleUi.js:134
+#: src/prefs/ruleUi.js:129
 #, javascript-format
 msgid "Picked from the window “%s”"
 msgstr "選自視窗「%s」"
 
 #. Translators: Closes the error dialog.
-#: src/prefs/ruleUi.js:145
+#: src/prefs/ruleUi.js:140
 msgid "Close"
 msgstr "關閉"
 
-#: src/prefs/windowPicker.js:16
+#: src/prefs/windowPicker.js:14
 msgid "No correction added: this window could not be identified"
 msgstr "無法辨識這個視窗，未新增修正"
 
-#: src/prefs/windowPicker.js:20
+#: src/prefs/windowPicker.js:18
 msgid ""
 "No correction added: the extension did not answer — restart the session and "
 "pick again"
 msgstr "擴充功能沒有回應，未新增修正；請重新登入後再選取"
 
 #. The one way a correction cannot act: the window is below the size both cuts need to fit.
-#: src/prefs/windowPicker.js:22
+#: src/prefs/windowPicker.js:20
 msgid "No correction added: this window is too small to decorate"
 msgstr "視窗過小，無法裝飾，未新增修正"
 
-#: src/prefs/windowPicker.js:65
+#: src/prefs/windowPicker.js:63
 msgid "Window Pick Failed"
 msgstr "選取視窗失敗"
 
 #
-#: src/prefs/windowPicker.js:67
+#: src/prefs/windowPicker.js:65
 msgid "A window is already being picked"
 msgstr "正在選取視窗"
 
-#: src/prefs/windowPicker.js:68
+#: src/prefs/windowPicker.js:66
 msgid "Could not connect to the Window Nativizer extension: it is not enabled"
 msgstr "Window Nativizer 擴充功能沒有啟用，無法選取視窗"
 
-#: src/prefs/windowPicker.js:94
+#: src/prefs/windowPicker.js:92
 msgid "No correction added: it could not be saved"
 msgstr "儲存失敗，未新增修正"
 
-#: src/prefs/windowPicker.js:103
+#: src/prefs/windowPicker.js:101
 #, javascript-format
 msgid "Correction updated for %s: %s"
 msgstr "已更新 %s 的修正：%s"
 
-#: src/prefs/windowPicker.js:104
+#: src/prefs/windowPicker.js:102
 #, javascript-format
 msgid "Correction added for %s: %s"
 msgstr "已為 %s 新增修正：%s"
 
-#: src/prefs/windowPicker.js:114
+#: src/prefs/windowPicker.js:112
 msgid "The correction takes effect once the window is restored"
 msgstr "視窗結束最大化或並排後，才能看到修正效果"

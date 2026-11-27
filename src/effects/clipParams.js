@@ -82,7 +82,6 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     // Unknown size counts as moved here: it vetoes the hold, and a frozen cut is worst mid-drag.
     const windowMoved = !windowKnown || maxSizeDelta(windowSize, previousWindowSize) >= tolerance;
 
-    // A resize explains the disagreement: trust the actor. Else the confirmed read, else a strike.
     if (pairDisagrees && !windowResized) {
         const targetMatches = windowKnown && maxSizeDelta(targetSize, windowSize) <= tolerance;
         const actorMatches = windowKnown && maxSizeDelta(windowActorSize, windowSize) <= tolerance;
@@ -126,11 +125,7 @@ export function settleClipBody(targetSize, windowActorSize, previousBody = null,
     };
 }
 
-/**
- * Body one paint acts on: settle's rules, reads live at paint, previous values from the pass.
- * Null only when neither the target nor the window actor is paintable, which is also the case the
- * paint's own size gate has already returned on - so a paint that got this far always has a body.
- */
+/** Settles the paint body against the pass's previous state. */
 export function resolvePaintBody(targetSize, windowActorSize, windowSize, plan = null) {
     return settleClipBody(targetSize, windowActorSize,
         plan?.previousBody ?? null, plan?.previousAuthority ?? null,
@@ -198,11 +193,7 @@ export function clipGeometryChanges(prev, next) {
     return changes;
 }
 
-/**
- * What one paint acts on, decided as values: the settle, the frame it cuts, the box it draws into.
- * `phase` and `fbo` come from the caller, where the live actor is read. `box.explained` is not a
- * gate: an FBO from another size compresses one frame, and suspending would blank it instead.
- */
+/** Per-paint plan; `box.explained` is not a suspend gate because a mismatched FBO only compresses one frame. */
 export function paintPlan({
     targetSize = null, windowActorSize = null, windowSize = null, fbo = null,
     scale = 1.0, candidates = null, insets = null, phase = null, bodyPlan = null,

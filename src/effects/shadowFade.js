@@ -40,7 +40,6 @@ export function createFadeState(options = {}) {
     };
 }
 
-/** New fade state for an incoming style; without `animate` it snaps, dropping the outgoing one. */
 export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 0} = {}) {
     if (!state.style || !animate) {
         return {
@@ -82,7 +81,6 @@ export function transitionFadeStyle(state, nextStyle, {animate = false, nowMs = 
     };
 }
 
-/** Advances the fade clock to `nowMs`; progress follows the eased curve and settles at 1. */
 export function advanceFadeState(state, nowMs) {
     if (state.fadeStart === 0 || !state.outgoing)
         return {state, running: false};
@@ -113,7 +111,6 @@ export function advanceFadeState(state, nowMs) {
 
 /** Cross-fade state machine for ShadowActor, on an injectable clock so tests stay deterministic. */
 export class ShadowFadeStateMachine {
-    /** `options.now` is the clock, defaulting to `Date.now`, so tests can step time. */
     constructor(options = {}) {
         this._durationMs = options.durationMs ?? DEFAULT_FADE_DURATION_MS;
         this._easing = options.easing ?? DEFAULT_FADE_EASING;
@@ -155,7 +152,6 @@ export class ShadowFadeStateMachine {
         return computeFadeWeights(this._state.progress, this._state.outgoing.weight).outgoing;
     }
 
-    /** Sets the target style and returns whether a fade is now running. */
     setStyle(nextStyle, options = {}) {
         const nowMs = typeof options.nowMs === 'number' ? options.nowMs : this._now();
         this._state = transitionFadeStyle(this._state, nextStyle, {
@@ -165,7 +161,6 @@ export class ShadowFadeStateMachine {
         return this.isFading;
     }
 
-    /** Advances the clock and returns whether another frame is still needed. */
     advance(nowMs = null) {
         const time = typeof nowMs === 'number' ? nowMs : this._now();
         const {state, running} = advanceFadeState(this._state, time);
@@ -173,7 +168,6 @@ export class ShadowFadeStateMachine {
         return running;
     }
 
-    /** Ends any running fade at once, snapping to the target style. */
     finish() {
         this._state = {
             ...this._state,
@@ -183,7 +177,6 @@ export class ShadowFadeStateMachine {
         };
     }
 
-    /** Resets to the initial state, keeping the configured duration and easing. */
     reset() {
         this._state = createFadeState({durationMs: this._durationMs, easing: this._easing});
     }

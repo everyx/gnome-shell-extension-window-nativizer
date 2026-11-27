@@ -1,5 +1,3 @@
-/** The corrections page: one row per window kind, with the pick, import and export it offers. */
-
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';

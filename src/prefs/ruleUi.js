@@ -12,7 +12,6 @@ const AXIS_ICONS = {
     [RuleAxis.RESIZE]: {bundled: 'winnativizer-resize-symbolic', fallback: 'view-restore-symbolic'},
 };
 
-/** Resolves display metadata for a rule key from installed app info, falling back to wmClass/key. */
 export function resolveRuleDisplay(key, installedApps) {
     const {baseWmClass, properties} = parseRuleKey(key);
     const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
@@ -22,7 +21,6 @@ export function resolveRuleDisplay(key, installedApps) {
 
 let _cssProviderRegistered = false;
 
-/** Registers the prefs CSS once; safe to call repeatedly. */
 export function ensureCustomStyles() {
     if (_cssProviderRegistered)
         return;
@@ -47,7 +45,6 @@ export function ensureCustomStyles() {
     _cssProviderRegistered = true;
 }
 
-/** Adds the bundled icons directory to the icon theme's search path; a failure leaves it stock. */
 export function registerIconThemePath(iconTheme) {
     try {
         const moduleDir = import.meta.url.slice(0, import.meta.url.lastIndexOf('/') + 1);
@@ -57,7 +54,6 @@ export function registerIconThemePath(iconTheme) {
     }
 }
 
-/** The axis's bundled symbolic icon, or its stock fallback. */
 function createAxisImage(axis, iconTheme) {
     const {bundled, fallback} = AXIS_ICONS[axis];
     return new Gtk.Image({
@@ -67,7 +63,6 @@ function createAxisImage(axis, iconTheme) {
     });
 }
 
-/** Replaces a box's children with one icon per corrected axis, or a fallback label if none. */
 export function populateAxisIcons(box, correctedAxes, caps, iconTheme, fallbackLabel = null) {
     let child = box.get_first_child();
     while (child) {

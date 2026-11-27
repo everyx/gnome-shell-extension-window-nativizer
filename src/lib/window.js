@@ -30,7 +30,6 @@ export function readDeclaredIdentity(win) {
     return '';
 }
 
-// Weak cache for resolved fallback identities; declared identities bypass cache.
 const fallbackIdentities = new WeakMap();
 
 export function resolveWindowIdentity(win) {

@@ -21,12 +21,7 @@ export const OverviewShadow = GObject.registerClass({
         preview.insert_child_below(this, container);
     }
 
-    /**
-     * Pads the thumbnail box so the cloned shadow's body lines up with the container under it.
-     * The box is not the thumbnail's: `Shell.WindowPreview` clamps every child to its own preferred
-     * size, and a clone's preferred size is its source's - the desktop shadow actor, already a window
-     * plus two pads. An unallocated container answers -Infinity.
-     */
+    /** Pads the container's box (Shell.WindowPreview clamps `box` to the unscaled source size; unallocated is -Infinity). */
     vfunc_allocate(box) {
         const cbox = this.get_parent()?.window_container?.get_allocation_box?.() ?? null;
         const width = cbox && cbox.get_width() > 0 ? cbox.get_width() : box.get_width();

@@ -6,7 +6,6 @@ import {HIGHLIGHT_BORDER_WIDTH} from './inspectorStyle.generated.js';
 // Picker highlight metrics match upstream Looking Glass (2px border) and screenshot selector fill.
 export {HIGHLIGHT_BORDER_WIDTH};
 
-/** Expected corner radius; maximized, tiled, fullscreen, unclipped non-Adwaita/SSD are square. */
 export function expectedWindowRadius({
     isFullscreen = false,
     isMaximized = false,

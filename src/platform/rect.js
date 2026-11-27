@@ -4,13 +4,11 @@
  * which is what lets `!rectEquals(a, b)` read as "it moved".
  */
 
-/** Whether two rects cover the same box. */
 export function rectEquals(first, second) {
     return Boolean(first && second) && first.x === second.x && first.y === second.y &&
         first.width === second.width && first.height === second.height;
 }
 
-/** Whether two sizes agree, origin aside. */
 export function sameSize(first, second) {
     return Boolean(first && second) && first.width === second.width && first.height === second.height;
 }

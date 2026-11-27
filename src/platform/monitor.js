@@ -77,7 +77,6 @@ function resolveHighestScaleMonitorIndex(win, rect) {
     return bestIndex;
 }
 
-/** Whether the cached index still describes the new rect. */
 function cacheHoldsRect(cached, rect) {
     if (rectEquals(cached.rect, rect))
         return true;
@@ -95,7 +94,6 @@ export function monitorScaleAt(index) {
     return entries?.[index]?.scale ?? null;
 }
 
-/** Scale of the monitor the frame sits on, from the cache; null when that read is unavailable. */
 function resolveWindowMonitorScale(win) {
     const index = resolveFrameMonitorIndex(win);
     if (index === null || index < 0)
@@ -103,7 +101,6 @@ function resolveWindowMonitorScale(win) {
     return monitorScaleAt(index);
 }
 
-/** Every monitor's scale, from the cached list the frame scan reads. */
 export function getAllMonitorScales() {
     return readMonitorList()?.map(entry => entry.scale).filter(scale => scale > 0) ?? null;
 }

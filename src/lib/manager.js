@@ -37,7 +37,7 @@ function gtypeName(object) {
 export class Manager {
     constructor(ext) {
         this._settings = ext.getSettings();
-        this._tracking = null;      // WindowTracking: the windows this session drives
+        this._tracking = null;
         this._subscriptions = new Subscriptions();
         this._rules = null;         // fingerprint -> rule state, invalidated on settings change
         this._inOverview = false;
@@ -73,7 +73,6 @@ export class Manager {
         this._highContrast = St.Settings.get().high_contrast;
         this._animationsEnabled = St.Settings.get().enable_animations;
         this._dark = this._isDark();
-        // Maintain overview mode across the showing-to-hidden transition.
         this._subscriptions.connect(Main.overview, 'showing', () => this._setOverviewMode(true));
         this._subscriptions.connect(Main.overview, 'hidden', () => this._setOverviewMode(false));
 
@@ -263,7 +262,6 @@ export class Manager {
         this._classifier?.probeAdwaitaLook(record.pid);
 
         const reading = readWindow(win, {classifier: this._classifier});
-        // The branch lives in the reading module, so it is a pure function of the reading.
         const outcome = reconcileOutcome(reading);
         if (outcome === 'defer')
             return;

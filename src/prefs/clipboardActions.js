@@ -1,5 +1,3 @@
-/** Rules out of the clipboard and back, and the toast that says what happened. */
-
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 

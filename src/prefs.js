@@ -1,5 +1,3 @@
-/** The preferences entry point: build the page, hand the corrections module what it needs. */
-
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';

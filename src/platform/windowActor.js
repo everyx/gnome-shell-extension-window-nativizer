@@ -10,7 +10,6 @@ export function getTrackedAppId(win) {
     }, '');
 }
 
-/** Meta.Window from an actor, trying `meta_window`, `metaWindow`, then `get_meta_window()`. */
 export function getWindowFromActor(actor) {
     if (!actor)
         return null;

@@ -288,8 +288,7 @@ export class OverviewDecoration {
             this._maskRefusalDiagnostic.check(null);
             return false;
         }
-        // Identity, never the title: a title can carry a document name or a chat partner, and this
-        // line goes to the journal. readDeclaredIdentity prefers wmClass and falls back to app ids.
+        // Identity, never the title: a title can carry a document name or chat partner into the journal.
         const label = windowIdentityLabel({wmClass: readDeclaredIdentity(this._win)});
         this._maskRefusalDiagnostic.check(overviewMaskRefusalWarning(reason, label));
         return false;
