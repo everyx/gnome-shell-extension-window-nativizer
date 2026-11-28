@@ -60,6 +60,12 @@ unmechanisable gets deleted. The rest of the anti-rot rules are the numbers: `ch
 code-size and comment-share ceilings from both sides, and `tools/ego-lint-baseline.txt` keeps every
 accepted finding on one line with its reason.
 
+**A check that reads code reads syntax, not text.** Matching a keyword with a pattern covers the
+forms someone thought of, and every form it misses passes silently - which is how one import scanner
+needed three rounds of review to learn about side-effect imports, dynamic ones, and versioned GI
+URIs. `tools/importSpecifiers.mjs` parses with `espree` for that reason, and reports what it cannot
+resolve (a template, a variable, a file that does not parse) instead of skipping it.
+
 ## What an extensions.gnome.org review rejects
 
 The [guidelines](https://gjs.guide/extensions/review-guidelines/review-guidelines.html) allow AI as a

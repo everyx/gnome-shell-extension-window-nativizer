@@ -1,6 +1,6 @@
 /**
- * Unit tests for the import scanner the boundary checker reads with: the forms that load a module
- * must all be seen, or the checker's verdict is about syntax rather than about dependencies.
+ * Unit tests for the import scanner: every form that loads a module is read, and a form it cannot
+ * resolve is reported rather than skipped.
  *
  * Run: pnpm run test:tools
  */
@@ -25,19 +25,31 @@ test('sees a dynamic import', () => {
     assert.deepEqual(specifiersOf("await import('../platform/display.js');\n"), ['../platform/display.js']);
 });
 
+test('sees a dynamic import whose specifier is on the next line', () => {
+    assert.deepEqual(specifiersOf("await import(\n    '../platform/display.js'\n);\n"), ['../platform/display.js']);
+});
+
+test('sees an import whose clause spans several lines', () => {
+    const text = "import {\n    getDisplay,\n} from '../platform/display.js';\n";
+    assert.deepEqual(importSpecifiers(text), [{specifier: '../platform/display.js', line: 1}]);
+});
+
 test('sees a re-export, which loads the module it names', () => {
     assert.deepEqual(specifiersOf("export {getDisplay} from '../platform/display.js';\n"), ['../platform/display.js']);
 });
 
-test('ignores an ordinary string that happens to mention an import', () => {
+test('reports a specifier it cannot resolve instead of skipping it', () => {
+    assert.deepEqual(specifiersOf("await import(`../platform/${name}.js`);\n"), [null]);
+    assert.deepEqual(specifiersOf('const where = 1;\nimport(where);\n'), [null]);
+});
+
+test('ignores comments and ordinary strings', () => {
+    assert.deepEqual(specifiersOf("// import '../platform/display.js'\n/* import 'gi://Meta' */\n"), []);
     assert.deepEqual(specifiersOf("const hint = 'import ../platform/display.js';\n"), []);
+    assert.deepEqual(specifiersOf("const url = 'https://example.com/import';\n"), []);
 });
 
-test('ignores a commented import', () => {
-    assert.deepEqual(specifiersOf("// import '../platform/display.js'\n"), []);
-});
-
-test('reports every specifier with the line it is on', () => {
+test('reports every import with the line it is on', () => {
     const text = "import 'gi://Gtk';\n\nimport Gio from 'gi://Gio';\n";
     assert.deepEqual(importSpecifiers(text), [
         {specifier: 'gi://Gtk', line: 1},

@@ -17,10 +17,15 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+import {importSpecifiers} from './importSpecifiers.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
 const TESTS = path.join(ROOT, 'tests');
 const ALLOWLIST = path.join(ROOT, 'tools', 'spec-coverage-allow.txt');
+
+/** A specifier that lands inside this tree's src/, as the path after `src/`. */
+const SRC_SPECIFIER = /^(?:\.\.\/)+src\/(.+)$/u;
 
 function fail(message) {
     console.error(`[check-spec-coverage] FAIL: ${message}`);
@@ -33,15 +38,20 @@ function jsFilesIn(dir) {
         .map(entry => path.join(entry.parentPath, entry.name));
 }
 
-/** Modules a spec imports, as paths relative to src/. */
-function specImports() {
-    const covered = new Set();
-    for (const file of jsFilesIn(TESTS)) {
-        const text = readFileSync(file, 'utf8');
-        for (const match of text.matchAll(/from ['"](?:\.\.\/)+src\/([^'"]+)['"]/gu))
-            covered.add(match[1]);
+/**
+ * Modules of src/ that one spec's text loads, however it loads them: a side-effect import counts as
+ * much as a named one, and so does a dynamic import inside a `beforeEach`.
+ */
+export function modulesImportedBy(text) {
+    const modules = new Set();
+    for (const {specifier} of importSpecifiers(text)) {
+        if (specifier === null)
+            continue;
+        const match = SRC_SPECIFIER.exec(specifier);
+        if (match)
+            modules.add(match[1]);
     }
-    return covered;
+    return modules;
 }
 
 /** `path/to/module.js # reason` per line; a line without a reason is refused. */
@@ -69,31 +79,40 @@ function readAllowlist() {
     return entries;
 }
 
-const modules = jsFilesIn(SRC)
-    .map(file => path.relative(SRC, file).split(path.sep).join('/'))
-    .filter(module => !module.endsWith('.generated.js'))
-    .sort();
+function main() {
+    const modules = jsFilesIn(SRC)
+        .map(file => path.relative(SRC, file).split(path.sep).join('/'))
+        .filter(module => !module.endsWith('.generated.js'))
+        .sort();
 
-const covered = specImports();
-const allowed = readAllowlist();
+    const covered = new Set();
+    for (const file of jsFilesIn(TESTS)) {
+        for (const module of modulesImportedBy(readFileSync(file, 'utf8')))
+            covered.add(module);
+    }
+    const allowed = readAllowlist();
 
-const violations = [];
-for (const module of modules) {
-    if (!covered.has(module) && !allowed.has(module))
-        violations.push(`src/${module}: no spec imports it; add one, or excuse it in ${path.relative(ROOT, ALLOWLIST)}`);
+    const violations = [];
+    for (const module of modules) {
+        if (!covered.has(module) && !allowed.has(module))
+            violations.push(`src/${module}: no spec imports it; add one, or excuse it in ${path.relative(ROOT, ALLOWLIST)}`);
+    }
+    for (const module of allowed.keys()) {
+        if (!modules.includes(module))
+            violations.push(`${path.relative(ROOT, ALLOWLIST)}: "${module}" does not exist`);
+        else if (covered.has(module))
+            violations.push(`${path.relative(ROOT, ALLOWLIST)}: "${module}" is imported by a spec now, so the entry is stale`);
+    }
+
+    if (violations.length > 0) {
+        for (const violation of violations)
+            console.error(`[check-spec-coverage] ${violation}`);
+        process.exit(1);
+    }
+
+    console.log(`[check-spec-coverage] OK: ${modules.length} modules, ${covered.size} imported by specs, ` +
+        `${allowed.size} excused with a reason.`);
 }
-for (const module of allowed.keys()) {
-    if (!modules.includes(module))
-        violations.push(`${path.relative(ROOT, ALLOWLIST)}: "${module}" does not exist`);
-    else if (covered.has(module))
-        violations.push(`${path.relative(ROOT, ALLOWLIST)}: "${module}" is imported by a spec now, so the entry is stale`);
-}
 
-if (violations.length > 0) {
-    for (const violation of violations)
-        console.error(`[check-spec-coverage] ${violation}`);
-    process.exit(1);
-}
-
-console.log(`[check-spec-coverage] OK: ${modules.length} modules, ${covered.size} imported by specs, ` +
-    `${allowed.size} excused with a reason.`);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+    main();
