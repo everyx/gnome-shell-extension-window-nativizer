@@ -1,0 +1,18 @@
+# Comment-only lines as a share of non-blank lines, in percent. `pnpm run check:volume` reads it.
+#
+# The numbers come from the tree, not from taste: at the time of writing the whole of src/ measured
+# 10.3% and the heaviest file 26.2%. A ceiling above the measurement is a licence to grow into it, so
+# the total is a ratchet - falling more than two points under it fails until the number comes down.
+# The per-file ceiling does not ratchet, because a ratio moves with every edit and a rule that fires
+# on arithmetic teaches people to ignore it.
+#
+# Every field below is required: a budget that cannot be read is an error, not a check that quietly
+# stops running. Values are whole numbers, `total` and `file` in 0-100, `min-lines` non-negative.
+#
+# total      the whole of src/, generated files excluded
+# file       any single authored file
+# min-lines  files with fewer non-blank lines than this are exempt (a four-line module can be half
+#            comment without carrying prose nobody needs)
+total 11
+file 30
+min-lines 20

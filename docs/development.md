@@ -23,7 +23,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run test:tools` | Node unit tests for generator/audit scripts (`tools/*.test.mjs`) |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
 | `pnpm run stats` | code size and EGO `quality/code-volume` budget; CI posts the base→head delta as a PR comment |
-| `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000 plus whatever overage the baseline declares (`# accepted-overage: N`); `stats` itself only reports. `pre-commit` prints that number as a reminder and never blocks on it: a feature is supposed to raise the ceiling, and a hook that refuses growth is a hook that gets `--no-verify`d |
+| `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000 plus whatever overage the baseline declares (`# accepted-overage: N`); `stats` itself only reports |
 | `pnpm run test:decoration` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
 | `pnpm run check:decoration` | fidelity guard: exits 1 unless shadows match live libadwaita (0 grey levels unfocused same-frame, 1 grey level focused alternating-frames), each is 4-way symmetric, and zero shadow bleeds inward |
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
@@ -45,6 +45,15 @@ picker's reply/teardown ordering live there. A spec for either would need those 
 lazy; until then, the safe move is to push the decision out into a pure function beside them -
 `paintPlan()` in `clipParams.js` is that, which is why the gates it holds are spec'd while the
 callback that calls it is not.
+
+**Prose is audited by a skill, not a check.** `.agents/skills/pre-release-audit` runs before a
+release over the diff that is about to ship: it lists the assertions the release touches, requires a
+pointer or a command for each, and reports which of them no longer hold. It reports rather than fixes,
+because the input is a judgement - what counts as an assertion - and the output has to be reviewable
+against the evidence it cites. Rot found twice becomes a mechanical check; rot found three times and
+unmechanisable gets deleted. The rest of the anti-rot rules are the numbers: `check:volume` holds the
+code-size and comment-share ceilings from both sides, and `tools/ego-lint-baseline.txt` keeps every
+accepted finding on one line with its reason.
 
 ## What an extensions.gnome.org review rejects
 
@@ -135,11 +144,6 @@ both would only make the second run slow, so the split follows what a check guar
   against the same round's disabled baseline, so a busy machine moves
   both arms and the guard reads it the same.
 
-Once those pass, the commit hook prints the EGO line - `8,461 / 8,000 + 461 accepted` - and exits
-zero whatever it says. It is a reminder rather than a gate because the ceiling is a budget a feature
-is allowed to raise; it is printed at all because the only thing that read it before was a CI comment,
-and master sat four lines past its declared budget with nothing failing.
-
 A commit made with `--no-verify` therefore reaches CI unchecked; that is the trade for not running
 the same checks twice on every push. Either hook can be skipped the same way.
 
@@ -147,22 +151,6 @@ A check's output goes to a file rather than straight to the terminal, so that th
 be printed whole. A failure or an interrupt keeps that file and names its path, because a hook that
 deletes the output of its own failure costs a re-run to learn what it already knew; a green run's
 file is removed. The path is `<tmpdir>/window-nativizer-<hook>.<pid>.log`, one per run.
-
-## What an agent must not do
-
-Four actions reach outside this tree, and no check can catch them, so they are written down instead of
-being left to judgement. Ask first, every time, however small the change looks - and say in the PR
-which of the four the change touched, or that none did.
-
-| Action | Why it is not ours to take |
-|---|---|
-| Driving the real desktop session instead of the nested one | `tools/dev.sh` exists because a test driving the developer's own shell can log them out of it; its first safety rule is that the desktop's `gnome-shell` is never signalled, evaluated against, or joined over its bus |
-| Publishing: a tag, the AUR package, extensions.gnome.org | A release is a promise to users that outlives the branch it was cut from |
-| Force-pushing a shared branch | Rewriting history someone has pulled destroys their work without telling them |
-| Deleting the installed extension or the user's dconf | The extension runs inside the developer's session; that install directory and those settings are their desktop, not our test fixture |
-
-Everything else - editing files, running the check chain, opening or rebasing your own branch, using
-the tools in `tools/` - proceed without asking, then report what you observed.
 
 ## Commit messages
 
@@ -400,12 +388,6 @@ live objects say `unavailable` explicitly rather than being omitted.
 `wmClass`, `windowTitle`, `width`, `height`, `clientType`, `hasRing`, `hasSsd`, `isMaximized`,
 `isFullscreen`, `hasTileMatch`, `allowsResize`, `isAttachedDialog`, `hasParent`, `windowType`,
 `bufferAlpha`, `suggestedState`, `suggestedStateWouldChange`.
-
-**The environment, in the same public reply**: `extensionVersion`, `monitorScale`, `theme` (`dark` or
-`light`), `highContrast`, `ruleState` (the stored axes that apply to this window kind, canonical order,
-or `none`). They are here so a bug report can be one paste instead of four questions, and every one of
-them says `unknown` when it cannot be read rather than being dropped: a caller that finds no key cannot
-tell "not asked" from "could not read", and the reply is a `a{ss}` where a missing key is silent.
 
 **Diagnostics-only - present only when `debug` is `true`**:
 
