@@ -79,7 +79,8 @@ tested without a session; the processes only gather inputs and apply results.
 ## Directory contracts
 
 What each directory may depend on. `tools/check-platform-boundary.mjs` enforces these and
-nothing else: `lib/` and `effects/` may not import `gi://Meta` or `gi://Shell`, touch
+nothing else: `prefs/` may not import `gi://Meta`, `gi://Shell`, `../platform/`, `../effects/`, the
+manager or the inspector; `lib/` and `effects/` may not import `gi://Meta` or `gi://Shell`, touch
 `global.display`, `global.stage`, `global.workspace_manager`, `globalThis.global` or `imports.gi`, or
 call the `win.*` window members it lists; a version-dependent member from `tools/shell-api.json`
 must be owned by `platform/` or guarded by a call-site probe; and `platform/` may not import
