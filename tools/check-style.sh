@@ -8,6 +8,7 @@ tools/gen-code.sh --check
 node tools/check-shell-version.mjs --check
 node tools/check-upstream-mirrors.mjs --check
 node tools/check-platform-boundary.mjs --check
+node tools/check-spec-coverage.mjs
 node tools/check-docs.mjs
 
 # One signal rule that is a grep: every signal the extension connects is torn down through

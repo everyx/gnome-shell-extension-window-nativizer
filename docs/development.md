@@ -17,7 +17,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
-| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `lint:ego`, `test:tools`, `test`, and `check:decoration` |
+| `pnpm run check` | full health check chain before commit: `lint`, `check:style`, `check:volume`, `lint:ego`, `test:tools`, `test`, and `check:decoration` |
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:tools` | Node unit tests for generator/audit scripts (`tools/*.test.mjs`) |
@@ -29,7 +29,8 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 when a budget is exceeded; a lone stress-ratio miss inside the known swing exits 2, which is the tool saying one re-run is worth it) |
-| `node tools/check-docs.mjs` | every document names paths that exist and `pnpm run` scripts that are defined; runs inside `check:style` |
+| `node tools/check-docs.mjs` | every document names paths that exist and `pnpm run` scripts that are defined; runs inside `check:style` and, on its own, before the hook that skips code checks for documentation-only commits |
+| `node tools/check-spec-coverage.mjs` | every module under `src/` is imported by a spec or excused with a reason in `tools/spec-coverage-allow.txt`; a stale excuse and a new unexcused module both exit 1 |
 | `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO reviewer's linter, compared against `tools/ego-lint-baseline.txt`: a finding that is not in the baseline, one that now appears more often, or a baseline entry that no longer appears all exit 1. `-- --update` rewrites the baseline; `EGO_LINT_DIR` points at a prepared checkout |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
@@ -38,10 +39,13 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run gen:code` | regenerates all transpiled shaders, styling constants, and upstream bindings |
 | `pnpm run gen:preview` | regenerates `assets/preview.webp` before/after comparison image in a nested session |
 
-**What the unit suite cannot load.** `src/effects/clipEffect.js` and `src/lib/inspector.js` import
-GI namespaces at module scope, and the suite runs on bare gjs - no `St`, `Cogl` or `Main`, and no
-`resource:///` shell modules. Neither file is imported by any spec, so their control flow is covered
-by the e2e checks above and by reading, not by `pnpm test`: the clip's paint sequence and the
+**What the unit suite cannot load.** The suite runs on bare gjs - no `St`, `Cogl` or `Main`, and no
+`resource:///` shell modules - so a module that imports those at module scope cannot be loaded at
+all. `tools/spec-coverage-allow.txt` is the list, each row with its reason; `check:style` fails on a
+module that is neither imported by a spec nor excused there.
+
+`src/effects/clipEffect.js` and `src/lib/inspector.js` are the two that cost the most coverage: their
+control flow is covered by the e2e checks above and by reading, not by `pnpm test`: the clip's paint sequence and the
 picker's reply/teardown ordering live there. A spec for either would need those imports to become
 lazy; until then, the safe move is to push the decision out into a pure function beside them -
 `paintPlan()` in `clipParams.js` is that, which is why the gates it holds are spec'd while the
