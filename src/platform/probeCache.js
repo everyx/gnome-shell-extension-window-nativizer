@@ -5,44 +5,38 @@ export function defaultProbeCachePath(uuid = 'window-nativizer@everyx.github.io'
 }
 
 /**
- * The kinds a probe has answered "decorate" for. Only that answer is worth remembering: it saves a
- * bare first frame, while "it rounds itself" is already the state an unprobed window starts in. So
- * nothing bounds the file - what it holds is the kinds this machine decorates, and a cap would
- * evict them.
+ * The kinds the probe measured as safe to clip, as rule keys. A set, not a record of booleans:
+ * presence is the whole answer, because "our clip would cut something" is the stand-down an unprobed
+ * window already takes. Nothing bounds the file - a cap would evict the kinds this machine decorates.
  */
 export function loadProbeCache(path) {
-    const map = new Map();
+    const kinds = new Set();
     if (!path)
-        return map;
+        return kinds;
     try {
         const [ok, bytes] = GLib.file_get_contents(path);
         if (!ok || !bytes)
-            return map;
+            return kinds;
         const parsed = JSON.parse(new TextDecoder().decode(bytes));
-        if (!parsed || typeof parsed !== 'object')
-            return map;
-        for (const [key, value] of Object.entries(parsed)) {
-            if (value === true)
-                map.set(key, true);
+        if (!Array.isArray(parsed))
+            return kinds;
+        for (const key of parsed) {
+            if (typeof key === 'string')
+                kinds.add(key);
         }
     } catch {
         // Missing or corrupt cache file is non-fatal; probing will rebuild it.
     }
-    return map;
+    return kinds;
 }
 
-export function saveProbeCache(path, map) {
-    if (!path || !(map instanceof Map))
+export function saveProbeCache(path, kinds) {
+    if (!path || !(kinds instanceof Set))
         return;
     try {
         const dir = GLib.path_get_dirname(path);
         GLib.mkdir_with_parents(dir, 0o755);
-        const obj = {};
-        for (const [key, value] of map.entries()) {
-            if (value === true)
-                obj[key] = true;
-        }
-        GLib.file_set_contents(path, JSON.stringify(obj));
+        GLib.file_set_contents(path, JSON.stringify([...kinds]));
     } catch {
         // Non-fatal: cache persistence is best-effort.
     }

@@ -121,7 +121,7 @@ export function inferDecorationBaseline({
     hasSsd = false,
     bufferAlpha = null,
     nativeLikeCorners = false,
-    selfRoundedCorners = null,
+    clipSafe = null,
     allowsResize = true,
     windowType = WindowType.NORMAL,
 }) {
@@ -153,9 +153,9 @@ export function inferDecorationBaseline({
         reason = `has-csd(${insets})`;
     }
 
-    const verifyReason = selfRoundedCorners !== false
-        ? requiresCornerVerification({hasSsd, sideW, sideH, bufferAlpha, allowsResize, windowType})
-        : null;
+    const verifyReason = clipSafe === true
+        ? null
+        : requiresCornerVerification({hasSsd, sideW, sideH, bufferAlpha, allowsResize, windowType});
     if (verifyReason === 'fixed-size') {
         return {
             shadow: false,
@@ -262,7 +262,7 @@ export function evaluateWindowActions({
     isX11 = false,
     bufferAlpha = null,
     nativeLikeCorners = false,
-    selfRoundedCorners = null,
+    clipSafe = null,
     hasGtk4Client = false,
     windowType = WindowType.NORMAL,
     hasParent = false,
@@ -295,7 +295,7 @@ export function evaluateWindowActions({
     const baseline = visuallyFloored
         ? {corners: false, shadow: false, reason: eligibility.reason}
         : inferDecorationBaseline({
-            isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, selfRoundedCorners, allowsResize, windowType,
+            isX11, sideW, sideH, hasSsd, bufferAlpha, nativeLikeCorners, clipSafe, allowsResize, windowType,
         });
 
     // `clientDeclaredRing` stays a pure question; clearing the SSD ring is strategy, handled here.

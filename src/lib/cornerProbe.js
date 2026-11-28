@@ -1,7 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-import {classifyCornerAlpha} from './cornerReading.js';
+import {isClipSafe} from './cornerReading.js';
 import {journal} from '../platform/journal.js';
 import {readActorCornerAlpha} from '../platform/cornerAlpha.js';
 import {defaultProbeCachePath, loadProbeCache, saveProbeCache} from '../platform/probeCache.js';
@@ -28,7 +28,7 @@ export class CornerProbe {
         this._cachePath = options.cachePath !== undefined
             ? options.cachePath
             : defaultProbeCachePath(options.uuid);
-        this._kindCache = this._cachePath ? loadProbeCache(this._cachePath) : new Map();
+        this._kindCache = this._cachePath ? loadProbeCache(this._cachePath) : new Set();
         this._winCache = new Map();
         this._lastSamples = new Map();
         this._inFlight = new Map();
@@ -51,17 +51,17 @@ export class CornerProbe {
         return this._destroyed;
     }
 
-    /** Tri-state: true (self-rounded), false (opaque corners), or null while pending/unknown. */
-    selfRoundedCorners(win, frameRect, kindKey = null) {
+    /** Tri-state: true (our clip cuts solid pixels), false (it would cut content), null while unknown. */
+    clipSafe(win, frameRect, kindKey = null) {
         if (!win || !frameRect)
             return null;
         const cached = this._winCache.get(win);
         if (cached && sameDimensions(cached, frameRect))
             return cached.value;
-        // The cache holds the kinds measured opaque: that is the answer worth sharing, because the
-        // other one - the client rounds itself - is the stand-down an unprobed window already takes.
-        if (kindKey && this._kindCache.get(kindKey) === true)
-            return false;
+        // The cache holds the kinds we measured as safe to clip: that is the answer worth sharing,
+        // because the other one is the stand-down an unprobed window already takes.
+        if (kindKey && this._kindCache.has(kindKey))
+            return true;
         return null;
     }
 
@@ -79,9 +79,9 @@ export class CornerProbe {
         if (cached)
             this._winCache.delete(win);
 
-        // A window of a kind measured opaque needs no answer: it decorates from that entry on its
-        // first frame.
-        if (kindKey && this._kindCache.get(kindKey) === true)
+        // A window of a kind already measured safe needs no answer: it decorates from that entry on
+        // its first frame.
+        if (kindKey && this._kindCache.has(kindKey))
             return;
 
         const active = this._inFlight.get(win);
@@ -189,7 +189,7 @@ export class CornerProbe {
             if (this._inFlight.get(win) !== entry)
                 return;
             this._inFlight.delete(win);
-            const verdict = error ? null : classifyCornerAlpha(sample);
+            const verdict = error ? null : isClipSafe(sample);
             // Kept for the inspector only.
             const discarded = verdict !== null && this._isDecorated(win);
             this._lastSamples.set(win, {
@@ -220,10 +220,10 @@ export class CornerProbe {
      */
     _publish(win, frameRect, kindKey, verdict) {
         this._winCache.set(win, {width: frameRect.width, height: frameRect.height, value: verdict});
-        // Only "the corners are opaque" is worth an entry, and it is for the next window of the kind:
-        // this one has been waiting since a pass that ran before the read finished.
-        if (verdict === false && kindKey && this._kindCache.get(kindKey) !== true) {
-            this._kindCache.set(kindKey, true);
+        // Only "safe to clip" is worth an entry, and it is for the next window of the kind: this one
+        // has been waiting since a pass that ran before the read finished.
+        if (verdict === true && kindKey && !this._kindCache.has(kindKey)) {
+            this._kindCache.add(kindKey);
             this._scheduleSave();
         }
         // Either answer ends the "unknown" the window was drawn under, so both are acted on. A
