@@ -13,7 +13,7 @@ metadata/future-shell-version	-	1
 # part: a report is one paste instead of four questions, paid for once. `pnpm run check:volume` reads
 # the line below as its budget, so the gate and this decision agree; the next feature has to pay for
 # its own lines.
-# accepted-overage: 504
+# accepted-overage: 498
 quality/code-volume	-	1
 quality/destroy-try-catch	lib/inspector.js	2
 quality/destroy-try-catch	lib/manager.js	1

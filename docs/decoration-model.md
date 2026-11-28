@@ -148,16 +148,19 @@ not get a second pair. Every metadata attribute is identical across all nine exc
 While direct `Cogl.Texture.get_data()` and `Cogl.Framebuffer.read_pixels()` do not fill caller
 buffers in GJS, `Meta.WindowActor.paint_to_content(null)` combined with
 `Shell.Screenshot.composite_to_stream` reads 1x1 RGBA samples 1px inside the four corners and at the
-center after the map transition settles. Windows whose corners are opaque (`alpha` matches interior)
-are decorated automatically; windows whose corners are transparent (`alpha < interior - 32`) stay
-undecorated. The entry is keyed by the kind the correction model uses, so a verdict and a rule always
+center after the map transition settles. The question the sample answers is whether **our** cut is
+safe, not what the client intended: at radius 15 the point 1px in from a corner already lies inside
+the arc we remove. Opaque corners (`alpha` matches interior) mean the clip cuts solid content and the
+window decorates; a corner that drops below `interior - 32` means something was painted there and we
+stand down. The entry is keyed by the kind the correction model uses, so a verdict and a rule always
 name the same window - the size joins that key only where it is stable, on a fixed-size window.
 
-Only the opaque answer is remembered, in `$XDG_CACHE_HOME` (`corner-probe.json`), so a familiar
-window applies on frame 1 without a visible undecorated flash. The other answer needs no entry: an
-unprobed window of the kind already stands down, so a client that paints its own corners is measured
-again on its next window and cannot be remembered as a kind-wide verdict - which also means a client
-that stops painting them needs no revalidation to be decorated. Rules still reverse either answer.
+Only the safe answer is remembered, in `$XDG_CACHE_HOME` (`corner-probe.json`) as a list of kinds,
+so a familiar window applies on frame 1 without a visible undecorated flash. The other answer needs
+no entry: an unprobed window of the kind already stands down, so a client whose corners carry content
+is measured again on its next window and cannot be remembered as a kind-wide verdict - which also
+means a client that stops painting them needs no revalidation to be decorated. Rules still reverse
+either answer.
 
 The sample is never taken on a window our own clip is on: `paint_to_content()` paints the actor with
 its effects, so those corners are the ones we cut, and reading them back would report our work as the

@@ -2,7 +2,7 @@ import GLib from 'gi://GLib';
 
 import {CornerProbe} from '../src/lib/cornerProbe.js';
 import {
-    classifyCornerAlpha,
+    isClipSafe,
     cornerProbeKey,
     needsCornerAlphaProbe,
 } from '../src/lib/cornerReading.js';
@@ -19,22 +19,22 @@ function flushAsync() {
     });
 }
 
-describe('classifyCornerAlpha', () => {
-    it('classifies opaque corners matching interior alpha as not self-rounded', () => {
-        expect(classifyCornerAlpha({corners: [255, 255, 255, 255], interior: 255})).toBeFalse();
-        expect(classifyCornerAlpha({corners: [220, 220, 220, 220], interior: 220})).toBeFalse();
+describe('isClipSafe', () => {
+    it('counts a clip as safe when every corner matches the interior alpha', () => {
+        expect(isClipSafe({corners: [255, 255, 255, 255], interior: 255})).toBeTrue();
+        expect(isClipSafe({corners: [220, 220, 220, 220], interior: 220})).toBeTrue();
     });
 
-    it('classifies transparent or shadow-faded corners as self-rounded', () => {
-        expect(classifyCornerAlpha({corners: [0, 0, 0, 0], interior: 255})).toBeTrue();
-        expect(classifyCornerAlpha({corners: [14, 14, 14, 14], interior: 255})).toBeTrue();
-        expect(classifyCornerAlpha({corners: [0, 0, 255, 255], interior: 255})).toBeTrue();
+    it('counts a clip as unsafe when a corner carries other content', () => {
+        expect(isClipSafe({corners: [0, 0, 0, 0], interior: 255})).toBeFalse();
+        expect(isClipSafe({corners: [14, 14, 14, 14], interior: 255})).toBeFalse();
+        expect(isClipSafe({corners: [0, 0, 255, 255], interior: 255})).toBeFalse();
     });
 
     it('returns null when the window has not painted its first frame yet or read failed', () => {
-        expect(classifyCornerAlpha(null)).toBeNull();
-        expect(classifyCornerAlpha({corners: [0, 0, 0, 0], interior: 0})).toBeNull();
-        expect(classifyCornerAlpha({corners: [null, 255, 255, 255], interior: 255})).toBeNull();
+        expect(isClipSafe(null)).toBeNull();
+        expect(isClipSafe({corners: [0, 0, 0, 0], interior: 0})).toBeNull();
+        expect(isClipSafe({corners: [null, 255, 255, 255], interior: 255})).toBeNull();
     });
 });
 
@@ -129,15 +129,15 @@ describe('CornerProbe', () => {
                 onCornerKnown: w => notified.push(w),
             });
 
-            expect(probe1.selfRoundedCorners(win1, rect, kindKey)).toBeNull();
+            expect(probe1.clipSafe(win1, rect, kindKey)).toBeNull();
             probe1.probe(win1, actor, rect, kindKey);
             await flushAsync();
 
             expect(reads).toBe(1);
             expect(notified).toEqual([win1]);
-            expect(probe1.selfRoundedCorners(win1, rect, kindKey)).toBeFalse();
+            expect(probe1.clipSafe(win1, rect, kindKey)).toBeTrue();
             // A brand-new window of the same kind hits synchronously without probing first.
-            expect(probe1.selfRoundedCorners(win2, rect, kindKey)).toBeFalse();
+            expect(probe1.clipSafe(win2, rect, kindKey)).toBeTrue();
             probe1.destroy();
 
             // Reloading from the XDG cache file hits synchronously on frame 1 in a fresh session.
@@ -148,7 +148,7 @@ describe('CornerProbe', () => {
                     return {corners: [255, 255, 255, 255], interior: 255};
                 },
             });
-            expect(probe2.selfRoundedCorners(win2, rect, kindKey)).toBeFalse();
+            expect(probe2.clipSafe(win2, rect, kindKey)).toBeTrue();
             probe2.destroy();
         } finally {
             GLib.unlink(cachePath);
@@ -196,7 +196,7 @@ describe('CornerProbe', () => {
         await flushAsync();
 
         expect(reads).toBe(1);
-        expect(probe.selfRoundedCorners(win, rect)).toBeFalse();
+        expect(probe.clipSafe(win, rect)).toBeTrue();
         probe.destroy();
     });
 
@@ -225,15 +225,15 @@ describe('CornerProbe', () => {
 
         probe.probe(win, actor, rect);
         await flushAsync();
-        expect(probe.selfRoundedCorners(win, rect)).toBeNull();
+        expect(probe.clipSafe(win, rect)).toBeNull();
         expect(timers.length).toBe(1);
 
         timers[0].cb();
         await flushAsync();
-        expect(probe.selfRoundedCorners(win, rect)).toBeTrue();
+        expect(probe.clipSafe(win, rect)).toBeFalse();
 
         probe.forgetWindow(win);
-        expect(probe.selfRoundedCorners(win, rect)).toBeNull();
+        expect(probe.clipSafe(win, rect)).toBeNull();
         probe.destroy();
     });
 
@@ -258,7 +258,7 @@ describe('CornerProbe', () => {
         await flushAsync();
 
         expect(reads).toBe(0);
-        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeNull();
+        expect(probe.clipSafe(win, rect, kindKey)).toBeNull();
         probe.destroy();
     });
 
@@ -289,13 +289,13 @@ describe('CornerProbe', () => {
 
         expect(reads).toBe(1);
         expect(notified).toEqual([]);
-        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeNull();
-        expect(probe.selfRoundedCorners({}, rect, kindKey)).toBeNull();
+        expect(probe.clipSafe(win, rect, kindKey)).toBeNull();
+        expect(probe.clipSafe({}, rect, kindKey)).toBeNull();
         expect(probe.lastSampleText(win)).toContain('discarded=decorated');
         probe.destroy();
     });
 
-    it('remembers the kinds measured opaque, and never that a kind rounds itself', async () => {
+    it('remembers the kinds measured safe to clip, and never that one is unsafe', async () => {
         const win = {};
         const rect = {x: 0, y: 0, width: 280, height: 380};
         const kindKey = 'wechat:client_type=wayland,window_type=0,has_parent=false,' +
@@ -307,21 +307,21 @@ describe('CornerProbe', () => {
         });
         opaque.probe(win, {}, rect, kindKey);
         await flushAsync();
-        expect(opaque.selfRoundedCorners(win, rect, kindKey)).toBeFalse();
-        expect(opaque.selfRoundedCorners({}, rect, kindKey)).toBeFalse();
+        expect(opaque.clipSafe(win, rect, kindKey)).toBeTrue();
+        expect(opaque.clipSafe({}, rect, kindKey)).toBeTrue();
         opaque.destroy();
 
-        const selfRounded = new CornerProbe({
+        const unsafe = new CornerProbe({
             cachePath: null,
             readCorners: async () => ({corners: [0, 0, 0, 0], interior: 255}),
         });
-        selfRounded.probe(win, {}, rect, kindKey);
+        unsafe.probe(win, {}, rect, kindKey);
         await flushAsync();
-        expect(selfRounded.selfRoundedCorners(win, rect, kindKey)).toBeTrue();
-        // Nothing to remember: an unprobed window of the kind already stands down, so a client that
-        // rounds itself cannot leave a verdict behind for the rest of the session or in the file.
-        expect(selfRounded.selfRoundedCorners({}, rect, kindKey)).toBeNull();
-        selfRounded.destroy();
+        expect(unsafe.clipSafe(win, rect, kindKey)).toBeFalse();
+        // Nothing to remember: an unprobed window of the kind already stands down, so an unsafe
+        // sample cannot leave a verdict behind for the rest of the session or in the file.
+        expect(unsafe.clipSafe({}, rect, kindKey)).toBeNull();
+        unsafe.destroy();
     });
 
     it('decides every window whose kind cannot be shared, and stores nothing for it', async () => {
@@ -345,7 +345,7 @@ describe('CornerProbe', () => {
             await flushAsync();
 
             expect(notified).toEqual([first, second]);
-            expect(probe.selfRoundedCorners(second, rect, null)).toBeFalse();
+            expect(probe.clipSafe(second, rect, null)).toBeTrue();
             probe.destroy();
 
             // Nothing was stored, so the file may never have been written at all.
@@ -388,7 +388,7 @@ describe('CornerProbe', () => {
         pending[1]();
         await flushAsync();
         expect(notified).toEqual([first, second]);
-        expect(probe.selfRoundedCorners(second, rect, kindKey)).toBeFalse();
+        expect(probe.clipSafe(second, rect, kindKey)).toBeTrue();
         probe.destroy();
     });
 
@@ -407,16 +407,16 @@ describe('CornerProbe', () => {
         probe.probe(win, {}, rect, kindKey);
         await flushAsync();
 
-        expect(probe.selfRoundedCorners(win, rect, kindKey)).toBeTrue();
+        expect(probe.clipSafe(win, rect, kindKey)).toBeFalse();
         // The window was drawn under "unknown", so its answer - either answer - has to reach it.
         expect(notified).toEqual([win]);
         // But nothing about it is worth a kind entry: an unprobed window already stands down.
-        expect(probe.selfRoundedCorners({}, rect, kindKey)).toBeNull();
+        expect(probe.clipSafe({}, rect, kindKey)).toBeNull();
         probe.destroy();
     });
 });
 
-describe('detector with selfRoundedCorners probe', () => {
+describe('detector with a clip-safe reading', () => {
     it('decorates fixed-size and alpha dialog windows when corner probe proves corners opaque', () => {
         const wechatOpaque = inferDecorationBaseline({
             isX11: false,
@@ -424,7 +424,7 @@ describe('detector with selfRoundedCorners probe', () => {
             sideH: 0,
             bufferAlpha: true,
             allowsResize: false,
-            selfRoundedCorners: false,
+            clipSafe: true,
         });
         expect(wechatOpaque.corners).toBeTrue();
         expect(wechatOpaque.shadow).toBeTrue();
@@ -435,7 +435,7 @@ describe('detector with selfRoundedCorners probe', () => {
             sideH: 0,
             bufferAlpha: true,
             allowsResize: false,
-            selfRoundedCorners: true,
+            clipSafe: false,
         });
         expect(wechatSelfRounded.corners).toBeFalse();
         expect(wechatSelfRounded.shadow).toBeFalse();
@@ -446,7 +446,7 @@ describe('detector with selfRoundedCorners probe', () => {
             frameWidth: 400, frameHeight: 300,
             windowType: WindowType.DIALOG,
             bufferAlpha: true,
-            selfRoundedCorners: false,
+            clipSafe: true,
             wmClass: 'wechat',
         });
         expect(opaqueDialog.drawClip).toBeTrue();

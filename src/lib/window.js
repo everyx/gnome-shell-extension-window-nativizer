@@ -145,9 +145,9 @@ export function readWindow(win, {classifier = null, cornerProbe = null} = {}) {
             frameHeight: frameRect.height,
         })
         : null;
-    const selfRoundedCorners = safeRead(() => {
-        if (cornerProbe && typeof cornerProbe.selfRoundedCorners === 'function')
-            return cornerProbe.selfRoundedCorners(win, frameRect, probeKey);
+    const clipSafe = safeRead(() => {
+        if (cornerProbe && typeof cornerProbe.clipSafe === 'function')
+            return cornerProbe.clipSafe(win, frameRect, probeKey);
         return null;
     }, null);
     const tiled = safeRead(() => isWindowTiled(win, {isMaximized, hasTileMatch}), false);
@@ -176,7 +176,7 @@ export function readWindow(win, {classifier = null, cornerProbe = null} = {}) {
         clientTypeToken,
         nativeLikeCorners,
         cornerProbeKey: probeKey,
-        selfRoundedCorners,
+        clipSafe,
         hasGtk4Client: hasGtk4,
         windowType,
         hasParent,

@@ -9,10 +9,10 @@ const ALPHA_DROP_THRESHOLD = 32;
 import {buildRuleKey} from './rules.js';
 
 /**
- * Classifies whether a window paints its own rounded corners from corner vs interior alpha.
- * Returns null when the surface has not painted its first frame yet (`interior === 0`) or cannot be read.
+ * Whether our corner arc (radius 15) cuts only solid pixels. The sample sits inside the arc, so a
+ * corner that dropped means something was painted there. Null before the first frame or unreadable.
  */
-export function classifyCornerAlpha(sample) {
+export function isClipSafe(sample) {
     if (!sample || !Array.isArray(sample.corners) || sample.corners.length < 4)
         return null;
     const {corners, interior} = sample;
@@ -22,7 +22,7 @@ export function classifyCornerAlpha(sample) {
         if (!Number.isFinite(alpha))
             return null;
     }
-    return corners.some(alpha => alpha < interior - ALPHA_DROP_THRESHOLD);
+    return !corners.some(alpha => alpha < interior - ALPHA_DROP_THRESHOLD);
 }
 
 /**
