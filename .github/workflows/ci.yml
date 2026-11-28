@@ -58,6 +58,9 @@ jobs:
       - name: Run ESLint
         run: pnpm run lint
 
+      - name: Check the size and comment budget
+        run: pnpm run check:volume
+
       - name: Check upstream code generation consistency
         run: |
           pnpm run check:style
