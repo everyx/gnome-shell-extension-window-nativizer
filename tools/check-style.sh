@@ -14,6 +14,7 @@ node tools/gen-shell-api.mjs --check
 node tools/check-shell-version.mjs --check
 node tools/check-upstream-mirrors.mjs --check
 node tools/check-platform-boundary.mjs --check
+node tools/check-docs.mjs
 
 # One signal rule that is a grep: every signal the extension connects is torn down through
 # src/lib/subscriptions.js, which holds the [object, id] pair that makes teardown possible. A

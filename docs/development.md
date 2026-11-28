@@ -29,6 +29,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run test:flat-border` | minimal repro for issue #129: two flat ringless subjects (clean + 1px client border) over the backdrop at a given session scale; prints raw pixel runs per edge. Append `-- --check` to gate: exits 1 unless the clip excised the stroke outright |
 | `pnpm run test:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
 | `pnpm run check:perf` | automated performance budget guard (exits 1 when a budget is exceeded; a lone stress-ratio miss inside the known swing exits 2, which is the tool saying one re-run is worth it) |
+| `node tools/check-docs.mjs` | every document names paths that exist and `pnpm run` scripts that are defined; runs inside `check:style` |
 | `pnpm run check:style` | re-derives generated styling, shader, padding, locale and Shell API-table artifacts and fails if they drifted; validates that all version-dependent APIs are owned by `src/platform/` or guarded by a call-site probe (via `check-platform-boundary.mjs`); and fails if `src/metadata.json` claims a Shell version `tools/shell-api.json` has not audited |
 | `pnpm run lint:ego` | the EGO reviewer's linter, compared against `tools/ego-lint-baseline.txt`: a finding that is not in the baseline, one that now appears more often, or a baseline entry that no longer appears all exit 1. `-- --update` rewrites the baseline; `EGO_LINT_DIR` points at a prepared checkout |
 | `pnpm run build` | builds `dist/<uuid>.shell-extension.zip` |
