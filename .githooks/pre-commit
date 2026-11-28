@@ -20,6 +20,12 @@ set -e
 
 . "$(dirname "$0")/run-checks"
 
+# Documentation is inert for the checks that read code, but not for the one that reads documents.
+# `check:docs` is the only thing that notices a document naming a path or a script that is gone, and
+# a commit that changes nothing but prose is exactly when that rot arrives. It runs before the
+# short-circuit below, in about 50ms.
+pnpm run --silent check:docs
+
 if git diff --cached --name-only | inert_paths_only; then
     echo "pre-commit: documentation and assets only, nothing to check"
     exit 0
