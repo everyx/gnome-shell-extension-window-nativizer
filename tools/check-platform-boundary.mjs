@@ -26,6 +26,7 @@ import {readFileSync, readdirSync} from 'node:fs';
 
 import {importSpecifiers} from './importSpecifiers.mjs';
 import {businessViolation, platformViolation, prefsViolation} from './importRules.mjs';
+import {buildGraph, chainTo, reachableFrom} from './moduleGraph.mjs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
@@ -36,6 +37,7 @@ const PLATFORM = path.join(SRC, 'platform');
 const LIB = path.join(SRC, 'lib');
 const EFFECTS = path.join(SRC, 'effects');
 const PREFS = path.join(SRC, 'prefs');
+const PREFS_ENTRY = path.join(SRC, 'prefs.js');
 
 function fail(message) {
     console.error(`[check-platform-boundary] FAIL: ${message}`);
@@ -225,7 +227,6 @@ for (const {file, text} of businessFiles) {
 
 // The preferences process is host UI: it runs in its own Gtk/Adw process, with no shell, no
 // compositor and no window. It may read the pure decision helpers, and nothing that owns a window.
-const PREFS_ENTRY = path.join(SRC, 'prefs.js');
 const prefsFiles = jsFilesIn(PREFS).concat([{file: PREFS_ENTRY, text: readFileSync(PREFS_ENTRY, 'utf8')}]);
 
 for (const {file, text} of prefsFiles) {
@@ -248,6 +249,42 @@ for (const {file, text} of prefsFiles) {
                 violations.push(`${relFile}:${idx + 1}: ${desc}`);
         }
     });
+}
+
+
+// The direct rules above answer "may this file name that module". The question a preferences page
+// raises is one edge longer: it may import a `lib/` module, and that module may import the session
+// manager, which needs a shell the prefs process does not have. So the check follows the tree's own
+// relative imports and fails if anything the prefs process loads needs the shell.
+const SHELL_ONLY_NAMESPACES = ['gi://Meta', 'gi://Shell', 'gi://St', 'gi://Clutter'];
+const SHELL_MODULE_PREFIX = 'resource:///org/gnome/shell';
+
+const isShellOnly = specifier => specifier !== null &&
+    (SHELL_ONLY_NAMESPACES.includes(specifier) || specifier.startsWith(SHELL_MODULE_PREFIX));
+
+const srcModules = jsFilesIn(SRC).map(({file, text}) => {
+    let specifiers = [];
+    try {
+        specifiers = importSpecifiers(text);
+    } catch {
+        violations.push(`${path.relative(ROOT, file)}: cannot parse, so its imports are unknown`);
+    }
+    return {file, specifiers};
+});
+const graph = buildGraph(srcModules);
+const shellOnly = new Set(srcModules
+    .filter(({specifiers}) => specifiers.some(({specifier}) => isShellOnly(specifier)))
+    .map(({file}) => file));
+const prefsEntries = jsFilesIn(PREFS).concat(srcModules.filter(({file}) => file === PREFS_ENTRY));
+
+for (const {file} of prefsEntries) {
+    const reached = reachableFrom(file, graph);
+    for (const node of reached.keys()) {
+        if (node === file || !shellOnly.has(node))
+            continue;
+        const chain = chainTo(reached, node).map(step => path.relative(ROOT, step)).join(' -> ');
+        violations.push(`${path.relative(ROOT, file)} loads the shell process: ${chain}`);
+    }
 }
 
 // =========================================================================
