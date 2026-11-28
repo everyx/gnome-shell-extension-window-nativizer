@@ -95,6 +95,13 @@ convention.
 | `prefs/` | GI (`Adw`, `Gtk`, `Gdk`, `Gio`, `GLib`, `Pango`), the prefs resource, `../lib/*`, `./*` | `../platform/*`, `../effects/*`, `Main`, the manager and the inspector | its own widgets; the rule store and the display switches live in GSettings |
 | `extension.js`, `prefs.js` | the extension or prefs resource, then `lib/`, then `prefs/` from `prefs.js` | `effects/` from `prefs.js`, `prefs/` from `extension.js` | the object its `enable()` builds: the manager and the inspector, or the prefs window |
 
+For `prefs/` the checker does not stop at the first edge: it follows the tree's own relative
+imports and fails when anything the prefs process loads imports `gi://Meta`, `gi://Shell`, `gi://St`,
+`gi://Clutter` or a `resource:///org/gnome/shell` module. A page may import a `lib/` helper; importing
+one that imports the session manager is the same failure one edge later, and the check reports the
+chain. A pure `lib/` or `platform/` helper reached that way is fine - it is the shell process a
+module needs, not the directory it sits in.
+
 Four notes on the table:
 
 - **`lib/` is not pure.** `manager.js` and `inspector.js` import GI and `Main` directly, because they
