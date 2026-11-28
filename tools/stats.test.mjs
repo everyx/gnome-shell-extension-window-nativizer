@@ -139,25 +139,119 @@ test('the report names the declared overage, and the status follows it', () => {
     rmSync(tree, {recursive: true, force: true});
 });
 
-test('--check fails above 8,000 lines unless the repository declares an overage', () => {
+test('--check holds the declared overage from both sides', () => {
     const tree = mkdtempSync(path.join(tmpdir(), 'stats-budget-'));
     mkdirSync(path.join(tree, 'src'));
     mkdirSync(path.join(tree, 'tools'));
     writeFileSync(path.join(tree, 'src', 'big.js'), 'const a = 1;\n'.repeat(8001));
+    writeFileSync(path.join(tree, 'tools', 'comment-budget.txt'), 'total 0\nfile 100\nmin-lines 0\n');
 
     const declared = (text) => writeFileSync(path.join(tree, 'tools', 'ego-lint-baseline.txt'), text);
 
     let result = run(STATS, '--root', tree, '--check');
     assert.equal(result.status, 1, 'an undeclared overage fails');
+    assert.match(result.stderr, /exceeds/);
 
-    declared('# accepted-overage: 434\n');
+    declared('# accepted-overage: 1\n');
     result = run(STATS, '--root', tree, '--check');
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /within the accepted ceiling of 8,434/);
+    assert.match(result.stdout, /within the accepted ceiling of 8,001/);
 
-    // The declaration is a budget, not a waiver: one line beyond it fails again.
+    // The declaration is a number, not a ceiling to grow into: one line under it is drift.
+    declared('# accepted-overage: 434\n');
+    result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /below the declared ceiling/);
+    assert.match(result.stderr, /accepted-overage: 1/);
+
     declared('# accepted-overage: 0\n');
     assert.equal(run(STATS, '--root', tree, '--check').status, 1);
+
+    rmSync(tree, {recursive: true, force: true});
+});
+
+test('--check enforces the declared comment ceilings', () => {
+    const tree = mkdtempSync(path.join(tmpdir(), 'stats-comments-'));
+    mkdirSync(path.join(tree, 'src'));
+    mkdirSync(path.join(tree, 'tools'));
+    writeFileSync(path.join(tree, 'tools', 'ego-lint-baseline.txt'), '# accepted-overage: 0\n');
+    // Ten non-blank lines, six of them comment-only: 60%.
+    writeFileSync(path.join(tree, 'src', 'chatty.js'), [
+        '// one', '// two', '// three', '// four', '// five', '// six',
+        'const a = 1;', 'const b = 2;', 'const c = 3;', 'const d = 4;',
+    ].join('\n') + '\n');
+
+    const budget = lines => writeFileSync(path.join(tree, 'tools', 'comment-budget.txt'), lines.join('\n') + '\n');
+
+    budget(['total 60', 'file 50', 'min-lines 5']);
+    let result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /chatty\.js: comment-only is 60\.0%/);
+
+    budget(['total 60', 'file 60', 'min-lines 5']);
+    assert.equal(run(STATS, '--root', tree, '--check').status, 0);
+
+    // A file under the minimum is exempt from the per-file ceiling and nothing else.
+    budget(['total 60', 'file 10', 'min-lines 99']);
+    assert.equal(run(STATS, '--root', tree, '--check').status, 0);
+
+    budget(['total 40', 'file 100', 'min-lines 5']);
+    assert.match(run(STATS, '--root', tree, '--check').stderr, /above the declared 40%/);
+
+    // Ten points under the declaration is a stale declaration, not an achievement, and the number
+    // it asks for has to pass: a suggestion that fails the check above it is worse than none.
+    budget(['total 70', 'file 100', 'min-lines 5']);
+    result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 1);
+    const suggested = /write "total (\d+)"/.exec(result.stderr);
+    assert.ok(suggested, result.stderr);
+    budget([`total ${suggested[1]}`, 'file 100', 'min-lines 5']);
+    assert.equal(run(STATS, '--root', tree, '--check').status, 0);
+
+    // A budget that cannot be read is not a budget: every one of these used to drop a check.
+    for (const bad of [
+        ['file 100', 'min-lines 5'],
+        ['total 60', 'min-lines 5'],
+        ['total 60', 'file 100'],
+        ['total 60', 'total 61', 'file 100', 'min-lines 5'],
+        ['total 150', 'file 100', 'min-lines 5'],
+        ['total sixty', 'file 100', 'min-lines 5'],
+        ['total 60', 'file 100', 'min-lines -1'],
+        ['total -1', 'file 30', 'min-lines 20'],
+        ['total 11', 'file -1', 'min-lines 20'],
+    ]) {
+        budget(bad);
+        result = run(STATS, '--root', tree, '--check');
+        assert.equal(result.status, 1, `accepted: ${bad.join(' / ')}`);
+        assert.match(result.stderr, /comment-budget\.txt: "/, bad.join(' / '));
+    }
+
+    rmSync(path.join(tree, 'tools', 'comment-budget.txt'));
+    assert.match(run(STATS, '--root', tree, '--check').stderr, /comment-budget\.txt is missing/);
+
+    rmSync(tree, {recursive: true, force: true});
+});
+
+test('the stale suggestion is a number that passes its own check', () => {
+    // 3 comments in 29 non-blank lines is 10.3%: a floor would suggest 10 and fail the ceiling check
+    // that runs above the drift check, so the suggestion has to round up.
+    const tree = mkdtempSync(path.join(tmpdir(), 'stats-rounding-'));
+    mkdirSync(path.join(tree, 'src'));
+    mkdirSync(path.join(tree, 'tools'));
+    writeFileSync(path.join(tree, 'tools', 'ego-lint-baseline.txt'), '# accepted-overage: 0\n');
+    writeFileSync(path.join(tree, 'src', 'a.js'),
+        [...Array(3).fill('// comment'), ...Array(26).fill('const a = 1;')].join('\n') + '\n');
+    const budget = lines => writeFileSync(path.join(tree, 'tools', 'comment-budget.txt'),
+        lines.join('\n') + '\n');
+
+    budget(['total 13', 'file 100', 'min-lines 0']);
+    const result = run(STATS, '--root', tree, '--check');
+    assert.equal(result.status, 1);
+    const suggested = Number(/write "total (\d+)"/.exec(result.stderr)[1]);
+    assert.ok(suggested > 10.3, `a floor of ${suggested} would fail the check above`);
+
+    budget([`total ${suggested}`, 'file 100', 'min-lines 0']);
+    assert.equal(run(STATS, '--root', tree, '--check').status, 0);
 
     rmSync(tree, {recursive: true, force: true});
 });

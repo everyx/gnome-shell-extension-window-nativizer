@@ -16,6 +16,10 @@
  * `tools/ego-lint-baseline.txt` (`# accepted-overage: N`). The declaration is the same decision as
  * the accepted `quality/code-volume` finding, so the gate and the baseline cannot disagree.
  *
+ * It also fails when the tree is *below* the declared ceiling: a budget whose declared number drifts
+ * away from the real one leaves slack that nobody remembers granting, and that slack is what the next
+ * feature spends. The same `--check` reads `tools/comment-budget.txt` for the comment-only share.
+ *
  * Usage: node tools/stats.mjs [--root <path>] [--json] [--top <n>] [--check]
  */
 
@@ -25,12 +29,68 @@ import {fileURLToPath} from 'node:url';
 
 const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EGO_LIMIT = 8000;
+// How far under a declared comment ceiling counts as "the declaration is stale". A ratio moves with
+// every edit, so holding it to exact equality would fail on arithmetic rather than on a decision.
+const RATCHET_SLACK = 2;
 const USAGE = 'usage: node tools/stats.mjs [--root <path>] [--json] [--top <n>] [--check]';
 
 /** The overage the repository has declared, or 0 when it declares none. */
 export function acceptedOverage(baselineText) {
     const match = /^#\s*accepted-overage:\s*(\d+)/m.exec(String(baselineText ?? ''));
     return match ? Number(match[1]) : 0;
+}
+
+/**
+ * The declared comment ceilings, and every reason the file cannot be read as one. A budget that
+ * answers nulls instead of errors is a budget that can be typed away: `totals 11` used to drop the
+ * whole-tree check without a word.
+ */
+/** What each field may declare; a number outside its range is a broken file, not a stricter one. */
+const BUDGET_RANGES = {total: [0, 100], file: [0, 100], 'min-lines': [0, Number.POSITIVE_INFINITY]};
+
+export function commentBudget(text) {
+    const source = String(text ?? '');
+    const errors = [];
+    const read = (key, fallback) => {
+        const found = [...source.matchAll(new RegExp(`^${key}\\s+(\\S+)\\s*$`, 'gm'))];
+        if (found.length === 0) {
+            if (fallback !== undefined)
+                return fallback;
+            errors.push(`"${key}" is not declared`);
+            return null;
+        }
+        if (found.length > 1) {
+            errors.push(`"${key}" is declared ${found.length} times`);
+            return null;
+        }
+        const value = Number(found[0][1]);
+        if (!Number.isInteger(value)) {
+            errors.push(`"${key}" is not a whole number: ${found[0][1]}`);
+            return null;
+        }
+        const [low, high] = BUDGET_RANGES[key];
+        if (value < low || value > high) {
+            errors.push(`"${key}" is out of range: ${value}`);
+            return null;
+        }
+        return value;
+    };
+
+    const total = read('total');
+    const file = read('file');
+    const minLines = read('min-lines');
+    return {total, file, minLines, errors};
+}
+
+function declaredCommentBudget(root) {
+    let text = null;
+    try {
+        text = readFileSync(path.join(root, 'tools', 'comment-budget.txt'), 'utf8');
+    } catch {
+        return {budget: null, errors: ['tools/comment-budget.txt is missing, so no comment ceiling is declared']};
+    }
+    const budget = commentBudget(text);
+    return {budget, errors: budget.errors.map(error => `tools/comment-budget.txt: ${error}`)};
 }
 
 function declaredOverage(root) {
@@ -197,9 +257,48 @@ if (options.json) {
 }
 
 if (options.check) {
+    const failures = [];
+    const share = (commentOnly, nonBlank) => (nonBlank > 0 ? (commentOnly / nonBlank) * 100 : 0);
+
+    // Two-sided: a tree that grew past the declaration fails, and so does one that shrank below it,
+    // because the difference between "declared" and "actual" is a licence nobody remembers granting.
     if (result.ego.nonBlank > limit) {
-        console.error(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(limit)} ` +
+        failures.push(`EGO non-blank ${fmt(result.ego.nonBlank)} exceeds ${fmt(limit)} ` +
             `(${fmt(EGO_LIMIT)} + ${fmt(acceptedOverageHere)} accepted)`);
+    } else if (acceptedOverageHere > 0 && result.ego.nonBlank < limit) {
+        // Only a declared overage can be stale: with none, being under 8,000 is the goal, not a drift.
+        const declared = Math.max(0, result.ego.nonBlank - EGO_LIMIT);
+        failures.push(`EGO non-blank ${fmt(result.ego.nonBlank)} is below the declared ceiling ` +
+            `${fmt(limit)}: write "# accepted-overage: ${declared}" in tools/ego-lint-baseline.txt`);
+    }
+
+    const {budget, errors} = declaredCommentBudget(options.root);
+    failures.push(...errors);
+    if (budget && errors.length === 0) {
+        const overall = share(authored.commentOnly, authored.nonBlank);
+        if (overall > budget.total) {
+            failures.push(`comment-only is ${overall.toFixed(1)}% of authored non-blank lines, above ` +
+                `the declared ${budget.total}%`);
+        } else if (overall < budget.total - RATCHET_SLACK) {
+            // Rounded up: a floor would suggest a number below the measurement, and the next run
+            // would fail the check above instead of passing.
+            failures.push(`comment-only is ${overall.toFixed(1)}%, more than ${RATCHET_SLACK} points ` +
+                `under the declared ${budget.total}%: write "total ${Math.ceil(overall)}" in ` +
+                'tools/comment-budget.txt');
+        }
+        for (const file of authoredFiles) {
+            if (file.nonBlank < budget.minLines)
+                continue;
+            const ratio = share(file.commentOnly, file.nonBlank);
+            if (ratio > budget.file)
+                failures.push(`${file.path}: comment-only is ${ratio.toFixed(1)}% of its ` +
+                    `${file.nonBlank} non-blank lines, above the declared ${budget.file}%`);
+        }
+    }
+
+    if (failures.length > 0) {
+        for (const failure of failures)
+            console.error(`[stats] ${failure}`);
         process.exitCode = 1;
     } else if (result.ego.nonBlank > EGO_LIMIT) {
         console.log(`[stats] EGO non-blank ${fmt(result.ego.nonBlank)} is within the accepted ` +
