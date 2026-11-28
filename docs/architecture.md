@@ -76,6 +76,39 @@ tested without a session; the processes only gather inputs and apply results.
 | `prefs/windowPicker.js` | D-Bus client calling `PickWindow(false)` with liveness guard |
 | `*.generated.js` | build-checked upstream constants/shaders (`adwaitaStyle`, `gtkRules`, `mutterRules`, `inspectorStyle`, `shadowShader`) |
 
+## Directory contracts
+
+What each directory may depend on. `tools/check-platform-boundary.mjs` enforces these and
+nothing else: `lib/` and `effects/` may not import `gi://Meta` or `gi://Shell`, touch
+`global.display`, `global.stage`, `global.workspace_manager`, `globalThis.global` or `imports.gi`, or
+call the `win.*` window members it lists; a version-dependent member from `tools/shell-api.json`
+must be owned by `platform/` or guarded by a call-site probe; and `platform/` may not import
+anything under `lib/` except `mutterRules.generated.js`, nor anything under `effects/`. The rest is
+convention.
+
+| Directory | May import | May not import | Owns |
+|---|---|---|---|
+| `lib/` | `../platform/*`, `./*`, `../effects/*`, the generated tables, and the GI namespaces it uses directly (`GLib`, `Gio`, `GObject`, `Clutter`, `St`, `Graphene`, `Atk`) plus the Shell's `Main` | `gi://Meta`, `gi://Shell`, the raw globals above | the session (`manager.js`) and one window's decoration (`windowDecoration.js`) |
+| `platform/` | `./*`, `../lib/mutterRules.generated.js`, GI | `../lib/*` (that one table excepted), `../effects/*` | no window state: read-through caches (`monitor.js`, `cornerAlpha.js`), the probe cache file (`probeCache.js`), and caches its callers pass in (`uniformLocation.js`) |
+| `effects/` | `../lib/*`, `../platform/*`, GI | `gi://Meta`, `gi://Shell`, the raw globals above; nothing here may be imported by `platform/` | the shared baked-shadow cache (`shadowTexture.js`) and the actors each module builds |
+| `prefs/` | GI (`Adw`, `Gtk`, `Gdk`, `Gio`, `GLib`, `Pango`), the prefs resource, `../lib/*`, `./*` | `../platform/*`, `../effects/*`, `Main`, the manager and the inspector | its own widgets; the rule store and the display switches live in GSettings |
+| `extension.js`, `prefs.js` | the extension or prefs resource, then `lib/`, then `prefs/` from `prefs.js` | `effects/` from `prefs.js`, `prefs/` from `extension.js` | the object its `enable()` builds: the manager and the inspector, or the prefs window |
+
+Four notes on the table:
+
+- **`lib/` is not pure.** `manager.js` and `inspector.js` import GI and `Main` directly, because they
+  are the two modules that own Shell objects rather than derive values. The checker's business rule
+  is about the namespaces and members above, not about GI as such.
+- **`platform/` reads a `lib/` file.** `window.js` and `windowPhase.js` import
+  `../lib/mutterRules.generated.js`: the generated enum tables are data, so that arrow points at a
+  build artifact rather than at business logic.
+- **`lib/` imports `effects/` on purpose.** `manager.js`, `windowDecoration.js` and
+  `overviewDecoration.js` do, because a decoration decision and the effect that applies it are one
+  lifecycle. `effects/` imports `lib/` far more often; both arrows exist and neither is a layering
+  violation.
+- **`prefs/` has no window objects.** It talks to the extension over D-Bus (`windowPicker.js`) and
+  reads the rule store through `../lib/settings.js`.
+
 ## The two processes
 
 - The **extension process** owns the windows. The manager reconciles effects against
