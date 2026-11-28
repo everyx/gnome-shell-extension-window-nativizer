@@ -1,0 +1,24 @@
+# Modules no spec can load, with the reason. The checker holds this list from both sides: a module
+# that is missing here and missing from a spec fails, and so does a row whose module is gone or is
+# covered now. Adding a row is the decision that this module cannot have a unit spec - not the
+# statement that nobody has written one yet.
+#
+# The host gate: everything below needs a running shell or a prefs window (St, Clutter, Cogl, Gtk,
+# Adw, Main). `docs/development.md` explains what the unit runner cannot load.
+
+extension.js                # entry point; the shell calls it, there is nothing to call it with
+prefs.js                    # prefs entry point; builds the window it would be tested against
+prefs/clipboardActions.js   # Gtk clipboard and results toast
+prefs/conflictDialog.js     # Adw dialog chrome
+prefs/rulePage.js           # Adw preferences page
+prefs/ruleUi.js             # Adw/Gtk row widgets and a CSS provider
+prefs/windowPicker.js       # D-Bus call plus an Adw toast
+effects/clipEffect.js       # Shell.GLSLEffect subclass; needs a GL pipeline
+effects/shadowActor.js      # St.Widget subclass wired to a Clutter container
+effects/shadowTexture.js    # bakes through a Cogl pipeline
+effects/overviewMask.js     # Cogl textures per context
+effects/overviewShadow.js   # clones a shell actor into the overview
+lib/manager.js              # drives signals on the live shell and owns the session
+lib/inspector.js            # D-Bus service plus a St overlay
+lib/resizeBandActor.js      # St.Widget subclass with a grab and a cursor
+platform/shaderEffect.js    # probes which GLSL uniform setter this shell ships
