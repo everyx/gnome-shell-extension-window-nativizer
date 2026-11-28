@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.13.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.12.0...v0.13.0) (2026-11-28)
+
+
+### Features
+
+* **detector:** leave a dialog whose corners cannot be seen undecorated ([b0171b4](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/b0171b4aad37e74ec5ba1e987b075a5b13e10ae5))
+* **pick:** report the buffer format in the pick reply ([4caaad9](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4caaad9c0118159b0dceb652496b3e75dd2ace22))
+* **pick:** report the environment a bug report would otherwise be asked for ([5e43503](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5e43503e8c2fae34ac88a5f0666d2b5205d4058f))
+* **prefs:** say what each axis does while its switch is off ([4d887a6](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/4d887a64bb66840a030558d362466598d925bc20))
+* probe corner alpha to auto-decorate opaque fixed-size and dialog windows ([9db0f3b](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9db0f3bfa69a0927b35930d75fb555775d1b2ee0))
+
+
+### Bug Fixes
+
+* **detector:** read a utility window the way a dialog is read ([1a4c739](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1a4c7393b47d47e1333badb570ab4e7e7f10275c))
+* **detector:** stop standing down a fixed-size window that has no alpha to read ([0182f85](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0182f85191e6027ae51da4722cac319e6dfb890b))
+* **probe:** do not probe a maximized or fullscreen window ([9cf3bd2](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/9cf3bd288150160b4fbcd56c3d1f5758aea24d73))
+* **probe:** measure a window before our clip is on it, and remember only what decorates ([e7e7881](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e7e78811c3e5660e39ad989727fd3603e1d9148d))
+
+
+### Documentation
+
+* align module map, check chains and stale notes with code ([5a18c2d](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/5a18c2dc23bf762c67f2ebf4961ab16ef6c265d3))
+* **architecture:** write down what each directory may import ([51171cc](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/51171cc7f0a0174e4a86aea974c2b1f25a3199dd))
+* **decoration:** record the WeChat case that keeps fixed-size a rule ([04c1f2c](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/04c1f2c5231ebbc982d9a601a325685cc9c85dee))
+* **development:** point the volume gate at the budget it reads ([af5a502](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/af5a5027c4e588ffb06598fef543c29d36c5cd75))
+* **development:** record the grab flag that looks missing and is not ([02df4fe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/02df4fe3c8a962d3cd65a558ebfcf2fccc150ac3))
+* **development:** restore what an agent must not do ([dde68f1](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/dde68f15a8c10602acde2242ce3fa6da9d63dacf))
+* index the decisions the docs argue from, and fix a count ([79f1e66](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/79f1e663059e28d958d7518ec1e99e73cae65188))
+* name the four actions that are not an agent's to take ([e91e763](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/e91e763059129b0b8e8a34f9ff560125ee41c507))
+* state what the decision reads, and drop the claims a reader cannot check ([a19f16e](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/a19f16e02e42a5f50f50e6ba6a49bc55f1330dcc))
+
 ## [0.12.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.11.2...v0.12.0) (2026-11-19)
 
 
