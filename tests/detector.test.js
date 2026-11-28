@@ -203,7 +203,7 @@ describe('inferDecorationBaseline', () => {
         });
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeFalse();
-        expect(r.reason).toBe('unverified-corners');
+        expect(r.reason).toContain('pending-probe');
     });
 
     it('the same dialog with an opaque buffer keeps its decoration', () => {
@@ -230,7 +230,7 @@ describe('inferDecorationBaseline', () => {
             ...marginsFromRects(424, 428, 424, 428),
         });
         expect(r.corners).toBeFalse();
-        expect(r.reason).toBe('unverified-corners');
+        expect(r.reason).toContain('pending-probe');
     });
 
     it('the reading needs the dialog type, no declared extents and an alpha buffer', () => {
@@ -238,7 +238,7 @@ describe('inferDecorationBaseline', () => {
         const flat = {...marginsFromRects(968, 443, 968, 443), bufferAlpha: true};
         const dialog = {...flat, windowType: WindowType.MODAL_DIALOG};
 
-        expect(inferDecorationBaseline({isX11: true, ...dialog}).reason).toBe('unverified-corners');
+        expect(inferDecorationBaseline({isX11: true, ...dialog}).reason).toContain('pending-probe');
         // A normal window keeps its decoration: this says nothing about X11 windows as a class.
         expect(inferDecorationBaseline({isX11: true, ...flat, windowType: WindowType.NORMAL}).corners)
             .toBeTrue();
@@ -248,7 +248,7 @@ describe('inferDecorationBaseline', () => {
             ...marginsFromRects(968, 443, 960, 435), bufferAlpha: true,
         }).corners).toBeTrue();
         // The protocol does not matter: what the client paints is not a protocol feature.
-        expect(inferDecorationBaseline({isX11: false, ...dialog}).reason).toBe('unverified-corners');
+        expect(inferDecorationBaseline({isX11: false, ...dialog}).reason).toContain('pending-probe');
     });
 
     it('WeChat article / browser window (XWayland, CEF, extents 4,4,4,4) -> its ring is the client\'s, so the shadow is not ours', () => {
@@ -322,8 +322,7 @@ describe('inferDecorationBaseline', () => {
         });
         expect(both.corners).toBeFalse();
         expect(both.shadow).toBeFalse();
-        expect(both.reason).toContain('fixed-size');
-        expect(both.reason).toContain('native-like-corners');
+        expect(both.reason).toContain('pending-probe');
 
         // A resizable native-like window keeps the reading that lets the shadow follow its margins.
         const resizable = inferDecorationBaseline({
@@ -332,7 +331,7 @@ describe('inferDecorationBaseline', () => {
         });
         expect(resizable.corners).toBeFalse();
         expect(resizable.shadow).toBeTrue();
-        expect(resizable.reason).not.toContain('fixed-size');
+        expect(resizable.reason).not.toContain('pending-probe');
     });
 
     it('a window that cannot be resized stands both axes down, and a rule reverses it', () => {
@@ -341,7 +340,7 @@ describe('inferDecorationBaseline', () => {
         const fixed = inferDecorationBaseline({allowsResize: false, ...marginsFromRects(800, 600, 800, 600)});
         expect(fixed.corners).toBeFalse();
         expect(fixed.shadow).toBeFalse();
-        expect(fixed.reason).toContain('fixed-size');
+        expect(fixed.reason).toContain('pending-probe');
 
         // Resizable is the default reading, and it still rounds.
         const resizable = inferDecorationBaseline({allowsResize: true, ...marginsFromRects(800, 600, 800, 600)});
@@ -495,7 +494,7 @@ describe('evaluateWindowActions', () => {
         expect(off.drawShadow).toBeFalse();
         // The band stays: it is a working affordance on a window that has no edge of its own.
         expect(off.drawResize).toBeTrue();
-        expect(off.reason).toBe('unverified-corners');
+        expect(off.reason).toContain('pending-probe');
 
         // Readings are reversible: every axis this turned off can be asked for again, and the key
         // carries the same fingerprint the resolver will rebuild.
@@ -727,7 +726,7 @@ describe('evaluateWindowActions', () => {
         expect(res.drawClip).toBeFalse();
         expect(res.drawShadow).toBeFalse();
         expect(res.drawResize).toBeFalse();
-        expect(res.reason).toContain('fixed-size');
+        expect(res.reason).toContain('pending-probe');
     });
 
     it('corners that already look like ours, with a declared margin: both axes left alone', () => {
@@ -1005,7 +1004,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(fixedChild.drawClip).toBeFalse();
         expect(fixedChild.reason).not.toContain('rule-applied');
-        expect(fixedChild.reason).toContain('fixed-size');
+        expect(fixedChild.reason).toContain('pending-probe');
     });
 
     it('client type is part of the window kind: an XWayland window does not match a Wayland rule', () => {

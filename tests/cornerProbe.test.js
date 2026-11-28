@@ -439,7 +439,7 @@ describe('detector with a clip-safe reading', () => {
         });
         expect(wechatSelfRounded.corners).toBeFalse();
         expect(wechatSelfRounded.shadow).toBeFalse();
-        expect(wechatSelfRounded.reason).toContain('fixed-size');
+        expect(wechatSelfRounded.reason).toContain('pending-probe');
 
         const opaqueDialog = evaluateWindowActions({
             bufferWidth: 400, bufferHeight: 300,

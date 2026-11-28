@@ -128,17 +128,22 @@ splash, a collapsed panel - and grows it afterwards is judged on that tiny frame
 decoration it should have had. The exit is a rule on that window kind, which is why the floor is
 reversible.
 
-A third reading stands both axes down: a window that **cannot be resized** (`allows_resize`
-false). An application that fixes its own size is usually one that draws its own frame *inside its
-buffer* - a rounded corner painted in pixels, not declared as an extent - and no read here can see
-that. Two failures follow: our clip cuts a second arc over the client's own, which shows as two
-arcs, and our square shadow's corners peek out around a rounded client. Both axes therefore answer
-off (`fixed-size; shadow: ...`), and a rule naming an axis reverses it, exactly like the visual
-floor. It is a reading rather than a capability because the correlation is a heuristic: a fixed-size
-window that does not round itself loses a decoration it could have carried, and re-decorating it is
-what the reversal is for. The correlation is strong in practice - every fixed-size window that
-needed a correction here was a non-native application painting its own frame - and the cost of
-being wrong is a square corner on a dialog, against two arcs on every such window.
+A third reading stands both axes down until pixels answer it: `pending-probe`. Two shapes enter it -
+a window that cannot be resized, and a dialog or utility window whose type and buffer leave the same
+question open (below). Both are windows that may draw their own frame *inside the buffer* - a rounded
+corner painted in pixels, not declared as an extent. Two failures follow if we decorate one: our clip
+cuts a second arc over the client's own, which shows as two arcs, and our square shadow's corners
+peek out around a rounded client. So both axes answer off, and `CornerProbe` lifts that answer as
+soon as the corner pixels show the cut is safe (`clipSafe`). A rule naming an axis reverses it,
+exactly like the visual floor.
+
+The first shape is the larger population, and the correlation behind it is a heuristic: an
+application that fixes its own size is usually one that paints its own frame, but not always. A
+fixed-size window that does not round itself loses a decoration it could have carried, and
+re-decorating it is what the reversal is for. The correlation is strong in practice - every
+fixed-size window that needed a correction here was a non-native application painting its own frame
+- and the cost of being wrong is a square corner on a dialog, against two arcs on every such
+window.
 
 **How WeChat's identical fixed-size windows are separated.** Nine of WeChat's windows are the same
 client, the same toolkit, Wayland, `NORMAL`, fixed size, declaring no extents, and carrying alpha:
@@ -167,12 +172,11 @@ its effects, so those corners are the ones we cut, and reading them back would r
 client's. A probe request therefore returns unanswered once the pass has drawn, and a sample that
 lands after it is kept only for the inspector (`discarded=decorated`), never cached nor acted on.
 
-A fourth reading stands both axes down until probed: a **dialog or utility window with no declared
-extents that carries alpha** (`unverified-corners`). A buffer's format is not its pixels: an alpha
-channel is what a corner the client rounded itself *may* look like from here, and it says nothing at
-all about a body that is opaque throughout. Until `CornerProbe` proves the corners opaque, the
-reading abstains conservatively (`unverified-corners`) so decorating never paints a ring outside a
-ring someone else drew; once probed opaque, it decorates automatically.
+The second shape is a **dialog or utility window with no declared extents that carries alpha**. A
+buffer's format is not its pixels: an alpha channel is what a corner the client rounded itself *may*
+look like from here, and it says nothing at all about a body that is opaque throughout. Until
+`CornerProbe` proves the corners opaque, the reading abstains conservatively (`pending-probe`) so
+decorating never paints a ring outside a ring someone else drew; once probed, it decorates.
 
 Two measured cases fix its shape. WPS's PDF export dialog, `968x443` at depth 32, declares no
 extents and paints its own corners, which our arc landed outside. Navicat's palette is the utility

@@ -107,10 +107,8 @@ export function requiresCornerVerification({
     allowsResize = true,
     windowType = WindowType.NORMAL,
 } = {}) {
-    if (!allowsResize)
-        return 'fixed-size';
-    if (isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
-        return 'unverified-corners';
+    if (!allowsResize || isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
+        return 'pending-probe';
     return null;
 }
 
@@ -156,15 +154,8 @@ export function inferDecorationBaseline({
     const verifyReason = clipSafe === true
         ? null
         : requiresCornerVerification({hasSsd, sideW, sideH, bufferAlpha, allowsResize, windowType});
-    if (verifyReason === 'fixed-size') {
-        return {
-            shadow: false,
-            corners: false,
-            reason: `fixed-size${nativeLikeCorners ? '; native-like-corners' : ''}; shadow: ${reason}`,
-        };
-    }
     if (verifyReason)
-        return {shadow: false, corners: false, reason: verifyReason};
+        return {shadow: false, corners: false, reason: `${verifyReason}; shadow: ${reason}`};
 
     if (nativeLikeCorners)
         return {shadow, corners: false, reason: `native-like-corners; shadow: ${reason}`};
