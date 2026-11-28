@@ -41,9 +41,25 @@ fi
 # animations off) are counted and reported rather than failed: the alternative is a red suite for a
 # line behaving correctly, which is indistinguishable from a real defect.
 CANNOT_RUN=0
+# A skip is the right answer on a machine that lacks the client it would drive, and the wrong answer
+# in CI: a suite that silently runs four checks fewer is a suite whose verdict depends on the runner.
+# `WN_STRICT=1` turns every skip into a failure, and CI sets it.
+STRICT_SKIPS=0
+# Not the same thing as a skip: a check that does not apply to this run at all - a scale-specific leg
+# at another scale, a shell line that cannot report what the check reads. Counting those as gaps
+# would make the strict flag permanently red for reasons no runner can fix.
+NOT_APPLICABLE=0
+not_applicable() {
+    NOT_APPLICABLE=$((NOT_APPLICABLE + 1))
+    echo ".. [test-e2e] NOT APPLICABLE: $1"
+}
 cannot_run() {
     CANNOT_RUN=$((CANNOT_RUN + 1))
     echo "!! [test-e2e] CANNOT RUN: $1"
+    if [ "${WN_STRICT:-0}" = "1" ]; then
+        STRICT_SKIPS=$((STRICT_SKIPS + 1))
+        echo "!! [test-e2e] WN_STRICT=1: that check counts as a failure" >&2
+    fi
 }
 
 # The final tally counts the summary's own PASSED lines, each one a check.
@@ -556,7 +572,7 @@ echo ">> Blend check: $BLEND_RESULT"
 # because it needs a compositor to advance the frames. Gaining focus must then land in one frame,
 # because upstream declares no transition for that direction.
 if check_fields "$BLEND_RESULT" '{"blendUnavailable": true}'; then
-    cannot_run "this line reports animations off however they are asked for, so the cross-fade is NOT verified here."
+    not_applicable "this line reports animations off however they are asked for, so the cross-fade is NOT verified here."
     BLEND_RESULT_SUMMARY="CANNOT RUN (animations off on this line)"
 elif ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true, "animationsOffStarted": false, "animationsOffSettled": true}'; then
     echo "!! A focus change did not fade on the way out, did not snap on the way back in, or still blended with animations off: $BLEND_RESULT"
@@ -3064,7 +3080,7 @@ if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
         exit 1
     fi
 else
-    cannot_run "the two-monitor straddle runs its own session once, at scale 1.0 (this leg is $SCALE)"
+    not_applicable "the two-monitor straddle runs its own session once, at scale 1.0 (this leg is $SCALE)"
 fi
 
 echo ">> Lifecycle Summary:"
@@ -3099,6 +3115,10 @@ summary "Overview Preview Corner Coverage: PASSED (preview corner cut, reproduci
 fi
 summary "Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "----------------------------------------------------------------"
-echo ">> [test-e2e] Result: $PASSED PASSED, $CANNOT_RUN CANNOT RUN on $(gnome-shell --version)"
+echo ">> [test-e2e] Result: $PASSED PASSED, $CANNOT_RUN CANNOT RUN, $NOT_APPLICABLE NOT APPLICABLE on $(gnome-shell --version)"
 echo "================================================================"
+if [ "$STRICT_SKIPS" -gt 0 ]; then
+    echo "!! [test-e2e] WN_STRICT=1: $STRICT_SKIPS check(s) could not run here; install what they need or drop the strict flag" >&2
+    exit 1
+fi
 exit 0
