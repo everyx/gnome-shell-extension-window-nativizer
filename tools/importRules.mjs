@@ -23,6 +23,23 @@ const namesForbiddenNamespace = specifier => {
 
 const isRelative = specifier => specifier.startsWith('./') || specifier.startsWith('../');
 
+/**
+ * The namespaces and modules that exist only inside the shell process: preferences runs its own
+ * process, where loading one of these is the boundary being crossed.
+ */
+const SHELL_PROCESS_NAMESPACES = ['gi://Meta', 'gi://Shell', 'gi://St', 'gi://Clutter'];
+const SHELL_MODULE_PREFIX = 'resource:///org/gnome/shell';
+
+/** True when loading `specifier` needs the shell process. Null (unresolved) is never shell-only. */
+export function namesShellProcess(specifier) {
+    if (specifier === null)
+        return false;
+    if (specifier.startsWith(SHELL_MODULE_PREFIX))
+        return true;
+    const namespace = namespaceOf(specifier);
+    return namespace !== null && SHELL_PROCESS_NAMESPACES.includes(namespace);
+}
+
 /** A path suffix, so `../lib/x.js` and `lib/x.js` are the same edge. */
 const underDirectory = (specifier, directory) => new RegExp(`(^|/)${directory}/`, 'u').test(specifier);
 const isModule = (specifier, file) => new RegExp(`(^|/)${file}$`, 'u').test(specifier);

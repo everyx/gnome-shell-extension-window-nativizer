@@ -9,6 +9,14 @@ node tools/check-shell-version.mjs --check
 node tools/check-upstream-mirrors.mjs --check
 node tools/check-platform-boundary.mjs --check
 node tools/check-spec-coverage.mjs
+
+# One authority for what an import specifier means. The boundary checker walks files; every judgement
+# about a namespace belongs to tools/importRules.mjs, and a second copy of a namespace literal is how
+# `gi://St?version=18` was shell-only for one rule and unknown for the other.
+if grep -n "gi://" tools/check-platform-boundary.mjs | grep -v '^\s*[0-9]*:\s*\*'; then
+    echo "[check-style] The boundary checker names a namespace: ask tools/importRules.mjs instead." >&2
+    exit 1
+fi
 node tools/check-docs.mjs
 
 # One signal rule that is a grep: every signal the extension connects is torn down through
