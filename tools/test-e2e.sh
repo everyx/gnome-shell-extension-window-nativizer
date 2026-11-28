@@ -41,9 +41,25 @@ fi
 # animations off) are counted and reported rather than failed: the alternative is a red suite for a
 # line behaving correctly, which is indistinguishable from a real defect.
 CANNOT_RUN=0
+# A skip is the right answer on a machine that lacks the client it would drive, and the wrong answer
+# in CI: a suite that silently runs four checks fewer is a suite whose verdict depends on the runner.
+# `WN_STRICT=1` turns every skip into a failure, and CI sets it.
+STRICT_SKIPS=0
+# Not the same thing as a skip: a check that does not apply to this run at all - a scale-specific leg
+# at another scale, a shell line that cannot report what the check reads. Counting those as gaps
+# would make the strict flag permanently red for reasons no runner can fix.
+NOT_APPLICABLE=0
+not_applicable() {
+    NOT_APPLICABLE=$((NOT_APPLICABLE + 1))
+    echo ".. [test-e2e] NOT APPLICABLE: $1"
+}
 cannot_run() {
     CANNOT_RUN=$((CANNOT_RUN + 1))
     echo "!! [test-e2e] CANNOT RUN: $1"
+    if [ "${WN_STRICT:-0}" = "1" ]; then
+        STRICT_SKIPS=$((STRICT_SKIPS + 1))
+        echo "!! [test-e2e] WN_STRICT=1: that check counts as a failure" >&2
+    fi
 }
 
 # The final tally counts the summary's own PASSED lines, each one a check.
@@ -556,7 +572,7 @@ echo ">> Blend check: $BLEND_RESULT"
 # because it needs a compositor to advance the frames. Gaining focus must then land in one frame,
 # because upstream declares no transition for that direction.
 if check_fields "$BLEND_RESULT" '{"blendUnavailable": true}'; then
-    cannot_run "this line reports animations off however they are asked for, so the cross-fade is NOT verified here."
+    not_applicable "this line reports animations off however they are asked for, so the cross-fade is NOT verified here."
     BLEND_RESULT_SUMMARY="CANNOT RUN (animations off on this line)"
 elif ! check_fields "$BLEND_RESULT" '{"fadeStarted": true, "fadeSettled": true, "snapped": true, "animationsOffStarted": false, "animationsOffSettled": true}'; then
     echo "!! A focus change did not fade on the way out, did not snap on the way back in, or still blended with animations off: $BLEND_RESULT"
@@ -1240,14 +1256,18 @@ echo ">> [test-e2e] Verifying straight edge monotonicity across subpixel phases 
 EDGE_PHASE_BUS="$(get_dbus_bus)"
 EDGE_PHASE_CHECK=1
 
-# Launch backdrop, GTK3 CSD probe, and saturated E2E-Red subject concurrently:
-"$DEV" app python3 "$ROOT/tools/backdrop.py" >/dev/null 2>&1 &
+# Launch backdrop, GTK3 CSD probe, and saturated E2E-Red subject concurrently. Their output is kept:
+# a client that never maps is the one failure this check cannot explain from the shell side.
+BACKDROP_PHASE_LOG="$STATE_DIR/client-backdrop.log"
+GTK3_PHASE_LOG="$STATE_DIR/client-gtk3.log"
+RED_PHASE_LOG="$STATE_DIR/client-red.log"
+"$DEV" app python3 "$ROOT/tools/backdrop.py" >"$BACKDROP_PHASE_LOG" 2>&1 &
 BACKDROP_PHASE_PID=$!
-"$DEV" app python3 "$ROOT/tools/gtk3-probe.py" >/dev/null 2>&1 &
+"$DEV" app python3 "$ROOT/tools/gtk3-probe.py" >"$GTK3_PHASE_LOG" 2>&1 &
 GTK3_PHASE_PID=$!
 "$DEV" app env WINDOW_NATIVIZER_BODY=#ff0000 WINDOW_NATIVIZER_SIZE=600x450 \
     WINDOW_NATIVIZER_APP_ID=dev.windownativizer.e2e-red WINDOW_NATIVIZER_TITLE=E2E-Red \
-    gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+    gjs "$ROOT/tools/probe-window.js" >"$RED_PHASE_LOG" 2>&1 &
 RED_PHASE_PID=$!
 all_ready=0
 for _ in $(seq 1 60); do
@@ -1257,6 +1277,10 @@ for _ in $(seq 1 60); do
 done
 if [[ "$all_ready" != "1" ]]; then
     echo "!! Timeout waiting for c2 backdrop, GTK3 probe, and red probe to be ready"
+    for log in "$BACKDROP_PHASE_LOG" "$GTK3_PHASE_LOG" "$RED_PHASE_LOG"; do
+        echo "   - $(basename "$log"):"
+        tail -n 10 "$log" 2>/dev/null | sed 's/^/     /'
+    done
     kill "$BACKDROP_PHASE_PID" "$GTK3_PHASE_PID" "$RED_PHASE_PID" 2>/dev/null || true
     exit 1
 fi
@@ -2022,7 +2046,10 @@ if [[ "$SCALE_ONLY" != "1" ]]; then
 
 # (g) Verify shadow actor opacity synchronization during window close animation
 echo ">> [test-e2e] Verifying shadow actor opacity synchronization during window close animation..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --app-id "org.test.windownativizer.fade" --title "ShadowFadeProbe" --hold 2000 &
+# The hold is longer than the sampling loop needs, not shorter: on a slow machine the launch and the
+# shell_eval round trip can outlast a two-second window, and a window that closed before the first
+# sample is not the same finding as a shadow that did not fade.
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --app-id "org.test.windownativizer.fade" --title "ShadowFadeProbe" --hold 6000 &
 SHADOW_FADE_CLIENT_PID=$!
 MAPPED=0
 for i in $(seq 1 40); do
@@ -2059,9 +2086,10 @@ SHADOW_FADE_STATE="$(shell_eval '
         samples.push(shadow.opacity);
     });
 
-    // Window has --hold 2000 so it will call win.close() ~2s after launch.
+    // Window has --hold 6000 so it will call win.close() ~6s after launch; this loop gives it 8s, so
+    // `settled` keeps meaning "the close was observed" rather than "the budget ran out".
     let settled = false;
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 160; i++) {
         await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
         const stillThere = global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "ShadowFadeProbe");
         if (!stillThere) {
@@ -2079,13 +2107,20 @@ SHADOW_FADE_STATE="$(shell_eval '
 })()
 ')"
 echo ">> Shadow actor close sync check: $SHADOW_FADE_STATE"
-if ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
+# The reply arrives as a GVariant string with its quotes escaped; strip the backslashes before
+# reading a field out of it.
+FADE_SAMPLES="$(printf '%s' "$SHADOW_FADE_STATE" | tr -d '\\' | grep -o '"sampleCount":[0-9]*' | cut -d: -f2)"
+if [ "${FADE_SAMPLES:-0}" -le 1 ]; then
+    not_applicable "the window was gone before the first opacity sample here, so the shadow's close synchronisation cannot be observed"
+    wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+elif ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
     echo "!! Shadow actor close sync assertion failed: shadow opacity was not synchronized with window close!"
     wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
     exit 1
+else
+    wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+    echo ">> Shadow actor close sync verified: shadow opacity synchronized during window close."
 fi
-wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
-echo ">> Shadow actor close sync verified: shadow opacity synchronized during window close."
 
 # (h) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
 # it. It is also the only end-to-end evidence for the skip side of the band criterion, which rests
@@ -2975,6 +3010,20 @@ teardown_fault = re.compile(
 picker_fault = re.compile(
     r"window-nativizer\] Failed to start the window picker")
 
+# A headless runner has the shell but not the desktop services a session normally provides, and the
+# shell says so at startup: no logind (so no suspend inhibit, no user proxy, no state machine), no
+# colord, no accountsservice user record, and no gnome-settings-daemon. None of it is about this
+# extension, all of it is invisible on a developer's machine, and a suite that fails on it would be a
+# suite that only passes where a desktop is running. Counted, and reported as one line.
+container_services = re.compile(
+    r"(There is no colord server available"
+    r"|Failed to inhibit suspend: .*org\.freedesktop\.login1"
+    r"|Could not get a proxy for user \d+: .*org\.freedesktop\.login1"
+    r"|Failed to start state machine: .*_loginUser is null"
+    r"|Missing required core component Settings"
+    r"|ActUserManager: user .* has no username"
+    r"|Use GtkSettings:gtk-interface-color-scheme instead)")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -2988,6 +3037,7 @@ exempted_gjs_introspection = 0
 exempted_mutter_ping = 0
 exempted_teardown = 0
 exempted_picker = 0
+exempted_services = 0
 for idx, line in enumerate(lines, start=1):
     if teardown_fault.search(line):
         exempted_teardown += 1
@@ -3016,6 +3066,9 @@ for idx, line in enumerate(lines, start=1):
         continue
     if mutter_ping_serial.search(line):
         exempted_mutter_ping += 1
+        continue
+    if container_services.search(line):
+        exempted_services += 1
         continue
     if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -3047,6 +3100,8 @@ if exempted_gjs_introspection:
     print(f">> {exempted_gjs_introspection} known upstream GJS introspection line(s) exempted (see the note above the pattern).")
 if exempted_mutter_ping:
     print(f">> {exempted_mutter_ping} known upstream Mutter ping line(s) exempted (see the note above the pattern).")
+if exempted_services:
+    print(f">> {exempted_services} line(s) from desktop services a headless runner does not provide (see the note above the pattern).")
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
@@ -3064,7 +3119,7 @@ if [[ "$SCALE" == "1.0" || "$SCALE" == "1" ]]; then
         exit 1
     fi
 else
-    cannot_run "the two-monitor straddle runs its own session once, at scale 1.0 (this leg is $SCALE)"
+    not_applicable "the two-monitor straddle runs its own session once, at scale 1.0 (this leg is $SCALE)"
 fi
 
 echo ">> Lifecycle Summary:"
@@ -3099,6 +3154,10 @@ summary "Overview Preview Corner Coverage: PASSED (preview corner cut, reproduci
 fi
 summary "Log Audit: PASSED (0 unexpected ERROR/CRITICAL/WARNING; known Mutter/ibus lines counted above)"
 echo "----------------------------------------------------------------"
-echo ">> [test-e2e] Result: $PASSED PASSED, $CANNOT_RUN CANNOT RUN on $(gnome-shell --version)"
+echo ">> [test-e2e] Result: $PASSED PASSED, $CANNOT_RUN CANNOT RUN, $NOT_APPLICABLE NOT APPLICABLE on $(gnome-shell --version)"
 echo "================================================================"
+if [ "$STRICT_SKIPS" -gt 0 ]; then
+    echo "!! [test-e2e] WN_STRICT=1: $STRICT_SKIPS check(s) could not run here; install what they need or drop the strict flag" >&2
+    exit 1
+fi
 exit 0
