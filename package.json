@@ -25,6 +25,7 @@
     "lint:ego": "bash tools/ego-lint.sh",
     "lint:zip": "tools/lint-zip.sh",
     "check": "pnpm run lint && pnpm run check:style && pnpm run check:volume && pnpm run lint:ego && pnpm run test:tools && pnpm test && pnpm run check:decoration",
+    "check:docs": "node tools/check-docs.mjs",
     "check:style": "tools/check-style.sh",
     "check:decoration": "python3 tools/check-decoration.py --check",
     "check:perf": "python3 tools/benchmark-perf.py --check",
