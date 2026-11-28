@@ -124,6 +124,72 @@ jobs:
       - name: Run tool tests
         run: pnpm run test:tools
 
+  e2e:
+    name: E2E (headless nested session)
+    runs-on: ubuntu-latest
+    needs: image
+    container:
+      image: ${{ needs.image.outputs.ref }}
+    # Not on a release PR: this job drives windows through a nested shell, and a version bump has no
+    # behaviour to exercise.
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A compositor needs somewhere to put a Wayland socket, Xwayland needs `/tmp/.X11-unix`
+      # writable or mutter aborts with "Failed to start X Wayland", and the shell opens a proxy on
+      # the system bus before it draws anything - a container has none of the three.
+      - name: Prepare the session
+        run: |
+          mkdir -p /tmp/wn-runtime && chmod 700 /tmp/wn-runtime
+          # The image creates it as root; running as the runner user, only its presence is ours to
+          # assert.
+          chmod 1777 /tmp/.X11-unix 2>/dev/null || true
+          dbus-daemon --session --fork --nopidfile --address=unix:path=/tmp/wn-system-bus
+          stat -c '%A %U:%G %n' /tmp/wn-runtime /tmp/.X11-unix /tmp/wn-system-bus
+
+      # One scale, not the three the hook runs: the matrix is worth a developer's two minutes and not
+      # worth six minutes of every push, and the fractional cases are what the local hook is for.
+      # `WN_STRICT=1` is the part that belongs here - a check this runner cannot perform fails the
+      # job instead of being counted and passed over.
+      # The suite and every client it launches run inside one session bus of their own. Inheriting
+      # the runner's (there is none) leaves GTK unable to autolaunch one, and pointing the clients at
+      # the nested shell's bus instead changes which settings they resolve, which the decoration
+      # comparison measures.
+      - name: Run the session suite
+        run: dbus-run-session -- ./tools/test-e2e.sh 1.0
+        env:
+          WN_STRICT: '1'
+          XDG_RUNTIME_DIR: /tmp/wn-runtime
+          DBUS_SYSTEM_BUS_ADDRESS: unix:path=/tmp/wn-system-bus
+          # No GPU in the container: mutter and the GTK clients render through software.
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GSK_RENDERER: cairo
+
+      - name: Stop the session
+        if: always()
+        run: ./tools/dev.sh stop || true
+
+      - name: Shell log
+        if: always()
+        run: |
+          cat /tmp/window-nativizer-dev/shell.log || true
+          ps -ef | grep -E 'gnome-shell|Xwayland' | grep -v grep || true
+
   pack:
     name: Extension Package Build
     runs-on: ubuntu-latest

@@ -1256,14 +1256,18 @@ echo ">> [test-e2e] Verifying straight edge monotonicity across subpixel phases 
 EDGE_PHASE_BUS="$(get_dbus_bus)"
 EDGE_PHASE_CHECK=1
 
-# Launch backdrop, GTK3 CSD probe, and saturated E2E-Red subject concurrently:
-"$DEV" app python3 "$ROOT/tools/backdrop.py" >/dev/null 2>&1 &
+# Launch backdrop, GTK3 CSD probe, and saturated E2E-Red subject concurrently. Their output is kept:
+# a client that never maps is the one failure this check cannot explain from the shell side.
+BACKDROP_PHASE_LOG="$STATE_DIR/client-backdrop.log"
+GTK3_PHASE_LOG="$STATE_DIR/client-gtk3.log"
+RED_PHASE_LOG="$STATE_DIR/client-red.log"
+"$DEV" app python3 "$ROOT/tools/backdrop.py" >"$BACKDROP_PHASE_LOG" 2>&1 &
 BACKDROP_PHASE_PID=$!
-"$DEV" app python3 "$ROOT/tools/gtk3-probe.py" >/dev/null 2>&1 &
+"$DEV" app python3 "$ROOT/tools/gtk3-probe.py" >"$GTK3_PHASE_LOG" 2>&1 &
 GTK3_PHASE_PID=$!
 "$DEV" app env WINDOW_NATIVIZER_BODY=#ff0000 WINDOW_NATIVIZER_SIZE=600x450 \
     WINDOW_NATIVIZER_APP_ID=dev.windownativizer.e2e-red WINDOW_NATIVIZER_TITLE=E2E-Red \
-    gjs "$ROOT/tools/probe-window.js" >/dev/null 2>&1 &
+    gjs "$ROOT/tools/probe-window.js" >"$RED_PHASE_LOG" 2>&1 &
 RED_PHASE_PID=$!
 all_ready=0
 for _ in $(seq 1 60); do
@@ -1273,6 +1277,10 @@ for _ in $(seq 1 60); do
 done
 if [[ "$all_ready" != "1" ]]; then
     echo "!! Timeout waiting for c2 backdrop, GTK3 probe, and red probe to be ready"
+    for log in "$BACKDROP_PHASE_LOG" "$GTK3_PHASE_LOG" "$RED_PHASE_LOG"; do
+        echo "   - $(basename "$log"):"
+        tail -n 10 "$log" 2>/dev/null | sed 's/^/     /'
+    done
     kill "$BACKDROP_PHASE_PID" "$GTK3_PHASE_PID" "$RED_PHASE_PID" 2>/dev/null || true
     exit 1
 fi
