@@ -25,6 +25,7 @@
 import {readFileSync, readdirSync} from 'node:fs';
 
 import {importSpecifiers} from './importSpecifiers.mjs';
+import {businessViolation, platformViolation, prefsViolation} from './importRules.mjs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
@@ -140,14 +141,22 @@ function jsFilesIn(dir) {
 
 const violations = [];
 
+/** Imports of one file; a file that does not parse is reported instead of skipped. */
+function importsOf(relFile, text) {
+    try {
+        return importSpecifiers(text);
+    } catch (e) {
+        violations.push(`${relFile}: cannot parse, so its imports are unknown (${e.message.split('\n')[0]})`);
+        return [];
+    }
+}
+
+
 // =========================================================================
 // 1. Platform Boundary Enforcement
 // =========================================================================
 
 const businessFiles = [...jsFilesIn(LIB), ...jsFilesIn(EFFECTS)];
-
-/** Namespaces business code reaches only through src/platform/, in any import form. */
-const FORBIDDEN_NAMESPACES = ['gi://Meta', 'gi://Shell'];
 
 const FORBIDDEN_GLOBALS = [
     {pattern: /\bglobal\.display\b/, desc: 'raw global.display access (use platform/display.js: getDisplay())'},
@@ -187,9 +196,14 @@ const RAW_WINDOW_PATTERNS = RAW_WINDOW_OPERATIONS.map(op => ({
 
 for (const {file, text} of businessFiles) {
     const relFile = path.relative(ROOT, file);
-    for (const {specifier, line} of importSpecifiers(text)) {
-        if (FORBIDDEN_NAMESPACES.includes(specifier))
-            violations.push(`${relFile}:${line}: direct ${specifier} import (must use src/platform/)`);
+    for (const {specifier, line} of importsOf(relFile, text)) {
+        if (specifier === null) {
+            violations.push(`${relFile}:${line}: the import specifier is not a string literal, so this boundary cannot be checked`);
+            continue;
+        }
+        const desc = businessViolation(specifier);
+        if (desc)
+            violations.push(`${relFile}:${line}: ${desc}`);
     }
     const lines = text.split('\n');
     lines.forEach((line, idx) => {
@@ -211,22 +225,19 @@ for (const {file, text} of businessFiles) {
 
 // The preferences process is host UI: it runs in its own Gtk/Adw process, with no shell, no
 // compositor and no window. It may read the pure decision helpers, and nothing that owns a window.
-const PREFS_FORBIDDEN_IMPORTS = [
-    {matches: specifier => specifier === 'gi://Meta', desc: 'prefs must not import gi://Meta (no window access)'},
-    {matches: specifier => specifier === 'gi://Shell', desc: 'prefs must not import gi://Shell (no shell access)'},
-    {matches: specifier => /(^|\/)platform\//u.test(specifier), desc: 'prefs must not import src/platform/ (that is the shell side)'},
-    {matches: specifier => /(^|\/)effects\//u.test(specifier), desc: 'prefs must not import src/effects/ (no actors in the prefs process)'},
-    {matches: specifier => /(^|\/)lib\/manager\.js$/u.test(specifier), desc: 'prefs must not import the session manager'},
-    {matches: specifier => /(^|\/)lib\/inspector\.js$/u.test(specifier), desc: 'prefs must not import the shell-side inspector'},
-];
+const PREFS_ENTRY = path.join(SRC, 'prefs.js');
+const prefsFiles = jsFilesIn(PREFS).concat([{file: PREFS_ENTRY, text: readFileSync(PREFS_ENTRY, 'utf8')}]);
 
-for (const {file, text} of jsFilesIn(PREFS)) {
+for (const {file, text} of prefsFiles) {
     const relFile = path.relative(ROOT, file);
-    for (const {specifier, line} of importSpecifiers(text)) {
-        for (const {matches, desc} of PREFS_FORBIDDEN_IMPORTS) {
-            if (matches(specifier))
-                violations.push(`${relFile}:${line}: ${desc}`);
+    for (const {specifier, line} of importsOf(relFile, text)) {
+        if (specifier === null) {
+            violations.push(`${relFile}:${line}: the import specifier is not a string literal, so this boundary cannot be checked`);
+            continue;
         }
+        const desc = prefsViolation(specifier);
+        if (desc)
+            violations.push(`${relFile}:${line}: ${desc}`);
     }
     text.split('\n').forEach((line, idx) => {
         const trimmed = line.trimStart();
@@ -287,22 +298,17 @@ for (const entry of dependent) {
 // 3. Directional Dependency Check (platform must not import lib / effects)
 // =========================================================================
 
-const FORBIDDEN_PLATFORM_IMPORTS = [
-    {pattern: /from\s+['"]\.\.\/lib\/(?!mutterRules\.generated\.js)[^'"]+['"]/, desc: 'platform must not depend on business modules in src/lib/'},
-    {pattern: /from\s+['"]\.\.\/effects\/[^'"]+['"]/, desc: 'platform must not depend on src/effects/'},
-];
-
 for (const {file, text} of platformFiles) {
     const relFile = path.relative(ROOT, file);
-    text.split('\n').forEach((line, idx) => {
-        const trimmed = line.trimStart();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*'))
-            return;
-        for (const {pattern, desc} of FORBIDDEN_PLATFORM_IMPORTS) {
-            if (pattern.test(line))
-                violations.push(`${relFile}:${idx + 1}: ${desc}`);
+    for (const {specifier, line} of importsOf(relFile, text)) {
+        if (specifier === null) {
+            violations.push(`${relFile}:${line}: the import specifier is not a string literal, so this boundary cannot be checked`);
+            continue;
         }
-    });
+        const desc = platformViolation(specifier);
+        if (desc)
+            violations.push(`${relFile}:${line}: ${desc}`);
+    }
 }
 
 // =========================================================================
