@@ -10,15 +10,12 @@ const sourceConfig = gnome.configs.recommended.map(config => ({
 /**
  * The AI-slop guard, scoped to the source it is meant for.
  *
- * `recent-changes` is what makes it adoptable here: a construct is reported only when its range
- * intersects a line the last five commits touched, so prose that predates the budget is tolerated
- * and new code is held to it. The word budget is the one the comment/docs split already uses - a
- * comment that outgrows it is carrying knowledge that belongs in `docs/` or in the code.
- *
- * `no-em-dash` reads the whole file, string literals included, so a msgid cannot carry one: the
- * lint runs on recent lines, and a moved string arrives as a new line.
+ * Whole file, not the lines the last commits touched: a verdict that depended on which commits
+ * precede it would give two people checking the same tree two answers. The word budget is the one
+ * the comment/docs split already uses - a comment that outgrows it is carrying knowledge that
+ * belongs in `docs/` or in the code.
  */
-const slopConfig = createSlopConfig({inspection: {mode: 'recent-changes', tracebackCommits: 5}})
+const slopConfig = createSlopConfig({inspection: 'full'})
     .map(config => ({...config, files: ['src/**/*.js']}));
 
 /**
