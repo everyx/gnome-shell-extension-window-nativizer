@@ -145,6 +145,15 @@ fixed-size window that needed a correction here was a non-native application pai
 - and the cost of being wrong is a square corner on a dialog, against two arcs on every such
 window.
 
+A buffer without alpha settles the question without a probe, and decorates. What the probe would
+have read is missing, not the corner: the client can still have painted its own frame in opaque
+pixels - a border, an inner shadow, corners filled with a background colour it assumes. Our arc then
+cuts through that painting and the client's edge ends at a hard line. That is the trade this rule
+makes, in one direction only: every well-behaved fixed-size window decorates, and the rare client
+that paints its own frame without declaring extents is what a rule on its kind is for. The reading
+still needs pixels to be worth standing down for - it is the measurement fixed-size windows wait for,
+not the size.
+
 **How WeChat's identical fixed-size windows are separated.** Nine of WeChat's windows are the same
 client, the same toolkit, Wayland, `NORMAL`, fixed size, declaring no extents, and carrying alpha:
 two of them - `280x380` and `640x560` - have no corners and no shadow of their own, and want ours;

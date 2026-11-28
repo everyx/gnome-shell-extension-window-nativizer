@@ -58,8 +58,6 @@ export class CornerProbe {
         const cached = this._winCache.get(win);
         if (cached && sameDimensions(cached, frameRect))
             return cached.value;
-        // The cache holds the kinds we measured as safe to clip: that is the answer worth sharing,
-        // because the other one is the stand-down an unprobed window already takes.
         if (kindKey && this._kindCache.has(kindKey))
             return true;
         return null;
@@ -79,8 +77,6 @@ export class CornerProbe {
         if (cached)
             this._winCache.delete(win);
 
-        // A window of a kind already measured safe needs no answer: it decorates from that entry on
-        // its first frame.
         if (kindKey && this._kindCache.has(kindKey))
             return;
 
