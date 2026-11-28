@@ -94,6 +94,28 @@ def close_existing(env):
     time.sleep(0.5)
 
 
+def report_foreign_windows(env):
+    """Say what else is on screen: this check measures pixels, so a window that is not ours sits in
+    the measurement and reads as an arc nowhere near its frame."""
+    reply = eval_js("""
+    (() => {
+        const others = global.get_window_actors()
+            .map(a => a.meta_window)
+            .filter(w => w && !(w.get_gtk_application_id?.() ?? "").startsWith("dev.windownativizer."))
+            .map(w => `${w.get_gtk_application_id?.() ?? "-"} / ${w.get_title?.() ?? "-"}`);
+        return JSON.stringify({others});
+    })()
+    """, env)
+    try:
+        others = json.loads(re.search(r"\{.*\}", reply.replace("\\", ""), re.S).group(0)).get("others", [])
+    except Exception:
+        others = []
+    if others:
+        print(">> [clip-tangent] other windows on screen: " + "; ".join(others))
+    else:
+        print(">> [clip-tangent] no foreign window on screen")
+
+
 def place_and_read(env):
     """Puts the subject down, waits for its shadow sibling, and returns the clip's own geometry."""
     js = f"""
@@ -239,6 +261,7 @@ def main():
     launch(env, "backdrop", ["WINDOW_NATIVIZER_BACKDROP=1"])
     launch(env, "subject", ["WINDOW_NATIVIZER_BODY=#ff0000", "WINDOW_NATIVIZER_TITLE=WN-Tangent"])
 
+    report_foreign_windows(env)
     geom = place_and_read(env)
     if geom is None:
         sys.exit("!! [clip-tangent] the subject was never decorated; is the extension enabled?")

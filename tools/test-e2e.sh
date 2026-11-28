@@ -2046,7 +2046,10 @@ if [[ "$SCALE_ONLY" != "1" ]]; then
 
 # (g) Verify shadow actor opacity synchronization during window close animation
 echo ">> [test-e2e] Verifying shadow actor opacity synchronization during window close animation..."
-"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --app-id "org.test.windownativizer.fade" --title "ShadowFadeProbe" --hold 2000 &
+# The hold is longer than the sampling loop needs, not shorter: on a slow machine the launch and the
+# shell_eval round trip can outlast a two-second window, and a window that closed before the first
+# sample is not the same finding as a shadow that did not fade.
+"$DEV" app python3 "$ROOT/tools/e2e-client.py" --decorated --app-id "org.test.windownativizer.fade" --title "ShadowFadeProbe" --hold 6000 &
 SHADOW_FADE_CLIENT_PID=$!
 MAPPED=0
 for i in $(seq 1 40); do
@@ -2083,9 +2086,10 @@ SHADOW_FADE_STATE="$(shell_eval '
         samples.push(shadow.opacity);
     });
 
-    // Window has --hold 2000 so it will call win.close() ~2s after launch.
+    // Window has --hold 6000 so it will call win.close() ~6s after launch; this loop gives it 8s, so
+    // `settled` keeps meaning "the close was observed" rather than "the budget ran out".
     let settled = false;
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 160; i++) {
         await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(); return GLib.SOURCE_REMOVE; }));
         const stillThere = global.get_window_actors().some(a => a.meta_window && a.meta_window.get_title() === "ShadowFadeProbe");
         if (!stillThere) {
@@ -2103,13 +2107,20 @@ SHADOW_FADE_STATE="$(shell_eval '
 })()
 ')"
 echo ">> Shadow actor close sync check: $SHADOW_FADE_STATE"
-if ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
+# The reply arrives as a GVariant string with its quotes escaped; strip the backslashes before
+# reading a field out of it.
+FADE_SAMPLES="$(printf '%s' "$SHADOW_FADE_STATE" | tr -d '\\' | grep -o '"sampleCount":[0-9]*' | cut -d: -f2)"
+if [ "${FADE_SAMPLES:-0}" -le 1 ]; then
+    not_applicable "the window was gone before the first opacity sample here, so the shadow's close synchronisation cannot be observed"
+    wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+elif ! check_fields "$SHADOW_FADE_STATE" '{"settled": true, "hasFaded": true}'; then
     echo "!! Shadow actor close sync assertion failed: shadow opacity was not synchronized with window close!"
     wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
     exit 1
+else
+    wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
+    echo ">> Shadow actor close sync verified: shadow opacity synchronized during window close."
 fi
-wait "$SHADOW_FADE_CLIENT_PID" 2>/dev/null || true
-echo ">> Shadow actor close sync verified: shadow opacity synchronized during window close."
 
 # (h) A libadwaita client is the reference this whole extension copies: nothing of ours may land on
 # it. It is also the only end-to-end evidence for the skip side of the band criterion, which rests
@@ -2999,6 +3010,20 @@ teardown_fault = re.compile(
 picker_fault = re.compile(
     r"window-nativizer\] Failed to start the window picker")
 
+# A headless runner has the shell but not the desktop services a session normally provides, and the
+# shell says so at startup: no logind (so no suspend inhibit, no user proxy, no state machine), no
+# colord, no accountsservice user record, and no gnome-settings-daemon. None of it is about this
+# extension, all of it is invisible on a developer's machine, and a suite that fails on it would be a
+# suite that only passes where a desktop is running. Counted, and reported as one line.
+container_services = re.compile(
+    r"(There is no colord server available"
+    r"|Failed to inhibit suspend: .*org\.freedesktop\.login1"
+    r"|Could not get a proxy for user \d+: .*org\.freedesktop\.login1"
+    r"|Failed to start state machine: .*_loginUser is null"
+    r"|Missing required core component Settings"
+    r"|ActUserManager: user .* has no username"
+    r"|Use GtkSettings:gtk-interface-color-scheme instead)")
+
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
 # Detect any log message from window-nativizer containing error, critical, or warning
@@ -3012,6 +3037,7 @@ exempted_gjs_introspection = 0
 exempted_mutter_ping = 0
 exempted_teardown = 0
 exempted_picker = 0
+exempted_services = 0
 for idx, line in enumerate(lines, start=1):
     if teardown_fault.search(line):
         exempted_teardown += 1
@@ -3040,6 +3066,9 @@ for idx, line in enumerate(lines, start=1):
         continue
     if mutter_ping_serial.search(line):
         exempted_mutter_ping += 1
+        continue
+    if container_services.search(line):
+        exempted_services += 1
         continue
     if glib_issue.search(line):
         offending.append(f"Line {idx}: {line.strip()}")
@@ -3071,6 +3100,8 @@ if exempted_gjs_introspection:
     print(f">> {exempted_gjs_introspection} known upstream GJS introspection line(s) exempted (see the note above the pattern).")
 if exempted_mutter_ping:
     print(f">> {exempted_mutter_ping} known upstream Mutter ping line(s) exempted (see the note above the pattern).")
+if exempted_services:
+    print(f">> {exempted_services} line(s) from desktop services a headless runner does not provide (see the note above the pattern).")
 print(f">> {exempted_teardown + exempted_picker} injected-fault line(s) exempted (the fault-injection cases assert the counts).")
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF

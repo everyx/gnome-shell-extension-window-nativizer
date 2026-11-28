@@ -22,7 +22,7 @@ FROM archlinux:base-20261122.0.629543
 #
 # gnome-shell brings `gnome-extensions`, which `pnpm run build` packs with, and the shell the session
 # suite drives. gnome-calculator is the suite's libadwaita reference client. gjs runs the unit tests,
-# python-gobject and python-pillow back the pixel checks, gtk3/gtk4/libadwaita provide the typelibs
+# python-gobject, python-numpy and python-pillow back the pixel checks, gtk3/gtk4/libadwaita provide the typelibs
 # those checks and the probe clients load, xorg-xwayland exercises the X11 path, mesa gives the
 # session a software renderer, dbus and dconf give it a bus and a settings backend, and
 # glib2/gettext provide glib-compile-schemas and msgfmt. github-cli (`gh`) uploads the release asset:
@@ -48,6 +48,7 @@ RUN pacman -Sy --noconfirm archlinux-keyring \
         meson \
         ninja \
         python-gobject \
+        python-numpy \
         python-pillow \
         ttf-dejavu \
         xorg-xwayland \

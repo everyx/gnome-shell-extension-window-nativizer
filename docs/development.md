@@ -21,7 +21,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 | `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs (automatically compiles locales via `pretest`) |
 | `pnpm run test:tools` | Node unit tests for generator/audit scripts (`tools/*.test.mjs`) |
-| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log |
+| `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, overview/popup/pick guards, XWayland and multi-window cases, and a zero-warning audit of the log. Runs at scale 1.0 in CI with `WN_STRICT=1`, and as the full three-scale matrix from the pre-push hook |
 | `pnpm run stats` | code size and EGO `quality/code-volume` budget; CI posts the base→head delta as a PR comment |
 | `pnpm run check:volume` | exits 1 when EGO non-blank exceeds 8,000 plus whatever overage the baseline declares (`# accepted-overage: N`); `stats` itself only reports |
 | `pnpm run test:decoration` | measures three windows across multiple frames with alternating focus (a live libadwaita reference, one with declared shadow margins, and a bare one) and prints their outward attenuation profiles |
