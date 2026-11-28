@@ -25,7 +25,7 @@
 import {readFileSync, readdirSync} from 'node:fs';
 
 import {importSpecifiers} from './importSpecifiers.mjs';
-import {businessViolation, platformViolation, prefsViolation} from './importRules.mjs';
+import {businessViolation, namesShellProcess, platformViolation, prefsViolation} from './importRules.mjs';
 import {buildGraph, chainTo, reachableFrom} from './moduleGraph.mjs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
@@ -256,12 +256,6 @@ for (const {file, text} of prefsFiles) {
 // raises is one edge longer: it may import a `lib/` module, and that module may import the session
 // manager, which needs a shell the prefs process does not have. So the check follows the tree's own
 // relative imports and fails if anything the prefs process loads needs the shell.
-const SHELL_ONLY_NAMESPACES = ['gi://Meta', 'gi://Shell', 'gi://St', 'gi://Clutter'];
-const SHELL_MODULE_PREFIX = 'resource:///org/gnome/shell';
-
-const isShellOnly = specifier => specifier !== null &&
-    (SHELL_ONLY_NAMESPACES.includes(specifier) || specifier.startsWith(SHELL_MODULE_PREFIX));
-
 const srcModules = jsFilesIn(SRC).map(({file, text}) => {
     let specifiers = [];
     try {
@@ -273,7 +267,7 @@ const srcModules = jsFilesIn(SRC).map(({file, text}) => {
 });
 const graph = buildGraph(srcModules);
 const shellOnly = new Set(srcModules
-    .filter(({specifiers}) => specifiers.some(({specifier}) => isShellOnly(specifier)))
+    .filter(({specifiers}) => specifiers.some(({specifier}) => namesShellProcess(specifier)))
     .map(({file}) => file));
 const prefsEntries = jsFilesIn(PREFS).concat(srcModules.filter(({file}) => file === PREFS_ENTRY));
 

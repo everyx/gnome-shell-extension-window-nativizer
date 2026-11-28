@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {modulesImportedBy} from './check-spec-coverage.mjs';
-import {businessViolation, platformViolation, prefsViolation} from './importRules.mjs';
+import {businessViolation, namesShellProcess, platformViolation, prefsViolation} from './importRules.mjs';
 
 test('business code may not name Meta or Shell, in any import form', () => {
     assert.match(businessViolation('gi://Meta'), /must use src\/platform/);
@@ -41,6 +41,15 @@ test('a versioned GI URI names the namespace it starts with', () => {
     assert.match(businessViolation('gi://Meta?version=51'), /must use src\/platform/);
     assert.match(prefsViolation('gi://Shell?version=18'), /shell side/);
     assert.equal(businessViolation('gi://Gtk?version=4.0'), null);
+});
+
+test('a shell-process namespace is recognised with or without a version', () => {
+    for (const specifier of ['gi://Meta', 'gi://Shell', 'gi://St', 'gi://Clutter',
+        'gi://St?version=18', 'gi://Clutter?version=18', 'resource:///org/gnome/shell/ui/main.js']) {
+        assert.equal(namesShellProcess(specifier), true, specifier);
+    }
+    for (const specifier of ['gi://Gtk?version=4.0', 'gi://GLib', '../platform/numeric.js', null])
+        assert.equal(namesShellProcess(specifier), false, String(specifier));
 });
 
 test('a spec covers a module however it imports it', () => {
