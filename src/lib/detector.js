@@ -107,7 +107,9 @@ export function requiresCornerVerification({
     allowsResize = true,
     windowType = WindowType.NORMAL,
 } = {}) {
-    if (!allowsResize || isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true}))
+    // An opaque buffer cannot hold a transparent corner, so there is nothing left to measure.
+    if (bufferAlpha !== false &&
+        (!allowsResize || isUnverifiedDialog({hasSsd, windowType, sideW, sideH, hasAlpha: bufferAlpha === true})))
         return 'pending-probe';
     return null;
 }

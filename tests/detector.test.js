@@ -342,6 +342,14 @@ describe('inferDecorationBaseline', () => {
         expect(fixed.shadow).toBeFalse();
         expect(fixed.reason).toContain('pending-probe');
 
+        // Without alpha only the correlation stood it down, and that is not worth a decoration.
+        const opaqueFixed = inferDecorationBaseline({
+            allowsResize: false, bufferAlpha: false, ...marginsFromRects(800, 600, 800, 600),
+        });
+        expect(opaqueFixed.corners).toBeTrue();
+        expect(opaqueFixed.shadow).toBeTrue();
+        expect(opaqueFixed.reason).not.toContain('pending-probe');
+
         // Resizable is the default reading, and it still rounds.
         const resizable = inferDecorationBaseline({allowsResize: true, ...marginsFromRects(800, 600, 800, 600)});
         expect(resizable.corners).toBeTrue();
