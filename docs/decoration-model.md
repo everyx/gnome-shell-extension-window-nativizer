@@ -26,7 +26,7 @@ one wins.
    feature and records the risk as a known boundary.
 3. **Cover what a rule can correct.** On a decoration axis, apply the decoration when the reading is
    right in most cases, because the user corrects the rest with a rule. That license has two conditions:
-   the axis must be one a rule can express (the four axes are the whole vocabulary, each with an exit),
+   the axis must be one a rule can express (the three axes are the whole vocabulary, each with an exit),
    and the correction must be reachable by picking the window while it shows the problem - a rule is a
    correction, captured for the state the window was in (`rule-model.md`).
 
