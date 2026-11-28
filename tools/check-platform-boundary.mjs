@@ -23,6 +23,8 @@
  */
 
 import {readFileSync, readdirSync} from 'node:fs';
+
+import {importSpecifiers} from './importSpecifiers.mjs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
@@ -32,6 +34,7 @@ const SRC = path.join(ROOT, 'src');
 const PLATFORM = path.join(SRC, 'platform');
 const LIB = path.join(SRC, 'lib');
 const EFFECTS = path.join(SRC, 'effects');
+const PREFS = path.join(SRC, 'prefs');
 
 function fail(message) {
     console.error(`[check-platform-boundary] FAIL: ${message}`);
@@ -143,10 +146,8 @@ const violations = [];
 
 const businessFiles = [...jsFilesIn(LIB), ...jsFilesIn(EFFECTS)];
 
-const FORBIDDEN_IMPORTS = [
-    {pattern: /from\s+['"]gi:\/\/Meta['"]/, desc: 'direct gi://Meta import (must use src/platform/)'},
-    {pattern: /from\s+['"]gi:\/\/Shell['"]/, desc: 'direct gi://Shell import (must use src/platform/)'},
-];
+/** Namespaces business code reaches only through src/platform/, in any import form. */
+const FORBIDDEN_NAMESPACES = ['gi://Meta', 'gi://Shell'];
 
 const FORBIDDEN_GLOBALS = [
     {pattern: /\bglobal\.display\b/, desc: 'raw global.display access (use platform/display.js: getDisplay())'},
@@ -186,16 +187,15 @@ const RAW_WINDOW_PATTERNS = RAW_WINDOW_OPERATIONS.map(op => ({
 
 for (const {file, text} of businessFiles) {
     const relFile = path.relative(ROOT, file);
+    for (const {specifier, line} of importSpecifiers(text)) {
+        if (FORBIDDEN_NAMESPACES.includes(specifier))
+            violations.push(`${relFile}:${line}: direct ${specifier} import (must use src/platform/)`);
+    }
     const lines = text.split('\n');
     lines.forEach((line, idx) => {
         const trimmed = line.trimStart();
         if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*'))
             return;
-
-        for (const {pattern, desc} of FORBIDDEN_IMPORTS) {
-            if (pattern.test(line))
-                violations.push(`${relFile}:${idx + 1}: ${desc}`);
-        }
 
         for (const {pattern, desc} of FORBIDDEN_GLOBALS) {
             if (pattern.test(line))
@@ -203,6 +203,36 @@ for (const {file, text} of businessFiles) {
         }
 
         for (const {pattern, desc} of RAW_WINDOW_PATTERNS) {
+            if (pattern.test(line))
+                violations.push(`${relFile}:${idx + 1}: ${desc}`);
+        }
+    });
+}
+
+// The preferences process is host UI: it runs in its own Gtk/Adw process, with no shell, no
+// compositor and no window. It may read the pure decision helpers, and nothing that owns a window.
+const PREFS_FORBIDDEN_IMPORTS = [
+    {matches: specifier => specifier === 'gi://Meta', desc: 'prefs must not import gi://Meta (no window access)'},
+    {matches: specifier => specifier === 'gi://Shell', desc: 'prefs must not import gi://Shell (no shell access)'},
+    {matches: specifier => /(^|\/)platform\//u.test(specifier), desc: 'prefs must not import src/platform/ (that is the shell side)'},
+    {matches: specifier => /(^|\/)effects\//u.test(specifier), desc: 'prefs must not import src/effects/ (no actors in the prefs process)'},
+    {matches: specifier => /(^|\/)lib\/manager\.js$/u.test(specifier), desc: 'prefs must not import the session manager'},
+    {matches: specifier => /(^|\/)lib\/inspector\.js$/u.test(specifier), desc: 'prefs must not import the shell-side inspector'},
+];
+
+for (const {file, text} of jsFilesIn(PREFS)) {
+    const relFile = path.relative(ROOT, file);
+    for (const {specifier, line} of importSpecifiers(text)) {
+        for (const {matches, desc} of PREFS_FORBIDDEN_IMPORTS) {
+            if (matches(specifier))
+                violations.push(`${relFile}:${line}: ${desc}`);
+        }
+    }
+    text.split('\n').forEach((line, idx) => {
+        const trimmed = line.trimStart();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*'))
+            return;
+        for (const {pattern, desc} of FORBIDDEN_GLOBALS) {
             if (pattern.test(line))
                 violations.push(`${relFile}:${idx + 1}: ${desc}`);
         }
